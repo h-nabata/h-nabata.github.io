@@ -9,11 +9,29 @@
   <link rel="icon" href="img/favicon.ico">
   <link rel="apple-touch-icon" href="img/favicon_xx.png" sizes="180x180">
 </head>
+<script type="text/javascript">
+  document.getElementById("todaysdate").innerHTML = showDay();
+function showDay() {
+  var now = new Date();
+  var day = now.getDate();
+  return day;
+}
+</script>
+<script type="text/javascript">
+  document.getElementById("dayofweek").innerHTML = showDay();
+function showDay() {
+  var weeks = [ "日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日" ];
+  var now = new Date();
+  var weekdays = now.getDay();
+  return weeks[weekdays];
+}
+</script>
 <body>
   <header>
     <div class="container">
       <div class="header-left">
         <img class="logo" src="img/favicon_xx.png" width="50px" height="50px">
+        <p>今日の日付は<span id="todaysdate"></span>日（<span id="dayofweek"></span）です</p>
       </div>
       <span class="fa fa-bars menu-icon"></span>
       <div class="header-right">
@@ -173,7 +191,7 @@
   <footer>
     <div class="container">
       <img src="img/favicon_xx.png">
-      <p style="text-align:center>このホームページは仮作成版です。</p>
+      <p style="text-align:center">このホームページは仮作成版です。</br>2023 May 20</p>
     </div>
   </footer>
 </body>
