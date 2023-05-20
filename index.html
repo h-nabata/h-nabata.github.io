@@ -22,7 +22,7 @@ function showDay() {
 <script type="text/javascript">
   document.getElementById("dayofweek").innerHTML = showDay();
 function showDay() {
-  var weeks = [ "日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日" ];
+  var weeks = [ "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" ];
   var now = new Date();
   var weekdays = now.getDay();
   return weeks[weekdays];
@@ -33,7 +33,7 @@ function showDay() {
     <div class="container">
       <div class="header-left">
         <img class="logo" src="img/favicon_xx.png" width="50px" height="50px">
-        <p><span id="todaysdate"></span>日（<span id="dayofweek"></span）</p>
+        <p><span id="todaysdate"></span>(<span id="dayofweek"></span>)</p>
       </div>
       <span class="fa fa-bars menu-icon"></span>
       <div class="header-right">
