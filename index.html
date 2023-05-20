@@ -16,7 +16,7 @@ function showDay() {
   var year = now.getFullYear();
   var month = now.getMonth();
   var day = now.getDate();
-  return [year, day, month];
+  return [year, month, day];
 }
 </script>
 <script type="text/javascript">
@@ -32,8 +32,10 @@ function showDay() {
   <header>
     <div class="container">
       <div class="header-left">
-        <img class="logo" src="img/favicon_xx.png" width="50px" height="50px">
-        <p><span id="todaysdate"></span>(<span id="dayofweek"></span>)</p>
+        <p>
+          <img class="logo" src="img/favicon_xx.png" width="50px" height="50px">
+          <span id="todaysdate"></span>(<span id="dayofweek"></span>)
+        </p>
       </div>
       <span class="fa fa-bars menu-icon"></span>
       <div class="header-right">
