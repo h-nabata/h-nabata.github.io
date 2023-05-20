@@ -13,8 +13,10 @@
   document.getElementById("todaysdate").innerHTML = showDay();
 function showDay() {
   var now = new Date();
+  var year = now.getFullYear();
+  var month = now.getMonth();
   var day = now.getDate();
-  return day;
+  return [year, day, month];
 }
 </script>
 <script type="text/javascript">
@@ -31,7 +33,7 @@ function showDay() {
     <div class="container">
       <div class="header-left">
         <img class="logo" src="img/favicon_xx.png" width="50px" height="50px">
-        <p>今日の日付は<span id="todaysdate"></span>日（<span id="dayofweek"></span）です</p>
+        <p><span id="todaysdate"></span>日（<span id="dayofweek"></span）</p>
       </div>
       <span class="fa fa-bars menu-icon"></span>
       <div class="header-right">
