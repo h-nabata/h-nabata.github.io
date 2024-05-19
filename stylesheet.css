@@ -88,6 +88,7 @@ a {
   justify-content: space-between; /* 左右にコンテンツを分ける */
   align-items: center; /* 高さ方向の中央揃え */
   padding: 0 20px; /* 左右のパディングを追加 */
+  box-sizing: border-box; /* パディングとボーダーを含めて幅と高さを計算 */
 }
 
 .logo {
@@ -101,7 +102,11 @@ a {
   align-items: center; /* 高さ方向の中央揃え */
 }
 
-.header-left a,
+.header-right {
+    margin-right: 0; /* 不要なマージンを削除 */
+}
+
+/* .header-left a, */
 .header-right a {
   line-height: 65px;
   padding: 0 15px; /* 左右のパディングを調整 */
