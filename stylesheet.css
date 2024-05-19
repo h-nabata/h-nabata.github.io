@@ -87,7 +87,7 @@ a {
   display: flex;
   justify-content: space-between; /* 左右にコンテンツを分ける */
   align-items: center; /* 高さ方向の中央揃え */
-  padding: 0 20px; /* 左右のパディングを追加 */
+  padding: 10 20px; /* 左右のパディングを追加 */
 }
 
 .logo {
@@ -103,7 +103,7 @@ a {
 
 .header-right a {
   line-height: 65px;
-  padding: 0 15px; /* 左右のパディングを調整 */
+  padding: 10 15px; /* 左右のパディングを調整 */
   color: white;
   text-decoration: none;
   transition: all 0.5s;
