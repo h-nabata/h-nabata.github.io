@@ -92,12 +92,14 @@ a {
 }
 
 .logo {
+  line-height: 65px;
   width: 40px; /* アイコンの幅を調整 */
   height: auto; /* アスペクト比を維持 */
 }
 
 .header-left,
 .header-right {
+  line-height: 65px;
   display: flex;
   align-items: center; /* 高さ方向の中央揃え */
 }
