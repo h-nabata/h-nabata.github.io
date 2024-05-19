@@ -167,7 +167,7 @@ header {
   margin-top: 15px;
   font-size: 13px;
   color: #b3aeb5;
-  padding: 20px; /* メインコンテンツのパディング */
+/*   padding: 20px; /* メインコンテンツのパディング */ */
 }
 
 .heading h3 {
