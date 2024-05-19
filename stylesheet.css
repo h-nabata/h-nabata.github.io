@@ -85,14 +85,18 @@ header {
 }
 
 /* modified 24519 */
-.logo {
-    width: 50px;
-    height: 50px;
-    object-fit: contain;
-}
 .header-left {
     display: flex;
     align-items: center;
+    padding: 2px; /* バナーの高さに応じて調整 */
+    background-color: #333; /* バナーの背景色を設定 */
+    color: white; /* テキストの色を白に */
+}
+
+.logo {
+    width: 10px; /* アイコンの幅を調整 */
+    height: auto; /* アスペクト比を維持 */
+    margin-right: 2px; /* アイコンとテキストの間にスペースを追加 */
 }
 
 /* .logo {
@@ -163,6 +167,7 @@ header {
   margin-top: 15px;
   font-size: 13px;
   color: #b3aeb5;
+  padding: 20px; /* メインコンテンツのパディング */
 }
 
 .heading h3 {
