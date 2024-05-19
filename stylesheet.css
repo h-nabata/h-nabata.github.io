@@ -4,6 +4,7 @@
 
 body {
   margin: 0;
+  padding-top: 65px; /* ヘッダーの高さ分のパディングを追加 */
   font-family: "Hiragino Kaku Gothic ProN";
 }
 
@@ -146,7 +147,8 @@ a {
 
 .header-right a:hover {
   background-color: rgba(255,255,255,0.3);
-} */
+}
+*/
 
 .lesson-wrapper {
   height: 580px;
