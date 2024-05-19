@@ -75,8 +75,43 @@ a {
   margin-right: 5px;
 }
 
-
 /* modified 24519 */
+.header {
+  height: 65px;
+  width: 100%;
+  background-color: rgba(34,49,52,0.9);
+  position: fixed;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between; /* 左右にコンテンツを分ける */
+  align-items: center; /* 高さ方向の中央揃え */
+  padding: 0 20px; /* 左右のパディングを追加 */
+}
+
+.logo {
+  width: 40px; /* アイコンの幅を調整 */
+  height: auto; /* アスペクト比を維持 */
+}
+
+.header-left,
+.header-right {
+  display: flex;
+  align-items: center; /* 高さ方向の中央揃え */
+}
+
+.header-right a {
+  line-height: 65px;
+  padding: 0 15px; /* 左右のパディングを調整 */
+  color: white;
+  text-decoration: none;
+  transition: all 0.5s;
+}
+
+.header-right a:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
 /* .header {
   height: 65px;
   width: 100%;
@@ -86,44 +121,8 @@ a {
   z-index: 10;
 }
 
-.header-left {
-    display: flex;
-    align-items: center;
-}
-
 .logo {
     width: 40px; /* アイコンの幅を調整 */
-    height: auto; /* アスペクト比を維持 */
-    margin-right: 10px; /* アイコンとテキストの間にスペースを追加 */
-}
-
-.header-right {
-  float: right;
-  margin-right: -25px;
-}
-
-.header-right a {
-  line-height: 65px;
-  padding: 0 15px;
-  color: white;
-  display: block;
-  float: left;
-  transition: all 0.5s;
-  text-decoration: none; /* リンクの下線を削除 */
-} */
-
-
-.header {
-  height: 65px;
-  width: 100%;
-  background-color: rgba(34,49,52,0.9);
-  position :fixed;
-  top: 0;
-  z-index: 10;
-}
-
-.logo {
-    width: 10px; /* アイコンの幅を調整 */
     height: auto; /* アスペクト比を維持 */
 }
 
@@ -147,7 +146,7 @@ a {
 
 .header-right a:hover {
   background-color: rgba(255,255,255,0.3);
-}
+} */
 
 .lesson-wrapper {
   height: 580px;
