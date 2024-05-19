@@ -77,7 +77,7 @@ a {
 
 
 /* modified 24519 */
- {
+.header {
     padding: 10px 20px; /* ヘッダー全体のパディングを設定 */
     background-color: #333; /* バナーの背景色を設定 */
     color: white; /* テキストの色を白に */
