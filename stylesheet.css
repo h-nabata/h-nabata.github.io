@@ -4,7 +4,7 @@
 
 body {
   margin: 0;
-  padding-top: 75px; /* ヘッダーの高さ分のパディングを追加 */
+  padding-top: 65px; /* ヘッダーの高さ分のパディングを追加 */
   font-family: "Hiragino Kaku Gothic ProN";
 }
 
@@ -82,7 +82,7 @@ a {
   width: 100%;
   background-color: rgba(34,49,52,0.9);
   position: fixed;
-  top: 0;
+  top: 0; /* ヘッダーをページのトップに固定 */
   z-index: 10;
   display: flex;
   justify-content: space-between; /* 左右にコンテンツを分ける */
@@ -101,7 +101,7 @@ a {
   align-items: center; /* 高さ方向の中央揃え */
 }
 
-/* .header-left a, */
+.header-left a,
 .header-right a {
   line-height: 65px;
   padding: 0 15px; /* 左右のパディングを調整 */
