@@ -219,6 +219,7 @@
   <div>
       \[ \int_0^\infty e^{-x^2} dx = \frac{\sqrt{\pi}}{2} \]
   </div> -->
+
 <pre><code class="python">
   def say_hello():
       print('Hello, world!')
@@ -226,6 +227,13 @@
   if name == "main":
       say_hello()
 </code></pre>
+<script>
+  document.addEventListener('DOMContentLoaded', (event) => {
+      document.querySelectorAll('pre code').forEach((block) => {
+          hljs.highlightBlock(block);
+      });
+  });
+</script>
   <footer>
     <div class="container">
       <img src="img/favicon_candle.png">
