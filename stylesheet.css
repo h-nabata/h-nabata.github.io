@@ -76,6 +76,17 @@ a {
   margin-right: 5px;
 }
 
+/* added 24519 */
+.code-container {
+    width: 80%; /* ページ幅の80%に設定 */
+}
+pre {
+    background-color: #f4f4f4;
+    padding: 20px;
+    border-radius: 5px;
+    overflow: auto;
+}
+
 /* modified 24519 */
 .header {
   height: 65px;
