@@ -4,29 +4,30 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nabata's personal page</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/katex.min.css">
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/katex.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/contrib/auto-render.min.js" onload="renderMathInElement(document.body);"></script>
+  
+  <!--   KaTeX settings   -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css" integrity="sha384-wcIxkf4k558AjM3Yz3BBFQUbk/zgIYC2R0QpeeYb+TwlBVMrlgLqwRjRtGZiK7ww" crossorigin="anonymous">
+  <!-- The loading of KaTeX is deferred to speed up page rendering -->
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js" integrity="sha384-hIoBPJpTUs74ddyc4bFZSM1TVlQDA60VBbJS0oA934VSz82sBx1X7kSx2ATBDIyd" crossorigin="anonymous"></script>
+  <!-- To automatically render math in text elements, include the auto-render extension: -->
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/contrib/auto-render.min.js" integrity="sha384-43gviWU0YVjaDtb/GhzOouOXtZMP/7XUzwPTstBeZFe/+rCMvRwr4yROQP43s0Xk" crossorigin="anonymous"
+      onload="renderMathInElement(document.body);"></script>
+  
   <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
   <link rel="stylesheet" type="text/css" href="stylesheet.css">
   <link rel="icon" href="img/favicon.ico">
-<!--   <link rel="apple-touch-icon" href="img/favicon_xx.png" sizes="180x180"> -->
   <link rel="apple-touch-icon" href="img/favicon_candle.png" sizes="180x180">
 </head>
 <body>
   <header class="header">
-<!--     <div class="container"> -->
       <div class="header-left">
-<!--         <img class="logo" src="img/favicon_xx.png" alt="Logo"> -->
         <img class="logo" src="img/favicon_candle.png" alt="Logo">
         &nbsp;&nbsp;<span id="todaysdate"></span>&nbsp;(<span id="dayofweek"></span>)
       </div>
-<!--       <span class="fa fa-bars menu-icon"></span> -->
       <div class="header-right">
         <a href="https://sites.google.com/view/nabatas-page/top/grrm-tips%E5%88%A9%E7%94%A8%E4%B8%8A%E3%81%AE%E6%B3%A8%E6%84%8F%E7%82%B9%E3%81%AA%E3%81%A9?authuser=0">GRRM Tips（旧サイト）</a>
         <a href="https://sites.google.com/view/nabatas-page/top/%E5%8F%82%E8%80%83%E8%B3%87%E6%96%99%E3%81%A8%E5%82%99%E5%BF%98%E9%8C%B2?authuser=0">参考資料と備忘録（旧サイト）</a>
       </div>
-<!--     </div> -->
     <script type="text/javascript">
         function showDate() {
             var now = new Date();
