@@ -100,16 +100,16 @@ a {
 .header-right {
   display: flex;
   align-items: center; /* 高さ方向の中央揃え */
+  color: white;
 }
 
 .header-left {
-    flex: 1; /* 左右の要素が等しく並ぶように */
+  flex: 1; /* 左右の要素が（高さ方向に）等しく並ぶように */
 }
 
 .header-right a {
   line-height: 65px;
   padding: 0 15px; /* 左右のパディングを調整 */
-  color: white;
   text-decoration: none;
   transition: all 0.5s;
 }
