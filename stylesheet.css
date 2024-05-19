@@ -75,6 +75,41 @@ a {
   margin-right: 5px;
 }
 
+
+/* modified 24519 */
+header {
+    padding: 10px 20px; /* ヘッダー全体のパディングを設定 */
+    background-color: #333; /* バナーの背景色を設定 */
+    color: white; /* テキストの色を白に */
+    display: flex;
+    justify-content: space-between; /* 左右のコンテンツをスペースで分ける */
+    align-items: center; /* 中央揃え */
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+}
+
+.logo {
+    width: 40px; /* アイコンの幅を調整 */
+    height: auto; /* アスペクト比を維持 */
+    margin-right: 10px; /* アイコンとテキストの間にスペースを追加 */
+}
+
+.header-right {
+    display: flex;
+}
+
+.header-right a {
+    line-height: 65px;
+    padding: 0 15px; /* 左右のリンクのパディングを統一 */
+    color: white;
+    text-decoration: none; /* リンクの下線を削除 */
+    transition: all 0.5s;
+}
+
+/* 
 header {
   height: 65px;
   width: 100%;
@@ -84,29 +119,14 @@ header {
   z-index: 10;
 }
 
-/* modified 24519 */
-.header-left {
-    display: flex;
-    align-items: center;
-    padding: 2px; /* バナーの高さに応じて調整 */
-    background-color: #333; /* バナーの背景色を設定 */
-    color: white; /* テキストの色を白に */
-}
-
 .logo {
-    width: 6px; /* アイコンの幅を調整 */
-    height: auto; /* アスペクト比を維持 */
-    margin-right: 2px; /* アイコンとテキストの間にスペースを追加 */
-}
-
-/* .logo {
   width: 124px;
   margin-top: 20px;
 }
 
 .header-left {
   float: left;
-} */
+} 
 
 .header-right {
   float: right;
@@ -120,7 +140,7 @@ header {
   display: block;
   float: left;
   transition: all 0.5s;
-}
+} */
 
 .header-right a:hover {
   background-color: rgba(255,255,255,0.3);
