@@ -98,16 +98,18 @@ a {
 }
 
 .header-right {
-    display: flex;
+  float: right;
+  margin-right: -25px;
 }
 
 .header-right a {
-    line-height: 65px;
-    padding: 0 15px; /* 左右のリンクのパディングを統一 */
-    color: white;
-    display: block;
-    text-decoration: none; /* リンクの下線を削除 */
-    transition: all 0.5s;
+  line-height: 65px;
+  padding: 0 15px;
+  color: white;
+  display: block;
+  float: left;
+  transition: all 0.5s;
+  text-decoration: none; /* リンクの下線を削除 */
 }
 
 /* 
