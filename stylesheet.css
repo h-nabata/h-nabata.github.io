@@ -123,8 +123,8 @@ a {
 }
 
 .logo {
-  width: 124px;
-  margin-top: 20px;
+    width: 10px; /* アイコンの幅を調整 */
+    height: auto; /* アスペクト比を維持 */
 }
 
 .header-left {
