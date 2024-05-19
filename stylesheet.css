@@ -94,7 +94,7 @@ a {
 }
 .code-title {
     font-weight: bold;
-    background-color: #999999; /* 背景色を設定 */
+    background-color: #CCCCCC; /* 背景色を設定 */
     margin-bottom: 10px; /* タイトルとコードブロックの間にスペースを追加 */
 }
 pre {
