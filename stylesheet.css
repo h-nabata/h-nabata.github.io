@@ -78,15 +78,12 @@ a {
 
 /* modified 24519 */
 .header {
-    padding: 10px 20px; /* ヘッダー全体のパディングを設定 */
-    background-color: #333; /* バナーの背景色を設定 */
-    color: white; /* テキストの色を白に */
-    display: flex;
-    position :fixed;
-    top: 0;
-    z-index: 10;
-/*     justify-content: space-between; /* 左右のコンテンツをスペースで分ける */
-    align-items: center; /* 中央揃え */ */
+  height: 65px;
+  width: 100%;
+  background-color: rgba(34,49,52,0.9);
+  position :fixed;
+  top: 0;
+  z-index: 10;
 }
 
 .header-left {
