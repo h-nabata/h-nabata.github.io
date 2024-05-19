@@ -4,6 +4,7 @@
 
 body {
   margin: 0;
+  padding: 20px;
   padding-top: 65px; /* ヘッダーの高さ分のパディングを追加 */
   font-family: "Hiragino Kaku Gothic ProN";
 }
@@ -77,6 +78,11 @@ a {
 }
 
 /* added 24519 */
+.main-container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
 .code-container {
     width: 80%; /* ページ幅の80%に設定 */
     background-color: #f4f4f4; /* 背景色を設定 */
@@ -88,6 +94,7 @@ a {
 }
 .code-title {
     font-weight: bold;
+    background-color: #999999; /* 背景色を設定 */
     margin-bottom: 10px; /* タイトルとコードブロックの間にスペースを追加 */
 }
 pre {
