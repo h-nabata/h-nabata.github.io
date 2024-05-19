@@ -9,7 +9,7 @@
   <link rel="icon" href="img/favicon.ico">
   <link rel="apple-touch-icon" href="img/favicon_xx.png" sizes="180x180">
 </head>
-<script type="text/javascript">
+<!-- <script type="text/javascript">
   document.getElementById("todaysdate").innerHTML = showDay();
 function showDay() {
   var now = new Date();
@@ -27,7 +27,7 @@ function showDay() {
   var weekdays = now.getDay();
   return weeks[weekdays];
 }
-</script>
+</script> -->
 <body>
   <header>
     <div class="container">
@@ -43,6 +43,27 @@ function showDay() {
         <a href="https://sites.google.com/view/nabatas-page/top/%E5%8F%82%E8%80%83%E8%B3%87%E6%96%99%E3%81%A8%E5%82%99%E5%BF%98%E9%8C%B2?authuser=0">参考資料と備忘録（旧サイト）</a>
       </div>
     </div>
+    <script type="text/javascript">
+        function showDate() {
+            var now = new Date();
+            var year = now.getFullYear();
+            var month = now.getMonth() + 1; // 月は0から始まるので1を足す
+            var day = now.getDate();
+            return year + "/" + month + "/" + day;
+        }
+
+        function showDayOfWeek() {
+            var weeks = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+            var now = new Date();
+            var weekdays = now.getDay();
+            return weeks[weekdays];
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            document.getElementById("todaysdate").innerHTML = showDate();
+            document.getElementById("dayofweek").innerHTML = showDayOfWeek();
+        });
+    </script>
   </header>
 
   <div class="top-wrapper">
