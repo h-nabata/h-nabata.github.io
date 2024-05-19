@@ -94,7 +94,7 @@ header {
 }
 
 .logo {
-    width: 10px; /* アイコンの幅を調整 */
+    width: 6px; /* アイコンの幅を調整 */
     height: auto; /* アスペクト比を維持 */
     margin-right: 2px; /* アイコンとテキストの間にスペースを追加 */
 }
