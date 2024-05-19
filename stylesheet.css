@@ -77,13 +77,16 @@ a {
 
 
 /* modified 24519 */
-header {
+ {
     padding: 10px 20px; /* ヘッダー全体のパディングを設定 */
     background-color: #333; /* バナーの背景色を設定 */
     color: white; /* テキストの色を白に */
     display: flex;
-    justify-content: space-between; /* 左右のコンテンツをスペースで分ける */
-    align-items: center; /* 中央揃え */
+    position :fixed;
+    top: 0;
+    z-index: 10;
+/*     justify-content: space-between; /* 左右のコンテンツをスペースで分ける */
+    align-items: center; /* 中央揃え */ */
 }
 
 .header-left {
@@ -105,6 +108,7 @@ header {
     line-height: 65px;
     padding: 0 15px; /* 左右のリンクのパディングを統一 */
     color: white;
+    display: block;
     text-decoration: none; /* リンクの下線を削除 */
     transition: all 0.5s;
 }
