@@ -173,14 +173,6 @@ code {
         display: none; /* 画面が広い場合は非表示に */
     }
 }
-@media (max-width: 768px) {
-    .header-right {
-        display: none; /* 画面が広い場合は表示 */
-    }
-    .menu-icon {
-        display: block; /* 画面が広い場合は非表示に */
-    }
-}
 .dropdown-menu {
     display: none;
     flex-direction: column;
@@ -201,42 +193,6 @@ code {
 /* added 24523 メニュー　（ここまで） */
 
 
-/* .header {
-  height: 65px;
-  width: 100%;
-  background-color: rgba(34,49,52,0.9);
-  position :fixed;
-  top: 0;
-  z-index: 10;
-}
-
-.logo {
-    width: 40px; /* アイコンの幅を調整 */
-    height: auto; /* アスペクト比を維持 */
-}
-
-.header-left {
-  float: left;
-} 
-
-.header-right {
-  float: right;
-  margin-right: -25px;
-}
-
-.header-right a {
-  line-height: 65px;
-  padding: 0 25px;
-  color: white;
-  display: block;
-  float: left;
-  transition: all 0.5s;
-}
-
-.header-right a:hover {
-  background-color: rgba(255,255,255,0.3);
-}
-*/
 
 .lesson-wrapper {
   height: 580px;
@@ -257,21 +213,6 @@ code {
   font-weight: normal;
 }
 
-.lesson {
-  float: left;
-  width: 25%;
-}
-
-.lesson-icon {
-  position: relative;
-}
-
-.lesson-icon p {
-  position: absolute;
-  top: 37%;
-  width: 100%;
-  color: white;
-}
 
 .text-contents {
   width: 80%;
@@ -319,13 +260,6 @@ footer {
   padding-bottom: 20px;
 }
 
-.menu-icon {
-  color: white;
-  float: right;
-  font-size: 25px;
-  padding: 21px 0;
-  display: none;
-}
 
 .clear {
   clear: left;
