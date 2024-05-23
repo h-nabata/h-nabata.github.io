@@ -131,8 +131,7 @@ code {
   height: auto; /* アスペクト比を維持 */
 }
 
-.header-left,
-.header-right {
+.header-left {
   display: flex;
   align-items: center; /* 高さ方向の中央揃え */
   color: white;
@@ -142,9 +141,11 @@ code {
   flex: 1; /* 左右の要素が（高さ方向に）等しく並ぶように */
 }
 
-/* .header-right {
-    display: none; /* デフォルトでは非表示に （代わりにメニューボタンを表示）*/
-} */
+.header-right {
+    display: none; /* デフォルトでは非表示に */
+    align-items: center; /* 高さ方向の中央揃え */
+    color: white;
+}
 
 .header-right a {
   line-height: 65px;
@@ -192,17 +193,6 @@ code {
 }
 /* added 24523 メニュー　（ここまで） */
 
-
-
-.lesson-wrapper {
-  height: 580px;
-  padding-bottom: 80px;
-  padding-left: 5%;
-  padding-right: 5%;
-  background-color: #f7f7f7;
-  text-align: center;
-}
-
 .heading {
   padding-top: 80px;
   padding-bottom: 50px;
@@ -212,7 +202,6 @@ code {
 .heading h2 {
   font-weight: normal;
 }
-
 
 .text-contents {
   width: 80%;
@@ -260,76 +249,7 @@ footer {
   padding-bottom: 20px;
 }
 
-
 .clear {
   clear: left;
 }
 
-/* 　　以下を削除（メニューアイコンの処理の関係で）    */
-/* @media all and (max-width: 1000px) {
-  .lesson {
-    width: 50%;
-    margin-bottom: 50px;
-  }
-
-  .lesson-wrapper {
-    height: 990px;
-  }
-
-  footer {
-    text-align: center;
-  }
-}
-
-@media all and (max-width: 750px) {
-  .top-wrapper h1 {
-    font-size: 32px;
-  }
-
-  .heading h2 {
-    font-size: 20px;
-  }
-}
-
-@media all and (max-width: 670px) {
-  .header-right {
-    display: none;
-  }
-
-  .menu-icon {
-    display: block;
-  }
-
-  .top-wrapper .btn {
-    width: 100%;
-  }
-
-  .twitter {
-    margin-top: 10px;
-  }
-
-  .top-wrapper {
-    text-align: left;
-  }
-
-  .top-wrapper h1 {
-    font-size: 24px;
-  }
-
-  .top-wrapper p {
-    font-size: 14px;
-  }
-
-  .lesson {
-    width: 100%;
-  }
-
-  .lesson-wrapper {
-    height: 1700px;
-  }
-
-  .message-wrapper .btn {
-    width: 100%;
-  }
-}
- */
