@@ -81,38 +81,6 @@ a {
   margin-right: 5px;
 }
 
-/* added 24523 メニュー　（ここから） */
-.menu-icon {
-    display: block;
-    cursor: pointer;
-}
-@media (min-width: 768px) {
-    .header-right {
-        display: flex; /* 画面が広い場合は表示 */
-    }
-    .menu-icon {
-        display: none; /* 画面が広い場合は非表示に */
-    }
-}
-.dropdown-menu {
-    display: none;
-    flex-direction: column;
-    background-color: rgba(34, 49, 52, 0.9);
-    position: absolute;
-    top: 65px; /* ヘッダーの下に配置 */
-    right: 0;
-    width: 100%;
-}
-.dropdown-menu a {
-    padding: 10px;
-    color: white;
-    text-decoration: none;
-}
-.dropdown-menu a:hover {
-    background-color: rgba(255, 255, 255, 0.3);
-}
-/* added 24523 メニュー　（ここまで） */
-
 /* added 24519 */
 .main-container {
     width: 100%;
@@ -188,6 +156,43 @@ code {
 .header-right a:hover {
   background-color: rgba(255, 255, 255, 0.3);
 }
+
+
+/* added 24523 メニュー　（ここから） */
+.menu-icon {
+    display: block;
+    cursor: pointer;
+    color: white;
+    font-size: 24px;
+}
+@media (min-width: 768px) {
+    .header-right {
+        display: flex; /* 画面が広い場合は表示 */
+    }
+    .menu-icon {
+        display: none; /* 画面が広い場合は非表示に */
+    }
+}
+.dropdown-menu {
+    display: none;
+    flex-direction: column;
+    background-color: rgba(34, 49, 52, 0.9);
+    position: absolute;
+    top: 65px; /* ヘッダーの下に配置 */
+    right: 0;
+    width: 100%;
+}
+.dropdown-menu a {
+    padding: 10px;
+    color: white;
+    text-decoration: none;
+}
+.dropdown-menu a:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+}
+/* added 24523 メニュー　（ここまで） */
+
+
 
 /* .header {
   height: 65px;
