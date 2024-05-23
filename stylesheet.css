@@ -142,9 +142,9 @@ code {
   flex: 1; /* 左右の要素が（高さ方向に）等しく並ぶように */
 }
 
-.header-right {
+/* .header-right {
     display: none; /* デフォルトでは非表示に （代わりにメニューボタンを表示）*/
-}
+} */
 
 .header-right a {
   line-height: 65px;
@@ -172,6 +172,14 @@ code {
     }
     .menu-icon {
         display: none; /* 画面が広い場合は非表示に */
+    }
+}
+@media (maz-width: 768px) {
+    .header-right {
+        display: none; /* 画面が広い場合は表示 */
+    }
+    .menu-icon {
+        display: block; /* 画面が広い場合は非表示に */
     }
 }
 .dropdown-menu {
