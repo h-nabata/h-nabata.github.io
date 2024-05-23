@@ -174,7 +174,7 @@ code {
         display: none; /* 画面が広い場合は非表示に */
     }
 }
-@media (maz-width: 768px) {
+@media (max-width: 768px) {
     .header-right {
         display: none; /* 画面が広い場合は表示 */
     }
