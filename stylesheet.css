@@ -131,8 +131,8 @@ code {
   height: auto; /* アスペクト比を維持 */
 }
 
-.header-left {
-  display: flex;
+.header-left,
+.header-right {
   align-items: center; /* 高さ方向の中央揃え */
   color: white;
 }
@@ -142,10 +142,26 @@ code {
 }
 
 .header-right {
-    display: none; /* デフォルトでは非表示に */
-    align-items: center; /* 高さ方向の中央揃え */
-    color: white;
+  display: none; /* デフォルトでは非表示に */
+  align-items: center; /* 高さ方向の中央揃え */
+  color: white;
 }
+
+        /* .header-left {
+          display: flex;
+          align-items: center; /* 高さ方向の中央揃え */
+          color: white;
+        }
+        
+        .header-left {
+          flex: 1; /* 左右の要素が（高さ方向に）等しく並ぶように */
+        }
+        
+        .header-right {
+            display: none; /* デフォルトでは非表示に */
+            align-items: center; /* 高さ方向の中央揃え */
+            color: white;
+        } */
 
 .header-right a {
   line-height: 65px;
