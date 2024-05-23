@@ -4,7 +4,7 @@
 
 body {
   margin: 0;
-/*   padding: 20px;    // added */
+  padding: 0px;    // added
   display: flex;    // added
   justify-content: center;    // added
   flex-direction: column;    // added
@@ -19,7 +19,7 @@ a {
 
 .container {
   width: 100%;
-  padding: 20 15px;
+  padding: 10px 15px;
   margin: 0 auto;
 }
 
