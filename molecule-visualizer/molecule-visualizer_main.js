@@ -21,9 +21,12 @@ function renderMolecule() {
     viewer.render();
 
     // クリックイベントリスナを設定
-    viewer.viewerDiv.addEventListener('mousedown', onMouseDown);
-    viewer.viewerDiv.addEventListener('mousemove', onMouseMove);
-    viewer.viewerDiv.addEventListener('mouseup', onMouseUp);
+    const canvas = viewer.viewerDiv.querySelector('canvas');
+    if (canvas) {
+        canvas.addEventListener('mousedown', onMouseDown);
+        canvas.addEventListener('mousemove', onMouseMove);
+        canvas.addEventListener('mouseup', onMouseUp);
+    }
 
     console.log("Molecule rendered");
 }
