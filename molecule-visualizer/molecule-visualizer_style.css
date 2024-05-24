@@ -33,4 +33,5 @@ h1 {
     height: 600px;  /* 高さを600pxに設定 */
     border: 1px solid black;
     display: block; /* 要素をブロックレベルに設定 */
+    position: relative; /* 親要素として相対位置を設定 */
 }
