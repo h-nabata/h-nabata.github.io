@@ -1,6 +1,13 @@
+let moveMode = false;
+let selectedAtom = null;
+
+function toggleMoveMode() {
+    moveMode = !moveMode;
+    console.log("Move mode:", moveMode);
+}
+
 function renderMolecule() {
     const xyzData = document.getElementById('xyz_input').value;
-    console.log("Input XYZ data:", xyzData);  // デバッグ用
     const viewer = $3Dmol.createViewer("viewer", {
         defaultcolors: $3Dmol.rasmolElementColors
     });
@@ -11,5 +18,28 @@ function renderMolecule() {
     });
     viewer.zoomTo();
     viewer.render();
-    console.log("Molecule rendered");  // デバッグ用
+
+    viewer.on('click', function(event, atom) {
+        if (moveMode && atom) {
+            selectedAtom = atom;
+            console.log("Selected atom:", selectedAtom);
+        }
+    });
+
+    viewer.on('mousemove', function(event) {
+        if (moveMode && selectedAtom) {
+            const xyz = viewer.selectedAtoms[0].xyz;
+            xyz.x += event.dx / 100; // Adjust movement scaling factor as needed
+            xyz.y += event.dy / 100;
+            viewer.render();
+        }
+    });
+
+    viewer.on('mouseup', function(event) {
+        if (moveMode) {
+            selectedAtom = null;
+        }
+    });
+
+    console.log("Molecule rendered");
 }
