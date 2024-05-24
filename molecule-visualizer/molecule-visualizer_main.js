@@ -5,7 +5,7 @@ function renderMolecule() {
         defaultcolors: $3Dmol.rasmolElementColors
     });
     viewer.addModel(xyzData, "xyz");
-    viewer.setStyle({}, {stick: {}});
+    viewer.setStyle({}, {stick;sphere:radius~0.5: {}});
     viewer.zoomTo();
     viewer.render();
     console.log("Molecule rendered");  // デバッグ用
