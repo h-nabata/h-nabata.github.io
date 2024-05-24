@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <title>分子構造描画</title>
-    <link rel="stylesheet" href="molecule-visualizer_style.css">
+    <link rel="stylesheet" href="style.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/3dmol@1.6.2/build/3Dmol-min.js"></script>
-    <script defer src="molecule-visualizer_main.js"></script>
+    <script defer src="main.js"></script>
 </head>
 <body>
     <h1>分子構造描画</h1>
-    <div style="display: flex;">
-        <div>
-            <textarea id="xyz_input" rows="30" cols="50" placeholder="XYZ座標をここに貼り付け"></textarea>
+    <div class="container">
+        <div class="input-container">
+            <textarea id="xyz_input" rows="10" cols="50" placeholder="XYZ座標をここに貼り付け"></textarea>
             <button onclick="renderMolecule()">描画</button>
         </div>
         <div id="viewer"></div>
