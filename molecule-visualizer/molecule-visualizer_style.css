@@ -6,6 +6,7 @@ body {
     margin: 0;
     padding: 0;
     height: 100vh;
+    justify-content: center;
 }
 
 h1 {
@@ -29,6 +30,6 @@ h1 {
 
 #viewer {
     width: 600px;
-    height: 400px;
+    height: 600px;  /* 高さを600pxに設定 */
     border: 1px solid black;
 }
