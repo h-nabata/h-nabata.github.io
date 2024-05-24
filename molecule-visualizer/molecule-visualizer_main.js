@@ -21,16 +21,19 @@ function renderMolecule() {
     viewer.render();
 
     // クリックイベントリスナを設定
-    viewer.addEventListener('click', onMouseDown);
-    viewer.addEventListener('mousemove', onMouseMove);
-    viewer.addEventListener('mouseup', onMouseUp);
+    viewer.viewerDiv.addEventListener('mousedown', onMouseDown);
+    viewer.viewerDiv.addEventListener('mousemove', onMouseMove);
+    viewer.viewerDiv.addEventListener('mouseup', onMouseUp);
 
     console.log("Molecule rendered");
 }
 
 function onMouseDown(event) {
     if (moveMode) {
-        const atom = viewer.pickAtom({x: event.offsetX, y: event.offsetY});
+        const rect = viewer.viewerDiv.getBoundingClientRect();
+        const x = event.clientX - rect.left;
+        const y = event.clientY - rect.top;
+        const atom = viewer.pickAtom({x: x, y: y});
         if (atom) {
             selectedAtom = atom;
             selectedAtom.style = {sphere: {scale: 0.5, color: 'red'}}; // 選択された原子の色を変更
@@ -42,6 +45,7 @@ function onMouseDown(event) {
 
 function onMouseMove(event) {
     if (moveMode && selectedAtom) {
+        const rect = viewer.viewerDiv.getBoundingClientRect();
         const {model, index} = selectedAtom;
         const atom = model.selectedAtoms()[index];
         if (atom) {
