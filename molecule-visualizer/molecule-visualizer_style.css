@@ -3,10 +3,14 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
+    margin: 0;
+    padding: 0;
+    height: 100vh;
 }
 
 h1 {
     text-align: center;
+    margin: 20px 0;
 }
 
 .container {
@@ -14,10 +18,13 @@ h1 {
     flex-direction: column;
     align-items: center;
     width: 100%;
+    max-width: 800px;
+    margin: auto;
 }
 
 .input-container {
     margin-bottom: 20px;
+    text-align: center;
 }
 
 #viewer {
@@ -25,4 +32,3 @@ h1 {
     height: 400px;
     border: 1px solid black;
 }
-
