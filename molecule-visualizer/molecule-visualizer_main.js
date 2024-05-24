@@ -20,12 +20,19 @@ function renderMolecule() {
     viewer.zoomTo();
     viewer.render();
 
+    // デバッグ用メッセージ
+    console.log("Viewer created:", viewer);
+    console.log("Viewer container:", viewer.viewerDiv);
+
     // クリックイベントリスナを設定
     const canvas = viewer.viewerDiv.querySelector('canvas');
     if (canvas) {
         canvas.addEventListener('mousedown', onMouseDown);
         canvas.addEventListener('mousemove', onMouseMove);
         canvas.addEventListener('mouseup', onMouseUp);
+        console.log("Event listeners added to canvas.");
+    } else {
+        console.error("Canvas not found!");
     }
 
     console.log("Molecule rendered");
@@ -42,6 +49,8 @@ function onMouseDown(event) {
             selectedAtom.style = {sphere: {scale: 0.5, color: 'red'}}; // 選択された原子の色を変更
             viewer.render();
             console.log("Selected atom:", selectedAtom);
+        } else {
+            console.log("No atom selected.");
         }
     }
 }
@@ -56,6 +65,7 @@ function onMouseMove(event) {
             atom.y -= event.movementY * 0.01;
             model.updateAtomPositions();
             viewer.render();
+            console.log("Atom moved:", atom);
         }
     }
 }
@@ -64,6 +74,7 @@ function onMouseUp(event) {
     if (moveMode && selectedAtom) {
         selectedAtom.style = {sphere: {scale: 0.3}}; // 選択解除時のスタイルリセット
         viewer.render();
+        console.log("Atom move ended.");
         selectedAtom = null;
     }
 }
