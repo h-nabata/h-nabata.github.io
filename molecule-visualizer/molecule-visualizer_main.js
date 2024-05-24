@@ -20,44 +20,21 @@ function renderMolecule() {
     viewer.zoomTo();
     viewer.render();
 
-    // デバッグ用メッセージ
-    console.log("Viewer created:", viewer);
-    console.log("Viewer container:", viewer.viewerDiv);
-
     // クリックイベントリスナを設定
-    const canvas = viewer.viewerDiv.querySelector('canvas');
-    if (canvas) {
-        canvas.addEventListener('mousedown', onMouseDown);
-        canvas.addEventListener('mousemove', onMouseMove);
-        canvas.addEventListener('mouseup', onMouseUp);
-        console.log("Event listeners added to canvas.");
-    } else {
-        console.error("Canvas not found!");
-    }
-
-    console.log("Molecule rendered");
-}
-
-function onMouseDown(event) {
-    if (moveMode) {
-        const rect = viewer.viewerDiv.getBoundingClientRect();
-        const x = event.clientX - rect.left;
-        const y = event.clientY - rect.top;
-        const atom = viewer.pickAtom({x: x, y: y});
-        if (atom) {
+    viewer.setClickable({}, true, function(atom, viewer, event, container) {
+        if (moveMode) {
             selectedAtom = atom;
             selectedAtom.style = {sphere: {scale: 0.5, color: 'red'}}; // 選択された原子の色を変更
             viewer.render();
             console.log("Selected atom:", selectedAtom);
-        } else {
-            console.log("No atom selected.");
         }
-    }
+    });
+
+    console.log("Molecule rendered");
 }
 
-function onMouseMove(event) {
+document.addEventListener('mousemove', function(event) {
     if (moveMode && selectedAtom) {
-        const rect = viewer.viewerDiv.getBoundingClientRect();
         const {model, index} = selectedAtom;
         const atom = model.selectedAtoms()[index];
         if (atom) {
@@ -68,13 +45,13 @@ function onMouseMove(event) {
             console.log("Atom moved:", atom);
         }
     }
-}
+});
 
-function onMouseUp(event) {
+document.addEventListener('mouseup', function(event) {
     if (moveMode && selectedAtom) {
         selectedAtom.style = {sphere: {scale: 0.3}}; // 選択解除時のスタイルリセット
         viewer.render();
         console.log("Atom move ended.");
         selectedAtom = null;
     }
-}
+});
