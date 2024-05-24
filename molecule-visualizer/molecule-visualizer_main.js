@@ -1,5 +1,6 @@
 let moveMode = false;
 let selectedAtom = null;
+let viewer;
 
 function toggleMoveMode() {
     moveMode = !moveMode;
@@ -8,7 +9,7 @@ function toggleMoveMode() {
 
 function renderMolecule() {
     const xyzData = document.getElementById('xyz_input').value;
-    const viewer = $3Dmol.createViewer("viewer", {
+    viewer = $3Dmol.createViewer("viewer", {
         defaultcolors: $3Dmol.rasmolElementColors
     });
     viewer.addModel(xyzData, "xyz");
@@ -19,27 +20,39 @@ function renderMolecule() {
     viewer.zoomTo();
     viewer.render();
 
-    viewer.on('click', function(event, atom) {
-        if (moveMode && atom) {
+    // クリックイベントリスナを設定
+    viewer.viewerDiv.addEventListener('mousedown', onMouseDown, false);
+    viewer.viewerDiv.addEventListener('mousemove', onMouseMove, false);
+    viewer.viewerDiv.addEventListener('mouseup', onMouseUp, false);
+    
+    console.log("Molecule rendered");
+}
+
+function onMouseDown(event) {
+    if (moveMode) {
+        const atom = viewer.pickAtom(event.pageX, event.pageY);
+        if (atom) {
             selectedAtom = atom;
             console.log("Selected atom:", selectedAtom);
         }
-    });
+    }
+}
 
-    viewer.on('mousemove', function(event) {
-        if (moveMode && selectedAtom) {
-            const xyz = viewer.selectedAtoms[0].xyz;
-            xyz.x += event.dx / 100; // Adjust movement scaling factor as needed
-            xyz.y += event.dy / 100;
+function onMouseMove(event) {
+    if (moveMode && selectedAtom) {
+        const {model, index} = selectedAtom;
+        const atom = model.selectedAtoms()[index];
+        if (atom) {
+            atom.x += event.movementX * 0.01; // Adjust movement scaling factor as needed
+            atom.y -= event.movementY * 0.01;
+            model.updateAtomPositions();
             viewer.render();
         }
-    });
+    }
+}
 
-    viewer.on('mouseup', function(event) {
-        if (moveMode) {
-            selectedAtom = null;
-        }
-    });
-
-    console.log("Molecule rendered");
+function onMouseUp(event) {
+    if (moveMode) {
+        selectedAtom = null;
+    }
 }
