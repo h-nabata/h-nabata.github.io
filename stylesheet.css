@@ -162,9 +162,9 @@ code {
     margin-right: 20px; /* 右側に余白を追加 */
 }
 @media (max-width: 768px) {
-    .header-right {
+/*     .header-right {
         display: none; /* 画面が広い場合は表示 */
-    }
+    } */
     .menu-icon {
         display: block; /* 画面が広い場合は非表示に */
     }
