@@ -113,7 +113,7 @@ code {
 
 /* modified 24519 */
 .header {
-  height: 65px;
+  height: 70px;
   width: 100%;
   background-color: rgba(34,49,52,0.9);
   position: fixed;
@@ -143,7 +143,7 @@ code {
 }
 
 .header-right a {
-  line-height: 60px;
+  line-height: 55px;
   padding: 0 15px; /* 左右のパディングを調整 */
   text-decoration: none;
   transition: all 0.5s;
@@ -155,18 +155,18 @@ code {
 
 /* added 24523 メニュー　（ここから） */
 .menu-icon {
-    display: none;
+    display: block;
     cursor: pointer;
     color: white;
     font-size: 24px;
     margin-right: 20px; /* 右側に余白を追加 */
 }
-@media (max-width: 768px) {
+@media (min-width: 768px) {
 /*     .header-right {
         display: none; /* 画面が広い場合は表示 */
     } */
     .menu-icon {
-        display: block; /* 画面が広い場合は非表示に */
+        display: none; /* 画面が広い場合は非表示に */
     }
 }
 .dropdown-menu {
@@ -174,7 +174,7 @@ code {
     flex-direction: column;
     background-color: rgba(34, 49, 52, 0.9);
     position: absolute;
-    top: 60px; /* ヘッダーの下に配置 */
+    top: 55px; /* ヘッダーの下に配置 */
     right: 0;
     width: 100%;
 }
