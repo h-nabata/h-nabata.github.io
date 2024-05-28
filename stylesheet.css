@@ -143,7 +143,7 @@ code {
 }
 
 .header-right a {
-  line-height: 55px;
+  line-height: 50px;
   padding: 0 15px; /* 左右のパディングを調整 */
   text-decoration: none;
   transition: all 0.5s;
@@ -174,7 +174,7 @@ code {
     flex-direction: column;
     background-color: rgba(34, 49, 52, 0.9);
     position: absolute;
-    top: 55px; /* ヘッダーの下に配置 */
+    top: 50px; /* ヘッダーの下に配置 */
     right: 0;
     width: 100%;
 }
