@@ -161,7 +161,7 @@ code {
     font-size: 24px;
     margin-right: 20px; /* 右側に余白を追加 */
 }
-@media (min-width: 768px) {
+@media (min-width: 10px) {
     .header-right {
         display: flex; /* 画面が広い場合は表示 */
     }
