@@ -24,6 +24,8 @@ h1 {
 .input-container {
     margin-bottom: 30px;
     text-align: center;
+    width: 80%;
+    margin: 0 auto;
 }
 
 #viewer {
@@ -31,6 +33,7 @@ h1 {
     position: relative; /* 親要素として相対位置を設定 */
     width: 80%;
     height: 500px;
+    margin: 20px auto;
     border: 4px solid #ddd;
 }
 
@@ -79,7 +82,7 @@ code {
   display: flex;
   justify-content: space-between; /* 左右にコンテンツを分ける */
   align-items: center; /* 高さ方向の中央揃え */
-  padding: 0 20px; /* 左右のパディングを追加 */
+  padding: 10px 20px; /* 左右のパディングを追加 */
   box-sizing: border-box; /* パディングとボーダーを含めて幅と高さを計算 */
 }
 
