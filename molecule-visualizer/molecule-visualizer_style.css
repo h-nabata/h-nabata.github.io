@@ -43,7 +43,7 @@ h1 {
           display: block; /* 要素をブロックレベルに設定 */
           position: relative; /* 親要素として相対位置を設定 */ */
     width: 80%;
-    height: 600px;
+    height: 500px;
     margin: 20px auto;
     border: 1px solid #ddd;
 }
