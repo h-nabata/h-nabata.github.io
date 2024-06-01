@@ -17,7 +17,7 @@ h1 {
 .container {
   width: 100%;
   padding: 10px 15px;
-  margin: 0 auto;
+  margin: auto auto;
   margin-top: 70px;
   text-align: center
 }
