@@ -22,27 +22,15 @@ h1 {
   text-align: center
 }
 
-/* .container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-    max-width: 800px;
-    margin: auto;
-} */
-
 .input-container {
     margin-bottom: 20px;
     text-align: center;
 }
 
 #viewer {
-      /*     width: 600px;
-          height: 600px;  /* 高さを600pxに設定 */
-      /*     border: 1px solid black; */
-          display: block; /* 要素をブロックレベルに設定 */
-          position: relative; /* 親要素として相対位置を設定 */ */
-    width: 80%;
+    display: block; /* 要素をブロックレベルに設定 */
+    position: relative; /* 親要素として相対位置を設定 */ */
+    width: 70%;
     height: 500px;
     margin: 20px auto;
     border: 1px solid #ddd;
