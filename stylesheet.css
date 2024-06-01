@@ -221,7 +221,7 @@ code {
 	background-color: #000;
 	color: #fff;
 	font-weight: bold;
-	transition: 400ms;
+	transition: 500ms;
 }
 .gaming::after{
 	content: "";
@@ -234,7 +234,7 @@ code {
 	padding: 5px;
 	background-color: transparent;
 	border-radius: calc(infinity * 1px);
-	animation: gaming 3200ms linear infinite;
+	animation: gaming 4000ms linear infinite;
   background: linear-gradient(to right, Magenta, Yellow, Cyan, Magenta) 0% center/200%;
 }
 @keyframes gaming{
