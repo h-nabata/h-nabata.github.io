@@ -113,7 +113,7 @@ code {
 
 /* modified 24519 */
 .header {
-  height: 70px;
+  height: 65px;
   width: 100%;
   background-color: rgba(34,49,52,0.9);
   position: fixed;
@@ -127,7 +127,7 @@ code {
 }
 
 .logo {
-  width: 40px; /* アイコンの幅を調整 */
+  width: 32px; /* アイコンの幅を調整 */
   height: auto; /* アスペクト比を維持 */
 }
 
@@ -143,7 +143,7 @@ code {
 }
 
 .header-right a {
-  line-height: 50px;
+  line-height: 40px;
   padding: 0 15px; /* 左右のパディングを調整 */
   text-decoration: none;
   transition: all 0.5s;
@@ -174,12 +174,12 @@ code {
     flex-direction: column;
     background-color: rgba(34, 49, 52, 0.9);
     position: absolute;
-    top: 50px; /* ヘッダーの下に配置 */
+    top: 65px; /* ヘッダーの下に配置 */
     right: 0;
     width: 100%;
 }
 .dropdown-menu a {
-    padding: 10px;
+    padding: 5px;
     color: white;
     text-decoration: none;
 }
