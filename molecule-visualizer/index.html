@@ -1,6 +1,29 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nabata's personal page</title>
+  
+  <!--   KaTeX settings (2024/05/19)   -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css" integrity="sha384-wcIxkf4k558AjM3Yz3BBFQUbk/zgIYC2R0QpeeYb+TwlBVMrlgLqwRjRtGZiK7ww" crossorigin="anonymous">
+  <!-- The loading of KaTeX is deferred to speed up page rendering -->
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js" integrity="sha384-hIoBPJpTUs74ddyc4bFZSM1TVlQDA60VBbJS0oA934VSz82sBx1X7kSx2ATBDIyd" crossorigin="anonymous"></script>
+  <!-- To automatically render math in text elements, include the auto-render extension: -->
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/contrib/auto-render.min.js" integrity="sha384-43gviWU0YVjaDtb/GhzOouOXtZMP/7XUzwPTstBeZFe/+rCMvRwr4yROQP43s0Xk" crossorigin="anonymous"
+      onload="renderMathInElement(document.body);"></script>
+
+  <!--   Highlight.js settings (2024/05/19)   -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <!-- and it's easy to individually load additional languages -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
+  <script>hljs.highlightAll();</script>
+  
+  <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
+  <link rel="stylesheet" type="text/css" href="stylesheet.css">
+  <link rel="icon" href="img/favicon.ico">
+  <link rel="apple-touch-icon" href="img/favicon_candle.png" sizes="180x180">
     <meta charset="UTF-8">
     <title>分子構造描画</title>
     <link rel="stylesheet" href="molecule-visualizer_style.css">
@@ -9,6 +32,59 @@
     <script defer src="molecule-visualizer_main.js"></script>
 </head>
 <body>
+      <header class="header">
+      <div class="header-left">
+<!--         <img class="logo" src="img/favicon_candle.png" alt="Logo"> -->
+        &nbsp;&nbsp;<span id="todaysdate"></span>&nbsp;(<span id="dayofweek"></span>)
+      </div>
+<!--       <span class="fa fa-bars menu-icon"></span> -->
+      <div class="menu-icon gaming" onclick="toggleMenu()">&#9776;</div>
+      <div class="header-right dropdown-menu">
+          <a href="https://sites.google.com/view/nabatas-page/top/grrm-tips%E5%88%A9%E7%94%A8%E4%B8%8A%E3%81%AE%E6%B3%A8%E6%84%8F%E7%82%B9%E3%81%AA%E3%81%A9?authuser=0">GRRM Tips（旧サイト）</a>
+          <a href="https://sites.google.com/view/nabatas-page/top/%E5%8F%82%E8%80%83%E8%B3%87%E6%96%99%E3%81%A8%E5%82%99%E5%BF%98%E9%8C%B2?authuser=0">参考資料と備忘録（旧サイト）</a>
+          <a href="molecule-visualizer/index.html">分子構造描画</a>
+      </div>
+    <script type="text/javascript">
+        function showDate() {
+            var now = new Date();
+            var year = now.getFullYear();
+            var month = now.getMonth() + 1; // 月は0から始まるので1を足す
+            var day = now.getDate();
+            return year + "/" + month + "/" + day;
+        }
+
+        function showDayOfWeek() {
+            var weeks = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+            var now = new Date();
+            var weekdays = now.getDay();
+            return weeks[weekdays];
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            document.getElementById("todaysdate").innerHTML = showDate();
+            document.getElementById("dayofweek").innerHTML = showDayOfWeek();
+        });
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+            document.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightBlock(block);
+            });
+        });
+
+        function toggleMenu() {
+            const menu = document.querySelector('.dropdown-menu');
+            if (menu.style.display === 'flex') {
+                menu.style.display = 'none';
+            } else {
+                menu.style.display = 'flex';
+            }
+        }
+    </script>
+    
+  </header>
+    
     <h1>分子構造描画</h1>
     <div class="container">
         <div class="input-container">
@@ -25,9 +101,37 @@ O       -2.585832701     -0.559087373     -0.147812979
 H       -2.585832701      0.170015644      0.484634004"></textarea>
             <br>
             <button onclick="renderMolecule()">描画</button>
+            <button onclick="copyToClipboard()">入力例をコピー</button>
             <button onclick="toggleMoveMode()">移動モード切り替え</button>
         </div>
         <div id="viewer"></div>
     </div>
+    <script>
+        function copyToClipboard() {
+            const textToCopy = "6
+CH4O
+C       -2.585832701      0.000000000     -1.451082395
+H       -2.585832701     -0.835882635     -2.155383201
+H       -3.477681701      0.612477182     -1.652786337
+H       -1.693983701      0.612477182     -1.652786337
+O       -2.585832701     -0.559087373     -0.147812979
+H       -2.585832701      0.170015644      0.484634004";
+            
+            // テキストエリアを一時的に作成
+            const tempTextArea = document.createElement("textarea");
+            tempTextArea.value = textToCopy;
+            document.body.appendChild(tempTextArea);
+            
+            // テキストを選択してコピー
+            tempTextArea.select();
+            document.execCommand("copy");
+            
+            // 一時的なテキストエリアを削除
+            document.body.removeChild(tempTextArea);
+            
+            // コピー完了メッセージを表示
+            alert("入力例がクリップボードにコピーされました。");
+        }
+    </script>
 </body>
 </html>
