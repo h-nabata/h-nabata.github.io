@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nabata's personal page - table of contents</title>
+  
+  <!--   KaTeX settings (2024/05/19)   -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css" integrity="sha384-wcIxkf4k558AjM3Yz3BBFQUbk/zgIYC2R0QpeeYb+TwlBVMrlgLqwRjRtGZiK7ww" crossorigin="anonymous">
+  <!-- The loading of KaTeX is deferred to speed up page rendering -->
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js" integrity="sha384-hIoBPJpTUs74ddyc4bFZSM1TVlQDA60VBbJS0oA934VSz82sBx1X7kSx2ATBDIyd" crossorigin="anonymous"></script>
+  <!-- To automatically render math in text elements, include the auto-render extension: -->
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/contrib/auto-render.min.js" integrity="sha384-43gviWU0YVjaDtb/GhzOouOXtZMP/7XUzwPTstBeZFe/+rCMvRwr4yROQP43s0Xk" crossorigin="anonymous"
+      onload="renderMathInElement(document.body);"></script>
+
+  <!--   Highlight.js settings (2024/05/19)   -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <!-- and it's easy to individually load additional languages -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
+  <script>hljs.highlightAll();</script>
+  
+  <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
+  <link rel="stylesheet" type="text/css" href="stylesheet.css">
+  <link rel="icon" href="img/favicon.ico">
+  <link rel="apple-touch-icon" href="img/favicon_candle.png" sizes="180x180">
+</head>
+<body>
+  <header class="header">
+      <div class="header-left">
+          <a href="https://h-nabata.github.io/"><img class="logo" src="https://h-nabata.github.io/img/favicon_candle.png" alt="Logo"></a>
+          &nbsp;&nbsp;<span id="todaysdate"></span>&nbsp;(<span id="dayofweek"></span>)
+      </div>
+      <div class="menu-icon gaming" onclick="toggleMenu()">&#9776;</div>
+      <div class="header-right dropdown-menu">
+          <a href="https://sites.google.com/view/nabatas-page/top/grrm-tips%E5%88%A9%E7%94%A8%E4%B8%8A%E3%81%AE%E6%B3%A8%E6%84%8F%E7%82%B9%E3%81%AA%E3%81%A9?authuser=0">GRRM Tips（旧サイト）</a>
+          <a href="https://sites.google.com/view/nabatas-page/top/%E5%8F%82%E8%80%83%E8%B3%87%E6%96%99%E3%81%A8%E5%82%99%E5%BF%98%E9%8C%B2?authuser=0">参考資料と備忘録（旧サイト）</a>
+          <a href="molecule-visualizer/index.html">目次 - Table of Contents</a>
+      </div>
+    <script type="text/javascript">
+        function showDate() {
+            var now = new Date();
+            var year = now.getFullYear();
+            var month = now.getMonth() + 1; // 月は0から始まるので1を足す
+            var day = now.getDate();
+            return year + "/" + month + "/" + day;
+        }
+
+        function showDayOfWeek() {
+            var weeks = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+            var now = new Date();
+            var weekdays = now.getDay();
+            return weeks[weekdays];
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            document.getElementById("todaysdate").innerHTML = showDate();
+            document.getElementById("dayofweek").innerHTML = showDayOfWeek();
+        });
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+            document.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightBlock(block);
+            });
+        });
+
+        function toggleMenu() {
+            const menu = document.querySelector('.dropdown-menu');
+            if (menu.style.display === 'flex') {
+                menu.style.display = 'none';
+            } else {
+                menu.style.display = 'flex';
+            }
+        }
+    </script>
+    
+  </header>
+
+  <div class="top-wrapper">
+    <div class="container">
+      <h1>Table of Contents</h1>
+      <p>Hitoshi Nabata<br>personal webpage</p>
+    </div>
+  </div>
+  <div class="container" style="padding: 15px">
+    <h2>【Contents】</h2>
+      <ul>
+        <li><a href="https://h-nabata.github.io/molecule-visualizer/index.html">分子構造描画 - Molecular Structure Rendering</a></li>
+      </ul>
+    </div>
+  
+<!--     数式サンプル
+  <p>Here is an inline math example: \( E = mc^2 \)</p>
+  <p>And here is a display math example:</p>
+  <div>
+      \[ \int_0^\infty e^{-x^2} dx = \frac{\sqrt{\pi}}{2} \]
+  </div> -->
+  
+<!-- コードブロックサンプル
+  <div class="main-container">
+    <div class="code-container">
+        <div class="code-title">Python Code Example</div>
+        <pre><code class="python">
+def say_hello():
+    print('Hello, world!')
+
+if __name__ == "__main__":
+    say_hello()
+        </code></pre>
+    </div>
+</div>
+<script>
+  document.addEventListener('DOMContentLoaded', (event) => {
+      document.querySelectorAll('pre code').forEach((block) => {
+          hljs.highlightBlock(block);
+      });
+  });
+</script> -->
+  
+  <footer>
+    <div class="container">
+      <img src="img/favicon_candle.png">
+      <p style="text-align:center">このホームページは仮作成版です。</br>2023 May 20</p>
+    </div>
+  </footer>
+</body>
+</html>
