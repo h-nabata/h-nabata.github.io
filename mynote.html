@@ -70,8 +70,9 @@
             });
         });
 
-        function toggleMenu() {
-            const menu = document.querySelector('.dropdown-menu');
+        function toggleMenu(menuId) {
+            // const menu = document.querySelector('.dropdown-menu');
+            const menu = document.getElementById(menuId);
             if (menu.style.display === 'flex') {
                 menu.style.display = 'none';
             } else {
