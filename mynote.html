@@ -145,26 +145,25 @@
         <li><a href="https://www.jstage.jst.go.jp/article/molsci/5/1/5_1_AC0005/_article/-char/ja/">学部学生のための量子化学講義ノート</a></li>
         <li>「<a href="https://home.hiroshima-u.ac.jp/kyam/pages/results/monograph/Ref23_B-O.pdf">Born−Oppenheimer近似と断熱近似</a>」（山崎勝義先生による<a href="https://home.hiroshima-u.ac.jp/kyam/pages/results/monograph/">物理化学Monographシリーズ</a>の一つ；「<a href="https://home.hiroshima-u.ac.jp/kyam/pages/results/monograph/Ref24_bracket.pdf">量子論におけるブラ・ケット表記</a>」も非常に分かりやすいのでオススメです）</li>
         <li><a href="https://nusit.nus.edu.sg/services/hpc-newsletter/running-gaussian-09-jobs-more-efficiently/">RUNNING GAUSSIAN 09 JOBS MORE EFFICIENTLY</a> （メモリやプロセッサ数を過剰に割り当てても計算性能が線形に向上する訳ではない、というお話）</li>
-        <li>
             <div class="main-container">
               <div class="code-container">
                   <div class="code-title">A comment on spin contamination by ChatGPT-4 (provided at 2023/11/21)</div>
                   <pre><code class="python">
-                      量子化学計算における「<b>spin contamination</b>」は、主に電子のスピンを取り扱う計算において発生する問題です。これは、理論的には特定のスピン状態（例えばシングレット、ダブレット、トリプレットなど）であるべき分子や原子の計算が、他のスピン状態の特性を誤って含む場合に起こります。
-                      
-                      <b>Spin Contaminationの具体的な状況</b>
-                      不正確な波動関数の使用: Spin contaminationは、特にハートリー・フォック（HF）や密度汎関数理論（DFT）のような一電子近似手法で見られます。これらの方法は、多電子系の波動関数を一電子軌道の積として近似するため、スピン対称性が正確に保たれないことがあります。
-                      
-                      励起状態の計算: 励起状態、特にトリプレット状態などの高次のスピン状態を計算する際にもspin contaminationが発生しやすいです。これは、基底状態に対する近似が励起状態のスピン特性を正確に表現できないためです。
-                      不安定な分子構造: 特定の不安定な分子や遷移状態では、スピンの混入が発生しやすくなります。これは、分子の対称性や電子構造が複雑であるため、一般的な近似手法では適切にスピン状態を記述できない場合があるためです。
-                      
-                      Spin Contaminationの検出と対策
-                      
-                      スピン汚染の検出: 計算された波動関数のスピン期待値を計算することで、spin contaminationの存在を検出できます。理想的なスピン純度の状態では、スピン期待値は特定の整数または半整数の値になります。
-                      
-                      対策: Spin contaminationを減らすためには、より高度な多体波動関数手法（例えば結合クラスター理論や多配置自己無撞着場（MCSCF）理論）を使用することが有効です。これらの方法は、多電子相互作用をより正確に取り扱うことができます。
-                      
-                      Spin contaminationは、量子化学計算の正確さと信頼性に影響を与えるため、特に精密な計算を必要とする研究では注意深く扱われるべき問題です
+量子化学計算における「<b>spin contamination</b>」は、主に電子のスピンを取り扱う計算において発生する問題です。これは、理論的には特定のスピン状態（例えばシングレット、ダブレット、トリプレットなど）であるべき分子や原子の計算が、他のスピン状態の特性を誤って含む場合に起こります。
+
+<b>Spin Contaminationの具体的な状況</b>
+不正確な波動関数の使用: Spin contaminationは、特にハートリー・フォック（HF）や密度汎関数理論（DFT）のような一電子近似手法で見られます。これらの方法は、多電子系の波動関数を一電子軌道の積として近似するため、スピン対称性が正確に保たれないことがあります。
+
+励起状態の計算: 励起状態、特にトリプレット状態などの高次のスピン状態を計算する際にもspin contaminationが発生しやすいです。これは、基底状態に対する近似が励起状態のスピン特性を正確に表現できないためです。
+不安定な分子構造: 特定の不安定な分子や遷移状態では、スピンの混入が発生しやすくなります。これは、分子の対称性や電子構造が複雑であるため、一般的な近似手法では適切にスピン状態を記述できない場合があるためです。
+
+Spin Contaminationの検出と対策
+
+スピン汚染の検出: 計算された波動関数のスピン期待値を計算することで、spin contaminationの存在を検出できます。理想的なスピン純度の状態では、スピン期待値は特定の整数または半整数の値になります。
+
+対策: Spin contaminationを減らすためには、より高度な多体波動関数手法（例えば結合クラスター理論や多配置自己無撞着場（MCSCF）理論）を使用することが有効です。これらの方法は、多電子相互作用をより正確に取り扱うことができます。
+
+Spin contaminationは、量子化学計算の正確さと信頼性に影響を与えるため、特に精密な計算を必要とする研究では注意深く扱われるべき問題です
                   </code></pre>
               </div>
           </div>
@@ -175,7 +174,7 @@
                 });
             });
           </script>
-          <li>スピン多重度とスピン二乗値の対応関係は次の表の通り。スピン二乗値（S**2）はGRRMのアウトプットファイルに記載されている。（参考：<a href="http://junzhu.chem8.org/sites/default/files/Open%20shell%20systems.pdf">http://junzhu.chem8.org/sites/default/files/Open%20shell%20systems.pdf</a> ）<br>※spin quantum number （スピン量子数）Sに対して S(S+1) がスピン二乗値に相当する。</li>
+          <li>スピン多重度とスピン二乗値の対応関係は次の表の通り。スピン二乗値（S**2）はGRRMのアウトプットファイルに記載されている。（参考：<a href="http://junzhu.chem8.org/sites/default/files/Open%20shell%20systems.pdf">http://junzhu.chem8.org/sites/default/files/Open%20shell%20systems.pdf</a> ）<br>※spin quantum number （スピン量子数）Sに対して S(S+1) がスピン二乗値に相当する。<br></li>
             <table>
               <thead>
                   <tr>
@@ -242,7 +241,6 @@
                   </tr>
               </tbody>
           </table>
-        </li>
       </ul>
     </div>
   
