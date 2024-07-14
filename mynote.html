@@ -90,7 +90,163 @@
     </div>
   </div>
   <div class="container" style="padding: 15px">
-    <h2>【電子状態計算／量子化学計算について】</h2>
+    <h2 id="calc">【電子状態計算／量子化学計算について】</h2>
+      <ul>
+        <li><a href="https://www.wiley.com/en-us/Introduction+to+Computational+Chemistry%2C+3rd+Edition-p-9781118825990">Introduction to Computational Chemistry</a>（Frank Jensen先生による計算化学の網羅的な解説書；第2版のPDF版がネット上でダウンロード可能）</li>
+        <li><a href="https://kitchingroup.cheme.cmu.edu/dft-book/dft.html">Modeling materials using density functional theory</a>（DFT（密度汎関数理論）を用いた材料研究スキル習得のためのテキスト）</li>
+        <li><a href="https://www.conflex.co.jp/gaussian_support/basissets.html">Gaussian日本語マニュアル ― 基底関数系</a>（コンフレックス株式会社）
+            <li><a href="https://www.basissetexchange.org/">Basis Set Exchange</a>（基底関数のデータベース）</li>
+            <li><a href="https://www.hpc.co.jp/chem/software/gaussian/help/keywords/scrf/">SCRF</a>（Gaussianプログラムの溶媒効果のオプションなど；HPCシステムズ）</li>
+        </li>
+        <li><a href="https://departments.icmab.es/leem/siesta/">SIESTA</a>（電子状態計算ソフトウェア「SIESTA」の公式ページ）
+            <li>（古い）<a href="https://departments.icmab.es/leem/SIESTA_MATERIAL/Databases/Pseudopotentials/periodictable-gga-abinit.html">GGA Pseudopotential Database（SIESTAで利用可能な擬ポテンシャルデータベース）</a></li>
+            <li><a href="http://www.pseudo-dojo.org/">pseudo-dojo</a>（擬ポテンシャル(pseudopotential)のデータベース）</li>
+            <li>SIESTAプログラムの<a href="https://personales.unican.es/junqueraj/JavierJunquera_files/Metodos/Theory-session.html">理論背景</a>・<a href="https://personales.unican.es/junqueraj/JavierJunquera_files/Metodos/Hands-on-session.html">実践例</a></li>
+            <li><a href="https://www.jsol-cae.com/product/material/siesta/feature/dft.html">SIESTAの特長</a> - CAEソリューション（JSOL株式会社による日本語のマニュアル）</li>
+            <li><a href="https://www.affinity-science.com/siesta/">SIESTA</a>の紹介ページ（株式会社アフィニティサイエンス）</li>
+        </li>
+        <li><a href="http://pseudopotentials.quantum-espresso.org/legacy_tables">Quantum ESPRESSO PSLIBRARY</a>（電子状態計算ソフトウェア「Quantum ESPRESSO」の擬ポテンシャルライブラリ）
+            <li><a href="https://www.materialscloud.org/discover/sssp">https://www.materialscloud.org/discover/sssp</a>: Standard solid-state pseudopotentials (SSSP)（折れ線グラフの様子からエネルギーカットオフを見積もる）</li>
+        </li>
+        <li><a href="https://ist.ksc.kwansei.ac.jp/~nishitani/?c=plugin;plugin=attach_download;p=RecentPublications;file_name=11VASPManual.pdf">はじめてのVASP 原理から使用法，適用例まで</a>（西谷滋人先生による第一原理計算ソフトVASPのビギナー向け手引き；直リンクにつき注意）</li>
+        <li><a href="https://xtb-docs.readthedocs.io/en/latest/contents.html">xTB User Guide</a>（xTBプログラムの資料；xTBは電子状態計算ソフトウェア「Orca」で利用可能）※ 周期境界条件も課すことができるがGRRMとの連携は挙動が不安定；計算速度が速いのでポリマーやクラスターモデルなどの大規模な反応経路探索に利用することが多い</li>
+        <li><a href="https://dftbplus.org/documentation">DFTB+ マニュアル</a>（2023年1月現在の最新バージョンは Version 22.2；<a href="https://dftbplus-recipes.readthedocs.io/en/latest/">DFTB+のインプットレシピ集</a>も参考に；"<a href="https://dftb.org/about-dftb">About DFTB</a>"）※「密度汎関数理論に基づくタイトバインディング（DFTB）法」を実装した電子状態計算ソフトウェアが「<a href="https://dftbplus.org/">DFTB+</a>」である※ 周期境界条件も課すことができる；計算速度が速いのでポリマーや大きめの有機分子などの大規模な反応経路探索に利用することが多い※ DFTB-SCCの参考文献：M. Elstner, D. Porezag, G. Jungnickel, J. Elsner, M. Haugk, Th. Frauenheim, S. Suhai, and G. Seifert, "<a href="https://journals.aps.org/prb/abstract/10.1103/PhysRevB.58.7260">Self-consistent-charge density-functional tight-binding method for simulations of complex materials properties</a>" Phys. Rev. B, 1998, 58, 7260–7268.</li>
+        <li><a href="https://docs.siesta-project.org/projects/atom/en/latest/reference/atom.html">ATOM User manual</a>（電子状態計算ソフトウェア「ATOM」のマニュアル）</li>
+        <li><a href="https://en.wikipedia.org/wiki/List_of_quantum_chemistry_and_solid-state_physics_software">List of quantum chemistry and solid-state physics software</a>（各種量子化学計算プログラムのスペックの比較・一覧；wikipediaの記事）</li>
+        <li><a href="http://www.postdocjournal.com/file_journal/673_22745370.pdf">Atomic Charges in Molecules: A Classical Concept in Modern Computational Chemistry</a>（分子の原子電荷についてまとめられた記事）</li>
+        <li><a href="http://ursula.chem.yale.edu/~batista/classes/tutorials/gaussian/ECP_bases.pdf">Effective Core Potential (ECP) Basis Sets</a>（<a href="https://computational-chemistry.com/top/blog/2017/01/25/ecp/">有効内殻ポテンシャル</a>（ECP）を取り入れた基底関数に関するYale大学<a href="http://ursula.chem.yale.edu/~batista/index.html">Batista研</a>の資料）</li>
+        <li><a href="https://www2.itc.nagoya-u.ac.jp/pub/pdf/pdf/vol06_03/282_296kouza.pdf">分子軌道法計算プログラム Gaussian 03　―その 6 ―</a>（熱力学諸量の計算方法について詳説されているテキスト；丸善出版の「実験化学講座」の計算化学の巻も参考に）</li>
+        <li><a href="https://aics.riken.jp/aicssite/wp-content/uploads/2016/05/20151125nakatsui-1.pdf">分⼦動⼒学計算によるタンパク質の機能解析</a>（中津井雅彦先生によるタンパク質の機能解析を題材とした分⼦動⼒学計算（MD）の解説）</li>
+        <li><a href="https://www5.hp-ez.com/hp/calculations/">第一原理計算入門</a></li>
+        <li><a href="https://www.jstage.jst.go.jp/article/jsssj/28/3/28_3_135/_pdf">「第一原理計算の諸条件：サンプル k 点， カットオフ・エネルギー，擬ポテンシャル」</a>
+          <i>
+            <li>通常，サンプルk点は等間隔のメッシュ上に空間的になるべく均等になるように採られる。ある方向に実空間でN倍にした系の計算精度が，元の系と同等であるためには，同じ方向に対するサンプルk点を1／Nにすれば良い。</li>
+            <li>ある電子状態（原子）で作成された擬ポテンシャルが，別の環境，例えば，電子配置の異なる原子や，結晶中等，に移行（transfer）した場合に，新しい環境での全電子計算の結果をどのぐらい再現できるかという性質を "transferability" と呼ぶ。</li>
+            <li>擬ポテンシャルが，少ないカットオフエネルギーで十分記述できるときにはソフトな擬ポテンシャルといわれ，逆に高いカットオフエネルギーが必要とされるときにはハードな擬ポテンシャルといわれる。</li>
+          </i>>
+            <li><a href="https://journals.aps.org/prb/abstract/10.1103/PhysRevB.13.5188">H.J. Monkhorst, J.D. Pack, "Special points for Brillouin-zone integrations," Phys. Rev. B, 13 (1976), p. 5188</a></li>
+        </li>
+        <li>"<a href="https://pubs.acs.org/doi/full/10.1021/jp109756g">Electronic Structure of TiO2 Surfaces and Effect of Molecular Adsorbates Using Different DFT Implementations</a>"<br><b>表面吸着物の電子状態計算に関して、次の3種類の計算手法を比較した論文</b><br>(i) all-electron calculations with localized Gaussian basis sets (using CRYSTAL06)<br>(ii) pseudopotential calculations with localized basis sets (using SIESTA)<br>(iii) pseudopotential calculations with plane-wave basis sets (using PWSCF distributed within the Quantum ESPRESSO suite of codes)</li>
+        <li>Hubburd U パラメータによるクーロン相互作用の補正（バンドギャップを過小評価するDFT特有の問題に対する補正）：<a href="https://www.jim.or.jp/journal/m/pdf3/56/09/554.pdf">https://www.jim.or.jp/journal/m/pdf3/56/09/554.pdf</a>
+            <li>DFT+U法（LDA/GGA＋U 法の総称）に関してよく引かれる論文：<a href="https://journals.aps.org/prb/abstract/10.1103/PhysRevB.44.943">Vladimir I. Anisimov, Jan Zaanen, and Ole K. Andersen, Band theory and Mott insulators: Hubbard U instead of Stoner I, Phys. Rev. B 44, 943 – Published 15 July 1991</a></li>
+            <li>Quantum ESPRESSOのマニュアル：<a href="https://www.quantum-espresso.org/Doc/user_guide_PDF/Hubbard_input.pdf">https://www.quantum-espresso.org/Doc/user_guide_PDF/Hubbard_input.pdf</a></li>
+            <li>U (eV単位) の値は、Uを色々変えて計算したバンドギャップや格子定数の値をもとに、実験値をよく再現する値をその都度計算者が決定する必要がある。多くの場合、概ね数eV程度となる。</li>
+            <li>酸化物などの系で用いられる手法。吸着エネルギーには大きく影響しない場合があり、色々な吸着種間で吸着エネルギーの相対値を比較する際には必ずしも用いられないことがある。（ただし、最近ではほとんどの研究でDFT+U法が用いられており、使っていないとむしろ不自然に思われる可能性がある）</li>
+        </li>
+        <li><a href="https://publications.lib.chalmers.se/records/fulltext/248266/248266.pdf">Methane oxidation over palladium oxide: From electronic structure to catalytic conversion</a><br>※ Chapter 4 "Reactions on surfaces" : 表面と吸着物の電子的な相互作用について</li>
+        <li><a href="http://www.chem.konan-u.ac.jp/applphys/web_material/denkaQA.pdf">「量子化学計算による酸化還元電位の算出法」</a>（測定法小委員会によるPDF資料）</li>
+        <li>T. Matsui, Y. Kitagawa, M. Okumura, Y. Shigeta, S. Sakaki, <a href="https://onlinelibrary.wiley.com/doi/10.1002/jcc.23100">"Consistent Scheme for Computing Standard Hydrogen Electrode and Redox Potentials"</a>, J. Comput. Chem. 2013, 34, 21–26. （DFT計算に基づいて還元電位を計算する手続きに関する研究）</li>
+        <li><a href="https://www.jstage.jst.go.jp/article/revpolarography/64/2/64_79/_pdf">「第一原理計算による電気化学界面・反応シミュレーションの考察」</a></li>
+        <li><a href="https://pycrawfordprogproj.readthedocs.io/en/latest/index.html">Programming Tutorial in Chemistry by Python</a>（計算化学のPython版チュートリアル；バージニア工科大学<a href="https://crawford.chem.vt.edu/">Crawford研</a>がGitHub上で公開しているC++ベースの "<a href="https://github.com/CrawfordGroup/ProgrammingProjects/">C++ Programming Tutorial in Chemistry</a>" が元ネタ）</li>
+        <li><a href="https://web.archive.org/web/20050404055458/http://ccmaol1.chim.unisi.it/comp-photochem/">Computational Organic Photochemistry</a></li>
+        <li><a href="https://dojo.qulacs.org/ja/latest/">Quantum Native Dojo</a>（<a href="https://qunasys.com/">株式会社QunaSys</a>が2019年から提供している量子力学･量子化学のチュートリアルサイト）</li>
+        <li><a href="http://mmrc.amss.cas.cn/tlb/201702/W020170224608149940643.pdf">Quantum Computation and Quantum Information</a>（10th Anniversary Edition；Michael A. Nielsen & Isaac L. Chuang；量子コンピューティングの著名なテキスト；→<a href="https://www.amazon.co.jp/Quantum-Computation-Information-10th-Anniversary/dp/1107002176">書籍版</a>）</li>
+        <li><a href="https://qiskit.org/textbook/ja/preface.html">Qiskit を使った量子計算の学習</a>（<a href="https://qiskit.org/">Qiskit Communityチーム</a>が提供する量子計算のチュートリアルを有志が邦訳したもの）</li>
+        <li><a href="https://www.jstage.jst.go.jp/article/molsci/5/1/5_1_AC0005/_article/-char/ja/">学部学生のための量子化学講義ノート</a></li>
+        <li>「<a href="https://home.hiroshima-u.ac.jp/kyam/pages/results/monograph/Ref23_B-O.pdf">Born−Oppenheimer近似と断熱近似</a>」（山崎勝義先生による<a href="https://home.hiroshima-u.ac.jp/kyam/pages/results/monograph/">物理化学Monographシリーズ</a>の一つ；「<a href="https://home.hiroshima-u.ac.jp/kyam/pages/results/monograph/Ref24_bracket.pdf">量子論におけるブラ・ケット表記</a>」も非常に分かりやすいのでオススメです）</li>
+        <li><a href="https://nusit.nus.edu.sg/services/hpc-newsletter/running-gaussian-09-jobs-more-efficiently/">RUNNING GAUSSIAN 09 JOBS MORE EFFICIENTLY</a> （メモリやプロセッサ数を過剰に割り当てても計算性能が線形に向上する訳ではない、というお話）</li>
+        <li>A comment on spin contamination by ChatGPT-4 (provided at 2023/11/21):
+            <div class="main-container">
+              <div class="code-container">
+                  <div class="code-title">Python Code Example</div>
+                  <pre><code class="python">
+                      量子化学計算における「<b>spin contamination</b>」は、主に電子のスピンを取り扱う計算において発生する問題です。これは、理論的には特定のスピン状態（例えばシングレット、ダブレット、トリプレットなど）であるべき分子や原子の計算が、他のスピン状態の特性を誤って含む場合に起こります。
+                      
+                      <b>Spin Contaminationの具体的な状況</b>
+                      不正確な波動関数の使用: Spin contaminationは、特にハートリー・フォック（HF）や密度汎関数理論（DFT）のような一電子近似手法で見られます。これらの方法は、多電子系の波動関数を一電子軌道の積として近似するため、スピン対称性が正確に保たれないことがあります。
+                      
+                      励起状態の計算: 励起状態、特にトリプレット状態などの高次のスピン状態を計算する際にもspin contaminationが発生しやすいです。これは、基底状態に対する近似が励起状態のスピン特性を正確に表現できないためです。
+                      不安定な分子構造: 特定の不安定な分子や遷移状態では、スピンの混入が発生しやすくなります。これは、分子の対称性や電子構造が複雑であるため、一般的な近似手法では適切にスピン状態を記述できない場合があるためです。
+                      
+                      Spin Contaminationの検出と対策
+                      
+                      スピン汚染の検出: 計算された波動関数のスピン期待値を計算することで、spin contaminationの存在を検出できます。理想的なスピン純度の状態では、スピン期待値は特定の整数または半整数の値になります。
+                      
+                      対策: Spin contaminationを減らすためには、より高度な多体波動関数手法（例えば結合クラスター理論や多配置自己無撞着場（MCSCF）理論）を使用することが有効です。これらの方法は、多電子相互作用をより正確に取り扱うことができます。
+                      
+                      Spin contaminationは、量子化学計算の正確さと信頼性に影響を与えるため、特に精密な計算を必要とする研究では注意深く扱われるべき問題です
+                  </code></pre>
+              </div>
+          </div>
+          <script>
+            document.addEventListener('DOMContentLoaded', (event) => {
+                document.querySelectorAll('pre code').forEach((block) => {
+                    hljs.highlightBlock(block);
+                });
+            });
+          </script>
+          <li>スピン多重度とスピン二乗値の対応関係は次の表の通り。スピン二乗値（S**2）はGRRMのアウトプットファイルに記載されている。（参考：<a href="http://junzhu.chem8.org/sites/default/files/Open%20shell%20systems.pdf">http://junzhu.chem8.org/sites/default/files/Open%20shell%20systems.pdf</a> ）<br>※spin quantum number （スピン量子数）Sに対して S(S+1) がスピン二乗値に相当する。</li>
+            <table>
+              <thead>
+                  <tr>
+                      <th>spin quantum number<br>スピン量子数 S</th>
+                      <th>spin multiplicity<br>スピン多重度 2S+1</th>
+                      <th>total spin<br>S**2 = S(S+1)</th>
+                  </tr>
+              </thead>
+              <tbody>
+                  <tr>
+                      <td>0</td>
+                      <td>1 (singlet)</td>
+                      <td>0.00</td>
+                  </tr>
+                  <tr>
+                      <td>1/2</td>
+                      <td>2 (doublet)</td>
+                      <td>0.75</td>
+                  </tr>
+                  <tr>
+                      <td>1</td>
+                      <td>3 (triplet)</td>
+                      <td>2.00</td>
+                  </tr>
+                  <tr>
+                      <td>3/2</td>
+                      <td>4 (quartet)</td>
+                      <td>3.75</td>
+                  </tr>
+                  <tr>
+                      <td>2</td>
+                      <td>5 (quintet)</td>
+                      <td>6.00</td>
+                  </tr>
+                  <tr>
+                      <td>5/2</td>
+                      <td>6 (sextet)</td>
+                      <td>8.75</td>
+                  </tr>
+                  <tr>
+                      <td>3</td>
+                      <td>7 (septet)</td>
+                      <td>12.00</td>
+                  </tr>
+                  <tr>
+                      <td>7/2</td>
+                      <td>8 (octet)</td>
+                      <td>15.75</td>
+                  </tr>
+                  <tr>
+                      <td>4</td>
+                      <td>9 (nonet)</td>
+                      <td>20.00</td>
+                  </tr>
+                  <tr>
+                      <td>9/2</td>
+                      <td>10 (decatet/dectet)</td>
+                      <td>24.75</td>
+                  </tr>
+                  <tr>
+                      <td>5</td>
+                      <td>11 (11重項状態)</td>
+                      <td>30.00</td>
+                  </tr>
+              </tbody>
+          </table>
+        </li>
+      </ul>
+    </div>
+  
+    <h2 id="grrm">【GRRM関連のテキスト】</h2>
       <ul>
         <li><a href="https://www.wiley.com/en-us/Introduction+to+Computational+Chemistry%2C+3rd+Edition-p-9781118825990">Introduction to Computational Chemistry</a>（Frank Jensen先生による計算化学の網羅的な解説書；第2版のPDF版がネット上でダウンロード可能）</li>
         <li><a href="https://kitchingroup.cheme.cmu.edu/dft-book/dft.html">Modeling materials using density functional theory</a>（DFT（密度汎関数理論）を用いた材料研究スキル習得のためのテキスト）</li>
