@@ -132,14 +132,26 @@
         \end{aligned}
       \]
     </div>
-    <p>と計算できる。式変形の途中で、\(\displaystyle \sum_{i=0}^n \boldsymbol{S}_i=0\)を用いているが、これはすべての\(i\)についてベクトル\(\boldsymbol{S}_i\)の始点が重心であるため、和がゼロベクトルになることから導かれる。</p>
+    <p>と計算できる。式変形の途中で、\(\displaystyle \sum_{i=0}^n \boldsymbol{S}_i=0\)を用いているが、これはすべての\(i\)についてベクトル\(\boldsymbol{S}_i\)の始点が重心であるため、和がゼロベクトルになることから導かれる。また、式中の2カ所の下線部は同じ値となる。</p>
     <p>よって、統計平均をとれば、</p>
     <div>
       \[
         \sum_{i=0}^n \sum_{j=0}^n \left\langle\boldsymbol{R}_{i j}^2\right\rangle = 2(n+1) \sum_{i=0}^n \left\langle\boldsymbol{S}_i^2\right\rangle
       \]
     </div>
-    <p>を得る。</p>
+    <p>を得る。ここで、\(\displaystyle \left\langle{S}\right\rangle = \dfrac{1}{n+1}\sum_{i=0}^n \left\langle\boldsymbol{S}_i^2\right\rangle\)より、</p>
+    <div>
+      \[
+        \left\langle{S}\right\rangle = \dfrac{1}{2(n+1)^2} \sum_{i=0}^n \sum_{j=0}^n \left\langle\boldsymbol{R}_{ij}^2\right\rangle
+      \]
+    </div>
+    <p>を得る。この総和を上三角行列部分だけに適用するように書き直すと、</p>
+    <div>
+      \[
+        \left\langle{S}\right\rangle = \dfrac{1}{(n+1)^2} \sum_{i=0}^{n-1} \sum_{j=i+1}^n \left\langle\boldsymbol{R}_{ij}^2\right\rangle
+      \]
+    </div>
+    <p>となる。以上で教科書(5.5)式が導出される。</p>
 
 
   </div>
