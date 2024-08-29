@@ -105,10 +105,42 @@
           \left\langle\boldsymbol{R}^2\right\rangle &=\langle\boldsymbol{R} \cdot \boldsymbol{R}\rangle \\
           &=\left\langle\left(\sum_{i=1}^n \boldsymbol{l}_i\right) \cdot\left(\sum_{j=1}^n \boldsymbol{l}_j\right)\right\rangle \\
           &=\left\langle\sum_{i, j=1}^n \boldsymbol{l}_i \cdot \boldsymbol{l}_j\right\rangle \\
-          &=\sum_{i=1}^n \boldsymbol{l}_i \cdot \boldsymbol{l}_i+\sum_{i \neq j}^n\left\langle\boldsymbol{l}_i \cdot \boldsymbol{l}_j\right\rangle
+          &=\sum_{i=1}^n {\boldsymbol{l}_i}^{2}+\sum_{i \neq j}^n\left\langle\boldsymbol{l}_i \cdot \boldsymbol{l}_j\right\rangle
         \end{aligned}
       \]
     </div>
+    <p>高分子鎖の平均的（統計的）な挙動を記述する場合、高分子鎖の重心を系の基準点にとると議論がシンプルになる。重心を視点とする\(i\)番目の原子の位置ベクトルを\(\boldsymbol{S}_i\)とすると、\(i\)番目の原子から\(j\)番目の原子を結ぶベクトル\(\boldsymbol{R}_{ij}\)は</p>
+    <div>
+      \[
+        \boldsymbol{R}_{ij}=\boldsymbol{S}_{j}-\boldsymbol{S}_{i}
+      \]
+    </div>
+    <p>と表される。この辺々を二乗すると</p>
+    <div>
+      \[
+        {\boldsymbol{R}_{ij}}^{2}={\boldsymbol{S}_{i}}^{2}+{\boldsymbol{S}_{j}}^{2}-2\boldsymbol{S}_{i}\cdot\boldsymbol{S}_{j}
+      \]
+    </div>
+    <p>となるから、</p>
+    <div>
+      \[
+        \begin{aligned}
+          & \quad \ \sum_{i=0}^n \sum_{j=0}^n \boldsymbol{R}_{i j}^2 \\
+          & =\sum_{i=0}^n \sum_{j=0}^n \boldsymbol{S}_i^2+\sum_{i=0}^n \sum_{j=0}^n \boldsymbol{S}_j^2-2 \sum_{i=0}^n \sum_{j=0}^n \boldsymbol{S}_i \cdot \boldsymbol{S}_j \\
+          & =\underline{(n+1) \sum_{i=0}^n \boldsymbol{S}_i^2}+\underline{(n+1) \sum_{j=0}^n \boldsymbol{S}_j^2}-2\left(\sum_{i=0}^n \boldsymbol{S}_i\right) \cdot\left(\sum_{j=0}^n \boldsymbol{S}_j\right) \\
+          & =2(n+1) \sum_{i=0}^n \boldsymbol{S}_i^2
+        \end{aligned}
+      \]
+    </div>
+    <p>と計算できる。式変形の途中で、\(\displaystyle \sum_{i=0}^n \boldsymbol{S}_i=0\)を用いているが、これはすべての\(i\)についてベクトル\(\boldsymbol{S}_i\)の始点が重心であるため、和がゼロベクトルになることから導かれる。</p>
+    <p>よって、統計平均をとれば、</p>
+    <div>
+      \[
+        \sum_{i=0}^n \sum_{j=0}^n \left\langle\boldsymbol{R}_{i j}^2\right\rangle = 2(n+1) \sum_{i=0}^n \left\langle\boldsymbol{S}_i^2\right\rangle
+      \]
+    </div>
+    <p>を得る。</p>
+
 
   </div>
   <div class="container" style="padding: 15px">
