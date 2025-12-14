@@ -54,6 +54,38 @@ function pushHistory(label = "edit") {
   history.redo = [];
 }
 
+let currentStyle = "stickball";
+
+function applyCurrentStyle() {
+  if (!viewer) return;
+  const model = viewer.getModel();
+  if (!model) return;
+
+  // ベーススタイルをまず決める
+  if (currentStyle === "stickball") {
+    model.setStyle({}, { stick: { radius: 0.2 }, sphere: { scale: 0.3 } });
+  } else if (currentStyle === "stick") {
+    model.setStyle({}, { stick: { radius: 0.25 } });
+  } else if (currentStyle === "wire") {
+    model.setStyle({}, { line: { linewidth: 2 } });
+  } else if (currentStyle === "vdw") {
+    // “vdWっぽい球”：scaleを大きく（必要なら数値調整）
+    model.setStyle({}, { sphere: { scale: 1.0 } });
+  }
+
+  // その上から「選択強調」を上書き（styleは最後に上書いた勝ち）
+  updateSelectionStyles();
+  updateLabels();
+  viewer.render();
+}
+
+function onStyleChange() {
+  currentStyle = document.getElementById("styleSelect").value;
+  applyCurrentStyle();
+  setStatus(`Style: ${currentStyle}`);
+}
+
+
 function setSelection(newSet) {
   selected = new Set([...newSet]);
   updateSelectionStyles();
@@ -197,10 +229,11 @@ function renderFromAtoms(preserveCamera = false) {
   const model = viewer.getModel();
 
   // ① ベーススタイル
-  model.setStyle({}, {
-    stick: { radius: 0.2 },
-    sphere: { scale: 0.3 }
-  });
+  applyCurrentStyle();
+  // model.setStyle({}, {
+  //   stick: { radius: 0.2 },
+  //   sphere: { scale: 0.3 }
+  // });
 
   // ② 選択スタイル
   updateSelectionStyles();
@@ -335,6 +368,51 @@ function deleteSelected() {
   selected.clear();
   renderFromAtoms(true);
   setStatus("Deleted selected atoms");
+}
+
+function changeSelectedElement() {
+  if (selected.size === 0) return;
+
+  const newElem = document.getElementById("editElem").value.trim();
+  if (!newElem) return;
+
+  pushHistory("changeElem");
+  for (const i of selected) atoms[i].elem = newElem;
+
+  // 再描画（カメラ維持）
+  renderFromAtoms(true);
+  setStatus(`Element changed to ${newElem}`);
+}
+
+function setSelection(newSet) {
+  selected = new Set([...newSet]);
+  updateSelectionStyles();
+  updateLabels();
+  if (viewer) viewer.render();
+  updateAtomTable();
+}
+
+function selectAll() {
+  setSelection(new Set(atoms.map((_, i) => i)));
+  setStatus("Selected all");
+}
+function selectNone() {
+  setSelection(new Set());
+  setStatus("Selected none");
+}
+function selectInvert() {
+  const ns = new Set();
+  for (let i = 0; i < atoms.length; i++) if (!selected.has(i)) ns.add(i);
+  setSelection(ns);
+  setStatus("Selection inverted");
+}
+function selectByElement() {
+  const e = document.getElementById("selByElem").value.trim();
+  if (!e) return;
+  const ns = new Set();
+  atoms.forEach((a, i) => { if (a.elem === e) ns.add(i); });
+  setSelection(ns);
+  setStatus(`Selected element: ${e}`);
 }
 
 function addAtom() {
@@ -582,9 +660,17 @@ function wireUI() {
 
   document.getElementById("btnClearSel").addEventListener("click", clearSelection);
   document.getElementById("btnDeleteSel").addEventListener("click", deleteSelected);
+  document.getElementById("btnChangeElem").addEventListener("click", changeSelectedElement);
 
   document.getElementById("btnAddAtom").addEventListener("click", addAtom);
   document.getElementById("btnAddFragment").addEventListener("click", openFragmentDialog);
+
+   document.getElementById("btnSelectAll").addEventListener("click", selectAll);
+   document.getElementById("btnSelectNone").addEventListener("click", selectNone);
+   document.getElementById("btnSelectInvert").addEventListener("click", selectInvert);
+   document.getElementById("btnSelectByElem").addEventListener("click", selectByElement);
+
+   document.getElementById("styleSelect").addEventListener("change", onStyleChange);
 
   const fragApplyBtn = document.getElementById("btnFragApply");
   fragApplyBtn.addEventListener("click", (ev) => {
