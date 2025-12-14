@@ -54,6 +54,14 @@ function pushHistory(label = "edit") {
   history.redo = [];
 }
 
+function setSelection(newSet) {
+  selected = new Set([...newSet]);
+  updateSelectionStyles();
+  updateLabels();
+  if (viewer) viewer.render();
+  updateAtomTable();
+}
+
 function restoreState(state) {
   atoms = deepCopyAtoms(state.atoms);
   selected = new Set([...state.selected]);
@@ -176,10 +184,9 @@ function renderFromAtoms(preserveCamera = false) {
 
   const xyz = atomsToXYZText(atoms);
 
-  // Keep camera if requested
   let view = null;
   if (preserveCamera) {
-    try { view = viewer.getView(); } catch (_) { view = null; }
+    try { view = viewer.getView(); } catch (_) {}
   }
 
   viewer.removeAllModels();
@@ -187,12 +194,21 @@ function renderFromAtoms(preserveCamera = false) {
 
   viewer.addModel(xyz, "xyz");
 
-  // base style
-  viewer.setStyle({}, { stick: { radius: 0.2 }, sphere: { scale: 0.3 } });
+  const model = viewer.getModel();
 
-  // selection styling
+  // ① ベーススタイル
+  model.setStyle({}, {
+    stick: { radius: 0.2 },
+    sphere: { scale: 0.3 }
+  });
+
+  // ② 選択スタイル
   updateSelectionStyles();
-  updateLabels();
+
+  // ③ ラベル（←ここで必ず新モデルに貼る）
+  if (showIndex) {
+    updateLabels();
+  }
 
   if (view) {
     try { viewer.setView(view); } catch (_) {}
@@ -203,6 +219,7 @@ function renderFromAtoms(preserveCamera = false) {
   viewer.render();
   updateAtomTable();
 }
+
 
 function updateSelectionStyles() {
   if (!viewer) return;
@@ -222,6 +239,7 @@ function updateSelectionStyles() {
 
 function updateLabels() {
   if (!viewer) return;
+
   viewer.removeAllLabels();
 
   if (!showIndex) {
@@ -230,23 +248,22 @@ function updateLabels() {
   }
 
   const model = viewer.getModel();
-  if (!model) return;
+  if (!model || !model.atoms) return;
 
-  const modelAtoms = model.atoms || [];
-  for (let i = 0; i < modelAtoms.length; i++) {
-    const a = modelAtoms[i];
-    const text = String(i + 1);
-    viewer.addLabel(text, {
+  model.atoms.forEach((a, i) => {
+    viewer.addLabel(String(i + 1), {
       position: { x: a.x, y: a.y, z: a.z },
-      fontSize: 10,
+      fontSize: 12,
       backgroundColor: "white",
       fontColor: "black",
-      borderColor: "#666",
+      borderColor: "#333",
       borderThickness: 1
     });
-  }
+  });
+
   viewer.render();
 }
+
 
 // -------------------- UI actions --------------------
 
@@ -429,28 +446,24 @@ function updateAtomTable() {
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.checked = selected.has(i);
-    cb.addEventListener("change", () => {
-      if (cb.checked) selected.add(i);
-      else selected.delete(i);
-      updateSelectionStyles();
-      updateLabels();
-      if (viewer) viewer.render();
-      updateAtomTable();
-    });
+   cb.addEventListener("change", (ev) => {
+     ev.stopPropagation();
+     const newSel = new Set(selected);
+     if (cb.checked) newSel.add(i);
+     else newSel.delete(i);
+     setSelection(newSel);
+   });
     tdS.appendChild(cb);
 
     // click row -> select
-    tr.addEventListener("click", (ev) => {
-      const ctrl = ev.ctrlKey || ev.metaKey;
-      if (!ctrl) selected.clear();
-      if (selected.has(i) && ctrl) selected.delete(i);
-      else selected.add(i);
+tr.addEventListener("click", (ev) => {
+  const ctrl = ev.ctrlKey || ev.metaKey;
+  const newSel = new Set(ctrl ? selected : []);
+  if (newSel.has(i)) newSel.delete(i);
+  else newSel.add(i);
+  setSelection(newSel);
+});
 
-      updateSelectionStyles();
-      updateLabels();
-      if (viewer) viewer.render();
-      updateAtomTable();
-    });
 
     tr.appendChild(tdI);
     tr.appendChild(tdE);
