@@ -1,4 +1,215 @@
 <!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>分子構造描画・編集（XYZ）</title>
+
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/3dmol@1.6.2/build/3Dmol-min.js"></script>
+
+  <link rel="stylesheet" href="molecule-visualizer_style.css" />
+  <style>
+    /* 最低限のUI整形（必要なら style.css 側へ移してOK） */
+    .mv-wrap { display:flex; gap:12px; padding:12px; flex-wrap:wrap; }
+    .mv-left { flex: 1 1 520px; min-width: 380px; }
+    .mv-right { flex: 1 1 520px; min-width: 380px; }
+    #viewer { width: 100%; height: 520px; border: 1px solid #ccc; border-radius: 8px; }
+    textarea { width: 100%; box-sizing: border-box; }
+    .mv-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin: 8px 0; }
+    .mv-row > * { margin:0; }
+    .mv-btn { padding: 8px 10px; border-radius: 8px; border: 1px solid #999; background:#fff; cursor:pointer; }
+    .mv-btn.primary { border-color:#333; font-weight:600; }
+    .mv-btn.danger { border-color:#b00020; color:#b00020; }
+    .mv-badge { padding: 3px 8px; border-radius: 999px; border:1px solid #999; font-size: 12px; }
+    .mv-panel { border: 1px solid #ddd; border-radius: 10px; padding: 10px; }
+    .mv-grid { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .mv-grid label { font-size: 12px; color:#333; display:block; }
+    .mv-grid input, .mv-grid select { width:100%; padding:6px; border-radius:8px; border:1px solid #bbb; }
+    table { width:100%; border-collapse: collapse; font-size: 12px; }
+    th, td { border-bottom: 1px solid #eee; padding: 6px; text-align: left; }
+    tr.selected { background: #fff3cd; }
+    .mv-small { font-size: 12px; color:#555; }
+    .mv-kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; border:1px solid #aaa; border-bottom-width:2px; border-radius:6px; padding:1px 6px; background:#fafafa; }
+    dialog { width: min(820px, 95vw); border-radius: 12px; border: 1px solid #bbb; }
+    dialog::backdrop { background: rgba(0,0,0,0.35); }
+  </style>
+
+  <script defer src="molecule-visualizer_main.js"></script>
+</head>
+
+<body>
+  <div class="mv-wrap">
+    <div class="mv-left">
+      <h1>分子構造描画・編集（XYZ）</h1>
+
+      <div class="mv-panel">
+        <div class="mv-row">
+          <button class="mv-btn primary" id="btnRender">描画 / 読み込み</button>
+          <button class="mv-btn" id="btnToggleMove">移動モード: OFF</button>
+          <button class="mv-btn" id="btnToggleIndex">原子番号表示: OFF</button>
+          <span class="mv-badge" id="statusBadge">Ready</span>
+        </div>
+
+        <textarea id="xyz_input" rows="14" placeholder="XYZ形式（ヘッダー有り/無しどちらでもOK）
+例（ヘッダー無しでもOK）:
+C 0.0 0.0 0.0
+H 0.0 0.0 1.1
+H 1.0 0.0 0.0
+..."></textarea>
+
+        <div class="mv-row">
+          <button class="mv-btn" id="btnCopyXYZ">編集後XYZをコピー</button>
+          <button class="mv-btn" id="btnDownloadXYZ">編集後XYZをダウンロード</button>
+          <button class="mv-btn" id="btnUndo">Undo</button>
+          <button class="mv-btn" id="btnRedo">Redo</button>
+          <button class="mv-btn" id="btnClearSel">選択解除</button>
+        </div>
+
+        <div class="mv-small">
+          操作:
+          <span class="mv-kbd">クリック</span>=選択 /
+          <span class="mv-kbd">Ctrl</span>+クリック=追加選択 /
+          <span class="mv-kbd">ドラッグ</span>=移動（移動モードON時） /
+          <span class="mv-kbd">Shift</span>+ドラッグ=Z方向 /
+          <span class="mv-kbd">Delete</span>=選択原子を削除
+        </div>
+      </div>
+
+      <div class="mv-panel" style="margin-top:12px;">
+        <h2 style="margin: 0 0 8px 0;">原子の追加 / 削除</h2>
+
+        <div class="mv-grid">
+          <div>
+            <label>元素</label>
+            <select id="addElem">
+              <option>H</option><option>C</option><option>N</option><option>O</option><option>F</option>
+              <option>P</option><option>S</option><option>Cl</option><option>Br</option><option>I</option>
+              <option>Si</option><option>B</option><option>Li</option><option>Na</option><option>K</option>
+              <option>Mg</option><option>Al</option><option>Ca</option><option>Fe</option><option>Cu</option><option>Zn</option>
+            </select>
+          </div>
+          <div>
+            <label>追加位置の基準</label>
+            <select id="addMode">
+              <option value="nearSelected">選択原子の近く</option>
+              <option value="origin">原点付近</option>
+              <option value="custom">座標を指定</option>
+            </select>
+          </div>
+
+          <div>
+            <label>X</label>
+            <input id="addX" type="number" step="0.1" value="0.0" />
+          </div>
+          <div>
+            <label>Y</label>
+            <input id="addY" type="number" step="0.1" value="0.0" />
+          </div>
+
+          <div>
+            <label>Z</label>
+            <input id="addZ" type="number" step="0.1" value="0.0" />
+          </div>
+          <div>
+            <label>距離（nearSelected用）</label>
+            <input id="addDist" type="number" step="0.1" value="1.1" />
+          </div>
+        </div>
+
+        <div class="mv-row" style="margin-top:10px;">
+          <button class="mv-btn primary" id="btnAddAtom">原子を追加</button>
+          <button class="mv-btn danger" id="btnDeleteSel">選択原子を削除</button>
+          <button class="mv-btn" id="btnAddFragment">原子団（XYZ貼付）を追加</button>
+        </div>
+      </div>
+
+      <div class="mv-panel" style="margin-top:12px;">
+        <h2 style="margin: 0 0 8px 0;">原子リスト</h2>
+        <div style="max-height: 260px; overflow:auto;">
+          <table id="atomTable">
+            <thead>
+              <tr>
+                <th>#</th><th>Elem</th><th>X</th><th>Y</th><th>Z</th><th>Sel</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="mv-right">
+      <div id="viewer"></div>
+      <div class="mv-panel" style="margin-top:12px;">
+        <div class="mv-small">
+          補足:
+          - 入力が「座標行のみ」でも自動でヘッダー補完して読み込みます。<br/>
+          - 原子の追加/削除は atoms 配列を更新し、XYZとして再描画します（確実性優先）。<br/>
+          - “結合編集”は 3Dmol 側の自動推定に任せています（必要なら後で拡張できます）。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 原子団追加ダイアログ -->
+  <dialog id="fragDialog">
+    <form method="dialog">
+      <h3 style="margin-top:0;">原子団（XYZ）を追加</h3>
+      <p class="mv-small" style="margin-top:-6px;">
+        XYZ（ヘッダー有/無どちらでもOK）を貼り付け → オフセットを指定 → 追加。
+        nearSelected の場合は選択原子付近に配置します。
+      </p>
+
+      <textarea id="fragText" rows="10" placeholder="例:
+C 0 0 0
+H 0 0 1.1
+H 1.0 0 0
+..."></textarea>
+
+      <div class="mv-grid" style="margin-top:8px;">
+        <div>
+          <label>配置</label>
+          <select id="fragPlace">
+            <option value="nearSelected">選択原子の近く</option>
+            <option value="offset">オフセット（原点基準）</option>
+          </select>
+        </div>
+        <div>
+          <label>スケール</label>
+          <input id="fragScale" type="number" step="0.1" value="1.0" />
+        </div>
+
+        <div>
+          <label>Offset X</label>
+          <input id="fragOX" type="number" step="0.1" value="0.0" />
+        </div>
+        <div>
+          <label>Offset Y</label>
+          <input id="fragOY" type="number" step="0.1" value="0.0" />
+        </div>
+
+        <div>
+          <label>Offset Z</label>
+          <input id="fragOZ" type="number" step="0.1" value="0.0" />
+        </div>
+        <div>
+          <label>ランダム微小ずらし</label>
+          <input id="fragJitter" type="number" step="0.001" value="0.000" />
+        </div>
+      </div>
+
+      <div class="mv-row" style="margin-top:10px; justify-content:flex-end;">
+        <button class="mv-btn" value="cancel">キャンセル</button>
+        <button class="mv-btn primary" id="btnFragApply" value="default">追加</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
+
+
+<!-- <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -170,4 +381,4 @@ H       -2.934600000      2.102100000     -0.884900000`;
     </script>
     </div>
 </body>
-</html>
+</html> -->
