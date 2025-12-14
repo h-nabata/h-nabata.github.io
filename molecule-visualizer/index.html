@@ -7,38 +7,69 @@
 
   <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/3dmol@1.6.2/build/3Dmol-min.js"></script>
-
-  <link rel="stylesheet" href="molecule-visualizer_style.css" />
-  <style>
-    /* 最低限のUI整形（必要なら style.css 側へ移してOK） */
-    .mv-wrap { display:flex; gap:12px; padding:12px; flex-wrap:wrap; }
-    .mv-left { flex: 1 1 520px; min-width: 380px; }
-    .mv-right { flex: 1 1 520px; min-width: 380px; }
-    #viewer { width: 100%; height: 520px; border: 1px solid #ccc; border-radius: 8px; }
-    textarea { width: 100%; box-sizing: border-box; }
-    .mv-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin: 8px 0; }
-    .mv-row > * { margin:0; }
-    .mv-btn { padding: 8px 10px; border-radius: 8px; border: 1px solid #999; background:#fff; cursor:pointer; }
-    .mv-btn.primary { border-color:#333; font-weight:600; }
-    .mv-btn.danger { border-color:#b00020; color:#b00020; }
-    .mv-badge { padding: 3px 8px; border-radius: 999px; border:1px solid #999; font-size: 12px; }
-    .mv-panel { border: 1px solid #ddd; border-radius: 10px; padding: 10px; }
-    .mv-grid { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .mv-grid label { font-size: 12px; color:#333; display:block; }
-    .mv-grid input, .mv-grid select { width:100%; padding:6px; border-radius:8px; border:1px solid #bbb; }
-    table { width:100%; border-collapse: collapse; font-size: 12px; }
-    th, td { border-bottom: 1px solid #eee; padding: 6px; text-align: left; }
-    tr.selected { background: #fff3cd; }
-    .mv-small { font-size: 12px; color:#555; }
-    .mv-kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; border:1px solid #aaa; border-bottom-width:2px; border-radius:6px; padding:1px 6px; background:#fafafa; }
-    dialog { width: min(820px, 95vw); border-radius: 12px; border: 1px solid #bbb; }
-    dialog::backdrop { background: rgba(0,0,0,0.35); }
-  </style>
-
+  <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
+  <link rel="stylesheet" type="text/css" href="molecule-visualizer_style.css">
+  <link rel="icon" href="img/favicon.ico">
+  <link rel="apple-touch-icon" href="img/favicon_candle.png" sizes="180x180">
+  <meta charset="UTF-8">
+  <title>分子構造描画</title>
+  <link rel="stylesheet" href="molecule-visualizer_style.css">
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/3dmol@1.6.2/build/3Dmol-min.js"></script>
+  <script defer src="molecule-visualizer_main.js"></script>
   <script defer src="molecule-visualizer_main.js"></script>
 </head>
 
 <body>
+        <div class="header-left">
+          <a href="https://h-nabata.github.io/"><img class="logo" src="https://h-nabata.github.io/img/favicon_candle.png" alt="Logo"></a>
+          &nbsp;&nbsp;<span id="todaysdate"></span>&nbsp;(<span id="dayofweek"></span>)
+      </div>
+<!--       <span class="fa fa-bars menu-icon"></span> -->
+      <div class="menu-icon gaming" onclick="toggleMenu()">&#9776;</div>
+      <div class="header-right dropdown-menu">
+          <a href="https://h-nabata.github.io/index.html">トップページ - Top Page</a>
+          <a href="https://h-nabata.github.io/toc.html">目次 - Table of Contents</a>
+      </div>
+    <script type="text/javascript">
+        function showDate() {
+            var now = new Date();
+            var year = now.getFullYear();
+            var month = now.getMonth() + 1; // 月は0から始まるので1を足す
+            var day = now.getDate();
+            return year + "/" + month + "/" + day;
+        }
+
+        function showDayOfWeek() {
+            var weeks = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+            var now = new Date();
+            var weekdays = now.getDay();
+            return weeks[weekdays];
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            document.getElementById("todaysdate").innerHTML = showDate();
+            document.getElementById("dayofweek").innerHTML = showDayOfWeek();
+        });
+    </script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', (event) => {
+            document.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightBlock(block);
+            });
+        });
+
+        function toggleMenu() {
+            const menu = document.querySelector('.dropdown-menu');
+            if (menu.style.display === 'flex') {
+                menu.style.display = 'none';
+            } else {
+                menu.style.display = 'flex';
+            }
+        }
+    </script>
+  
   <div class="mv-wrap">
     <div class="mv-left">
       <h1>分子構造描画・編集（XYZ）</h1>
