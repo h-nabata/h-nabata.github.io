@@ -5,83 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nabata's personal page - table of contents</title>
   
-  <!--   KaTeX settings (2024/05/19)   -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css" integrity="sha384-wcIxkf4k558AjM3Yz3BBFQUbk/zgIYC2R0QpeeYb+TwlBVMrlgLqwRjRtGZiK7ww" crossorigin="anonymous">
-  <!-- The loading of KaTeX is deferred to speed up page rendering -->
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js" integrity="sha384-hIoBPJpTUs74ddyc4bFZSM1TVlQDA60VBbJS0oA934VSz82sBx1X7kSx2ATBDIyd" crossorigin="anonymous"></script>
-  <!-- To automatically render math in text elements, include the auto-render extension: -->
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/contrib/auto-render.min.js" integrity="sha384-43gviWU0YVjaDtb/GhzOouOXtZMP/7XUzwPTstBeZFe/+rCMvRwr4yROQP43s0Xk" crossorigin="anonymous"
-      onload="renderMathInElement(document.body);"></script>
-
-  <!--   Highlight.js settings (2024/05/19)   -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/default.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-  <!-- and it's easy to individually load additional languages -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/go.min.js"></script>
-  <script>hljs.highlightAll();</script>
-  
-  <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
-  <link rel="stylesheet" type="text/css" href="https://h-nabata.github.io/stylesheet.css">
-  <link rel="icon" href="https://h-nabata.github.io/img/favicon.ico">
-  <link rel="apple-touch-icon" href="https://h-nabata.github.io/img/favicon_candle.png" sizes="180x180">
 </head>
 <body>
-  <header class="header">
-      <div class="header-left">
-          <a href="https://h-nabata.github.io/"><img class="logo" src="https://h-nabata.github.io/img/favicon_candle.png" alt="Logo"></a>
-          &nbsp;&nbsp;<span id="todaysdate"></span>&nbsp;(<span id="dayofweek"></span>)
-      </div>
+  <div id="site-header"></div>
+  <script src="../header.js"></script>
+  <script>
+    const extraMenuHtml = `
       <div class="menu-icon gaming" onclick="toggleMenu('menu2')">&#9660;</div>
       <div id="menu2" class="header-right dropdown-menu">
           <a href="#calc">【電子状態計算／量子化学計算について】</a>
           <a href="#grrm">【GRRM関連のテキスト】</a>
       </div>
-      <div class="menu-icon gaming" onclick="toggleMenu('menu1')">&#9776;</div>
-      <div id="menu1" class="header-right dropdown-menu">
-          <a href="https://h-nabata.github.io/index.html">トップページ - Top Page</a>
-          <a href="https://h-nabata.github.io/toc.html">目次 - Table of Contents</a>
-      </div>
-    <script type="text/javascript">
-        function showDate() {
-            var now = new Date();
-            var year = now.getFullYear();
-            var month = now.getMonth() + 1; // 月は0から始まるので1を足す
-            var day = now.getDate();
-            return year + "/" + month + "/" + day;
-        }
-
-        function showDayOfWeek() {
-            var weeks = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-            var now = new Date();
-            var weekdays = now.getDay();
-            return weeks[weekdays];
-        }
-
-        document.addEventListener("DOMContentLoaded", function() {
-            document.getElementById("todaysdate").innerHTML = showDate();
-            document.getElementById("dayofweek").innerHTML = showDayOfWeek();
-        });
-    </script>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', (event) => {
-            document.querySelectorAll('pre code').forEach((block) => {
-                hljs.highlightBlock(block);
-            });
-        });
-
-        function toggleMenu(menuId) {
-            // const menu = document.querySelector('.dropdown-menu');
-            const menu = document.getElementById(menuId);
-            if (menu.style.display === 'flex') {
-                menu.style.display = 'none';
-            } else {
-                menu.style.display = 'flex';
-            }
-        }
-    </script>
-    
-  </header>
+    `;
+    loadSharedHeader({ extraMenuHtml });
+  </script>
 
   <div class="top-wrapper">
     <div class="container">

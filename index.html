@@ -5,78 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nabata's personal page</title>
 
-  <!-- KaTeX settings (2025/11/23) -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/katex.min.css" integrity="sha384-WcoG4HRXMzYzfCgiyfrySxx90XSl2rxY5mnVY5TwtWE6KLrArNKn0T/mOgNL0Mmi" crossorigin="anonymous">
-  <!-- The loading of KaTeX is deferred to speed up page rendering -->
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/katex.min.js" integrity="sha384-J+9dG2KMoiR9hqcFao0IBLwxt6zpcyN68IgwzsCSkbreXUjmNVRhPFTssqdSGjwQ" crossorigin="anonymous"></script>
-  <!-- To automatically render math in text elements, include the auto-render extension: -->
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.25/dist/contrib/auto-render.min.js" integrity="sha384-hCXGrW6PitJEwbkoStFjeJxv+fSOOQKOPbJxSfM6G5sWZjAyWhXiTIIAmQqnlLlh" crossorigin="anonymous"
-      onload="renderMathInElement(document.body);"></script>
-
-  <!--   Highlight.js settings (2025/11/23)   -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/styles/default.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/highlight.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.11.1/languages/go.min.js"></script>
-  <script>hljs.highlightAll();</script>
-
-  
-  <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet" integrity="sha384-wvfXpqpZZVQGK6TAh5PVlGOfQNHSoD2xbE+QkPxCAFlNEevoEH3Sl0sibVcOQVnN" crossorigin="anonymous">
-  <link rel="stylesheet" type="text/css" href="stylesheet.css">
-  <link rel="icon" href="img/favicon.ico">
-  <link rel="apple-touch-icon" href="img/favicon_candle.png" sizes="180x180">
 </head>
 <body>
-  <header class="header">
-      <div class="header-left">
-          <a href="https://h-nabata.github.io/"><img class="logo" src="https://h-nabata.github.io/img/favicon_candle.png" alt="Logo"></a>
-          &nbsp;&nbsp;<span id="todaysdate"></span>&nbsp;(<span id="dayofweek"></span>)
-      </div>
-  <!-- <span class="fa fa-bars menu-icon"></span> -->
-      <div class="menu-icon gaming" onclick="toggleMenu()">&#9776;</div>
-      <div class="header-right dropdown-menu">
-          <a href="https://h-nabata.github.io/index.html">トップページ - Top Page</a>
-          <a href="https://h-nabata.github.io/toc.html">目次 - Table of Contents</a>
-      </div>
-    <script type="text/javascript">
-        function showDate() {
-            var now = new Date();
-            var year = now.getFullYear();
-            var month = now.getMonth() + 1; // 月は0から始まるので1を足す
-            var day = now.getDate();
-            return year + "/" + month + "/" + day;
-        }
-
-        function showDayOfWeek() {
-            var weeks = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-            var now = new Date();
-            var weekdays = now.getDay();
-            return weeks[weekdays];
-        }
-
-        document.addEventListener("DOMContentLoaded", function() {
-            document.getElementById("todaysdate").innerHTML = showDate();
-            document.getElementById("dayofweek").innerHTML = showDayOfWeek();
-        });
-    </script>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', (event) => {
-            document.querySelectorAll('pre code').forEach((block) => {
-                hljs.highlightBlock(block);
-            });
-        });
-
-        function toggleMenu() {
-            const menu = document.querySelector('.dropdown-menu');
-            if (menu.style.display === 'flex') {
-                menu.style.display = 'none';
-            } else {
-                menu.style.display = 'flex';
-            }
-        }
-    </script>
-    
-  </header>
+  <div id="site-header"></div>
+  <script src="header.js"></script>
+  <script>
+    loadSharedHeader();
+  </script>
 
   <div class="top-wrapper">
     <div class="container">
