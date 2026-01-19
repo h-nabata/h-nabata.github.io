@@ -1,0 +1,16 @@
+<header class="header">
+  <div class="header-left">
+    <a href="{{ "/" | relative_url }}"><img class="logo" src="{{ "/img/favicon_candle.png" | relative_url }}" alt="Logo"></a>
+    &nbsp;&nbsp;<span id="todaysdate"></span>&nbsp;(<span id="dayofweek"></span>)
+  </div>
+  <div id="extra-menu">
+    {% if page.extra_menu == "notes" %}
+      {% include extra-menu-notes.html %}
+    {% endif %}
+  </div>
+  <div class="menu-icon gaming" onclick="toggleMenu('menu-main')">&#9776;</div>
+  <div id="menu-main" class="header-right dropdown-menu">
+    <a href="{{ "/index.html" | relative_url }}">トップページ - Top Page</a>
+    <a href="{{ "/toc.html" | relative_url }}">目次 - Table of Contents</a>
+  </div>
+</header>
