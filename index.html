@@ -26,57 +26,7 @@
   <link rel="apple-touch-icon" href="img/favicon_candle.png" sizes="180x180">
 </head>
 <body>
-  <header class="header">
-      <div class="header-left">
-          <a href="https://h-nabata.github.io/"><img class="logo" src="https://h-nabata.github.io/img/favicon_candle.png" alt="Logo"></a>
-          &nbsp;&nbsp;<span id="todaysdate"></span>&nbsp;(<span id="dayofweek"></span>)
-      </div>
-  <!-- <span class="fa fa-bars menu-icon"></span> -->
-      <div class="menu-icon gaming" onclick="toggleMenu()">&#9776;</div>
-      <div class="header-right dropdown-menu">
-          <a href="https://h-nabata.github.io/index.html">トップページ - Top Page</a>
-          <a href="https://h-nabata.github.io/toc.html">目次 - Table of Contents</a>
-      </div>
-    <script type="text/javascript">
-        function showDate() {
-            var now = new Date();
-            var year = now.getFullYear();
-            var month = now.getMonth() + 1; // 月は0から始まるので1を足す
-            var day = now.getDate();
-            return year + "/" + month + "/" + day;
-        }
-
-        function showDayOfWeek() {
-            var weeks = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-            var now = new Date();
-            var weekdays = now.getDay();
-            return weeks[weekdays];
-        }
-
-        document.addEventListener("DOMContentLoaded", function() {
-            document.getElementById("todaysdate").innerHTML = showDate();
-            document.getElementById("dayofweek").innerHTML = showDayOfWeek();
-        });
-    </script>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', (event) => {
-            document.querySelectorAll('pre code').forEach((block) => {
-                hljs.highlightBlock(block);
-            });
-        });
-
-        function toggleMenu() {
-            const menu = document.querySelector('.dropdown-menu');
-            if (menu.style.display === 'flex') {
-                menu.style.display = 'none';
-            } else {
-                menu.style.display = 'flex';
-            }
-        }
-    </script>
-    
-  </header>
+  <?php include 'header.php'; ?>
 
   <div class="top-wrapper">
     <div class="container">
