@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="{{ page.lang | default: "ja" }}">
+<head>
+  <title>{{ page.title }}</title>
+  {% include head-assets.html %}
+  {% if page.extra_head %}
+    {{ page.extra_head }}
+  {% endif %}
+</head>
+<body>
+  {% include header.html %}
+  {{ content }}
+</body>
+</html>

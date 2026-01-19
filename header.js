@@ -22,9 +22,6 @@ function initHeader() {
   if (dayOfWeek) {
     dayOfWeek.innerHTML = showDayOfWeek();
   }
-  document.querySelectorAll('pre code').forEach((block) => {
-    hljs.highlightBlock(block);
-  });
 }
 
 function toggleMenu(menuId) {
