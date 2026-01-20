@@ -177,6 +177,9 @@ code {
     top: 65px; /* ヘッダーの下に配置 */
     right: 0;
     width: 100%;
+    max-height: calc(100vh - 65px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 .dropdown-menu a {
     padding: 5px;
@@ -283,4 +286,3 @@ footer {
 .clear {
   clear: left;
 }
-
