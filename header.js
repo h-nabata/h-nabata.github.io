@@ -33,3 +33,21 @@ function toggleMenu(menuId) {
   }
   menu.style.display = menu.style.display === "flex" ? "none" : "flex";
 }
+
+function closeMenus() {
+  document.querySelectorAll(".dropdown-menu").forEach((menu) => {
+    if (menu.style.display === "flex") {
+      menu.style.display = "none";
+    }
+  });
+}
+
+document.addEventListener("click", (event) => {
+  if (event.target.closest(".dropdown-menu")) {
+    return;
+  }
+  if (event.target.closest(".menu-icon")) {
+    return;
+  }
+  closeMenus();
+});
