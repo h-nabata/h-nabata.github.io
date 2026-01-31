@@ -157,11 +157,224 @@ Spin contaminationは、量子化学計算の正確さと信頼性に影響を�
       </ul>
   
       <h2 id="grrm">【GRRM関連のテキスト】</h2>
-      <ul>
-        <li><a href="https://www.wiley.com/en-us/Introduction+to+Computational+Chemistry%2C+3rd+Edition-p-9781118825990">Introduction to Computational Chemistry</a>（Frank Jensen先生による計算化学の網羅的な解説書；第2版のPDF版がネット上でダウンロード可能）</li>
-        <li><a href="https://kitchingroup.cheme.cmu.edu/dft-book/dft.html">Modeling materials using density functional theory</a>（DFT（密度汎関数理論）を用いた材料研究スキル習得のためのテキスト）</li>
-        <li><a href="https://www.conflex.co.jp/gaussian_support/basissets.html">Gaussian日本語マニュアル ― 基底関数系</a>（コンフレックス株式会社）</li>
-      </ul>
+        <ul>
+          <li>
+            「
+            <a href="https://www.jstage.jst.go.jp/article/molsci/5/1/5_1_A0042/_pdf/-char/ja"
+               target="_blank"
+               rel="noopener">
+              化学反応経路の自動探索
+            </a>
+            」大野先生と前田先生による総説（2011年時点での内容）<br>
+            【※補足】当時はAFIR法（人工力誘起反応法；じんこうりょくゆうきはんのうほう）が存在しなかったため、
+            反応経路探索はADDF法によるものに限られていました。一時期、ADDF法は「GRRM法」と呼称されており、
+            その名残のせいか、現在でもGRRMプログラムによる反応経路探索手法を総称して
+            「GRRM法」と呼ぶ人がいらっしゃいます。しかし現在ではAFIR法が確立されてきたことに伴い、
+            「GRRM法」という名称は一般に用いられなくなっていることに注意してください。
+          </li>
+        
+          <li>
+            <a href="https://link.springer.com/chapter/10.1007/3418_2020_51"
+               target="_blank"
+               rel="noopener">
+              Artificial Force-Induced Reaction Method for Systematic Elucidation of Mechanism and Selectivity in Organometallic Reactions
+            </a>
+          </li>
+        
+          <li>
+            A. Nakao, Y. Harabuchi, S. Maeda, K. Tsuda,
+            &quot;
+            <a href="https://pubs.rsc.org/en/content/articlehtml/2022/cp/d2cp01079h"
+               target="_blank"
+               rel="noopener">
+              Leveraging algorithmic search in quantum chemical reaction path finding
+            </a>
+            ,&quot;
+            Phys. Chem. Chem. Phys. 2022, 24, 10305–10310.
+            （反応経路探索の方向･空間の決定にrapidly-exploring random tree (RRT)法を適用して
+            EQのクラスタリングを工夫した研究；従来のBoltzmann/SC-AFIR（1万経路を上限に探索）と
+            kinetics/SC-AFIR（速度論ナビゲーションを適用して探索）と比較して効率的に目的物に到達できている；
+            構造間のグラフ同型チェックにはNetworkX pythonライブラリ（https://networkx.org/）を使用）
+          </li>
+        
+          <li>
+            <a href="https://github.com/h-nabata/utility/blob/main/text4GRRM/%E3%82%AF%E3%83%A9%E3%82%A4%E3%82%BC%E3%83%B3%E8%BB%A2%E4%BD%8D%E5%8F%8D%E5%BF%9C%E3%81%AE%E5%8F%8D%E5%BF%9C%E7%B5%8C%E8%B7%AF%E3%82%92%E8%BF%BD%E8%B7%A1%E3%81%99%E3%82%8B_v1.0_.pdf"
+               target="_blank"
+               rel="noopener">
+              クライゼン転位反応の反応経路を追跡する
+            </a>
+          </li>
+        
+          <li>
+            <a href="https://sites.google.com/view/nabatas-page/top/grrm-tips"
+               target="_blank"
+               rel="noopener">
+              GRRM Tips
+            </a>
+            のページも参照のこと
+          </li>
+        
+          <li>
+            <a href="https://github.com/h-nabata/PES/blob/main/practice/Optimizetion_on_PES.md"
+               target="_blank"
+               rel="noopener">
+              Optimizetion on Potential Energy Surface
+            </a>
+            （自作の練習用プログラムをNotebook形式でまとめたものです）
+          </li>
+        
+          <li>
+            P. Ruelle, U. W. Kesselring, H. Nam-Tran,
+            <a href="https://pubs.acs.org/doi/10.1021/ja00263a004"
+               target="_blank"
+               rel="noopener">
+              Abinitio Quantum-Chemical Study of the Unimolecular Pyrolysis Mechanisms of Formic-Acid.
+            </a>
+            J. Am. Chem. Soc. 1986, 108, 371–375,
+            DOI: 10.1021/ja00263a004
+            （気相中におけるギ酸の熱分解に関する論文）<br>
+        
+            Y. Harabuchi, S. Maeda, T. Taketsugu, K. Ohno.
+            <a href="https://www.journal.csj.jp/doi/10.1246/cl.130940"
+               target="_blank"
+               rel="noopener">
+              Direct Pathway for Water–Gas Shift Reaction in Gas Phase.
+            </a>
+            Chem. Lett. 2014, 43 (2), 193–195.
+            DOI: 10.1246/cl.130940
+            （WGS反応のGRRMによる全探索）
+          </li>
+        
+          <li>
+            RCMC法に関するHighlight Review:
+            Y. Sumiya and S. Maeda,
+            <a href="https://doi.org/10.1246/cl.200092"
+               target="_blank"
+               rel="noopener">
+              &quot;Rate Constant Matrix Contraction Method for Systematic Analysis of Reaction Path Networks&quot;
+            </a>
+            Chem. Lett. 2020, 49, 553–564.
+            DOI: 10.1246/cl.200092
+          </li>
+        </ul>
+<ul>
+  <li style="list-style-type: none;">
+    <ul>
+      <li>
+        Claisen転位について<br>
+        → 
+        <a href="https://chemistry-europe.onlinelibrary.wiley.com/doi/10.1002/cber.19120450348"
+           target="_blank"
+           rel="noopener">
+          "Über Umlagerung von Phenol-allyläthern in C-Allyl-phenole"
+        </a>
+        Chem. Ber. 1912, 45, 3157–3166.
+        （Claisenによる転位反応の報告；Claisen転位の初出論文）<br>
+
+        → 
+        <a href="https://pubs.acs.org/doi/10.1021/ja01163a096"
+           target="_blank"
+           rel="noopener">
+          "The Kinetics of the Rearrangement of Vinyl Allyl Ether&nbsp;1"
+        </a>
+        J. Am. Chem. Soc. 1950, 72 (7), 3155–3159.
+        （実験的に得られているアリルビニルエーテルのクライゼン転位反応の速度定数は
+        469.1 Kにおいて k = 2.875 × 10<sup>−3</sup> と測定されており，
+        ここから 469.1 Kにおける活性化障壁は
+        ΔG<sup>‡</sup> = 139.5 kJ/mol と見積もられる）<br>
+
+        → 
+        <a href="https://pubs.acs.org/doi/10.1021/ja00184a018"
+           target="_blank"
+           rel="noopener">
+          "Mechanism of the Claisen Rearrangement of Allyl Vinyl Ethers"
+        </a>
+        J. Am. Chem. Soc. 1989, 111 (2), 511–519.<br>
+
+        （多くのClaisen転位反応は200～300℃の反応温度で
+        数分～数十分程度で完結する）
+      </li>
+
+      <li>
+        Cope転位について<br>
+        → 
+        <a href="https://pubs.acs.org/doi/abs/10.1021/ja01859a055"
+           target="_blank"
+           rel="noopener">
+          "The Introduction of Substituted Vinyl Groups. V. A Rearrangement Involving the Migration of an Allyl Group in a Three-Carbon System"
+        </a>
+        J. Am. Chem. Soc. 1940, 62 (2), 441–444.
+        （Copeによる転位反応の報告；Cope転位の初出論文）
+      </li>
+
+      <li>
+        Oxy-Cope転位：A. Berson, M. Jonesによる最初の報告
+        （2-exo-vinyl-2-endo-hydroxybicyclo[2.2.2]octene の反応；
+        反応には300℃以上の高温条件が必要）<br>
+
+        → 
+        <a href="https://pubs.acs.org/doi/abs/10.1021/ja01076a067"
+           target="_blank"
+           rel="noopener">
+          "A Synthesis of Ketones by the Thermal Isomerization of 3-Hydroxy-1,5-hexadienes. The Oxy-Cope Rearrangement"
+        </a>
+        J. Am. Chem. Soc. 1964, 86, 5019–5020.<br>
+
+        → 
+        <a href="https://pubs.acs.org/doi/10.1021/ja01076a066"
+           target="_blank"
+           rel="noopener">
+          "Stepwise Mechanisms in the Oxy-Cope Rearrangement"
+        </a>
+        J. Am. Chem. Soc. 1964, 86, 5017–5018.<br>
+
+        → 
+        <a href="https://pubs.acs.org/doi/10.1021/ja00849a054"
+           target="_blank"
+           rel="noopener">
+          "[3,3] Sigmatropic rearrangements of 1,5-diene alkoxides. Powerful accelerating effects of the alkoxide substituent"
+        </a>
+        J. Am. Chem. Soc. 1975, 97, 4765–4766.
+        （D. A. Evans と A. M. Golob により，
+        カリウムアルコキシドなどの存在下では
+        低温でも極めて迅速に反応が進行することが見出された）<br>
+
+        → 
+        <a href="https://www.sciencedirect.com/science/article/pii/S0040402097006790"
+           target="_blank"
+           rel="noopener">
+          "Recent applications of anionic oxy-cope rearrangements"
+        </a>
+        （1997年時点での総説；反応条件によって生成物選択性が生じる）
+      </li>
+    </ul>
+  </li>
+</ul>
+
+<ul>
+  <li>
+    <a href="https://www.jstage.jst.go.jp/article/mssj/21/2/21_151/_pdf/-char/ja"
+       target="_blank"
+       rel="noopener">
+      博士論文紹介「化学反応素過程の複雑ネットワークに対する速度解析」
+    </a>
+    （住谷陽輔先生の博士論文紹介；
+    開発者本人によるRCMC法の日本語解説記事）
+  </li>
+
+  <li>
+    <a href="https://pubs.rsc.org/en/content/articlelanding/2008/dt/b801115j"
+       target="_blank"
+       rel="noopener">
+      B. Cordero, V. Gómez, E. Platero-Prats, M. Revés, J. Echeverría,
+      E. Cremades, F. Barragán, S. Alvarez,
+      "Covalent radii revisited",
+      Dalton Trans. 2008, 0, 2832–2838.
+    </a>
+    （共有結合半径）
+  </li>
+</ul>
+
     
     <p><span style="color: red;">（以下、工事中）</span></p>
     
