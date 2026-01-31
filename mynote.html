@@ -375,7 +375,1181 @@ Spin contaminationは、量子化学計算の正確さと信頼性に影響を�
   </li>
 </ul>
 
-    
+<section>
+  <h2 id="tst">【遷移状態理論について】</h2>
+
+  <ul>
+    <li>
+      E. Wigner,
+      &quot;
+      <a href="https://journals.aps.org/pr/abstract/10.1103/PhysRev.40.749"
+         target="_blank"
+         rel="noopener">
+        On the Quantum Correction For Thermodynamic Equilibrium
+      </a>
+      &quot;
+      Phys. Rev. 1932, 40, 749–759.
+      （Wignerのトンネリングファクターの補正）
+    </li>
+
+    <li>
+      P. Bell,
+      &quot;
+      <a href="https://pubs.rsc.org/en/content/articlelanding/1959/TF/tf9595500001"
+         target="_blank"
+         rel="noopener">
+        The tunnel effect correction for parabolic potential barriers
+      </a>
+      &quot;
+      Trans. Faraday Soc. 1959, 55, 1–4.
+      （より一般の調和ポテンシャル面上での摂動展開によるトンネリングファクターの補正）<br>
+      The Wigner formula represents the first correction term in a perturbative expansion for a parabolic barrier,
+      and is therefore only accurate in the limit of a small tunneling correction. There are many cases for which
+      the tunneling correction is very large; for these cases the Wigner model is inappropriate.
+    </li>
+
+    <li>
+      I. Shavitt,
+      &quot;
+      <a href="https://aip.scitation.org/doi/abs/10.1063/1.1730599"
+         target="_blank"
+         rel="noopener">
+        A Calculation of the Rates of the Ortho‐Para Conversions and Isotope Exchanges in Hydrogen
+      </a>
+      &quot;
+      J. Chem. Phys. 1959, 31, 1359–1367.
+      （Shavitt補正と呼ばれるWigner補正の拡張も知られている）
+    </li>
+
+    <li>
+      （変分的遷移状態理論に関するレヴュー）
+      <a href="https://pubs.rsc.org/en/content/articlehtml/2017/cs/c7cs00602k"
+         target="_blank"
+         rel="noopener">
+        Variational transition state theory: theoretical framework and recent developments
+      </a>
+      （Review Article；Bao JL, Truhlar DG (2017) Chem Soc Rev 46:7548）
+    </li>
+
+    <li>
+      M. Bickelhaupt, N. Houk,
+      <a href="https://onlinelibrary.wiley.com/doi/full/10.1002/anie.201701486"
+         target="_blank"
+         rel="noopener">
+        &quot;Analyzing Reaction Rates with the Distortion/Interaction-Activation Strain Model&quot;
+      </a>
+      , Angew. Chem. Int. Ed. 2017, 56, 10070–10086.
+      （レヴュー；Activation Strain Model - 歪み/相互作用による反応速度の解析）
+    </li>
+
+    <li>
+      <a href="https://www.jstage.jst.go.jp/article/jcombsj/60/192/60_112/_pdf/-char/ja"
+         target="_blank"
+         rel="noopener">
+        燃焼の反応機構と反応素過程 — (2) 反応速度定数
+      </a>
+      （広島大の三好明先生による解説）
+    </li>
+
+    <li>
+      <a href="https://www.jstage.jst.go.jp/article/jvsj2/56/6/56_13-LC-018/_pdf"
+         target="_blank"
+         rel="noopener">
+        真空と表面
+      </a>
+      （東京大の福谷克之先生による表面吸着に関する解説；
+      熱脱離確率と平均滞在時間に関する記載がある）
+    </li>
+
+    <li>
+      <a href="https://github.com/h-nabata/utility/blob/main/Python/rate_constant_correction.py"
+         target="_blank"
+         rel="noopener">
+        反応障壁から反応速度定数を求めるプログラム
+      </a>
+      （反応温度 K、反応障壁 kJ/mol、虚振動数 cm<sup>−1</sup> の入力から
+      Wigner補正を適用した反応速度定数を計算する）
+    </li>
+
+    <li>
+      <a href="https://github.com/h-nabata/utility/blob/main/Python/brrier_from_k.py"
+         target="_blank"
+         rel="noopener">
+        反応速度定数から反応障壁を求めるプログラム
+      </a>
+      （上記の逆の計算を行うプログラム）
+    </li>
+
+    <li>
+      半減期が約1時間に相当する活性化障壁と温度の関係（遷移状態理論に基づく；
+      虚振動数による補正はせず、透過係数を 1 と仮定）<br>
+
+      <table>
+        <tbody>
+          <tr><td>1000 K</td><td>326 kJ/mol</td></tr>
+          <tr><td>900 K</td><td>293 kJ/mol</td></tr>
+          <tr><td>800 K</td><td>260 kJ/mol</td></tr>
+          <tr><td>700 K</td><td>226 kJ/mol</td></tr>
+          <tr><td>600 K</td><td>193 kJ/mol</td></tr>
+          <tr><td>500 K</td><td>160 kJ/mol</td></tr>
+          <tr><td>400 K</td><td>128 kJ/mol</td></tr>
+          <tr><td>300 K</td><td>94.8 kJ/mol</td></tr>
+          <tr><td>200 K</td><td>62.6 kJ/mol</td></tr>
+          <tr><td>100 K</td><td>30.7 kJ/mol</td></tr>
+        </tbody>
+      </table>
+
+      速度論ナビゲーションのパラメータセットの参考にしてください。
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2 id="graph-theory">【グラフ理論ほか】</h2>
+
+  <ul>
+    <li>
+      H. Edelsbrunner, D. Kirkpatrick and R. Seidel,
+      &quot;
+      <a href="https://ieeexplore.ieee.org/document/1056714"
+         target="_blank"
+         rel="noopener">
+        On the shape of a set of points in the plane
+      </a>
+      &quot;,
+      IEEE Transactions on Information Theory 1983, 29 (4), 551–559.
+      doi: 10.1109/TIT.1983.1056714.
+      （アルファシェイプを初めて定義した論文）
+    </li>
+
+    <li>
+      Aktas, M.E., Akbas, E. &amp; Fatmaoui, A.E.
+      <a href="https://appliednetsci.springeropen.com/articles/10.1007/s41109-019-0179-3"
+         target="_blank"
+         rel="noopener">
+        Persistence homology of networks: methods and applications.
+      </a>
+      Appl Netw Sci 4, 61 (2019). https://doi.org/10.1007/s41109-019-0179-3
+      （Persistence homology（パーシステントホモロジー）の応用に関する論文）
+    </li>
+
+    <li>
+      <a href="https://graph-neural-networks.github.io/"
+         target="_blank"
+         rel="noopener">
+        Graph Neural Networks
+      </a>
+      - GNNBook@2022
+      （グラフニューラルネットワーク（GNN）に関する教科書；PDFが無料で公開されている）
+    </li>
+
+    <li>
+      <a href="https://www.pnas.org/content/118/46/e2109011118"
+         target="_blank"
+         rel="noopener">
+        Trading bits in the readout from a genetic network
+      </a>
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2 id="study-for-chemistry">【化学に関する勉強用論文･テキスト】</h2>
+
+  <ul>
+    <li>
+      <a href="http://www2.riken.jp/qcl/members/tsuneda/web/pages/ryoiki.pdf"
+         target="_blank"
+         rel="noopener">
+        領域プロジェクト「理論による化学のシミュレーション」
+      </a>
+      （常田貴夫 先生）
+    </li>
+
+    <li>
+      <a href="https://chem.tut.ac.jp/keel/umc/archives/jcsj51_157_oguchi.pdf"
+         target="_blank"
+         rel="noopener">
+        量子化学計算から燃焼反応機構への道標─理論化学的手法の現状と将来─
+      </a>
+      （小口達夫 先生）
+    </li>
+
+    <li>
+      （構造最適化について）H. B. Schlegel,
+      <a href="https://wires.onlinelibrary.wiley.com/doi/10.1002/wcms.34"
+         target="_blank"
+         rel="noopener">
+        &quot;Geometry optimization&quot;
+      </a>
+      Wiley Interdiscip. Rev.: Comput. Mol. Sci. 2011, 1, 790–809.
+    </li>
+
+    <li>
+      （溶媒効果に関するレヴュー）R. E. Skyner, J. L. McDonagh, C. R. Groom,
+      T. van Mourik and J. B. O. Mitchell,
+      <a href="https://doi.org/10.1039/C5CP00288E"
+         target="_blank"
+         rel="noopener">
+        &quot;A review of methods for the calculation of solution free energies and the modelling of systems in solution&quot;
+      </a>
+      Phys. Chem. Chem. Phys. 2015, 17, 6174–6191.
+    </li>
+
+    <li>
+      （有機分子の歪みエネルギーに関するレヴュー）
+      <a href="https://onlinelibrary.wiley.com/doi/10.1002/anie.198603121"
+         target="_blank"
+         rel="noopener">
+        The Concept of Strain in Organic Chemistry
+      </a>
+      - Prof. Kenneth B. Wiberg
+      (B. Wiberg, Angew. Chem. Int. Ed. Engl. 1986, 25, 312–322.)
+    </li>
+
+    <li>
+      ADDF法, AFIR法以外の反応経路探索に関する論文
+      （10.1021/acs.jpca.6b12195 の分類に基づき適当に列挙）
+
+      <ul>
+        <li>
+          (gradient extremal following (GEF) method)
+          &quot;On finding transition states&quot; Cite as: J. Chem. Phys. 1981, 75, 2800;
+          <a href="https://doi.org/10.1063/1.442352"
+             target="_blank"
+             rel="noopener">
+            https://doi.org/10.1063/1.442352
+          </a>
+        </li>
+
+        <li>
+          (reduced gradient following (RGF) method)
+          &quot;Determination of energy minima and saddle points using multireference configuration interaction methods in combination with reduced gradient following: The S0 surface of H2CO and the T1 and T2 surfaces of acetylene&quot;
+          Cite as: J. Comput. Chem. 2002, 23, 576–583;
+          <a href="https://doi.org/10.1002/jcc.10054"
+             target="_blank"
+             rel="noopener">
+            https://doi.org/10.1002/jcc.10054
+          </a>
+        </li>
+
+        <li>
+          (coordinate driving methods)
+          &quot;New Software for Exploring Interconversions on Potential Energy Surfaces&quot;
+          Cite as: J. Chem. Inf. Comput. Sci. 1999, 39, 705–712;
+          <a href="https://pubs.acs.org/doi/pdf/10.1021/ci9804138"
+             target="_blank"
+             rel="noopener">
+            https://pubs.acs.org/doi/pdf/10.1021/ci9804138
+          </a>
+        </li>
+
+        <li>
+          (Growing String Method; GSM)
+          &quot;Reliable Transition State Searches Integrated with the Growing String Method&quot;
+          Cite as: P. Zimmerman, J. Chem. Theory Comput. 2013, 9 (7), 3043–3050;
+          <a href="https://doi.org/10.1021/ct400319w"
+             target="_blank"
+             rel="noopener">
+            https://doi.org/10.1021/ct400319w
+          </a>
+          <br>
+          → これを表面反応探索に応用した研究:
+          &quot;Reliable and Efficient Reaction Path and Transition State Finding for Surface Reactions with the Growing String Method&quot;
+          M. Jafari and P. M. Zimmerman;
+          <a href="https://doi.org/10.1002/jcc.24720"
+             target="_blank"
+             rel="noopener">
+            https://doi.org/10.1002/jcc.24720
+          </a>
+        </li>
+
+        <li>
+          (stochastic surface walking based reaction sampling (SSW-RS) method)
+          &quot;Stochastic Surface Walking Method for Structure Prediction and Pathway Searching&quot;
+          Cite as: J. Chem. Theory Comput. 2013, 9 (3), 1838–1845;
+          <a href="https://doi.org/10.1021/ct301010b"
+             target="_blank"
+             rel="noopener">
+            https://doi.org/10.1021/ct301010b
+          </a>
+        </li>
+
+        <li>
+          (combined molecular dynamics and coordinate driving (MD/CD) method)
+          &quot;Automatic Reaction Pathway Search via Combined Molecular Dynamics and Coordinate Driving Method&quot;
+          Cite as: J. Phys. Chem. A 2017, 121, 1351–1361;
+          <a href="https://doi.org/10.1021/acs.jpca.6b12195"
+             target="_blank"
+             rel="noopener">
+            https://doi.org/10.1021/acs.jpca.6b12195
+          </a>
+        </li>
+      </ul>
+    </li>
+
+    <li>
+      （反応経路分岐 &quot;Bifurcation&quot; に関するmini-review）
+      D. H. Ess, S. E. Wheeler, R. G. Iafe, L. Xu, N. Celebi-Olcum, K. N. Houk,
+      <a href="https://onlinelibrary.wiley.com/doi/full/10.1002/anie.200800918"
+         target="_blank"
+         rel="noopener">
+        &quot;Bifurcations on Potential Energy Surfaces of Organic Reactions&quot;
+      </a>
+      Angew. Chem., Int. Ed. 2008, 47, 7592–7601.
+    </li>
+
+    <li>
+      （「Müller･Brownポテンシャル」のオリジナル）
+      K. Müller, L. D. Brown,
+      <a href="https://link.springer.com/article/10.1007/BF00547608"
+         target="_blank"
+         rel="noopener">
+        &quot;Location of Saddle Points and Minimum Energy Paths by a Constrained Simplex Optimization Procedure&quot;
+      </a>
+      Theor. Chem. Acc. 1979, 53, 75–93.
+    </li>
+
+    <li>
+      （汎関数のパフォーマンスのベンチマーク）
+      G.-X. Zhang, A. M Reilly, A. Tkatchenko, M. Scheffler,
+      <a href="https://iopscience.iop.org/article/10.1088/1367-2630/aac7f0"
+         target="_blank"
+         rel="noopener">
+        &quot;Performance of various density-functional approximations for cohesive properties of 64 bulk solids&quot;
+      </a>
+      New J. Phys. 2018, 20, 063020/1–19.
+      （固相系ではPBE汎関数（必要に応じてvdW効果を考慮）がコスト的にも第1選択になり得る）
+    </li>
+
+    <li>
+      第一原理計算による band gap の評価
+    </li>
+
+    <li>
+      （Brillouin zone（ブリュアンゾーン）のk点の分類と図示）
+      W. Setyawan and S. Curtarolo,
+      <a href="https://www.sciencedirect.com/science/article/pii/S0927025610002697"
+         target="_blank"
+         rel="noopener">
+        High-throughput electronic band structure calculations: Challenges and tools
+      </a>
+      Comput. Mater. Sci. 2010, 49, 299–312.
+      （Appendixに格子ごとのk点の分類と図示が掲載されている）
+    </li>
+
+    <li>
+      <a href="https://pubs.acs.org/journal/jceda8"
+         target="_blank"
+         rel="noopener">
+        Journal of Chemical Education
+      </a>
+      （化学教育を志向するACS系の雑誌；研究分野のバックグラウンドを勉強するのにちょうどよい）
+    </li>
+
+    <li>
+      <a href="https://www.intechopen.com/subjects/8"
+         target="_blank"
+         rel="noopener">
+        IntechOpenの「化学」のライブラリ
+      </a>
+      （IntechOpenはOA図書出版社（掲載内容は査読有り）；
+      <a href="https://www.intechopen.com/news/introducing-intechopen-book-series-a-new-publishing-format-for-oa-books-20210915"
+         target="_blank"
+         rel="noopener">
+        IntechOpen Book Seriesについて
+      </a>
+      ）
+    </li>
+
+    <li>
+      For metal complexes, the stability and reactivity are described in thermodynamic and kinetic terms, respectively.
+      In particular, the terms stable and unstable are related to thermodynamic aspects, whereas labile and inert terms
+      are related to kinetic aspects.
+      （
+      <a href="https://www.intechopen.com/chapters/71326#:~:text=2.%20Relation%20between%20thermodynamic%20and%20kinetic%20stabilities"
+         target="_blank"
+         rel="noopener">
+        Stability of Metal Complexes
+      </a>
+      ）
+    </li>
+
+    <li>
+      &quot;
+      <a href="https://www.epfl.ch/labs/cosmo/wp-content/uploads/2018/11/sampling_atomistic_simulations-lecture_notes.pdf"
+         target="_blank"
+         rel="noopener">
+        Statistical methods in atomistic computer simulations
+      </a>
+      &quot;
+      （
+      <a href="https://people.epfl.ch/michele.ceriotti?lang=en"
+         target="_blank"
+         rel="noopener">
+        Michele Ceriotti
+      </a>
+      先生；スイス連邦工科大学ローザンヌ校 教授）
+    </li>
+
+    <li>
+      <a href="https://solid-mater.com/entry/freea"
+         target="_blank"
+         rel="noopener">
+        「無料で読める学術誌：誰でも最先端の研究に触れられる！」- はじめよう固体の科学
+      </a>
+    </li>
+
+    <li>
+      TOF（触媒回転頻度）：一つの触媒サイトにおいて単位時間あたりに生成物に変換できる分子数の最大値である。
+      触媒の最高効率を表す。<br>
+      TON（触媒回転数）：触媒が不活性化する前に、触媒１モルあたり（または触媒サイト１モルあたり）
+      変換できる物質のモル数（または分子数）である。触媒の安定性（寿命）を表す。
+    </li>
+
+    <li>
+      Isodesmic Reaction（アイソデスミック反応）：反応物で切断される化学結合の種類と、
+      反応生成物で形成される結合の種類が同じであるような化学反応のこと。このタイプの反応では、
+      結合の総数と種類が保たれているため、反応前後のエネルギー的な誤差が相殺され、
+      計算レベルの高低によらず熱化学のエネルギー差（反応エネルギー）を良い精度で見積もることができるとされている。<br>
+      ※参考：
+      <a href="https://doi.org/10.1021/ed074p201"
+         target="_blank"
+         rel="noopener">
+        What are Isodesmic Reactions?
+      </a>
+    </li>
+  </ul>
+</section>
+
+
+      <section>
+  <h2 id="videos">【動画など】</h2>
+
+  <ul>
+    <li>
+      <a href="https://www.youtube.com/channel/UC-8sllV43IxFYwNYKnhLWZA"
+         target="_blank"
+         rel="noopener">
+        湯どうふ(化学の勉強)
+      </a>
+    </li>
+    <li>
+      <a href="https://www.youtube.com/watch?v=9w9FXijKVv0&amp;ab_channel=%E7%A0%94%E7%A9%B6%E5%8B%95%E7%94%BB"
+         target="_blank"
+         rel="noopener">
+        密度汎関数理論に基づく第一原理計算ざっくり入門(固体材料編)
+      </a>
+    </li>
+    <li>
+      <a href="https://www.youtube.com/watch?v=NHMZIvKpW9c&amp;ab_channel=JSOLCAESolution"
+         target="_blank"
+         rel="noopener">
+        SIESTAからはじめる材料解析I －第一原理計算とは？－
+      </a>
+    </li>
+    <li>
+      <a href="https://www.youtube.com/watch?v=v-W4K6iMM5Q&amp;ab_channel=JSOLCAESolution"
+         target="_blank"
+         rel="noopener">
+        SIESTAからはじめる材料解析II －事例で見る第一原理計算－
+      </a>
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2 id="compound-databases">【化合物･構造データベース+その他】</h2>
+
+  <ul>
+    <li>
+      <a href="https://pubchem.ncbi.nlm.nih.gov/"
+         target="_blank"
+         rel="noopener">
+        PubChem
+      </a>
+    </li>
+    <li>
+      <a href="https://www.chemspider.com/"
+         target="_blank"
+         rel="noopener">
+        ChemSpider
+      </a>
+    </li>
+    <li>
+      <a href="https://cactus.nci.nih.gov/chemical/structure"
+         target="_blank"
+         rel="noopener">
+        Chemical Identifier Resolver
+      </a>
+    </li>
+    <li>
+      <a href="https://materialsproject.org/"
+         target="_blank"
+         rel="noopener">
+        The Materials Project
+      </a>
+    </li>
+    <li>
+      <a href="https://www.sigmaaldrich.com/JP/ja/structure-search"
+         target="_blank"
+         rel="noopener">
+        Aldrich
+      </a>
+      （Merck社の提供する化合物検索システム；大量検索には向かない）
+    </li>
+
+    <li>
+      H. Shudo, M. Kuwayama, Y. Segawa, K. Itami,
+      <a href="https://pubs.rsc.org/en/content/articlelanding/2020/sc/d0sc02501a"
+         target="_blank"
+         rel="noopener">
+        "Synthesis of cycloiptycenes from carbon nanobelts"
+      </a>
+      Chem. Sci. 2020, 11, 6775–6779.
+      （SIのzipにカーボンナノベルト類のxyz座標）<br>
+
+      カーボンナノベルトは芳香環の接合様式によって「アームチェア型」と「ジグザグ型」に分類される。
+      （参考→
+      <a href="https://onlinelibrary.wiley.com/doi/10.1002/anie.202200800"
+         target="_blank"
+         rel="noopener">
+        東工大の研究
+      </a>
+      ）<br>
+
+      N. Hayase, J. Nogami, Y. Shibata, K. Tanaka,
+      <a href="https://onlinelibrary.wiley.com/doi/10.1002/anie.201903422"
+         target="_blank"
+         rel="noopener">
+        "Synthesis of a Strained Spherical Carbon Nanocage by Regioselective Alkyne Cyclotrimerization"
+      </a>
+      Angew. Chem. Int. Ed. 2019, 58, 9439–9442.
+      （SIのpdfにカーボンナノケージのxyz座標）<br>
+
+      cf. カーボンナノチューブ、カーボンナノファイバー、カーボンナノフレークなど
+    </li>
+
+    <li>
+      <a href="https://www.makingmolecules.com/"
+         target="_blank"
+         rel="noopener">
+        Making Molecules
+      </a>
+      というウェブサイトが公開している学部レベルの有機化学のハンドアウト一覧 →
+      <a href="https://www.makingmolecules.com/handouts"
+         target="_blank"
+         rel="noopener">
+        https://www.makingmolecules.com/handouts
+      </a>
+    </li>
+
+    <li>
+      <a href="https://www-wales.ch.cam.ac.uk/CCD.html"
+         target="_blank"
+         rel="noopener">
+        The Cambridge Energy Landscape Database
+      </a>
+      （クラスターなどの研究チーム；エネルギー地形）
+    </li>
+
+    <li>
+      <a href="http://doye.chem.ox.ac.uk/"
+         target="_blank"
+         rel="noopener">
+        Jonathan Doye's Research Group
+      </a>
+      （クラスターなどの研究チーム）
+    </li>
+
+    <li>
+      <a href="https://pubs.acs.org/doi/10.1021/acsapm.0c00524"
+         target="_blank"
+         rel="noopener">
+        High-Throughput Molecular Dynamics Simulations and Validation of Thermophysical Properties of Polymers for Various Applications
+      </a>
+      （ガラス転移温度を予測するMDシミュレーションに関する研究；SIにガラス転移温度と密度のデータあり）
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2 id="tools">【その他のプログラム関係のツール類】</h2>
+
+  <ul>
+    <li>
+      <a href="https://ma.issp.u-tokyo.ac.jp/app-post/1668"
+         target="_blank"
+         rel="noopener">
+        Creating a surface slab model using VESTA
+      </a>
+      （VESTAを利用したスラブモデルの作り方）
+    </li>
+    <li>
+      <a href="https://www.lenntech.com/calculators/molecular/molecular-weight-calculator.htm"
+         target="_blank"
+         rel="noopener">
+        Molecular Weight Calculator
+      </a>
+      （組成から分子量を計算する）
+    </li>
+    <li>
+      <a href="https://github.com/patonlab/GoodVibes"
+         target="_blank"
+         rel="noopener">
+        GoodVibes
+      </a>
+      （エネルギーの補正計算など）
+    </li>
+    <li>
+      <a href="https://github.com/YukiMitsuta/shs4py"
+         target="_blank"
+         rel="noopener">
+        SHS4py
+      </a>
+      （Pythonによる超球面探索手法の実装）
+    </li>
+    <li>
+      <a href="https://www.rdkit.org/docs_jp/Getting_Started_with_RDKit_in_Python_jp.html"
+         target="_blank"
+         rel="noopener">
+        PythonでRDKitを始めよう
+      </a>
+      （RDKitの日本語マニュアル）
+    </li>
+    <li>
+      <a href="https://qiita.com/h-nabata/items/0b99e16b8e0ed4e32a82"
+         target="_blank"
+         rel="noopener">
+        結晶格子の並進ベクトルの座標計算（Calculate xyz coordinates of translation vectors from cif format）
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/matplotlib/cheatsheets"
+         target="_blank"
+         rel="noopener">
+        matplotlibチートシート
+      </a>
+      （matplotlib公式）
+    </li>
+    <li>
+      <a href="https://github.com/microsoft/ML-For-Beginners"
+         target="_blank"
+         rel="noopener">
+        ML-For-Beginners
+      </a>
+      （microsoftのリポジトリ）
+    </li>
+    <li>
+      <a href="https://yoshitakamo.github.io/pymol-book/index.html"
+         target="_blank"
+         rel="noopener">
+        PyMOL Tutorial
+      </a>
+      （PyMOLはオープンソースの分子グラフィックスツール）
+    </li>
+    <li>
+      <a href="https://www.docker.com/ja-jp/"
+         target="_blank"
+         rel="noopener">
+        Docker
+      </a>
+      （
+      <a href="https://zenn.dev/suzuki_hoge/books/2021-04-docker-picture-60fbe950136be9c7ad85"
+         target="_blank"
+         rel="noopener">
+        初心者向けのDocker解説記事
+      </a>
+      ）
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2 id="programming">【プログラミング】</h2>
+
+  <p>
+    GitHubアカウントを持っている人は、GitHubの資料はブックマーク機能で整理しておくと便利です。
+  </p>
+
+  <p>
+    プログラミング自体はオンラインアプリを使えば環境構築（＝プログラミング言語を使えるようにする作業）をせずに
+    誰でもすぐに始めることができます。例えば以下のようなものがあります。
+  </p>
+
+  <ul>
+    <li>
+      <a href="https://paiza.io/ja/projects/new"
+         target="_blank"
+         rel="noopener">
+        paiza.io
+      </a>
+    </li>
+    <li>
+      <a href="https://replit.com/"
+         target="_blank"
+         rel="noopener">
+        Replit
+      </a>
+    </li>
+    <li>
+      Pythonメインなら
+      <a href="https://colab.research.google.com/?hl=ja"
+         target="_blank"
+         rel="noopener">
+        Google Colaboratory
+      </a>
+      なども便利（Notebook形式なので少し慣れが必要かも？）
+    </li>
+  </ul>
+
+  <p>
+    これらのオンラインアプリでコードを動かすことができます。プログラムを使って何をしたいかによって、
+    実装の難度が変わってきます。化学科の化学実験II（旧「計算機実習」）の課題はプログラミングスキルとしては
+    いずれも初級レベルの内容です。研究にプログラムを利用する場合はより高度な実装が求められますが、
+    インターネットを通じてうまく情報収集すれば大抵のことは実現できます。以下に、今後役立つかもしれない
+    プログラミング用の教材を挙げておきます。
+  </p>
+
+  <h3>【プログラミング全般】</h3>
+  <ul>
+    <li>
+      <a href="https://dotinstall.com/"
+         target="_blank"
+         rel="noopener">
+        ドットインストール
+      </a>
+      （様々なプログラミング言語やソフトウェアについて動画付きで項目別に解説しているサイト；初心者向け）
+    </li>
+    <li>
+      <a href="https://github.com/EbookFoundation/free-programming-books/blob/master/books/free-programming-books-ja.md"
+         target="_blank"
+         rel="noopener">
+        free-programming-books-ja
+      </a>
+      （GitHubにまとめられている充実の資料；
+      <a href="https://github.com/EbookFoundation"
+         target="_blank"
+         rel="noopener">
+        Free Ebook Foundation
+      </a>
+      には様々なリポジトリがあります；リンク集として活用するのがオススメ）
+    </li>
+    <li>
+      <a href="https://github.com/CyC2018/CS-Notes"
+         target="_blank"
+         rel="noopener">
+        CS-Notes
+      </a>
+      （アルゴリズム集；中国語（簡体））
+    </li>
+  </ul>
+
+  <h3>【(主に)Python】</h3>
+  <ul>
+    <li>
+      <a href="https://docs.python.org/ja/3/tutorial/"
+         target="_blank"
+         rel="noopener">
+        Python チュートリアル
+      </a>
+      （Pythonディベロッパーが提供する本家本元のチュートリアル）
+    </li>
+    <li>
+      <a href="https://chokkan.github.io/python/"
+         target="_blank"
+         rel="noopener">
+        Python早見帳
+      </a>
+      （東工大の岡崎直観先生によるPython初学者向けテキスト；ノートブック形式）
+    </li>
+    <li>
+      <a href="https://chokkan.github.io/mlnote/index.html"
+         target="_blank"
+         rel="noopener">
+        機械学習帳
+      </a>
+      （東工大の岡崎直観先生による機械学習初学者向けテキスト；ノートブック形式）
+    </li>
+    <li>
+      <a href="https://utokyo-ipp.github.io/7/7-1.html"
+         target="_blank"
+         rel="noopener">
+        pandasライブラリ
+      </a>
+      （東大の数理･情報教育研究センターが公開しているテキスト；ノートブック形式）
+    </li>
+    <li>
+      <a href="https://automatetheboringstuff.com/"
+         target="_blank"
+         rel="noopener">
+        Automate the Boring Stuff with Python
+      </a>
+      第2版（邦訳は『退屈なことはpythonにやらせよう』）
+    </li>
+    <li>
+      <a href="https://www.deeplearningbook.org/"
+         target="_blank"
+         rel="noopener">
+        Deep Learning
+      </a>
+      （Goodfellow先生のテキスト；htmlとして閲覧可能）
+    </li>
+    <li>
+      <a href="https://pytorch.org/assets/deep-learning/Deep-Learning-with-PyTorch.pdf"
+         target="_blank"
+         rel="noopener">
+        Deep Learning with PyTorch
+      </a>
+      （PDF資料）
+    </li>
+    <li>
+      <a href="https://jakevdp.github.io/PythonDataScienceHandbook/"
+         target="_blank"
+         rel="noopener">
+        Python Data Science Handbook
+      </a>
+      （html資料）
+    </li>
+    <li>
+      <a href="https://www.theinsaneapp.com/2020/12/download-free-machine-learning-books.html"
+         target="_blank"
+         rel="noopener">
+        100+ Free Machine Learning Books - Download Best Machine Learning Books PDF
+      </a>
+    </li>
+    <li>
+      <a href="https://www.theinsaneapp.com/2020/12/free-data-science-books-pdf.html"
+         target="_blank"
+         rel="noopener">
+        100+ Free Data Science Books - Data Science PDF for Beginners and Experts
+      </a>
+    </li>
+    <li>
+      <a href="https://www.statlearning.com/"
+         target="_blank"
+         rel="noopener">
+        An Introduction to Statistical Learning
+      </a>
+      第2版（邦訳は『Rによる統計的学習入門』）
+    </li>
+
+    <li>
+      ML関連のテキストを紹介するredditのスレッド
+      <ul>
+        <li>
+          <a href="https://www.reddit.com/r/MachineLearning/comments/51qhc8/phdlevel_courses/"
+             target="_blank"
+             rel="noopener">
+            Phd-level courses
+          </a>
+        </li>
+        <li>
+          <a href="https://www.reddit.com/r/MachineLearning/comments/fdw0ax/d_advanced_courses_update/"
+             target="_blank"
+             rel="noopener">
+            Advanced courses update
+          </a>
+        </li>
+      </ul>
+    </li>
+
+    <li>
+      <a href="https://wwwchem.sci.hokudai.ac.jp/~qc/ruby_tutorial/PChapter=Contents_index.html"
+         target="_blank"
+         rel="noopener">
+        プログラミング入門　- Rubyを使って -
+      </a>
+      （化学実験Ⅱで例年利用しているプログラミング実習のテキスト；有志による和訳版）
+    </li>
+    <li>
+      <a href="https://projecteuler.net/"
+         target="_blank"
+         rel="noopener">
+        Project Euler
+      </a>
+      （研究室配属後のプログラミングの練習用素材；有志による和訳版は
+      <a href="http://odz.sakura.ne.jp/projecteuler/index.php?Project%20Euler"
+         target="_blank"
+         rel="noopener">
+        こちら
+      </a>
+      ）
+    </li>
+    <li>
+      <a href="https://aabbdd.jp/py4bi/"
+         target="_blank"
+         rel="noopener">
+        Python for Bioinformatics
+      </a>
+      （バイオインフォマティクスと書いてあるが一般的なPythonの初歩から解説されている；ビデオ解説有り）
+    </li>
+    <li>
+      <a href="https://github.com/stefan-jansen/machine-learning-for-trading?tab=readme-ov-file"
+         target="_blank"
+         rel="noopener">
+        ML for Trading
+      </a>
+    </li>
+    <li>
+      <a href="https://qiita.com/nkay/items/d1eb91e33b9d6469ef51"
+         target="_blank"
+         rel="noopener">
+        matplotlibのめっちゃまとめ
+      </a>
+    </li>
+    <li>
+      <a href="https://medium.com/lsc-psd/pythonic%E8%89%B2%E3%80%85-python%E3%81%AE%E3%82%A2%E3%83%B3%E3%83%80%E3%83%BC%E3%82%B9%E3%82%B3%E3%82%A2-%E3%82%92%E4%BD%BF%E3%81%84%E3%81%93%E3%81%AA%E3%81%9D%E3%81%86-3c132842eeef"
+         target="_blank"
+         rel="noopener">
+        Pythonのアンダースコア( _ )を使いこなそう！
+      </a>
+    </li>
+  </ul>
+
+  <h3>【JavaScript】</h3>
+  <ul>
+    <li>
+      <a href="https://jsprimer.net/"
+         target="_blank"
+         rel="noopener">
+        JavaScript Primer - 迷わないための入門書
+      </a>
+      （JavaScriptのテキスト）
+    </li>
+  </ul>
+
+  <h3>【Julia言語】</h3>
+  <ul>
+    <li>
+      <a href="https://hydrocoast.jp/index.php?Julia"
+         target="_blank"
+         rel="noopener">
+        Julia memorandums
+      </a>
+      （Julia言語のテキスト；日本語マニュアル）
+    </li>
+    <li>
+      <a href="http://www.mwsoft.jp/programming/julia/file.html"
+         target="_blank"
+         rel="noopener">
+        Juliaでファイル操作
+      </a>
+      、
+      <a href="https://www.geeksforgeeks.org/file-handling-in-julia/"
+         target="_blank"
+         rel="noopener">
+        File Handling in Julia
+      </a>
+      （こちらも参考に）
+    </li>
+    <li>
+      <a href="https://myenigma.hatenablog.com/entry/2018/05/21/075654"
+         target="_blank"
+         rel="noopener">
+        Juliaで競技プログラミングやるときによく書くコードをまとめてみた
+      </a>
+    </li>
+    <li>
+      <a href="https://qiita.com/mametank/items/53a2ad40bc9c496734a4"
+         target="_blank"
+         rel="noopener">
+        Juliaでの整数・浮動小数点数・文字列・文字間の型変換
+      </a>
+      - Qiita
+    </li>
+  </ul>
+
+  <h3>【その他】</h3>
+  <ul>
+    <li>
+      自動微分について:
+      <ul>
+        <li>
+          自動微分を実装して理解する（前編）:
+          <a href="https://qiita.com/lotz/items/39c52f08cc9b5d8439ca"
+             target="_blank"
+             rel="noopener">
+            https://qiita.com/lotz/items/39c52f08cc9b5d8439ca
+          </a>
+        </li>
+        <li>
+          自動微分を実装して理解する（後編）:
+          <a href="https://qiita.com/lotz/items/f1d4ab1d83dc13a5d81a"
+             target="_blank"
+             rel="noopener">
+            https://qiita.com/lotz/items/f1d4ab1d83dc13a5d81a
+          </a>
+        </li>
+      </ul>
+    </li>
+
+    <li>
+      The Elements of Differentiable Programming (arXiv):
+      <a href="https://arxiv.org/pdf/2403.14606.pdf"
+         target="_blank"
+         rel="noopener">
+        https://arxiv.org/pdf/2403.14606.pdf
+      </a>
+      （微分可能プログラミングのテキスト）
+    </li>
+
+    <li>
+      行列積順序問題について:
+      <a href="https://en.wikipedia.org/wiki/Matrix_chain_multiplication#More_efficient_algorithms"
+         target="_blank"
+         rel="noopener">
+        https://en.wikipedia.org/wiki/Matrix_chain_multiplication#More_efficient_algorithms
+      </a>
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2 id="markdown">【Markdown記法】</h2>
+
+  <p>
+    （1. は辞書のように充実しているのでサクッと調べたいときは 2. を参照のこと）
+  </p>
+
+  <ol>
+    <li>
+      <ol>
+        <li>
+          <a href="https://qiita.com/Qiita/items/c686397e4a0f4f11683d"
+             target="_blank"
+             rel="noopener">
+            Markdown記法 チートシート
+          </a>
+          - Qiita
+        </li>
+        <li>
+          <a href="https://qiita.com/tbpgr/items/989c6badefff69377da7"
+             target="_blank"
+             rel="noopener">
+            Markdown記法 サンプル集
+          </a>
+          - Qiita
+        </li>
+      </ol>
+    </li>
+  </ol>
+</section>
+
+<section>
+  <h2 id="latex">【LaTeX文書関連】</h2>
+
+  <p>
+    LaTeX形式で卒論修論博論を書きたい方向けの情報をまとめておきます。
+    「LaTeX 卒論 テンプレート」などで検索すれば大量の情報がヒットします。
+    レポート課題なんかも数式を多用するのであればLaTeX形式で作成するのがオススメです。
+    TeXの数式レンダリングは非常に美しいためです。（最初は慣れが必要ですが…）
+  </p>
+
+  <p>
+    個人的にはOverleafというオンラインアプリでの作成を推奨しています。こちらも検索すれば大量の情報がヒットします。
+    中でも東大工学部が公開しているテンプレートは実用的であり貴重です。以下にツールセットを紹介します。
+  </p>
+
+  <ol>
+    <li>
+      <ol>
+        <li>
+          <a href="https://ja.overleaf.com/gallery/tagged/tokyo"
+             target="_blank"
+             rel="noopener">
+            Gallery — University of Tokyo
+          </a>
+          - Overleaf（LaTeX形式の卒論修論博論テンプレート）
+        </li>
+        <li>
+          <a href="https://mathpix.com/"
+             target="_blank"
+             rel="noopener">
+            mathpix
+          </a>
+          （数式の画像をキャプチャしてLaTeXコマンドを生成する「数式起こし」アプリ；
+          手打ちだと大変な数式でもラクに＆高精度で起こせるので非常に重宝する）
+        </li>
+        <li>
+          <a href="https://artofproblemsolving.com/texer/"
+             target="_blank"
+             rel="noopener">
+            TeXer
+          </a>
+          - AoPS（数式のLaTeXコマンドをリアルタイムレンダリングしてくれるオンラインアプリ；
+          &quot;RENDER MATHJAX&quot; のボタンを押すとMathjax（Javascriptのライブラリ）による
+          リアルタイムレンダリングが実行されます；因みに
+          <a href="https://artofproblemsolving.com/"
+             target="_blank"
+             rel="noopener">
+            AoPS
+          </a>
+          は競技数学専門の掲示板です）
+        </li>
+        <li>
+          <a href="https://qiita.com/h-nabata/items/100057e9823f9878eeb9"
+             target="_blank"
+             rel="noopener">
+            【Python】png,jpeg,gif画像をeps形式に変換する
+          </a>
+          - Qiita
+          （LaTeX文書への画像挿入はeps形式に変換して行うとサイズ指定などがラクです；pdf形式の画像でもOK）
+        </li>
+      </ol>
+    </li>
+  </ol>
+</section>
+
+<section>
+  <h2 id="hpc">【スパコン関連（マニュアル、scpでのファイル移動など）】</h2>
+
+  <ul>
+    <li>スパコン関連の資料</li>
+  </ul>
+
+  <ol>
+    <li>
+      <ol>
+        <li>
+          京都大学　
+          <a href="https://web.kudpc.kyoto-u.ac.jp/manual/ja"
+             target="_blank"
+             rel="noopener">
+            https://web.kudpc.kyoto-u.ac.jp/manual/ja
+          </a>
+        </li>
+        <li>
+          <a href="https://github.com/kaityo256/sevendayshpc"
+             target="_blank"
+             rel="noopener">
+            一週間でなれる！スパコンプログラマ
+          </a>
+          - kaityo256氏 (github)
+        </li>
+      </ol>
+    </li>
+  </ol>
+
+  <ul>
+    <li>
+      scpコマンドでスパコンA（aserver.ac.jp）からスパコンB（bserver.ac.jp）へファイルを移動するには、
+      移動させる先のサーバーで以下のコマンドを叩く。送信元であるaserverの秘密鍵のパスフレーズが要求されるので
+      入力すると、データのコピーが開始する。
+    </li>
+  </ul>
+
+  <pre><code>[hoge@bserver ~]$ scp -i /home/hoge/.ssh/(aserverの秘密鍵) -r hoge@aserver.ac.jp:(移動したいファイルのパス) (移動先のパス)</code></pre>
+  <pre><code>Enter passphrase for key '/home/nabata/.ssh/(aserverの秘密鍵)':</code></pre>
+
+  <p>
+    ※上手くいかない場合は秘密鍵の規格が悪い可能性があるので、鍵を別のフォーマットで再作成してみる
+    （MobaXtermの場合は既存の鍵を用いて再作成可能）。<br>
+    ※MobaXtermのバージョンが古いという原因も考えられるので、最新のバージョンにアップグレードして再試行してみること。
+  </p>
+</section>
+
+      
     <p><span style="color: red;">（以下、工事中）</span></p>
     
     </div>
