@@ -1549,7 +1549,228 @@ Spin contaminationは、量子化学計算の正確さと信頼性に影響を�
   </p>
 </section>
 
-      
+<section id="commands">
+  <h2>【コマンド】</h2>
+
+  <ul>
+    <li>
+      <a href="https://parashuto.com/rriver/tools/mac-command-line-basics"
+         target="_blank"
+         rel="noopener">
+        初心者のためのよく使うLinuxコマンド一覧
+      </a>
+      - Rriver
+    </li>
+
+    <li>
+      <a href="https://qiita.com/t-kubo0325/items/158e02aa6b8e62b76242"
+         target="_blank"
+         rel="noopener">
+        【メモ】Linux圧縮/解凍コマンド
+      </a>
+      - Qiita
+      <ul>
+        <li>
+          gzファイルの解凍：
+          <code>tar -xzvf xxx.tar.gz</code>
+        </li>
+        <li>
+          ファイル検索：
+          <code>find -name xxx</code>
+          （xxx という名前のファイルを検索）
+        </li>
+      </ul>
+    </li>
+
+    <li>
+      <a href="https://news.mynavi.jp/techplus/article/20190917-895254/"
+         target="_blank"
+         rel="noopener">
+        Linuxでハードウェア情報を表示するコマンドまとめ
+      </a>
+      - マイナビTECH+
+    </li>
+  </ul>
+
+  <h3>IPアドレス確認例</h3>
+  <pre><code>[user@ccfep7 ~]$ hostname -I
+10.20.32.7 10.10.32.7 133.48.230.17</code></pre>
+
+  <pre><code>[user@ccfep7 ~]$ ip a
+（中略）
+7: bond1: &lt;BROADCAST,MULTICAST,MASTER,UP,LOWER_UP&gt;
+    inet 133.48.230.17/24</code></pre>
+
+  <pre><code>[user@ccfep7 ~]$ ifconfig
+bond1: inet 133.48.230.17 netmask 255.255.255.0</code></pre>
+
+  <p>
+    【参考】
+    <a href="https://pentan.info/doc/ip133_list.html"
+       target="_blank"
+       rel="noopener">
+      インターネット初期に日本に割り振られたIPアドレス一覧
+    </a>
+    - ぺんたん.info
+  </p>
+
+  <h3>OS・CPU・メモリ情報</h3>
+
+  <pre><code>[user@gr24 ~]$ cat /proc/version
+Linux version 3.10.0-693.21.1.el7.x86_64</code></pre>
+
+  <pre><code>[user@gr24 ~]$ cat /proc/cpuinfo
+model name : Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz</code></pre>
+
+  <pre><code>[user@ae01 ~]$ cat /proc/meminfo
+MemTotal: 196482788 kB</code></pre>
+
+  <pre><code>[user@ae01 ~]$ lscpu
+CPU(s): 40
+Socket(s): 2</code></pre>
+</section>
+
+<section id="shortcuts">
+  <h2>【ショートカット＆Tips】</h2>
+
+  <ul>
+    <li>【Windows】Ctrl + Z：元に戻す、Ctrl + Y：やり直し</li>
+    <li>【Windows】Ctrl + C / Ctrl + V：コピー＆貼り付け、Ctrl + Shift + V：書式なし貼り付け</li>
+    <li>【MS Word】Shift + Alt + =：数式モード</li>
+    <li>【Windows】Win + Alt + R：画面録画開始／終了（Win + G）</li>
+    <li>【PowerPoint】Ctrl + G：オブジェクトのグループ化</li>
+    <li>
+      高速文字起こし：
+      <ol>
+        <li>PC版LINEなどで画像OCR</li>
+        <li>URLバーに貼り付けて改行除去</li>
+        <li>必要に応じて翻訳</li>
+      </ol>
+    </li>
+    <li>
+      印刷不可PDFの対処：
+      Firefoxで開いて画像化 → 印刷またはPDF保存
+    </li>
+  </ul>
+</section>
+
+<section id="apps">
+  <h2>【情報共有・情報収集アプリケーション】</h2>
+
+  <ul>
+    <li>
+      <a href="https://app.slack.com/"
+         target="_blank"
+         rel="noopener">
+        Slack
+      </a>
+      ：チーム向け情報共有
+    </li>
+    <li>
+      <a href="https://scrapbox.io/"
+         target="_blank"
+         rel="noopener">
+        Scrapbox
+      </a>
+      ：相互リンク型メモ
+    </li>
+    <li>
+      <a href="https://zoom.us/"
+         target="_blank"
+         rel="noopener">
+        Zoom
+      </a>
+      ：オンライン会議
+    </li>
+    <li>
+      <a href="https://www.notion.so/"
+         target="_blank"
+         rel="noopener">
+        Notion
+      </a>
+      ：タスク管理
+    </li>
+    <li>
+      <a href="https://twitter.com/"
+         target="_blank"
+         rel="noopener">
+        Twitter
+      </a>
+      ：速報的情報収集
+    </li>
+    <li>
+      <a href="https://discord.com/"
+         target="_blank"
+         rel="noopener">
+        Discord
+      </a>
+      ：コミュニティ運営
+    </li>
+    <li>
+      <a href="https://gaxi.jp/"
+         target="_blank"
+         rel="noopener">
+        ガクシー
+      </a>
+      ：奨学金検索
+    </li>
+    <li>
+      <a href="https://www.kagaku.com/calendar.php"
+         target="_blank"
+         rel="noopener">
+        科学カレンダー
+      </a>
+    </li>
+    <li>
+      <a href="https://research-er.jp/articles/search"
+         target="_blank"
+         rel="noopener">
+        日本の研究.com
+      </a>
+    </li>
+    <li>
+      <a href="https://www.connectedpapers.com/"
+         target="_blank"
+         rel="noopener">
+        connected papers
+      </a>
+    </li>
+  </ul>
+</section>
+
+<section id="literature-search">
+  <h2>【参考文献検索・論文の読み方】</h2>
+
+  <ol>
+    <li>Google / Google Scholar でキーワード検索</li>
+    <li>引用・被引用を辿る
+      <ul>
+        <li><a href="https://www.semanticscholar.org/" target="_blank" rel="noopener">Semantic Scholar</a></li>
+        <li><a href="https://scholar.google.co.jp/" target="_blank" rel="noopener">Google Scholar</a></li>
+        <li><a href="https://pubmed.ncbi.nlm.nih.gov/" target="_blank" rel="noopener">PubMed</a></li>
+        <li><a href="https://www.reaxys.com/" target="_blank" rel="noopener">Reaxys</a></li>
+        <li><a href="https://scifinder-n.cas.org/" target="_blank" rel="noopener">SciFinder</a></li>
+      </ul>
+    </li>
+    <li>和文総説を探す</li>
+    <li>図書館で古典文献を確認</li>
+  </ol>
+</section>
+
+<section id="presentation">
+  <h2>【発表資料作成の基本】</h2>
+
+  <ul>
+    <li>文字サイズは本文14pt以上、図表12pt以上</li>
+    <li>ページ番号を付与</li>
+    <li>引用形式はRSCまたはACSで統一</li>
+    <li>1スライド1メッセージを意識</li>
+    <li>色は2色程度に抑える</li>
+    <li>負号は「−（U+2212）」を使用</li>
+    <li>図表には必ずキャプションを付ける</li>
+  </ul>
+</section>
+   
     <p><span style="color: red;">（以下、工事中）</span></p>
     
     </div>
