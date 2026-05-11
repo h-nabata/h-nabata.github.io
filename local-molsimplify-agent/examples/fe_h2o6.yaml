@@ -1,0 +1,9 @@
+metal: Fe
+oxidation_state: 2
+spin_state: high
+geometry: octahedral
+ligands:
+  - name: water
+    count: 6
+output_format: xyz
+relax: false

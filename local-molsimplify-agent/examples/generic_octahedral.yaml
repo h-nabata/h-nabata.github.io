@@ -1,0 +1,11 @@
+metal: Mn
+oxidation_state: 2
+spin_state: high
+geometry: octahedral
+ligands:
+  - name: water
+    count: 4
+  - name: ammonia
+    count: 2
+output_format: xyz
+relax: false

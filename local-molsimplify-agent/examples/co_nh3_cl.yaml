@@ -1,0 +1,11 @@
+metal: Co
+oxidation_state: 3
+spin_state: low
+geometry: octahedral
+ligands:
+  - name: ammonia
+    count: 5
+  - name: chloride
+    count: 1
+output_format: xyz
+relax: false
