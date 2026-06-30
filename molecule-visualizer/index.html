@@ -4,41 +4,25 @@ title: 分子構造描画・編集（XYZ）
 extra_head: |
   <script defer src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/3dmol@1.6.2/build/3Dmol-min.js"></script>
-  <style>
-    /* 最低限のUI整形（必要なら style.css 側へ移してOK） */
-    .mv-wrap { display:flex; gap:12px; padding:12px; flex-wrap:wrap; }
-    .mv-left { flex: 1 1 520px; min-width: 380px; }
-    .mv-right { flex: 1 1 520px; min-width: 380px; }
-    #viewer { width: 100%; height: 520px; border: 1px solid #ccc; border-radius: 8px; }
-    textarea { width: 100%; box-sizing: border-box; }
-    .mv-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin: 8px 0; }
-    .mv-row > * { margin:0; }
-    .mv-btn { padding: 8px 10px; border-radius: 8px; border: 1px solid #999; background:#fff; cursor:pointer; }
-    .mv-btn.primary { border-color:#333; font-weight:600; }
-    .mv-btn.danger { border-color:#b00020; color:#b00020; }
-    .mv-badge { padding: 3px 8px; border-radius: 999px; border:1px solid #999; font-size: 12px; }
-    .mv-panel { border: 1px solid #ddd; border-radius: 10px; padding: 10px; }
-    .mv-grid { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .mv-grid label { font-size: 12px; color:#333; display:block; }
-    .mv-grid input, .mv-grid select { width:100%; padding:6px; border-radius:8px; border:1px solid #bbb; }
-    table { width:100%; border-collapse: collapse; font-size: 12px; }
-    th, td { border-bottom: 1px solid #eee; padding: 6px; text-align: left; }
-    tr.selected { background: #fff3cd; }
-    .mv-small { font-size: 12px; color:#555; }
-    .mv-kbd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; border:1px solid #aaa; border-bottom-width:2px; border-radius:6px; padding:1px 6px; background:#fafafa; }
-    dialog { width: min(820px, 95vw); border-radius: 12px; border: 1px solid #bbb; }
-    dialog::backdrop { background: rgba(0,0,0,0.35); }
-  </style>
   <link rel="stylesheet" href="/molecule-visualizer/molecule-visualizer_style.css">
+  <script defer src="/molecule-visualizer/model.js"></script>
+  <script defer src="/molecule-visualizer/bonding.js"></script>
+  <script defer src="/molecule-visualizer/geometry.js"></script>
+  <script defer src="/molecule-visualizer/io.js"></script>
+  <script defer src="/molecule-visualizer/history.js"></script>
+  <script defer src="/molecule-visualizer/renderer3dmol.js"></script>
+  <script defer src="/molecule-visualizer/ui.js"></script>
   <script defer src="/molecule-visualizer/molecule-visualizer_main.js"></script>
 ---
-<div class="mv-wrap">
+<div class="mv-app">
+  <div class="mv-wrap">
     <div class="mv-left">
       <h1>分子構造描画・編集（工事中）</h1>
 
       <div class="mv-panel">
         <div class="mv-row">
           <button class="mv-btn primary" id="btnRender">描画 / 読み込み</button>
+          <button class="mv-btn" id="btnImportMol">MOL/SDF読み込み</button>
           <button class="mv-btn" id="btnToggleMove">移動モード: OFF</button>
           <button class="mv-btn" id="btnToggleIndex">原子番号表示: OFF</button>
           <span class="mv-badge" id="statusBadge">Ready</span>
@@ -54,6 +38,8 @@ H 1.0 0.0 0.0
         <div class="mv-row">
           <button class="mv-btn" id="btnCopyXYZ">編集後XYZをコピー</button>
           <button class="mv-btn" id="btnDownloadXYZ">編集後XYZをダウンロード</button>
+          <button class="mv-btn" id="btnCopyMol">MOLをコピー</button>
+          <button class="mv-btn" id="btnDownloadSdf">SDFをDL</button>
           <button class="mv-btn" id="btnUndo">Undo</button>
           <button class="mv-btn" id="btnRedo">Redo</button>
           <button class="mv-btn" id="btnClearSel">選択解除</button>
@@ -90,6 +76,59 @@ H 1.0 0.0 0.0
           <span class="mv-kbd">ドラッグ</span>=移動（移動モードON時） /
           <span class="mv-kbd">Shift</span>+ドラッグ=Z方向 /
           <span class="mv-kbd">Delete</span>=選択原子を削除
+        </div>
+      </div>
+
+      <div class="mv-panel" style="margin-top:12px;">
+        <h2 style="margin: 0 0 8px 0;">結合編集</h2>
+        <div class="mv-row">
+          <select id="bondOrder">
+            <option value="1">単結合</option>
+            <option value="2">二重結合</option>
+            <option value="3">三重結合</option>
+          </select>
+          <select id="bondType">
+            <option value="covalent">共有結合</option>
+            <option value="coordination_candidate">配位候補</option>
+            <option value="hydrogen">水素結合</option>
+          </select>
+          <button class="mv-btn primary" id="btnAddBond">選択2原子を結合</button>
+          <button class="mv-btn" id="btnUpdateBond">選択結合を更新</button>
+          <button class="mv-btn danger" id="btnDeleteBond">選択結合を削除</button>
+          <button class="mv-btn" id="btnReinferBonds">推定結合を再計算</button>
+        </div>
+        <div style="max-height: 220px; overflow:auto;">
+          <table id="bondTable">
+            <thead>
+              <tr>
+                <th>#</th><th>A1</th><th>A2</th><th>Order</th><th>Type</th><th>Source</th><th>Sel</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="mv-panel" style="margin-top:12px;">
+        <h2 style="margin: 0 0 8px 0;">座標拘束 / 幾何編集</h2>
+        <div class="mv-row">
+          <label class="mv-small">距離(2原子)</label>
+          <input id="targetDistance" class="mv-num" type="number" step="0.01" value="1.10" />
+          <button class="mv-btn primary" id="btnApplyDistance">適用</button>
+          <button class="mv-btn" id="btnMeasureDistance">測定</button>
+        </div>
+        <div class="mv-row">
+          <label class="mv-small">角度(3原子)</label>
+          <input id="targetAngle" class="mv-num" type="number" step="0.1" value="109.5" />
+          <button class="mv-btn primary" id="btnApplyAngle">適用</button>
+          <button class="mv-btn" id="btnMeasureAngle">測定</button>
+        </div>
+        <div class="mv-row">
+          <label class="mv-small">二面角(4原子)</label>
+          <input id="targetDihedral" class="mv-num" type="number" step="0.1" value="180.0" />
+          <button class="mv-btn primary" id="btnApplyDihedral">適用</button>
+          <button class="mv-btn" id="btnMeasureDihedral">測定</button>
+          <span class="mv-badge" id="measureBadge">-</span>
         </div>
       </div>
 
@@ -172,8 +211,8 @@ H 1.0 0.0 0.0
         <div class="mv-small">
           補足:
           - 入力が「座標行のみ」でも自動でヘッダー補完して読み込みます。<br/>
-          - 原子の追加/削除は atoms 配列を更新し、XYZとして再描画します（確実性優先）。<br/>
-          - “結合編集”は 3Dmol 側の自動推定に任せています（必要なら後で拡張できます）。
+          - 原子の追加/削除は MoleculeState を更新し、XYZとして再描画します（確実性優先）。<br/>
+          - 結合は共有結合半径から初期推定し、内部状態の bonds として保持します。
         </div>
       </div>
     </div>
@@ -198,6 +237,7 @@ H 1.0 0 0
         <div>
           <label>配置</label>
           <select id="fragPlace">
+            <option value="anchorBond">選択原子へアンカー結合</option>
             <option value="nearSelected">選択原子の近く</option>
             <option value="offset">オフセット（原点基準）</option>
           </select>
@@ -221,6 +261,22 @@ H 1.0 0 0
           <input id="fragOZ" type="number" step="0.1" value="0.0" />
         </div>
         <div>
+          <label>フラグメント側アンカー番号</label>
+          <input id="fragAnchorIndex" type="number" step="1" min="1" value="1" />
+        </div>
+        <div>
+          <label>接続距離</label>
+          <input id="fragBondDistance" type="number" step="0.01" value="1.45" />
+        </div>
+        <div>
+          <label>接続結合次数</label>
+          <select id="fragBondOrder">
+            <option value="1">単結合</option>
+            <option value="2">二重結合</option>
+            <option value="3">三重結合</option>
+          </select>
+        </div>
+        <div>
           <label>ランダム微小ずらし</label>
           <input id="fragJitter" type="number" step="0.001" value="0.000" />
         </div>
@@ -232,3 +288,4 @@ H 1.0 0 0
       </div>
     </form>
   </dialog>
+</div>
