@@ -47,6 +47,8 @@
     this.container.innerHTML = "";
     this.canvas = document.createElement("canvas");
     this.canvas.className = "mv-canvas";
+    this.canvas.tabIndex = 0;
+    this.canvas.setAttribute("aria-label", "Molecule editor canvas");
     this.container.appendChild(this.canvas);
     this.ctx = this.canvas.getContext("2d");
     this.installCanvasEvents();
@@ -237,9 +239,12 @@
   Renderer3DMol.prototype.installCanvasEvents = function () {
     const self = this;
     this.canvas.addEventListener("pointerdown", function (event) {
+      self.canvas.focus();
       const p = self.eventPoint(event);
       const atom = self.pickAtom(p.x, p.y);
       const bond = atom ? null : self.pickBond(p.x, p.y);
+      const isRightButton = event.button === 2;
+      const isLeftButton = event.button === 0;
       self.pointer = {
         x: event.clientX,
         y: event.clientY,
@@ -253,9 +258,12 @@
         action: null,
         historyStarted: false
       };
-      if (!atom && !bond && self.mode === "select" && !event.altKey) {
+      if (!atom && !bond && isRightButton) {
         self.pointer.action = "box";
         self.selectionBox = { x1: p.x, y1: p.y, x2: p.x, y2: p.y };
+        event.preventDefault();
+      } else if (!atom && !bond && isLeftButton) {
+        self.pointer.action = "rotate";
       }
       self.canvas.setPointerCapture(event.pointerId);
     });
@@ -286,7 +294,7 @@
         return;
       }
 
-      if (self.mode !== "move" || event.altKey) {
+      if (self.pointer.action === "rotate" || event.altKey) {
         self.rotY += dx * 0.01;
         self.rotX += dy * 0.01;
         self.draw();
@@ -308,11 +316,15 @@
       if (wasClick) self.handlePick(event);
     });
     this.canvas.addEventListener("wheel", function (event) {
+      self.canvas.focus();
       event.preventDefault();
       self.zoom *= event.deltaY < 0 ? 1.08 : 0.92;
       self.zoom = Math.max(0.25, Math.min(5, self.zoom));
       self.draw();
     }, { passive: false });
+    this.canvas.addEventListener("contextmenu", function (event) {
+      event.preventDefault();
+    });
     global.addEventListener("resize", function () {
       self.resize();
       self.draw();

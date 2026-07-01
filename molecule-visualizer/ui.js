@@ -202,6 +202,56 @@
     setStatus(`Selected element: ${element}`);
   }
 
+  function canvasHasFocus() {
+    return Boolean(renderer && renderer.canvas && document.activeElement === renderer.canvas);
+  }
+
+  function adjacencyMap() {
+    const map = new Map(state.atoms.map(atom => [atom.id, new Set()]));
+    state.bonds.forEach(bond => {
+      if (!map.has(bond.atom1) || !map.has(bond.atom2)) return;
+      map.get(bond.atom1).add(bond.atom2);
+      map.get(bond.atom2).add(bond.atom1);
+    });
+    return map;
+  }
+
+  function expandSelectionOneBond() {
+    if (state.selectedAtomIds.size === 0) return;
+    const adj = adjacencyMap();
+    const next = new Set(state.selectedAtomIds);
+    state.selectedAtomIds.forEach(atomId => {
+      const neighbors = adj.get(atomId);
+      if (!neighbors) return;
+      neighbors.forEach(id => next.add(id));
+    });
+    Model.setSelectedAtoms(state, Array.from(next));
+    Model.setSelectedBonds(state, []);
+    rerenderSelectionOnly();
+    setStatus(`Expanded selection: ${state.selectedAtomIds.size} atom(s)`);
+  }
+
+  function selectConnectedMoleculesFromSelection() {
+    if (state.selectedAtomIds.size === 0) return;
+    const adj = adjacencyMap();
+    const visited = new Set();
+    const stack = Array.from(state.selectedAtomIds);
+    while (stack.length > 0) {
+      const atomId = stack.pop();
+      if (visited.has(atomId)) continue;
+      visited.add(atomId);
+      const neighbors = adj.get(atomId);
+      if (!neighbors) continue;
+      neighbors.forEach(id => {
+        if (!visited.has(id)) stack.push(id);
+      });
+    }
+    Model.setSelectedAtoms(state, Array.from(visited));
+    Model.setSelectedBonds(state, []);
+    rerenderSelectionOnly();
+    setStatus(`Selected connected molecule: ${state.selectedAtomIds.size} atom(s)`);
+  }
+
   function addAtom() {
     const element = byId("addElem").value.trim() || "C";
     const mode = byId("addMode").value;
@@ -641,6 +691,27 @@
   function onKeyDown(e) {
     const tag = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : "";
     const editingText = tag === "textarea" || tag === "input" || tag === "select";
+    const inCanvas = canvasHasFocus();
+
+    if (inCanvas && (e.ctrlKey || e.metaKey)) {
+      const key = e.key.toLowerCase();
+      if (key === "a") {
+        e.preventDefault();
+        selectAll();
+        return;
+      }
+      if (key === "e") {
+        e.preventDefault();
+        expandSelectionOneBond();
+        return;
+      }
+      if (key === "w") {
+        e.preventDefault();
+        selectConnectedMoleculesFromSelection();
+        return;
+      }
+    }
+
     if ((e.key === "Delete" || e.key === "Backspace") && !editingText) {
       if (state.selectedBondIds.size > 0) deleteSelectedBonds();
       else deleteSelected();
@@ -650,6 +721,8 @@
     if (key === "v" || key === "s") { setMode("select"); return; }
     if (key === "b") { setMode("bond"); return; }
     if (key === "m") { setMode("move"); return; }
+    if (inCanvas && key === "e") { expandSelectionOneBond(); return; }
+    if (inCanvas && key === "w") { selectConnectedMoleculesFromSelection(); return; }
     if (key === "escape") { clearSelection(); return; }
     if (key === "a" && !(e.ctrlKey || e.metaKey)) { selectAll(); return; }
     if (key === "1" || key === "2" || key === "3") { setSelectedBondOrder(Number(key)); return; }
@@ -717,7 +790,7 @@
       applyFragment();
       byId("fragDialog").close();
     });
-    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("keydown", onKeyDown, true);
   }
 
   function init() {

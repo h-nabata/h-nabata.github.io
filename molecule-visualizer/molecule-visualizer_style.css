@@ -88,6 +88,11 @@
   height: 100%;
 }
 
+.mv-app .mv-canvas:focus {
+  outline: 3px solid rgba(37, 99, 235, 0.45);
+  outline-offset: -3px;
+}
+
 .mv-app .mv-toolbar {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

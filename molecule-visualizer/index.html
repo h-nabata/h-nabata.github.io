@@ -75,10 +75,14 @@ H 1.0 0.0 0.0
         <div class="mv-small">
           操作:
           <span class="mv-kbd">クリック</span>=選択 /
-          <span class="mv-kbd">ドラッグ</span>=原子移動または矩形選択 /
-          <span class="mv-kbd">Alt</span>+ドラッグ=回転 /
+          空白<span class="mv-kbd">左ドラッグ</span>=回転 /
+          空白<span class="mv-kbd">右ドラッグ</span>=矩形選択 /
+          原子<span class="mv-kbd">ドラッグ</span>=移動 /
           <span class="mv-kbd">Shift</span>+ドラッグ=Z方向 /
           <span class="mv-kbd">1</span><span class="mv-kbd">2</span><span class="mv-kbd">3</span>=結合次数 /
+          <span class="mv-kbd">Ctrl</span>+<span class="mv-kbd">A</span>=全選択 /
+          <span class="mv-kbd">Ctrl</span>+<span class="mv-kbd">E</span>=選択拡大 /
+          <span class="mv-kbd">Ctrl</span>+<span class="mv-kbd">W</span>=分子全体 /
           <span class="mv-kbd">B</span>=結合 /
           <span class="mv-kbd">Delete</span>=削除
         </div>
@@ -214,7 +218,7 @@ H 1.0 0.0 0.0
       <div class="mv-viewer-shell">
         <div class="mv-viewer-hud">
           <span id="modeBadge">Mode: Select</span>
-          <span>Drag atom: move / Drag empty: box select / Alt+drag: rotate / Wheel: zoom</span>
+          <span>Blank L-drag: rotate / Blank R-drag: box select / Ctrl+A/E/W when focused</span>
         </div>
         <div id="viewer"></div>
       </div>
