@@ -12,6 +12,7 @@
   let state = Model.createState();
   let renderer = null;
   let history = new History(120);
+  let editMode = "select";
   let moveMode = false;
   const drag = {
     active: false,
@@ -21,11 +22,27 @@
     scaleZ: 0.01,
     mode: "xy"
   };
+  let dragMoved = false;
 
   function byId(id) { return document.getElementById(id); }
   function setStatus(msg) { const el = byId("statusBadge"); if (el) el.textContent = msg; }
   function setMeasure(msg) { const el = byId("measureBadge"); if (el) el.textContent = msg; }
   function pushHistory(label) { history.push(label, state); }
+
+  function setMode(mode) {
+    editMode = mode;
+    moveMode = mode === "move";
+    [["toolSelect", "select"], ["toolBond", "bond"], ["toolMove", "move"]].forEach(item => {
+      const el = byId(item[0]);
+      if (el) el.classList.toggle("active", item[1] === mode);
+    });
+    const modeBadge = byId("modeBadge");
+    if (modeBadge) modeBadge.textContent = `Mode: ${mode.charAt(0).toUpperCase()}${mode.slice(1)}`;
+    if (renderer && typeof renderer.setInteractionMode === "function") renderer.setInteractionMode(mode);
+    const btn = byId("btnToggleMove");
+    if (btn) btn.textContent = `移動モード: ${moveMode ? "ON" : "OFF"}`;
+    setStatus(`Mode: ${mode}`);
+  }
 
   function atomLabel(atom) {
     const idx = state.atoms.findIndex(a => a.id === atom.id);
@@ -86,10 +103,7 @@
   }
 
   function toggleMoveMode() {
-    moveMode = !moveMode;
-    const btn = byId("btnToggleMove");
-    if (btn) btn.textContent = `移動モード: ${moveMode ? "ON" : "OFF"}`;
-    setStatus(moveMode ? "Move mode ON" : "Move mode OFF");
+    setMode(moveMode ? "select" : "move");
   }
 
   function toggleIndexLabels() {
@@ -293,6 +307,122 @@
     Model.setSelectedBonds(state, bond ? [bond.id] : []);
     render(true);
     setStatus("Manual bond added/updated");
+  }
+
+  function handleAtomClick(atomId, event) {
+    const additive = Boolean(event && (event.ctrlKey || event.metaKey));
+    if (editMode === "bond") {
+      const next = new Set(additive ? state.selectedAtomIds : state.selectedAtomIds);
+      if (next.has(atomId)) next.delete(atomId);
+      else next.add(atomId);
+      if (next.size > 2) {
+        const ids = Array.from(next);
+        next.clear();
+        next.add(ids[ids.length - 2]);
+        next.add(ids[ids.length - 1]);
+      }
+      Model.setSelectedAtoms(state, Array.from(next));
+      if (state.selectedAtomIds.size === 2) {
+        pushHistory("quickBond");
+        const atoms = selectedAtoms();
+        const bond = Model.addOrUpdateBond(state, atoms[0].id, atoms[1].id, byId("bondOrder").value, byId("bondType").value, "manual");
+        Model.setSelectedBonds(state, bond ? [bond.id] : []);
+        render(true);
+        setStatus("Bond created from 3D clicks");
+      } else {
+        rerenderSelectionOnly();
+        setStatus("Bond mode: select second atom");
+      }
+      return;
+    }
+
+    Model.toggleAtomSelection(state, atomId, additive);
+    Model.setSelectedBonds(state, []);
+    rerenderSelectionOnly();
+    setStatus(`Selected atoms: ${state.selectedAtomIds.size}`);
+  }
+
+  function handleBondClick(bondId, event) {
+    const additive = Boolean(event && (event.ctrlKey || event.metaKey));
+    Model.toggleBondSelection(state, bondId, additive);
+    const bond = state.bonds.find(item => item.id === bondId);
+    if (bond) {
+      Model.setSelectedAtoms(state, [bond.atom1, bond.atom2]);
+      byId("bondOrder").value = String(bond.order || 1);
+      byId("bondType").value = bond.type || "covalent";
+    }
+    rerenderSelectionOnly();
+    setStatus("Bond selected");
+  }
+
+  function atomIdsForDrag(atomId) {
+    if (state.selectedAtomIds.has(atomId)) return Array.from(state.selectedAtomIds);
+    Model.setSelectedAtoms(state, [atomId]);
+    Model.setSelectedBonds(state, []);
+    rerenderSelectionOnly();
+    return [atomId];
+  }
+
+  function handleAtomDragStart(atomId) {
+    atomIdsForDrag(atomId);
+    pushHistory("dragAtoms");
+    dragMoved = false;
+    setStatus(`Dragging ${state.selectedAtomIds.size} atom(s)`);
+  }
+
+  function handleAtomsDrag(atomId, delta) {
+    const ids = atomIdsForDrag(atomId);
+    const selected = new Set(ids);
+    state.atoms.forEach(atom => {
+      if (!selected.has(atom.id)) return;
+      atom.x += delta.x;
+      atom.y += delta.y;
+      atom.z += delta.z;
+    });
+    dragMoved = true;
+    render(true);
+  }
+
+  function handleCanvasDragEnd() {
+    if (!dragMoved) return;
+    dragMoved = false;
+    Bonding.refreshInferredBonds(state);
+    render(true);
+    setStatus("Atom drag applied");
+  }
+
+  function handleBoxSelect(atomIds, event) {
+    if (event && (event.ctrlKey || event.metaKey)) {
+      const next = new Set(state.selectedAtomIds);
+      atomIds.forEach(id => next.add(id));
+      Model.setSelectedAtoms(state, Array.from(next));
+    } else {
+      Model.setSelectedAtoms(state, atomIds);
+    }
+    Model.setSelectedBonds(state, []);
+    rerenderSelectionOnly();
+    setStatus(`Box selected: ${atomIds.length} atom(s)`);
+  }
+
+  function setSelectedBondOrder(order) {
+    const normalized = Number(order);
+    if (![1, 2, 3].includes(normalized)) return;
+    byId("bondOrder").value = String(normalized);
+    if (state.selectedBondIds.size > 0) {
+      pushHistory("shortcutBondOrder");
+      Model.updateSelectedBonds(state, { order: normalized, source: "manual" });
+      render(true);
+      setStatus(`Bond order: ${normalized}`);
+      return;
+    }
+    if (state.selectedAtomIds.size === 2) {
+      pushHistory("shortcutBondCreate");
+      const atoms = selectedAtoms();
+      const bond = Model.addOrUpdateBond(state, atoms[0].id, atoms[1].id, normalized, byId("bondType").value, "manual");
+      Model.setSelectedBonds(state, bond ? [bond.id] : []);
+      render(true);
+      setStatus(`Bond order: ${normalized}`);
+    }
   }
 
   function updateSelectedBonds() {
@@ -515,6 +645,24 @@
       if (state.selectedBondIds.size > 0) deleteSelectedBonds();
       else deleteSelected();
     }
+    if (editingText) return;
+    const key = e.key.toLowerCase();
+    if (key === "v" || key === "s") { setMode("select"); return; }
+    if (key === "b") { setMode("bond"); return; }
+    if (key === "m") { setMode("move"); return; }
+    if (key === "escape") { clearSelection(); return; }
+    if (key === "a" && !(e.ctrlKey || e.metaKey)) { selectAll(); return; }
+    if (key === "1" || key === "2" || key === "3") { setSelectedBondOrder(Number(key)); return; }
+    if (key === "r") {
+      renderer.rotX = -0.45;
+      renderer.rotY = 0.65;
+      renderer.zoom = 1;
+      renderer.panX = 0;
+      renderer.panY = 0;
+      renderer.render();
+      setStatus("View reset");
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
       e.preventDefault();
       if (e.shiftKey) redo(); else undo();
@@ -534,6 +682,9 @@
     bind("btnRender", "click", loadFromTextarea);
     bind("btnImportMol", "click", loadMolFromTextarea);
     bind("btnToggleMove", "click", toggleMoveMode);
+    bind("toolSelect", "click", () => setMode("select"));
+    bind("toolBond", "click", () => setMode("bond"));
+    bind("toolMove", "click", () => setMode("move"));
     bind("btnToggleIndex", "click", toggleIndexLabels);
     bind("btnCopyXYZ", "click", copyXYZ);
     bind("btnDownloadXYZ", "click", downloadXYZ);
@@ -566,9 +717,6 @@
       applyFragment();
       byId("fragDialog").close();
     });
-    document.addEventListener("mousedown", onMouseDown);
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
     document.addEventListener("keydown", onKeyDown);
   }
 
@@ -576,11 +724,19 @@
     renderer = new Renderer3DMol("viewer");
     renderer.ensureViewer();
     renderer.onAtomClick = function (atomId, event, viewer) {
-      Model.toggleAtomSelection(state, atomId, Boolean(event && (event.ctrlKey || event.metaKey)));
-      rerenderSelectionOnly();
+      handleAtomClick(atomId, event);
       if (viewer) viewer.render();
     };
+    renderer.onBondClick = function (bondId, event, viewer) {
+      handleBondClick(bondId, event);
+      if (viewer) viewer.render();
+    };
+    renderer.onAtomDragStart = handleAtomDragStart;
+    renderer.onAtomsDrag = handleAtomsDrag;
+    renderer.onDragEnd = handleCanvasDragEnd;
+    renderer.onBoxSelect = handleBoxSelect;
     wireUI();
+    setMode("select");
     setStatus("Ready");
     const styleSelect = byId("styleSelect");
     if (styleSelect) styleSelect.value = state.viewSettings.style;

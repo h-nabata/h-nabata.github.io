@@ -2,8 +2,6 @@
 layout: default
 title: 分子構造描画・編集（XYZ）
 extra_head: |
-  <script defer src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/3dmol@1.6.2/build/3Dmol-min.js"></script>
   <link rel="stylesheet" href="/molecule-visualizer/molecule-visualizer_style.css">
   <script defer src="/molecule-visualizer/model.js"></script>
   <script defer src="/molecule-visualizer/bonding.js"></script>
@@ -17,9 +15,14 @@ extra_head: |
 <div class="mv-app">
   <div class="mv-wrap">
     <div class="mv-left">
-      <h1>分子構造描画・編集（工事中）</h1>
+      <h1>分子構造エディタ</h1>
 
       <div class="mv-panel">
+        <div class="mv-toolbar" role="toolbar" aria-label="編集モード">
+          <button class="mv-tool active" id="toolSelect" type="button">Select</button>
+          <button class="mv-tool" id="toolBond" type="button">Bond</button>
+          <button class="mv-tool" id="toolMove" type="button">Move</button>
+        </div>
         <div class="mv-row">
           <button class="mv-btn primary" id="btnRender">描画 / 読み込み</button>
           <button class="mv-btn" id="btnImportMol">MOL/SDF読み込み</button>
@@ -72,10 +75,12 @@ H 1.0 0.0 0.0
         <div class="mv-small">
           操作:
           <span class="mv-kbd">クリック</span>=選択 /
-          <span class="mv-kbd">Ctrl</span>+クリック=追加選択 /
-          <span class="mv-kbd">ドラッグ</span>=移動（移動モードON時） /
+          <span class="mv-kbd">ドラッグ</span>=原子移動または矩形選択 /
+          <span class="mv-kbd">Alt</span>+ドラッグ=回転 /
           <span class="mv-kbd">Shift</span>+ドラッグ=Z方向 /
-          <span class="mv-kbd">Delete</span>=選択原子を削除
+          <span class="mv-kbd">1</span><span class="mv-kbd">2</span><span class="mv-kbd">3</span>=結合次数 /
+          <span class="mv-kbd">B</span>=結合 /
+          <span class="mv-kbd">Delete</span>=削除
         </div>
       </div>
 
@@ -206,13 +211,19 @@ H 1.0 0.0 0.0
     </div>
 
     <div class="mv-right">
-      <div id="viewer"></div>
+      <div class="mv-viewer-shell">
+        <div class="mv-viewer-hud">
+          <span id="modeBadge">Mode: Select</span>
+          <span>Drag atom: move / Drag empty: box select / Alt+drag: rotate / Wheel: zoom</span>
+        </div>
+        <div id="viewer"></div>
+      </div>
       <div class="mv-panel" style="margin-top:12px;">
         <div class="mv-small">
           補足:
           - 入力が「座標行のみ」でも自動でヘッダー補完して読み込みます。<br/>
           - 原子の追加/削除は MoleculeState を更新し、XYZとして再描画します（確実性優先）。<br/>
-          - 結合は共有結合半径から初期推定し、内部状態の bonds として保持します。
+          - 表示はMoleculeStateを直接描画するCanvasレンダラです。原子/結合クリック編集に対応します。
         </div>
       </div>
     </div>
