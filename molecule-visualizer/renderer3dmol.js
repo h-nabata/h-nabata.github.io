@@ -38,6 +38,8 @@
     this.currentScale = 80;
     this.pointer = null;
     this.selectionBox = null;
+    this.keyboardActive = false;
+    this.pointerInside = false;
   }
 
   Renderer3DMol.prototype.ensureViewer = function () {
@@ -49,6 +51,7 @@
     this.canvas.className = "mv-canvas";
     this.canvas.tabIndex = 0;
     this.canvas.setAttribute("aria-label", "Molecule editor canvas");
+    this.canvas.setAttribute("role", "application");
     this.container.appendChild(this.canvas);
     this.ctx = this.canvas.getContext("2d");
     this.installCanvasEvents();
@@ -84,6 +87,21 @@
 
   Renderer3DMol.prototype.render = function () {
     this.draw();
+  };
+
+  Renderer3DMol.prototype.focusCanvas = function () {
+    if (!this.canvas) return;
+    this.keyboardActive = true;
+    try {
+      this.canvas.focus({ preventScroll: true });
+    } catch (error) {
+      this.canvas.focus();
+    }
+  };
+
+  Renderer3DMol.prototype.hasKeyboardFocus = function () {
+    if (!this.canvas) return false;
+    return document.activeElement === this.canvas || this.keyboardActive;
   };
 
   Renderer3DMol.prototype.center = function () {
@@ -238,8 +256,23 @@
 
   Renderer3DMol.prototype.installCanvasEvents = function () {
     const self = this;
+    this.canvas.addEventListener("focus", function () {
+      self.keyboardActive = true;
+    });
+    this.canvas.addEventListener("blur", function () {
+      self.keyboardActive = false;
+    });
+    this.canvas.addEventListener("pointerenter", function () {
+      self.pointerInside = true;
+    });
+    this.canvas.addEventListener("pointerleave", function () {
+      self.pointerInside = false;
+    });
+    this.canvas.addEventListener("keydown", function (event) {
+      if (typeof self.onKeyDown === "function") self.onKeyDown(event);
+    }, true);
     this.canvas.addEventListener("pointerdown", function (event) {
-      self.canvas.focus();
+      self.focusCanvas();
       const p = self.eventPoint(event);
       const atom = self.pickAtom(p.x, p.y);
       const bond = atom ? null : self.pickBond(p.x, p.y);
@@ -316,7 +349,7 @@
       if (wasClick) self.handlePick(event);
     });
     this.canvas.addEventListener("wheel", function (event) {
-      self.canvas.focus();
+      self.focusCanvas();
       event.preventDefault();
       self.zoom *= event.deltaY < 0 ? 1.08 : 0.92;
       self.zoom = Math.max(0.25, Math.min(5, self.zoom));
@@ -325,6 +358,9 @@
     this.canvas.addEventListener("contextmenu", function (event) {
       event.preventDefault();
     });
+    document.addEventListener("pointerdown", function (event) {
+      if (event.target !== self.canvas) self.keyboardActive = false;
+    }, true);
     global.addEventListener("resize", function () {
       self.resize();
       self.draw();

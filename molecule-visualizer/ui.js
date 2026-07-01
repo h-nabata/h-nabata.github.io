@@ -203,7 +203,13 @@
   }
 
   function canvasHasFocus() {
-    return Boolean(renderer && renderer.canvas && document.activeElement === renderer.canvas);
+    return Boolean(renderer && typeof renderer.hasKeyboardFocus === "function" && renderer.hasKeyboardFocus());
+  }
+
+  function consumeShortcut(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
   }
 
   function adjacencyMap() {
@@ -689,44 +695,47 @@
   }
 
   function onKeyDown(e) {
+    if (e.defaultPrevented) return;
     const tag = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : "";
     const editingText = tag === "textarea" || tag === "input" || tag === "select";
     const inCanvas = canvasHasFocus();
+    const key = e.key.toLowerCase();
 
     if (inCanvas && (e.ctrlKey || e.metaKey)) {
-      const key = e.key.toLowerCase();
       if (key === "a") {
-        e.preventDefault();
+        consumeShortcut(e);
         selectAll();
         return;
       }
       if (key === "e") {
-        e.preventDefault();
+        consumeShortcut(e);
         expandSelectionOneBond();
         return;
       }
       if (key === "w") {
-        e.preventDefault();
+        consumeShortcut(e);
         selectConnectedMoleculesFromSelection();
         return;
       }
     }
 
     if ((e.key === "Delete" || e.key === "Backspace") && !editingText) {
+      consumeShortcut(e);
       if (state.selectedBondIds.size > 0) deleteSelectedBonds();
       else deleteSelected();
+      return;
     }
-    if (editingText) return;
-    const key = e.key.toLowerCase();
-    if (key === "v" || key === "s") { setMode("select"); return; }
-    if (key === "b") { setMode("bond"); return; }
-    if (key === "m") { setMode("move"); return; }
-    if (inCanvas && key === "e") { expandSelectionOneBond(); return; }
-    if (inCanvas && key === "w") { selectConnectedMoleculesFromSelection(); return; }
-    if (key === "escape") { clearSelection(); return; }
-    if (key === "a" && !(e.ctrlKey || e.metaKey)) { selectAll(); return; }
-    if (key === "1" || key === "2" || key === "3") { setSelectedBondOrder(Number(key)); return; }
+    if (editingText && !inCanvas) return;
+    if (key === "v" || key === "s") { consumeShortcut(e); setMode("select"); return; }
+    if (key === "b") { consumeShortcut(e); setMode("bond"); return; }
+    if (key === "m") { consumeShortcut(e); setMode("move"); return; }
+    if (inCanvas && key === "e") { consumeShortcut(e); expandSelectionOneBond(); return; }
+    if (inCanvas && key === "w") { consumeShortcut(e); selectConnectedMoleculesFromSelection(); return; }
+    if (key === "escape") { consumeShortcut(e); clearSelection(); return; }
+    if (key === "a" && !(e.ctrlKey || e.metaKey)) { consumeShortcut(e); selectAll(); return; }
+    if (key === "1" || key === "2" || key === "3") { consumeShortcut(e); setSelectedBondOrder(Number(key)); return; }
     if (key === "r") {
+      consumeShortcut(e);
       renderer.rotX = -0.45;
       renderer.rotY = 0.65;
       renderer.zoom = 1;
@@ -737,12 +746,14 @@
       return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
-      e.preventDefault();
+      consumeShortcut(e);
       if (e.shiftKey) redo(); else undo();
+      return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "y") {
-      e.preventDefault();
+      consumeShortcut(e);
       redo();
+      return;
     }
   }
 
@@ -808,6 +819,7 @@
     renderer.onAtomsDrag = handleAtomsDrag;
     renderer.onDragEnd = handleCanvasDragEnd;
     renderer.onBoxSelect = handleBoxSelect;
+    renderer.onKeyDown = onKeyDown;
     wireUI();
     setMode("select");
     setStatus("Ready");
