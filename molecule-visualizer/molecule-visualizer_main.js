@@ -5,3 +5,4 @@
     global.MoleculeVisualizer.App.init();
   });
 })(window);
+

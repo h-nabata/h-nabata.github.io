@@ -40,6 +40,7 @@
     this.selectionBox = null;
     this.keyboardActive = false;
     this.pointerInside = false;
+    this.cameraCenter = null; this.cameraSpan = null;
   }
 
   Renderer3DMol.prototype.ensureViewer = function () {
@@ -55,6 +56,7 @@
     this.container.appendChild(this.canvas);
     this.ctx = this.canvas.getContext("2d");
     this.installCanvasEvents();
+    if (global.ResizeObserver) new ResizeObserver(() => { this.resize(); this.draw(); }).observe(this.container);
     this.resize();
   };
 
@@ -73,9 +75,10 @@
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   };
 
-  Renderer3DMol.prototype.renderState = function (state) {
+  Renderer3DMol.prototype.renderState = function (state, preserveCamera) {
     this.ensureViewer();
     this.state = state;
+    if (!preserveCamera || !this.cameraCenter) this.fit();
     this.resize();
     this.draw();
   };
@@ -135,7 +138,7 @@
       x: width / 2 + this.panX + rotated.x * scale,
       y: height / 2 + this.panY - rotated.y * scale,
       z: rotated.z,
-      radius: Math.max(8, (ELEMENT_RADII[atom.element] || 0.4) * scale * 0.55)
+      radius: this.atomRadius(atom.element, scale)
     };
   };
 
@@ -144,19 +147,20 @@
     const width = this.canvas.clientWidth;
     const height = this.canvas.clientHeight;
     this.ctx.clearRect(0, 0, width, height);
-    this.ctx.fillStyle = "#ffffff";
+    this.ctx.fillStyle = "#f9fbfc";
     this.ctx.fillRect(0, 0, width, height);
 
     const atoms = this.state.atoms || [];
     if (atoms.length === 0) {
+      this.projectedAtoms = []; this.projectedBonds = [];
       this.drawEmpty(width, height);
       return;
     }
-    const center = this.center();
-    const span = this.estimateSpan(center);
+    const center = this.cameraCenter || this.center();
+    const span = this.cameraSpan || this.estimateSpan(center);
     const scale = Math.min(width, height) / Math.max(4.2, span * 1.65) * this.zoom;
     this.currentScale = scale;
-    this.projectedAtoms = atoms.map(atom => this.project(atom, center, scale, width, height));
+    this.projectedAtoms = atoms.map((atom,index) => Object.assign(this.project(atom, center, scale, width, height), {index:index+1}));
     const atomById = new Map(this.projectedAtoms.map(pa => [pa.atom.id, pa]));
 
     this.projectedBonds = (this.state.bonds || []).map(bond => ({
@@ -165,7 +169,7 @@
       b: atomById.get(bond.atom2)
     })).filter(item => item.a && item.b);
 
-    this.projectedBonds
+    if (this.state.viewSettings.style !== "vdw") this.projectedBonds
       .slice()
       .sort((m, n) => ((m.a.z + m.b.z) / 2) - ((n.a.z + n.b.z) / 2))
       .forEach(item => this.drawBond(item));
@@ -182,7 +186,7 @@
     this.ctx.fillStyle = "#6b7280";
     this.ctx.font = "14px Arial, sans-serif";
     this.ctx.textAlign = "center";
-    this.ctx.fillText("Paste XYZ/MOL/SDF and load a molecule", width / 2, height / 2);
+    this.ctx.fillText("ファイルを開く・座標を貼り付ける・下のサンプルから始める", width / 2, height / 2);
   };
 
   Renderer3DMol.prototype.estimateSpan = function (center) {
@@ -199,7 +203,7 @@
   Renderer3DMol.prototype.drawBond = function (item) {
     const selected = this.state.selectedBondIds && this.state.selectedBondIds.has(item.bond.id);
     const manual = item.bond.source === "manual";
-    const order = Math.max(1, Math.min(3, Number(item.bond.order) || 1));
+    const order = item.bond.order === 4 ? 2 : Math.max(1, Math.min(3, Number(item.bond.order) || 1));
     const dx = item.b.x - item.a.x;
     const dy = item.b.y - item.a.y;
     const len = Math.sqrt(dx * dx + dy * dy) || 1;
@@ -207,15 +211,18 @@
     const ny = dx / len;
     const offsets = order === 1 ? [0] : (order === 2 ? [-3.5, 3.5] : [-5, 0, 5]);
     this.ctx.lineCap = "round";
-    offsets.forEach(offset => {
+    const style = this.state.viewSettings.style;
+    offsets.forEach((offset, lineIndex) => {
+      this.ctx.setLineDash(item.bond.type !== "covalent" || (item.bond.order === 4 && lineIndex === 1) ? [5,4] : []);
       this.ctx.beginPath();
       this.ctx.moveTo(item.a.x + nx * offset, item.a.y + ny * offset);
       this.ctx.lineTo(item.b.x + nx * offset, item.b.y + ny * offset);
-      this.ctx.lineWidth = selected ? 7 : (manual ? 5 : 3);
-      this.ctx.strokeStyle = selected ? "#ef4444" : (manual ? "#2563eb" : "#5b6472");
+      this.ctx.lineWidth = selected ? 5 : (style === "wire" ? 1.4 : Math.max(2, Math.min(10,this.currentScale * .09)));
+      this.ctx.strokeStyle = selected ? "#07959c" : (item.bond.type === "covalent" ? "#85969e" : "#b08d58");
       this.ctx.globalAlpha = item.bond.source === "inferred" ? 0.72 : 0.95;
       this.ctx.stroke();
       this.ctx.globalAlpha = 1;
+      this.ctx.setLineDash([]);
     });
   };
 
@@ -230,10 +237,10 @@
     if (selected) {
       this.ctx.beginPath();
       this.ctx.arc(pa.x, pa.y, pa.radius + 7, 0, Math.PI * 2);
-      this.ctx.fillStyle = "rgba(255, 212, 0, 0.38)";
+      this.ctx.fillStyle = "rgba(8, 156, 163, 0.18)";
       this.ctx.fill();
       this.ctx.lineWidth = 2;
-      this.ctx.strokeStyle = "#f59e0b";
+      this.ctx.strokeStyle = "#07959c";
       this.ctx.stroke();
     }
 
@@ -246,125 +253,67 @@
     this.ctx.stroke();
 
     if (this.state.viewSettings && this.state.viewSettings.showIndexLabels) {
-      const idx = this.state.atoms.findIndex(atom => atom.id === pa.atom.id) + 1;
+      const idx = pa.index;
       this.ctx.fillStyle = "#111827";
       this.ctx.font = "12px Arial, sans-serif";
       this.ctx.textAlign = "center";
-      this.ctx.fillText(String(idx), pa.x, pa.y - pa.radius - 9);
+      this.ctx.fillText(`${idx} ${pa.atom.element}`, pa.x, pa.y - pa.radius - 9);
     }
   };
 
+  Renderer3DMol.prototype.fit = function () {
+    this.cameraCenter = this.center(); this.cameraSpan = this.estimateSpan(this.cameraCenter);
+    this.zoom = 1; this.panX = 0; this.panY = 0; this.draw();
+  };
+  Renderer3DMol.prototype.atomRadius = function(element,scale) {
+    const style=this.state?.viewSettings?.style || "stickball";
+    if(style==="wire") return 3;
+    if(style==="stick") return Math.max(3,Math.min(10,scale*.07));
+    if(style==="vdw") {const vdw={H:1.2,C:1.7,N:1.55,O:1.52,F:1.47,P:1.8,S:1.8,Cl:1.75,Br:1.85,I:1.98}; return Math.max(4,(vdw[element]||1.8)*scale);}
+    return Math.max(5,(ELEMENT_RADII[element]||.4)*scale*.8);
+  };
   Renderer3DMol.prototype.installCanvasEvents = function () {
-    const self = this;
-    this.canvas.addEventListener("focus", function () {
-      self.keyboardActive = true;
+    const self=this, touches=new Map(); let gesture=null;
+    this.canvas.addEventListener("focus",()=>self.keyboardActive=true);
+    this.canvas.addEventListener("blur",()=>self.keyboardActive=false);
+    this.canvas.addEventListener("keydown",e=>self.onKeyDown?.(e));
+    const pinch=()=>{const [a,b]=[...touches.values()];return {x:(a.x+b.x)/2,y:(a.y+b.y)/2,d:Math.hypot(a.x-b.x,a.y-b.y)};};
+    this.canvas.addEventListener("pointerdown",function(e){
+      self.focusCanvas();const p=self.eventPoint(e);touches.set(e.pointerId,p);self.canvas.setPointerCapture(e.pointerId);
+      if(touches.size===2){if(self.pointer?.historyStarted) self.onDragEnd?.(e);self.pointer=null;self.selectionBox=null;gesture=pinch();return;}
+      if(touches.size>2)return;
+      const atom=self.pickAtom(p.x,p.y),bond=atom?null:self.pickBond(p.x,p.y);
+      let action=e.button===2||e.altKey?"pan":self.mode==="box"?"box":self.mode==="move"&&atom?"move":"rotate";
+      self.pointer={id:e.pointerId,x:e.clientX,y:e.clientY,lastX:e.clientX,lastY:e.clientY,moved:false,atomId:atom?.id,bondId:bond?.id,action,historyStarted:false};
+      if(action==="box")self.selectionBox={x1:p.x,y1:p.y,x2:p.x,y2:p.y};
+      e.preventDefault();
     });
-    this.canvas.addEventListener("blur", function () {
-      self.keyboardActive = false;
-    });
-    this.canvas.addEventListener("pointerenter", function () {
-      self.pointerInside = true;
-    });
-    this.canvas.addEventListener("pointerleave", function () {
-      self.pointerInside = false;
-    });
-    this.canvas.addEventListener("keydown", function (event) {
-      if (typeof self.onKeyDown === "function") self.onKeyDown(event);
-    }, true);
-    this.canvas.addEventListener("pointerdown", function (event) {
-      self.focusCanvas();
-      const p = self.eventPoint(event);
-      const atom = self.pickAtom(p.x, p.y);
-      const bond = atom ? null : self.pickBond(p.x, p.y);
-      const isRightButton = event.button === 2;
-      const isLeftButton = event.button === 0;
-      self.pointer = {
-        x: event.clientX,
-        y: event.clientY,
-        lastX: event.clientX,
-        lastY: event.clientY,
-        canvasX: p.x,
-        canvasY: p.y,
-        moved: false,
-        atomId: atom ? atom.id : null,
-        bondId: bond ? bond.id : null,
-        action: null,
-        historyStarted: false
-      };
-      if (!atom && !bond && isRightButton) {
-        self.pointer.action = "box";
-        self.selectionBox = { x1: p.x, y1: p.y, x2: p.x, y2: p.y };
-        event.preventDefault();
-      } else if (!atom && !bond && isLeftButton) {
-        self.pointer.action = "rotate";
-      }
-      self.canvas.setPointerCapture(event.pointerId);
-    });
-    this.canvas.addEventListener("pointermove", function (event) {
-      if (!self.pointer) return;
-      const dx = event.clientX - self.pointer.lastX;
-      const dy = event.clientY - self.pointer.lastY;
-      const p = self.eventPoint(event);
-      self.pointer.lastX = event.clientX;
-      self.pointer.lastY = event.clientY;
-      if (Math.abs(event.clientX - self.pointer.x) + Math.abs(event.clientY - self.pointer.y) > 4) self.pointer.moved = true;
-
-      if (self.pointer.action === "box") {
-        self.selectionBox.x2 = p.x;
-        self.selectionBox.y2 = p.y;
-        self.draw();
-        return;
-      }
-
-      if (self.pointer.atomId && (self.mode === "move" || self.mode === "select")) {
-        if (!self.pointer.historyStarted && typeof self.onAtomDragStart === "function") {
-          self.onAtomDragStart(self.pointer.atomId, event);
-          self.pointer.historyStarted = true;
-        }
-        if (typeof self.onAtomsDrag === "function") {
-          self.onAtomsDrag(self.pointer.atomId, self.screenDeltaToWorld(dx, dy, event.shiftKey), event);
-        }
-        return;
-      }
-
-      if (self.pointer.action === "rotate" || event.altKey) {
-        self.rotY += dx * 0.01;
-        self.rotX += dy * 0.01;
-        self.draw();
-      }
-    });
-    this.canvas.addEventListener("pointerup", function (event) {
-      if (!self.pointer) return;
-      const wasClick = !self.pointer.moved;
-      const pointer = self.pointer;
-      self.pointer = null;
-      if (pointer.action === "box") {
-        const ids = self.atomIdsInBox(self.selectionBox);
-        self.selectionBox = null;
-        self.draw();
-        if (ids.length > 0 && typeof self.onBoxSelect === "function") self.onBoxSelect(ids, event);
-        return;
-      }
-      if (pointer.historyStarted && typeof self.onDragEnd === "function") self.onDragEnd(event);
-      if (wasClick) self.handlePick(event);
-    });
-    this.canvas.addEventListener("wheel", function (event) {
-      self.focusCanvas();
-      event.preventDefault();
-      self.zoom *= event.deltaY < 0 ? 1.08 : 0.92;
-      self.zoom = Math.max(0.25, Math.min(5, self.zoom));
-      self.draw();
-    }, { passive: false });
-    this.canvas.addEventListener("contextmenu", function (event) {
-      event.preventDefault();
-    });
-    document.addEventListener("pointerdown", function (event) {
-      if (event.target !== self.canvas) self.keyboardActive = false;
-    }, true);
-    global.addEventListener("resize", function () {
-      self.resize();
+    this.canvas.addEventListener("pointermove",function(e){
+      if(!touches.has(e.pointerId))return;const p=self.eventPoint(e);touches.set(e.pointerId,p);
+      if(gesture&&touches.size===2){const next=pinch();self.zoom=Math.max(.1,Math.min(12,self.zoom*next.d/Math.max(1,gesture.d)));self.panX+=next.x-gesture.x;self.panY+=next.y-gesture.y;gesture=next;self.draw();return;}
+      const ptr=self.pointer;if(!ptr||ptr.id!==e.pointerId)return;
+      if(!ptr.moved&&Math.hypot(e.clientX-ptr.x,e.clientY-ptr.y)<5)return;
+      ptr.moved=true;const dx=e.clientX-ptr.lastX,dy=e.clientY-ptr.lastY;ptr.lastX=e.clientX;ptr.lastY=e.clientY;
+      if(ptr.action==="box"){self.selectionBox.x2=p.x;self.selectionBox.y2=p.y;}
+      else if(ptr.action==="pan"){self.panX+=dx;self.panY+=dy;}
+      else if(ptr.action==="move"){
+        if(!ptr.historyStarted){self.onAtomDragStart?.(ptr.atomId,e);ptr.historyStarted=true;}
+        self.onAtomsDrag?.(ptr.atomId,self.screenDeltaToWorld(dx,dy,e.shiftKey),e);
+      }else {self.rotY+=dx*.008;self.rotX+=dy*.008;}
       self.draw();
     });
+    const finish=function(e){
+      touches.delete(e.pointerId);if(gesture){if(touches.size<2)gesture=null;self.pointer=null;return;}
+      const ptr=self.pointer;if(!ptr||ptr.id!==e.pointerId)return;self.pointer=null;
+      if(ptr.historyStarted)self.onDragEnd?.(e);
+      if(ptr.action==="box"){const ids=self.atomIdsInBox(self.selectionBox);self.selectionBox=null;if(e.type!=="pointercancel")self.onBoxSelect?.(ids,e);}
+      else if(!ptr.moved&&ptr.action!=="pan"&&e.type!=="pointercancel") {if(ptr.atomId)self.onAtomClick?.(ptr.atomId,e,self);else if(ptr.bondId)self.onBondClick?.(ptr.bondId,e,self);else self.onBlankClick?.(e);}
+      self.draw();
+    };
+    this.canvas.addEventListener("pointerup",finish);this.canvas.addEventListener("pointercancel",finish);this.canvas.addEventListener("lostpointercapture",finish);
+    this.canvas.addEventListener("wheel",e=>{e.preventDefault();self.zoom=Math.max(.1,Math.min(12,self.zoom*Math.exp(-e.deltaY*.001)));self.draw();},{passive:false});
+    this.canvas.addEventListener("contextmenu",e=>e.preventDefault());
+    global.addEventListener("resize",()=>{self.resize();self.draw();});
   };
 
   Renderer3DMol.prototype.screenDeltaToWorld = function (dx, dy, zMode) {
@@ -431,21 +380,13 @@
   };
 
   Renderer3DMol.prototype.pickAtom = function (x, y) {
-    let best = null;
-    let bestD = Infinity;
-    this.projectedAtoms.forEach(pa => {
-      const dx = x - pa.x;
-      const dy = y - pa.y;
-      const d = Math.sqrt(dx * dx + dy * dy);
-      if (d <= pa.radius + 9 && d < bestD) {
-        best = pa.atom;
-        bestD = d;
-      }
-    });
-    return best;
+    const sorted=this.projectedAtoms.slice().sort((a,b)=>b.z-a.z);
+    const hit=sorted.find(pa=>Math.hypot(x-pa.x,y-pa.y)<=Math.max(10,pa.radius+3));
+    return hit ? hit.atom : null;
   };
 
   Renderer3DMol.prototype.pickBond = function (x, y) {
+    if(this.state?.viewSettings?.style === "vdw") return null;
     let best = null;
     let bestD = Infinity;
     this.projectedBonds.forEach(item => {
@@ -472,3 +413,4 @@
 
   MV.Renderer3DMol = Renderer3DMol;
 })(window);
+

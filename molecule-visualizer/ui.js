@@ -25,23 +25,43 @@
   let dragMoved = false;
 
   function byId(id) { return document.getElementById(id); }
-  function setStatus(msg) { const el = byId("statusBadge"); if (el) el.textContent = msg; }
+  function setStatus(msg, error) { const el = byId("statusBadge"); if (el) { el.textContent = msg; el.classList.toggle("error",Boolean(error)); } if(byId("exportDialog")?.open) byId("exportMessage").textContent=msg; }
+  function report(error) { const message=error.message||String(error); setStatus(message,true); if(byId("importDialog").open)byId("importError").textContent=message; if(byId("fragDialog").open)byId("fragmentError").textContent=message; }
+  function numberInput(id, min=-1e6, max=1e6) {const el=byId(id), value=Number(el.value);if(el.value.trim()==="" || !Number.isFinite(value) || value<min || value>max)throw Error("数値が空欄または範囲外です。");return value;}
+  function additive(event){return Boolean(event&&(event.ctrlKey||event.metaKey||event.shiftKey))||byId("multiSelect").checked;}
+  let saveTimer;
+  function saveLocal(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>{try{localStorage.setItem("molecule-studio-v1",IO.stateToProjectText(state));byId("saveState").textContent="この端末に保存済み";}catch(e){byId("saveState").textContent="自動保存できません。ファイルで保存してください。";}},350);}
+  function syncUI(){
+    const selected=selectedAtoms();byId("structureStats").textContent=`${state.atoms.length} 原子 · ${state.bonds.length} 結合`;
+    if(document.activeElement!==byId("structureTitle"))byId("structureTitle").value=state.metadata.title||"無題の構造";
+    byId("selectionSummary").textContent=selected.length ? `選択順: ${selected.slice(0,8).map(atomLabel).join(" → ")}${selected.length>8?` ほか ${selected.length-8} 原子`:""}` : "原子をクリックして選択";
+    ["coordX","coordY","coordZ","atomCharge","btnApplyCoords"].forEach(id=>byId(id).disabled=selected.length!==1);
+    if(selected.length===1){["coordX","coordY","coordZ"].forEach((id,i)=>byId(id).value=selected[0][["x","y","z"][i]].toFixed(6));byId("atomCharge").value=selected[0].charge||0;}
+    byId("btnUndo").disabled=!history.undoStack.length;byId("btnRedo").disabled=!history.redoStack.length;
+    ["btnDeleteSel","btnChangeElem","btnTranslate"].forEach(id=>byId(id).disabled=!selected.length);
+    byId("btnAddBond").disabled=selected.length!==2;
+    ["btnUpdateBond","btnDeleteBond"].forEach(id=>byId(id).disabled=!state.selectedBondIds.size);
+    [["Distance",2],["Angle",3],["Dihedral",4]].forEach(([name,n])=>["Apply","Measure"].forEach(action=>byId("btn"+action+name).disabled=selected.length!==n));
+    byId("styleSelect").value=state.viewSettings.style;byId("btnToggleIndex").setAttribute("aria-pressed",String(state.viewSettings.showIndexLabels));
+    const values=selected;
+    try{setMeasure(values.length===2?`${Geometry.distance(...values).toFixed(3)} Å`:values.length===3?`${Geometry.angle(...values).toFixed(2)}°`:values.length===4?`${Geometry.dihedral(...values).toFixed(2)}°`:"2 / 3 / 4 原子を順に選択してください");}catch(e){setMeasure(e.message);}
+  }
   function setMeasure(msg) { const el = byId("measureBadge"); if (el) el.textContent = msg; }
   function pushHistory(label) { history.push(label, state); }
 
   function setMode(mode) {
     editMode = mode;
     moveMode = mode === "move";
-    [["toolSelect", "select"], ["toolBond", "bond"], ["toolMove", "move"]].forEach(item => {
+    [["toolSelect", "select"], ["toolBond", "bond"], ["toolMove", "move"], ["toolBox", "box"]].forEach(item => {
       const el = byId(item[0]);
-      if (el) el.classList.toggle("active", item[1] === mode);
+      if (el) { el.classList.toggle("active", item[1] === mode); el.setAttribute("aria-pressed",String(item[1]===mode)); }
     });
     const modeBadge = byId("modeBadge");
-    if (modeBadge) modeBadge.textContent = `Mode: ${mode.charAt(0).toUpperCase()}${mode.slice(1)}`;
+    if (modeBadge) modeBadge.textContent = ({select:"選択モード",move:"原子移動モード",bond:"結合モード",box:"範囲選択モード"})[mode];
     if (renderer && typeof renderer.setInteractionMode === "function") renderer.setInteractionMode(mode);
     const btn = byId("btnToggleMove");
     if (btn) btn.textContent = `移動モード: ${moveMode ? "ON" : "OFF"}`;
-    setStatus(`Mode: ${mode}`);
+    setStatus(({select:"クリックで選択。ドラッグで回転します。",move:"原子をドラッグして移動。ShiftでZ方向へ移動します。",bond:"原子を2つ順にクリックして結合します。",box:"ドラッグした範囲の原子を選択します。"})[mode]);
   }
 
   function atomLabel(atom) {
@@ -57,8 +77,10 @@
 
   function render(preserveCamera) {
     renderer.renderState(state, Boolean(preserveCamera));
+    saveLocal();
     updateAtomTable();
     updateBondTable();
+    syncUI();
   }
 
   function setState(nextState, preserveCamera) {
@@ -71,6 +93,7 @@
     renderer.updateSelection(state);
     updateAtomTable();
     updateBondTable();
+    syncUI();
   }
 
   function refreshBondsAndRender(preserveCamera) {
@@ -78,29 +101,14 @@
     render(preserveCamera);
   }
 
-  function loadFromTextarea() {
-    const nextState = IO.parseXYZToState(byId("xyz_input").value);
-    if (nextState.atoms.length === 0) {
-      setStatus("XYZ parse failed / empty");
-      return;
-    }
-    pushHistory("loadXYZ");
-    nextState.viewSettings = Object.assign({}, state.viewSettings);
-    setState(nextState, false);
-    setStatus(`Loaded XYZ: ${state.atoms.length} atoms, ${state.bonds.length} bonds`);
+  function loadText(text) {
+    const nextState=IO.parseAuto(text);
+    pushHistory("load");nextState.viewSettings=Object.assign({},state.viewSettings,nextState.viewSettings);
+    setState(nextState,false);setStatus(`${state.atoms.length} 原子を読み込みました。`);
+    byId("importError").textContent="";byId("importDialog").close();
   }
-
-  function loadMolFromTextarea() {
-    const nextState = IO.parseMolToState(byId("xyz_input").value);
-    if (nextState.atoms.length === 0) {
-      setStatus("MOL/SDF parse failed / empty");
-      return;
-    }
-    pushHistory("loadMol");
-    nextState.viewSettings = Object.assign({}, state.viewSettings);
-    setState(nextState, false);
-    setStatus(`Loaded MOL/SDF: ${state.atoms.length} atoms, ${state.bonds.length} bonds`);
-  }
+  function loadFromTextarea(){loadText(byId("xyz_input").value);}
+  function loadMolFromTextarea(){loadFromTextarea();}
 
   function toggleMoveMode() {
     setMode(moveMode ? "select" : "move");
@@ -109,27 +117,30 @@
   function toggleIndexLabels() {
     state.viewSettings.showIndexLabels = !state.viewSettings.showIndexLabels;
     const btn = byId("btnToggleIndex");
-    if (btn) btn.textContent = `原子番号表示: ${state.viewSettings.showIndexLabels ? "ON" : "OFF"}`;
+    if (btn) btn.textContent = "原子番号";
     renderer.updateSelection(state);
+    syncUI(); saveLocal();
     setStatus(state.viewSettings.showIndexLabels ? "Index labels ON" : "Index labels OFF");
   }
 
   function onStyleChange() {
     state.viewSettings.style = byId("styleSelect").value;
     renderer.updateSelection(state);
+    syncUI(); saveLocal();
     setStatus(`Style: ${state.viewSettings.style}`);
   }
 
   function copyText(text, okMessage) {
     if (!navigator.clipboard) {
-      setStatus("Clipboard unavailable");
+      byId("exportText").value=text;
+      setStatus("コピー機能を利用できません。下のテキスト欄から手動でコピーしてください。");
       return;
     }
-    navigator.clipboard.writeText(text).then(() => setStatus(okMessage)).catch(() => setStatus("Clipboard failed"));
+    navigator.clipboard.writeText(text).then(() => setStatus(okMessage)).catch(() => {byId("exportText").value=text;setStatus("コピーできませんでした。下の欄から手動でコピーしてください。");});
   }
 
-  function copyXYZ() { copyText(IO.stateToXYZText(state), "XYZ copied"); }
-  function copyMol() { copyText(IO.stateToMolText(state), "MOL copied"); }
+  function copyXYZ() { copyText(IO.stateToXYZText(state), "XYZをコピーしました。"); }
+  function copyMol() { copyText(IO.stateToMolText(state), "MOLをコピーしました。"); }
 
   function downloadText(text, filename) {
     const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
@@ -140,24 +151,24 @@
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
 
   function downloadXYZ() {
-    downloadText(IO.stateToXYZText(state), "edited.xyz");
-    setStatus("XYZ downloaded");
+    downloadText(IO.stateToXYZText(state), safeFilename()+".xyz");
+    setStatus("XYZを保存しました。");
   }
 
   function downloadSDF() {
-    downloadText(IO.stateToSDFText(state), "edited.sdf");
-    setStatus("SDF downloaded");
+    downloadText(IO.stateToSDFText(state), safeFilename()+".sdf");
+    setStatus("SDFを保存しました。");
   }
 
   function clearSelection() {
     Model.setSelectedAtoms(state, []);
     Model.setSelectedBonds(state, []);
     rerenderSelectionOnly();
-    setStatus("Selection cleared");
+    setStatus("選択を解除しました。");
   }
 
   function deleteSelected() {
@@ -165,7 +176,7 @@
     pushHistory("deleteAtoms");
     Model.removeSelectedAtoms(state);
     refreshBondsAndRender(true);
-    setStatus("Deleted selected atoms");
+    setStatus("選択原子を削除しました。");
   }
 
   function changeSelectedElement() {
@@ -183,7 +194,7 @@
   function selectAll() {
     Model.selectAllAtoms(state);
     rerenderSelectionOnly();
-    setStatus("Selected all atoms");
+    setStatus("全原子を選択しました。");
   }
 
   function selectNone() { clearSelection(); }
@@ -191,7 +202,7 @@
   function selectInvert() {
     Model.invertAtomSelection(state);
     rerenderSelectionOnly();
-    setStatus("Atom selection inverted");
+    setStatus("選択を反転しました。");
   }
 
   function selectByElement() {
@@ -261,11 +272,13 @@
   function addAtom() {
     const element = byId("addElem").value.trim() || "C";
     const mode = byId("addMode").value;
-    const dist = Number(byId("addDist").value || "1.1");
-    let x = Number(byId("addX").value || "0");
-    let y = Number(byId("addY").value || "0");
-    let z = Number(byId("addZ").value || "0");
+    const dist = numberInput("addDist",0.01,100);
+    let x = numberInput("addX");
+    let y = numberInput("addY");
+    let z = numberInput("addZ");
 
+    if(state.atoms.length>=2000)throw Error("原子数の上限は2000です。");
+    if(mode==="nearSelected"&&state.selectedAtomIds.size!==1)throw Error("追加位置の基準となる原子を1つ選択してください。");
     if (mode === "nearSelected" && state.selectedAtomIds.size > 0) {
       const base = selectedAtoms()[0];
       if (base) { x = base.x; y = base.y; z = base.z + (Number.isFinite(dist) ? dist : 1.1); }
@@ -283,7 +296,7 @@
 
   function openFragmentDialog() {
     const dlg = byId("fragDialog");
-    if (dlg) dlg.showModal();
+    if (dlg) { byId("fragmentError").textContent=""; dlg.showModal(); }
   }
 
   function centroid(atoms) {
@@ -298,19 +311,22 @@
   function applyFragment() {
     const parsed = IO.parseXYZAtoms(byId("fragText").value);
     if (parsed.atoms.length === 0) {
-      setStatus("Fragment parse failed");
-      return;
+      throw Error("原子団の座標を読み取れません。");
     }
 
     const place = byId("fragPlace").value;
-    const scale = Number(byId("fragScale").value || "1.0");
-    const ox = Number(byId("fragOX").value || "0");
-    const oy = Number(byId("fragOY").value || "0");
-    const oz = Number(byId("fragOZ").value || "0");
-    const jitter = Number(byId("fragJitter").value || "0");
+    const scale = numberInput("fragScale",.01,100);
+    const ox = numberInput("fragOX");
+    const oy = numberInput("fragOY");
+    const oz = numberInput("fragOZ");
+    const jitter = numberInput("fragJitter");
     const anchorIndex = Math.max(1, Number(byId("fragAnchorIndex").value || "1")) - 1;
-    const bondDistance = Number(byId("fragBondDistance").value || "1.45");
+    const bondDistance = numberInput("fragBondDistance");
     const bondOrder = Number(byId("fragBondOrder").value || "1");
+    if(state.atoms.length+parsed.atoms.length>2000)throw Error("原子数の上限は2000です。");
+    if(!Number.isInteger(anchorIndex)||!parsed.atoms[anchorIndex])throw Error("アンカー番号が範囲外です。");
+    if((place==="anchorBond"||place==="nearSelected")&&state.selectedAtomIds.size!==1)throw Error("接続先の原子を1つ選んでください。");
+    if(bondDistance<=0||jitter<0)throw Error("距離は正、ずらし幅は0以上にしてください。");
     const hostAnchor = selectedAtoms()[0] || null;
     const fragAnchor = parsed.atoms[anchorIndex] || parsed.atoms[0];
 
@@ -362,13 +378,13 @@
     const bond = Model.addOrUpdateBond(state, atoms[0].id, atoms[1].id, byId("bondOrder").value, byId("bondType").value, "manual");
     Model.setSelectedBonds(state, bond ? [bond.id] : []);
     render(true);
-    setStatus("Manual bond added/updated");
+    setStatus("結合を作成・更新しました。");
   }
 
   function handleAtomClick(atomId, event) {
-    const additive = Boolean(event && (event.ctrlKey || event.metaKey));
+    const isAdditive = additive(event);
     if (editMode === "bond") {
-      const next = new Set(additive ? state.selectedAtomIds : state.selectedAtomIds);
+      const next = new Set(state.selectedAtomIds.size===2 ? [] : state.selectedAtomIds);
       if (next.has(atomId)) next.delete(atomId);
       else next.add(atomId);
       if (next.size > 2) {
@@ -384,23 +400,23 @@
         const bond = Model.addOrUpdateBond(state, atoms[0].id, atoms[1].id, byId("bondOrder").value, byId("bondType").value, "manual");
         Model.setSelectedBonds(state, bond ? [bond.id] : []);
         render(true);
-        setStatus("Bond created from 3D clicks");
+        setStatus("2原子を結合しました。");
       } else {
         rerenderSelectionOnly();
-        setStatus("Bond mode: select second atom");
+        setStatus("2つ目の原子を選択してください。");
       }
       return;
     }
 
-    Model.toggleAtomSelection(state, atomId, additive);
+    Model.toggleAtomSelection(state, atomId, isAdditive);
     Model.setSelectedBonds(state, []);
     rerenderSelectionOnly();
     setStatus(`Selected atoms: ${state.selectedAtomIds.size}`);
   }
 
   function handleBondClick(bondId, event) {
-    const additive = Boolean(event && (event.ctrlKey || event.metaKey));
-    Model.toggleBondSelection(state, bondId, additive);
+    const isAdditive = additive(event);
+    Model.toggleBondSelection(state, bondId, isAdditive);
     const bond = state.bonds.find(item => item.id === bondId);
     if (bond) {
       Model.setSelectedAtoms(state, [bond.atom1, bond.atom2]);
@@ -408,7 +424,7 @@
       byId("bondType").value = bond.type || "covalent";
     }
     rerenderSelectionOnly();
-    setStatus("Bond selected");
+    setStatus("結合を選択しました。");
   }
 
   function atomIdsForDrag(atomId) {
@@ -436,7 +452,7 @@
       atom.z += delta.z;
     });
     dragMoved = true;
-    render(true);
+    renderer.updateSelection(state);
   }
 
   function handleCanvasDragEnd() {
@@ -444,11 +460,11 @@
     dragMoved = false;
     Bonding.refreshInferredBonds(state);
     render(true);
-    setStatus("Atom drag applied");
+    setStatus("原子の移動を確定しました。");
   }
 
   function handleBoxSelect(atomIds, event) {
-    if (event && (event.ctrlKey || event.metaKey)) {
+    if (additive(event)) {
       const next = new Set(state.selectedAtomIds);
       atomIds.forEach(id => next.add(id));
       Model.setSelectedAtoms(state, Array.from(next));
@@ -490,7 +506,7 @@
       source: "manual"
     });
     render(true);
-    setStatus("Selected bonds updated");
+    setStatus("結合を更新しました。");
   }
 
   function deleteSelectedBonds() {
@@ -498,26 +514,27 @@
     pushHistory("deleteBond");
     Model.removeSelectedBonds(state);
     render(true);
-    setStatus("Selected bonds deleted");
+    setStatus("結合を削除しました。");
   }
 
   function reinferBonds() {
     pushHistory("reinferBonds");
+    state.metadata.suppressedBondKeys=[];
     refreshBondsAndRender(true);
-    setStatus("Inferred bonds refreshed; manual bonds preserved");
+    setStatus("推定結合を再計算しました。手動の結合は保持しています。");
   }
 
   function applyDistance() {
     const atoms = selectedAtoms();
     if (atoms.length !== 2) { setStatus("Select exactly 2 atoms for distance"); return; }
-    const target = Number(byId("targetDistance").value);
+    const target = numberInput("targetDistance",0.001,1e5);
     if (!Number.isFinite(target) || target <= 0) return;
     pushHistory("setDistance");
     const moved = Geometry.setDistance(atoms[0], atoms[1], target);
     Object.assign(atoms[1], moved);
     refreshBondsAndRender(true);
     setMeasure(`d=${Geometry.distance(atoms[0], atoms[1]).toFixed(3)} A`);
-    setStatus("Distance constraint applied");
+    setStatus("距離を変更しました。");
   }
 
   function measureDistance() {
@@ -531,13 +548,14 @@
   function applyAngle() {
     const atoms = selectedAtoms();
     if (atoms.length !== 3) { setStatus("Select exactly 3 atoms for angle A-B-C"); return; }
-    const target = Number(byId("targetAngle").value);
+    const target = numberInput("targetAngle",0,180);
     if (!Number.isFinite(target)) return;
+    const result=Geometry.setAngle(atoms[0], atoms[1], atoms[2], target);
     pushHistory("setAngle");
-    Object.assign(atoms[2], Geometry.setAngle(atoms[0], atoms[1], atoms[2], target));
+    Object.assign(atoms[2], result);
     refreshBondsAndRender(true);
     setMeasure(`angle=${Geometry.angle(atoms[0], atoms[1], atoms[2]).toFixed(2)} deg`);
-    setStatus("Angle constraint applied");
+    setStatus("角度を変更しました。");
   }
 
   function measureAngle() {
@@ -551,13 +569,14 @@
   function applyDihedral() {
     const atoms = selectedAtoms();
     if (atoms.length !== 4) { setStatus("Select exactly 4 atoms for dihedral A-B-C-D"); return; }
-    const target = Number(byId("targetDihedral").value);
+    const target = numberInput("targetDihedral",-180,180);
     if (!Number.isFinite(target)) return;
+    const result=Geometry.setDihedral(atoms[0], atoms[1], atoms[2], atoms[3], target);
     pushHistory("setDihedral");
-    Object.assign(atoms[3], Geometry.setDihedral(atoms[0], atoms[1], atoms[2], atoms[3], target));
+    Object.assign(atoms[3], result);
     refreshBondsAndRender(true);
     setMeasure(`dihedral=${Geometry.dihedral(atoms[0], atoms[1], atoms[2], atoms[3]).toFixed(2)} deg`);
-    setStatus("Dihedral constraint applied");
+    setStatus("二面角を変更しました。");
   }
 
   function measureDihedral() {
@@ -572,14 +591,14 @@
     const previous = history.undo(state);
     if (!previous) return;
     setState(previous, true);
-    setStatus("Undo");
+    setStatus("1つ前の編集に戻しました。");
   }
 
   function redo() {
     const next = history.redo(state);
     if (!next) return;
     setState(next, true);
-    setStatus("Redo");
+    setStatus("編集をやり直しました。");
   }
 
   function updateAtomTable() {
@@ -597,6 +616,7 @@
       const tdS = document.createElement("td");
       const cb = document.createElement("input");
       cb.type = "checkbox";
+      cb.setAttribute("aria-label",`${i+1}番を選択`);
       cb.checked = state.selectedAtomIds.has(atom.id);
       cb.addEventListener("click", ev => ev.stopPropagation());
       cb.addEventListener("change", ev => {
@@ -609,7 +629,7 @@
       tdS.appendChild(cb);
       tr.appendChild(tdS);
       tr.addEventListener("click", ev => {
-        Model.toggleAtomSelection(state, atom.id, ev.ctrlKey || ev.metaKey);
+        Model.toggleAtomSelection(state, atom.id, additive(ev));
         rerenderSelectionOnly();
       });
       tbody.appendChild(tr);
@@ -633,6 +653,7 @@
       const tdS = document.createElement("td");
       const cb = document.createElement("input");
       cb.type = "checkbox";
+      cb.setAttribute("aria-label",`${i+1}番を選択`);
       cb.checked = state.selectedBondIds.has(bond.id);
       cb.addEventListener("click", ev => ev.stopPropagation());
       cb.addEventListener("change", ev => {
@@ -645,7 +666,7 @@
       tdS.appendChild(cb);
       tr.appendChild(tdS);
       tr.addEventListener("click", ev => {
-        Model.toggleBondSelection(state, bond.id, ev.ctrlKey || ev.metaKey);
+        Model.toggleBondSelection(state, bond.id, additive(ev));
         Model.setSelectedAtoms(state, [bond.atom1, bond.atom2]);
         byId("bondOrder").value = String(bond.order || 1);
         byId("bondType").value = bond.type || "covalent";
@@ -655,45 +676,6 @@
     });
   }
 
-  function onMouseDown(e) {
-    if (!moveMode || state.selectedAtomIds.size === 0) return;
-    const viewerEl = byId("viewer");
-    if (!viewerEl) return;
-    const rect = viewerEl.getBoundingClientRect();
-    const inside = e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
-    if (!inside) return;
-    drag.active = true;
-    drag.lastClientX = e.clientX;
-    drag.lastClientY = e.clientY;
-    drag.mode = e.shiftKey ? "z" : "xy";
-    pushHistory("move");
-    setStatus(drag.mode === "z" ? "Dragging (Z)" : "Dragging (XY)");
-  }
-
-  function onMouseMove(e) {
-    if (!drag.active || !moveMode || state.selectedAtomIds.size === 0) return;
-    const dx = e.clientX - drag.lastClientX;
-    const dy = e.clientY - drag.lastClientY;
-    drag.lastClientX = e.clientX;
-    drag.lastClientY = e.clientY;
-    let sXY = drag.scaleXY;
-    let sZ = drag.scaleZ;
-    if (e.altKey) { sXY *= 0.2; sZ *= 0.2; }
-    if (e.ctrlKey || e.metaKey) { sXY *= 3.0; sZ *= 3.0; }
-    state.atoms.forEach(atom => {
-      if (!state.selectedAtomIds.has(atom.id)) return;
-      if (drag.mode === "xy" && !e.shiftKey) { atom.x += dx * sXY; atom.y -= dy * sXY; }
-      else atom.z += -dy * sZ;
-    });
-    refreshBondsAndRender(true);
-  }
-
-  function onMouseUp() {
-    if (!drag.active) return;
-    drag.active = false;
-    setStatus("Move end");
-  }
-
   function onKeyDown(e) {
     if (e.defaultPrevented) return;
     const tag = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : "";
@@ -701,24 +683,13 @@
     const inCanvas = canvasHasFocus();
     const key = e.key.toLowerCase();
 
-    if (inCanvas && (e.ctrlKey || e.metaKey)) {
-      if (key === "a") {
-        consumeShortcut(e);
-        selectAll();
-        return;
-      }
-      if (key === "e") {
-        consumeShortcut(e);
-        expandSelectionOneBond();
-        return;
-      }
-      if (key === "w") {
-        consumeShortcut(e);
-        selectConnectedMoleculesFromSelection();
-        return;
-      }
+    if(editingText || !inCanvas || document.querySelector("dialog[open]"))return;
+    if(e.ctrlKey||e.metaKey){
+      if(key==="a"){consumeShortcut(e);selectAll();return;}
+      if(key==="z"){consumeShortcut(e);e.shiftKey?redo():undo();return;}
+      if(key==="y"){consumeShortcut(e);redo();return;}
+      return;
     }
-
     if ((e.key === "Delete" || e.key === "Backspace") && !editingText) {
       consumeShortcut(e);
       if (state.selectedBondIds.size > 0) deleteSelectedBonds();
@@ -736,13 +707,14 @@
     if (key === "1" || key === "2" || key === "3") { consumeShortcut(e); setSelectedBondOrder(Number(key)); return; }
     if (key === "r") {
       consumeShortcut(e);
+      renderer.fit();
       renderer.rotX = -0.45;
       renderer.rotY = 0.65;
       renderer.zoom = 1;
       renderer.panX = 0;
       renderer.panY = 0;
       renderer.render();
-      setStatus("View reset");
+      setStatus("表示をリセットしました。");
       return;
     }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
@@ -759,7 +731,7 @@
 
   function bind(id, event, handler) {
     const el = byId(id);
-    if (el) el.addEventListener(event, handler);
+    if (el) el.addEventListener(event, ev=>{try{const result=handler(ev);if(result?.catch)result.catch(report);}catch(error){report(error);}});
   }
 
   function wireUI() {
@@ -798,10 +770,52 @@
     bind("btnMeasureDihedral", "click", measureDihedral);
     bind("btnFragApply", "click", ev => {
       ev.preventDefault();
-      applyFragment();
-      byId("fragDialog").close();
+      if(applyFragment()!==false) byId("fragDialog").close();
     });
-    document.addEventListener("keydown", onKeyDown, true);
+    document.addEventListener("keydown", e=>{try{onKeyDown(e);}catch(error){report(error);}}, true);
+  }
+
+  function safeFilename(){return String(state.metadata.title||'structure').replace(/[\\/:*?"<>|\r\n]/g,'_').slice(0,80)||'structure';}
+  function exampleState(name){
+    const xyz={water:'3\nWater\nO 0 0 0\nH 0.9572 0 0\nH -0.239987 0.926627 0',methane:'5\nMethane\nC 0 0 0\nH .629 .629 .629\nH -.629 -.629 .629\nH -.629 .629 -.629\nH .629 -.629 -.629',ethanol:'9\nEthanol\nC -0.75 0 0\nC .75 0 0\nO 1.35 1.20 0\nH -1.13 .51 .89\nH -1.13 .51 -.89\nH -1.13 -1.02 0\nH 1.13 -.51 .89\nH 1.13 -.51 -.89\nH 2.30 1.10 0'};
+    if(name!=='benzene')return IO.parseXYZToState(xyz[name]);
+    const atoms=[];for(const [element,r] of [['C',1.397],['H',2.48]])for(let i=0;i<6;i++)atoms.push(Model.createAtom({element,x:r*Math.cos(i*Math.PI/3),y:r*Math.sin(i*Math.PI/3),z:0}));
+    const result=Model.createState({atoms,metadata:{title:'Benzene',sourceFormat:'sample'}});
+    for(let i=0;i<6;i++){Model.addOrUpdateBond(result,atoms[i].id,atoms[(i+1)%6].id,i%2?1:2,'covalent','manual');Model.addOrUpdateBond(result,atoms[i].id,atoms[i+6].id,1,'covalent','manual');}return result;
+  }
+  function setupStudio(){
+    ['addElem','editElem','selByElem'].forEach(id=>{const el=byId(id);el.replaceChildren(...IO.ELEMENTS.map(e=>{const o=document.createElement('option');o.value=e;o.textContent=e;return o;}));});
+    byId('addElem').value='C';byId('editElem').value='C';byId('addMode').value='custom';
+    const aromatic=document.createElement('option');aromatic.value='4';aromatic.textContent='芳香族';byId('bondOrder').append(aromatic);
+    document.querySelectorAll('[data-close]').forEach(el=>el.addEventListener('click',()=>byId(el.dataset.close).close()));
+    bind('toolBox','click',()=>setMode('box'));
+    bind('btnOpen','click',()=>byId('fileInput').click());
+    bind('btnPaste','click',()=>{byId('importError').textContent='';byId('importDialog').showModal();byId('xyz_input').focus();});
+    bind('btnHelp','click',()=>byId('helpDialog').showModal());
+    bind('btnExport','click',()=>{byId('exportText').value=IO.stateToXYZText(state);byId('exportMessage').textContent='';byId('exportDialog').showModal();});
+    bind('btnExportText','click',()=>byId('exportText').value=IO.stateToXYZText(state));
+    bind('btnSaveProject','click',()=>{downloadText(IO.stateToProjectText(state),safeFilename()+'.json');setStatus('プロジェクトを保存しました。');});
+    bind('btnNew','click',()=>{pushHistory('new');state=Model.createState();setMode('select');render(false);setStatus('新規構造です。原子追加またはサンプルから始めてください。');});
+    bind('structureTitle','change',()=>{pushHistory('rename');state.metadata.title=byId('structureTitle').value.trim()||'無題の構造';saveLocal();syncUI();});
+    const readFile=async file=>{if(!file)return;if(file.size>10*1024*1024)throw Error('ファイルは10MB以下にしてください。');const text=await file.text();loadText(text);if(!state.metadata.title||state.metadata.title==='無題の構造')state.metadata.title=file.name.replace(/\.[^.]+$/,'');saveLocal();syncUI();};
+    bind('fileInput','change',async e=>{try{await readFile(e.target.files[0]);}finally{e.target.value='';}});
+    const app=document.querySelector('.mv-app');
+    app.addEventListener('dragover',e=>{if([...e.dataTransfer.types].includes('Files')){e.preventDefault();app.classList.add('drag-over');}});
+    app.addEventListener('dragleave',e=>{if(!app.contains(e.relatedTarget))app.classList.remove('drag-over');});
+    app.addEventListener('drop',async e=>{e.preventDefault();app.classList.remove('drag-over');try{if(e.dataTransfer.files.length!==1)throw Error('ファイルは1つずつ開いてください。');await readFile(e.dataTransfer.files[0]);}catch(error){report(error);}});
+    document.querySelectorAll('[data-example]').forEach(el=>el.addEventListener('click',()=>{pushHistory('sample');setState(exampleState(el.dataset.example),false);setStatus('サンプルを読み込みました。以前の構造は「戻す」で復元できます。');}));
+    const tabs=[...document.querySelectorAll('[data-tab]')];
+    function activate(tab){tabs.forEach(t=>{const active=t===tab;t.setAttribute('aria-selected',String(active));t.tabIndex=active?0:-1;byId('pane-'+t.dataset.tab).hidden=!active;});}
+    tabs.forEach((tab,i)=>{tab.tabIndex=i===0?0:-1;tab.addEventListener('click',()=>activate(tab));tab.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const next=e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;activate(tabs[next]);tabs[next].focus();});});
+    bind('btnApplyCoords','click',()=>{const atoms=selectedAtoms();if(atoms.length!==1)return;const data={x:numberInput('coordX'),y:numberInput('coordY'),z:numberInput('coordZ'),charge:numberInput('atomCharge',-15,15)};if(!Number.isInteger(data.charge))throw Error('形式電荷は整数にしてください。');pushHistory('coordinates');Object.assign(atoms[0],data);refreshBondsAndRender(true);setStatus('座標・形式電荷を変更しました。');});
+    bind('btnTranslate','click',()=>{const delta=['translateX','translateY','translateZ'].map(id=>numberInput(id));if(!state.selectedAtomIds.size)return;pushHistory('translate');selectedAtoms().forEach(a=>['x','y','z'].forEach((k,i)=>a[k]+=delta[i]));refreshBondsAndRender(true);setStatus('選択原子を平行移動しました。');});
+    bind('btnFit','click',()=>renderer.fit());
+    bind('btnZoomIn','click',()=>{renderer.zoom=Math.min(12,renderer.zoom*1.2);renderer.draw();});
+    bind('btnZoomOut','click',()=>{renderer.zoom=Math.max(.1,renderer.zoom/1.2);renderer.draw();});
+    [['XY',0,0],['XZ',Math.PI/2,0],['YZ',0,Math.PI/2]].forEach(([name,x,y])=>bind('btnView'+name,'click',()=>{renderer.rotX=x;renderer.rotY=y;renderer.draw();}));
+    bind('btnPNG','click',()=>{const a=document.createElement('a');a.download=safeFilename()+'.png';a.href=renderer.canvas.toDataURL('image/png');a.click();setStatus('表示画像を保存しました。');});
+    bind('btnSelectConnected','click',selectConnectedMoleculesFromSelection);bind('btnExpandSelection','click',expandSelectionOneBond);
+    global.addEventListener('pagehide',()=>{try{localStorage.setItem('molecule-studio-v1',IO.stateToProjectText(state));}catch(error){/* Export remains available when storage is blocked. */}});
   }
 
   function init() {
@@ -819,14 +833,18 @@
     renderer.onAtomsDrag = handleAtomsDrag;
     renderer.onDragEnd = handleCanvasDragEnd;
     renderer.onBoxSelect = handleBoxSelect;
-    renderer.onKeyDown = onKeyDown;
+    renderer.onBlankClick = () => clearSelection();
+    renderer.onKeyDown = e=>{try{onKeyDown(e);}catch(error){report(error);}};
     wireUI();
+    setupStudio();
     setMode("select");
-    setStatus("Ready");
     const styleSelect = byId("styleSelect");
     if (styleSelect) styleSelect.value = state.viewSettings.style;
     const initial = byId("xyz_input").value.trim();
-    if (initial) loadFromTextarea();
+    if (initial) loadFromTextarea(); else {
+      try {const saved=localStorage.getItem("molecule-studio-v1");if(saved){state=IO.parseProject(saved);setStatus("前回の編集を復元しました。");}else state=exampleState("water");}catch(error){setStatus("前回の編集を復元できませんでした。ファイルから読み込んでください。",true);}
+      render(false);
+    }
   }
 
   MV.App = {
@@ -835,3 +853,4 @@
     setState
   };
 })(window);
+

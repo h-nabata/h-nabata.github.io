@@ -132,6 +132,7 @@
 
   function addOrUpdateBond(state, atom1, atom2, order, type, source) {
     if (!atom1 || !atom2 || atom1 === atom2 || !hasAtom(state, atom1) || !hasAtom(state, atom2)) return null;
+    state.metadata.suppressedBondKeys=(state.metadata.suppressedBondKeys||[]).filter(k=>k!==normalizeBondKey(atom1,atom2));
     const existing = findBondBetween(state, atom1, atom2);
     if (existing) {
       existing.order = Number(order) || existing.order || 1;
@@ -152,6 +153,7 @@
 
   function removeSelectedBonds(state) {
     const removed = new Set(state.selectedBondIds);
+    state.metadata.suppressedBondKeys = [...new Set([...(state.metadata.suppressedBondKeys||[]), ...state.bonds.filter(b=>removed.has(b.id)).map(b=>normalizeBondKey(b.atom1,b.atom2))])];
     state.bonds = state.bonds.filter(bond => !removed.has(bond.id));
     state.selectedBondIds.clear();
   }
@@ -209,7 +211,7 @@
     const inferred = [];
     inferredBonds.forEach(bond => {
       const key = normalizeBondKey(bond.atom1, bond.atom2);
-      if (occupied.has(key)) return;
+      if (occupied.has(key) || (state.metadata.suppressedBondKeys||[]).includes(key)) return;
       inferred.push(createBond(Object.assign({}, bond, { source: "inferred" })));
       occupied.add(key);
     });
@@ -244,3 +246,4 @@
     sanitizeSelection
   };
 })(window);
+

@@ -29,6 +29,7 @@
   }
 
   function angle(a, b, c) {
+    if (distance(a,b)<1e-9 || distance(b,c)<1e-9) throw new Error("同じ座標の原子を含む角度は定義できません。");
     const ba = unit(vsub(a, b));
     const bc = unit(vsub(c, b));
     return radToDeg(Math.acos(clamp(dot(ba, bc), -1, 1)));
@@ -50,6 +51,7 @@
     const b1 = vsub(b, a);
     const b2 = vsub(c, b);
     const b3 = vsub(d, c);
+    if (norm(cross(b1,b2))<1e-9 || norm(cross(b2,b3))<1e-9) throw new Error("一直線または同じ座標の原子を含む二面角は定義できません。");
     const n1 = unit(cross(b1, b2));
     const n2 = unit(cross(b2, b3));
     const m1 = cross(n1, unit(b2));
@@ -63,13 +65,14 @@
 
   function setAngle(a, b, c, targetDegrees) {
     const current = angle(a, b, c);
-    const axis = cross(vsub(a, b), vsub(c, b));
+    let axis = cross(vsub(a, b), vsub(c, b));
+    if (norm(axis)<1e-9) { const v=unit(vsub(a,b)); axis=cross(v,Math.abs(v.x)<0.9?{x:1,y:0,z:0}:{x:0,y:1,z:0}); }
     return rotateAroundAxis(c, b, axis, targetDegrees - current);
   }
 
   function setDihedral(a, b, c, d, targetDegrees) {
     const current = dihedral(a, b, c, d);
-    return rotateAroundAxis(d, c, vsub(c, b), targetDegrees - current);
+    return rotateAroundAxis(d, c, vsub(c, b), current - targetDegrees);
   }
 
   MV.Geometry = {
@@ -89,3 +92,4 @@
     setDihedral
   };
 })(window);
+
