@@ -2,6 +2,59 @@
 layout: default
 title: Nabata's personal page - My Note
 extra_menu: notes
+extra_head: |
+  <style>
+    /* My Note only. Adjust these variables to change the page appearance. */
+    .mynote {
+      --note-accent: #245d72;
+      --note-border: #d8e2e7;
+      --note-code-bg: #f3f6f8;
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 28px 24px 64px;
+      color: #26343d;
+      font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans JP", sans-serif;
+      font-size: 16px;
+      line-height: 1.85;
+      overflow-wrap: anywhere;
+    }
+    .mynote section { margin: 0 0 3.5rem; }
+    .mynote section, .mynote h2, .mynote h3 { scroll-margin-top: 90px; }
+    .mynote h2 { margin: 2.5rem 0 1.25rem; padding: .5rem 0 .5rem .85rem; border-left: 4px solid var(--note-accent); font-size: 1.4rem; line-height: 1.6; }
+    .mynote h3 { margin: 2rem 0 .8rem; font-size: 1.15rem; line-height: 1.6; }
+    .mynote p { margin: .9rem 0; }
+    .mynote ul, .mynote ol { padding-left: 1.5rem; }
+    .mynote li { margin: .65rem 0; }
+    .mynote .note-block { list-style: none; }
+    .mynote a { color: #176481; text-decoration: underline; text-underline-offset: .2em; }
+    .mynote a:hover { color: #103e50; }
+    .mynote a:focus-visible, .mynote summary:focus-visible, .mynote pre:focus-visible { outline: 2px solid var(--note-accent); outline-offset: 3px; }
+    .mynote .main-container { display: block; width: 100%; }
+    .mynote .code-container { width: 100%; padding: 0; background: transparent; overflow: visible; margin: 1.5rem 0; }
+    .mynote .code-title { padding: .65rem .9rem; background: #e8eff3; border-radius: 5px; line-height: 1.6; }
+    .mynote pre { max-width: 100%; margin: 1rem 0 1.5rem; padding: 1rem; border: 1px solid var(--note-border); border-radius: 6px; background: var(--note-code-bg); overflow-x: auto; white-space: pre; overflow-wrap: normal; word-break: normal; tab-size: 4; line-height: 1.6; }
+    .mynote code { display: inline; padding: .1em .3em; border-radius: 3px; background: var(--note-code-bg); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .9em; }
+    .mynote pre code { display: block; padding: 0; background: transparent; color: inherit; font-size: 14px; white-space: inherit; overflow-wrap: normal; word-break: normal; }
+    .mynote table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; margin: 1.5rem 0; }
+    .mynote th, .mynote td { border: 1px solid var(--note-border); padding: .6rem .85rem; text-align: left; }
+    .mynote th { background: #e8eff3; }
+    .mynote img { max-width: 100%; height: auto; }
+    .mynote .note-toc { padding: 1rem 1.25rem; border: 1px solid var(--note-border); border-radius: 6px; background: #f8fafb; }
+    .mynote .note-toc summary { cursor: pointer; font-weight: 700; color: var(--note-accent); }
+    .mynote .note-toc ul { columns: 2; column-gap: 2rem; }
+    .mynote .note-toc li { break-inside: avoid; font-size: .9rem; }
+    @media (max-width: 600px) {
+      .mynote { padding: 20px 16px 40px; }
+      .mynote h2 { font-size: 1.2rem; }
+      .mynote .note-toc ul { columns: 1; }
+      .mynote pre { padding: .8rem; }
+    }
+    @media print {
+      .mynote { max-width: none; font-size: 11pt; }
+      .mynote pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+      .mynote .note-toc { display: none; }
+    }
+  </style>
 ---
 <div class="top-wrapper">
     <div class="container">
@@ -9,7 +62,58 @@ extra_menu: notes
 <!--       <p>Hitoshi Nabata<br>personal webpage</p> -->
     </div>
   </div>
-  <div class="container" style="padding: 15px">
+  <div class="container mynote">
+<details class="note-toc"><summary>このページの目次</summary>
+<ul>
+<li><a href="#calc">電子状態計算／量子化学計算について</a></li>
+<li><a href="#grrm">GRRM関連のテキスト</a></li>
+<li><a href="#tst">遷移状態理論について</a></li>
+<li><a href="#graph-theory">グラフ理論ほか</a></li>
+<li><a href="#study-for-chemistry">化学に関する勉強用論文･テキスト</a></li>
+<li><a href="#videos">動画など</a></li>
+<li><a href="#compound-databases">化合物･構造データベース+その他</a></li>
+<li><a href="#tools">その他のプログラム関係のツール類</a></li>
+<li><a href="#programming">プログラミング</a></li>
+<li><a href="#markdown">Markdown記法</a></li>
+<li><a href="#latex">LaTeX文書関連</a></li>
+<li><a href="#hpc">スパコン関連（マニュアル、scpでのファイル移動など）</a></li>
+<li><a href="#commands">コマンド</a></li>
+<li><a href="#shortcuts">ショートカット＆Tips</a></li>
+<li><a href="#apps">情報共有・情報収集アプリケーション</a></li>
+<li><a href="#literature-search">参考文献検索・論文の読み方</a></li>
+<li><a href="#presentation">発表資料作成の基本</a></li>
+<li><a href="#publication-writing">学会発表･論文執筆の際に役立つかもしれない項目</a></li>
+<li><a href="#doctoral-course">博士課程への進学を検討している方へ</a></li>
+<li><a href="#desktop-pc-build">デスクトップPCの自作について</a></li>
+<li><a href="#ethernet-trouble">LANケーブルを差しているのにイーサネットに接続できない場合</a></li>
+<li><a href="#wol">遠隔でPCを起動するWake-on-LAN（WOL）の設定手順</a></li>
+<li><a href="#dual-boot-storage">ストレージを追加してOS別にデュアルブートする</a></li>
+<li><a href="#gpu-login-loop">グラフィックボード換装後にdriverを更新してログインループに陥った場合</a></li>
+<li><a href="#vpn">VPN接続まわり</a></li>
+<li><a href="#python-setup">Pythonの環境構築について</a></li>
+<li><a href="#julia-setup">Juliaの環境構築について</a></li>
+<li><a href="#google-colab">Google Colaboratory関連</a></li>
+<li><a href="#github">GitHub関連</a></li>
+<li><a href="#database">Database関連</a></li>
+<li><a href="#website">ウェブサイト関連</a></li>
+<li><a href="#chatgpt">ChatGPT関連</a></li>
+<li><a href="#cif-files">Cifファイル関連</a></li>
+<li><a href="#surface-model">表面モデル関連</a></li>
+<li><a href="#vesta">VESTA関連</a></li>
+<li><a href="#gaussian-standalone">Gaussianプログラムの計算をstand-aloneで実行する手順</a></li>
+<li><a href="#siesta-related">電子状態計算ソフトウェア「SIESTA」関連</a></li>
+<li><a href="#siesta-job-script">SIESTAのJOBを分子研計算機に投入するシェルスクリプトの例</a></li>
+<li><a href="#qe-related">電子状態計算ソフトウェア「Quantum ESPRESSO」関連</a></li>
+<li><a href="#turbomole-related">電子状態計算ソフトウェア「TURBOMOLE」関連</a></li>
+<li><a href="#orca-related">電子状態計算ソフトウェア「Orca」関連</a></li>
+<li><a href="#dftb-related">電子状態計算ソフトウェア「DFTB+」関連</a></li>
+<li><a href="#grimme-d2">GrimmeのDFT-D（D2）パラメータ</a></li>
+<li><a href="#tax-filing">確定申告･納税周りについて</a></li>
+<li><a href="#asset-building">資産形成について</a></li>
+<li><a href="#lab-trip-hokkaido">北海道内の研究室旅行の行先候補一覧</a></li>
+<li><a href="#research-sasisuseso">研究の「さしすせそ」</a></li>
+</ul>
+</details>
 
 
 <section id="calc">
@@ -46,7 +150,7 @@ extra_menu: notes
             <li>通常，サンプルk点は等間隔のメッシュ上に空間的になるべく均等になるように採られる。ある方向に実空間でN倍にした系の計算精度が，元の系と同等であるためには，同じ方向に対するサンプルk点を1／Nにすれば良い。</li>
             <li>ある電子状態（原子）で作成された擬ポテンシャルが，別の環境，例えば，電子配置の異なる原子や，結晶中等，に移行（transfer）した場合に，新しい環境での全電子計算の結果をどのぐらい再現できるかという性質を "transferability" と呼ぶ。</li>
             <li>擬ポテンシャルが，少ないカットオフエネルギーで十分記述できるときにはソフトな擬ポテンシャルといわれ，逆に高いカットオフエネルギーが必要とされるときにはハードな擬ポテンシャルといわれる。</li>
-          </i>>
+          </i>
             <li><a href="https://journals.aps.org/prb/abstract/10.1103/PhysRevB.13.5188">H.J. Monkhorst, J.D. Pack, "Special points for Brillouin-zone integrations," Phys. Rev. B, 13 (1976), p. 5188</a></li>
         </li>
         <li>"<a href="https://pubs.acs.org/doi/full/10.1021/jp109756g">Electronic Structure of TiO2 Surfaces and Effect of Molecular Adsorbates Using Different DFT Implementations</a>"<br><b>表面吸着物の電子状態計算に関して、次の3種類の計算手法を比較した論文</b><br>(i) all-electron calculations with localized Gaussian basis sets (using CRYSTAL06)<br>(ii) pseudopotential calculations with localized basis sets (using SIESTA)<br>(iii) pseudopotential calculations with plane-wave basis sets (using PWSCF distributed within the Quantum ESPRESSO suite of codes)</li>
@@ -68,30 +172,30 @@ extra_menu: notes
         <li><a href="https://www.jstage.jst.go.jp/article/molsci/5/1/5_1_AC0005/_article/-char/ja/">学部学生のための量子化学講義ノート</a></li>
         <li>「<a href="https://home.hiroshima-u.ac.jp/kyam/pages/results/monograph/Ref23_B-O.pdf">Born−Oppenheimer近似と断熱近似</a>」（山崎勝義先生による<a href="https://home.hiroshima-u.ac.jp/kyam/pages/results/monograph/">物理化学Monographシリーズ</a>の一つ；「<a href="https://home.hiroshima-u.ac.jp/kyam/pages/results/monograph/Ref24_bracket.pdf">量子論におけるブラ・ケット表記</a>」も非常に分かりやすいのでオススメです）</li>
         <li><a href="https://nusit.nus.edu.sg/services/hpc-newsletter/running-gaussian-09-jobs-more-efficiently/">RUNNING GAUSSIAN 09 JOBS MORE EFFICIENTLY</a> （メモリやプロセッサ数を過剰に割り当てても計算性能が線形に向上する訳ではない、というお話）</li>
-            <div class="main-container">
+            <li class="note-block"><div class="main-container">
               <div class="code-container">
                   <div class="code-title">A comment on spin contamination by ChatGPT-4 (provided at 2023/11/21)</div>
-                  <pre><code class="python">
-量子化学計算における「<b>spin contamination</b>」は、主に電子のスピンを取り扱う計算において発生する問題です。これは、理論的には特定のスピン状態（例えばシングレット、ダブレット、トリプレットなど）であるべき分子や原子の計算が、他のスピン状態の特性を誤って含む場合に起こります。
+                  <div class="note-text">
+<p>量子化学計算における「<b>spin contamination</b>」は、主に電子のスピンを取り扱う計算において発生する問題です。これは、理論的には特定のスピン状態（例えばシングレット、ダブレット、トリプレットなど）であるべき分子や原子の計算が、他のスピン状態の特性を誤って含む場合に起こります。</p>
 
-<b>Spin Contaminationの具体的な状況</b>
-不正確な波動関数の使用: Spin contaminationは、特にハートリー・フォック（HF）や密度汎関数理論（DFT）のような一電子近似手法で見られます。これらの方法は、多電子系の波動関数を一電子軌道の積として近似するため、スピン対称性が正確に保たれないことがあります。
+<p><b>Spin Contaminationの具体的な状況</b><br>
+不正確な波動関数の使用: Spin contaminationは、特にハートリー・フォック（HF）や密度汎関数理論（DFT）のような一電子近似手法で見られます。これらの方法は、多電子系の波動関数を一電子軌道の積として近似するため、スピン対称性が正確に保たれないことがあります。</p>
 
-励起状態の計算: 励起状態、特にトリプレット状態などの高次のスピン状態を計算する際にもspin contaminationが発生しやすいです。これは、基底状態に対する近似が励起状態のスピン特性を正確に表現できないためです。
-不安定な分子構造: 特定の不安定な分子や遷移状態では、スピンの混入が発生しやすくなります。これは、分子の対称性や電子構造が複雑であるため、一般的な近似手法では適切にスピン状態を記述できない場合があるためです。
+<p>励起状態の計算: 励起状態、特にトリプレット状態などの高次のスピン状態を計算する際にもspin contaminationが発生しやすいです。これは、基底状態に対する近似が励起状態のスピン特性を正確に表現できないためです。<br>
+不安定な分子構造: 特定の不安定な分子や遷移状態では、スピンの混入が発生しやすくなります。これは、分子の対称性や電子構造が複雑であるため、一般的な近似手法では適切にスピン状態を記述できない場合があるためです。</p>
 
-Spin Contaminationの検出と対策
+<p>Spin Contaminationの検出と対策</p>
 
-スピン汚染の検出: 計算された波動関数のスピン期待値を計算することで、spin contaminationの存在を検出できます。理想的なスピン純度の状態では、スピン期待値は特定の整数または半整数の値になります。
+<p>スピン汚染の検出: 計算された波動関数のスピン期待値を計算することで、spin contaminationの存在を検出できます。理想的なスピン純度の状態では、スピン期待値は特定の整数または半整数の値になります。</p>
 
-対策: Spin contaminationを減らすためには、より高度な多体波動関数手法（例えば結合クラスター理論や多配置自己無撞着場（MCSCF）理論）を使用することが有効です。これらの方法は、多電子相互作用をより正確に取り扱うことができます。
+<p>対策: Spin contaminationを減らすためには、より高度な多体波動関数手法（例えば結合クラスター理論や多配置自己無撞着場（MCSCF）理論）を使用することが有効です。これらの方法は、多電子相互作用をより正確に取り扱うことができます。</p>
 
-Spin contaminationは、量子化学計算の正確さと信頼性に影響を与えるため、特に精密な計算を必要とする研究では注意深く扱われるべき問題です
-                  </code></pre>
+<p>Spin contaminationは、量子化学計算の正確さと信頼性に影響を与えるため、特に精密な計算を必要とする研究では注意深く扱われるべき問題です</p>
+</div>
               </div>
-          </div>
+          </div></li>
           <li>スピン多重度とスピン二乗値の対応関係は次の表の通り。スピン二乗値（S**2）はGRRMのアウトプットファイルに記載されている。（参考：<a href="http://junzhu.chem8.org/sites/default/files/Open%20shell%20systems.pdf">http://junzhu.chem8.org/sites/default/files/Open%20shell%20systems.pdf</a> ）<br>※spin quantum number （スピン量子数）Sに対して S(S+1) がスピン二乗値に相当する。<br></li>
-            <table>
+            <li class="note-block"><table>
               <thead>
                   <tr>
                       <th>spin quantum number<br>スピン量子数 S</th>
@@ -156,7 +260,7 @@ Spin contaminationは、量子化学計算の正確さと信頼性に影響を�
                       <td>30.00</td>
                   </tr>
               </tbody>
-          </table>
+          </table></li>
       </ul>
 </section>
 
@@ -491,7 +595,7 @@ Spin contaminationは、量子化学計算の正確さと信頼性に影響を�
       半減期が約1時間に相当する活性化障壁と温度の関係（遷移状態理論に基づく；
       虚振動数による補正はせず、透過係数を 1 と仮定）<br>
 
-      <table>
+      <li class="note-block"><table>
         <tbody>
           <tr><td>1000 K</td><td>326 kJ/mol</td></tr>
           <tr><td>900 K</td><td>293 kJ/mol</td></tr>
@@ -504,7 +608,7 @@ Spin contaminationは、量子化学計算の正確さと信頼性に影響を�
           <tr><td>200 K</td><td>62.6 kJ/mol</td></tr>
           <tr><td>100 K</td><td>30.7 kJ/mol</td></tr>
         </tbody>
-      </table>
+      </table></li>
 
       速度論ナビゲーションのパラメータセットの参考にしてください。
     </li>
@@ -1545,8 +1649,8 @@ Spin contaminationは、量子化学計算の正確さと信頼性に影響を�
     </li>
   </ul>
 
-  <pre><code>[hoge@bserver ~]$ scp -i /home/hoge/.ssh/(aserverの秘密鍵) -r hoge@aserver.ac.jp:(移動したいファイルのパス) (移動先のパス)</code></pre>
-  <pre><code>Enter passphrase for key '/home/nabata/.ssh/(aserverの秘密鍵)':</code></pre>
+  <pre tabindex="0"><code class="nohighlight">[hoge@bserver ~]$ scp -i /home/hoge/.ssh/(aserverの秘密鍵) -r hoge@aserver.ac.jp:(移動したいファイルのパス) (移動先のパス)</code></pre>
+  <pre tabindex="0"><code class="nohighlight">Enter passphrase for key '/home/nabata/.ssh/(aserverの秘密鍵)':</code></pre>
 
   <p>
     ※上手くいかない場合は秘密鍵の規格が悪い可能性があるので、鍵を別のフォーマットで再作成してみる
@@ -1599,7 +1703,7 @@ Spin contaminationは、量子化学計算の正確さと信頼性に影響を�
     <li>
       よく使うLinuxコマンド：
     </li>
-    <table>
+    <li class="note-block"><table>
       <thead>
         <tr>
           <th>コマンド</th>
@@ -1719,7 +1823,7 @@ Spin contaminationは、量子化学計算の正確さと信頼性に影響を�
           <td><code>more ファイル名</code></td>
         </tr>
       </tbody>
-    </table>
+    </table></li>
   </ul>
     
   <ul>
@@ -1731,7 +1835,7 @@ Spin contaminationは、量子化学計算の正確さと信頼性に影響を�
     </li>
   </ul>
 
-  <pre><code>[user@ccfep7 ~]$ hostname -I
+  <pre tabindex="0"><code class="nohighlight">[user@ccfep7 ~]$ hostname -I
 10.20.32.7 10.10.32.7 133.48.230.17
 
 [user@ccfep7 ~]$ ip a
@@ -1769,7 +1873,7 @@ bond1: flags=5187&lt;UP,BROADCAST,RUNNING,MASTER,MULTICAST&gt;  mtu 1500
     </li>
   </ul>
 
-  <pre><code>[user@gr24 ~]$ cat /proc/version
+  <pre tabindex="0"><code class="nohighlight">[user@gr24 ~]$ cat /proc/version
 Linux version 3.10.0-693.21.1.el7.x86_64 (builder@kbuilder.dev.centos.org) (gcc version 4.8.5 20150623 (Red Hat 4.8.5-16) (GCC) ) #1 SMP Wed Mar 7 19:03:37 UTC 2018</code></pre>
 
   <ul>
@@ -1780,7 +1884,7 @@ Linux version 3.10.0-693.21.1.el7.x86_64 (builder@kbuilder.dev.centos.org) (gcc 
     </li>
   </ul>
 
-  <pre><code>[user@gr24 ~]$ cat /proc/cpuinfo
+  <pre tabindex="0"><code class="nohighlight">[user@gr24 ~]$ cat /proc/cpuinfo
 processor       : 0
 vendor_id       : GenuineIntel
 cpu family      : 6
@@ -1862,7 +1966,7 @@ DirectMap1G:   193986560 kB</code></pre>
     </li>
   </ul>
 
-  <pre><code>[user@ae01 ~]$ lscpu
+  <pre tabindex="0"><code class="nohighlight">[user@ae01 ~]$ lscpu
 Architecture:          x86_64
 CPU op-mode(s):        32-bit, 64-bit
 Byte Order:            Little Endian
@@ -2035,318 +2139,341 @@ Flags:                 fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca 
 
 <section id="publication-writing">
   <h2>【学会発表･論文執筆の際に役立つかもしれない項目】</h2>
-  <pre><code>引用著者名の表記法と“et al.”の使い方
+  <div class="note-text">
+<p>引用著者名の表記法と“et al.”の使い方</p>
 
-謝辞の書き方の例：
-The calculations in this study were performed by the Computational Science Research Center, Okazaki Common Research Facilities.
-This research was supported by the Institute of Quantum Chemistry and Chemical Exploration (IQCE) Scholarship &quot;IQCE Fellowship&quot; and the Ambitious Doctoral Fellowship (Information and AI) of Hokkaido University.
+<p>謝辞の書き方の例：<br>
+The calculations in this study were performed by the Computational Science Research Center, Okazaki Common Research Facilities.<br>
+This research was supported by the Institute of Quantum Chemistry and Chemical Exploration (IQCE) Scholarship &quot;IQCE Fellowship&quot; and the Ambitious Doctoral Fellowship (Information and AI) of Hokkaido University.</p>
 
-よりよい英語論文の書き方（英文校正.netが提供するドキュメント）
+<p>よりよい英語論文の書き方（英文校正.netが提供するドキュメント）</p>
 
-（再掲）「伝わるデザイン」（千葉大の高橋佑磨先生によるウェブサイト；高校生向けの「高校生のための研究発表の手引き」も参考に）
+<p>（再掲）「伝わるデザイン」（千葉大の高橋佑磨先生によるウェブサイト；高校生向けの「高校生のための研究発表の手引き」も参考に）</p>
 
-（再掲）ICReDDスキルアップ講演会「きれいに見えるプレゼンファイルの作り方」（北海道大の伊藤肇先生のプレゼン指南書；研究室内での共有を推奨）
+<p>（再掲）ICReDDスキルアップ講演会「きれいに見えるプレゼンファイルの作り方」（北海道大の伊藤肇先生のプレゼン指南書；研究室内での共有を推奨）</p>
 
-connected papers（論文間のリンク関係をグラフ化するオンラインアプリ）
-論文の引用・被引用のリンクを辿る際に非常に重宝する。検索はDOIを入れるだけで可能。ただし引用・被引用の件数には限りがある（リンクのある全論文を含むネットワーク化はされない模様）。
+<p>connected papers（論文間のリンク関係をグラフ化するオンラインアプリ）<br>
+論文の引用・被引用のリンクを辿る際に非常に重宝する。検索はDOIを入れるだけで可能。ただし引用・被引用の件数には限りがある（リンクのある全論文を含むネットワーク化はされない模様）。</p>
 
-論文執筆にあたっては参考文献として多くの論文を蓄積することになるが、その管理･把握は一苦労である。そこで便利なのがmendeley（メンデレー）というオンラインアプリである。論文をPDF形式でアップロード・登録し、文献情報を整理することができる。ユーザーが独自にタグ付けしたりメモを残したりする機能もあり、電子データとして論文を管理する際には第1選択となるアプリと言える。詳細な使用方法については公式ドキュメントや関連ウェブサイト等を当たって頂きたい。
+<p>論文執筆にあたっては参考文献として多くの論文を蓄積することになるが、その管理･把握は一苦労である。そこで便利なのがmendeley（メンデレー）というオンラインアプリである。論文をPDF形式でアップロード・登録し、文献情報を整理することができる。ユーザーが独自にタグ付けしたりメモを残したりする機能もあり、電子データとして論文を管理する際には第1選択となるアプリと言える。詳細な使用方法については公式ドキュメントや関連ウェブサイト等を当たって頂きたい。</p>
 
-Booking.com（滞在先予約サイト）
+<p>Booking.com（滞在先予約サイト）</p>
 
-ホテル等の宿泊施設の予約はこのサイトを通じて行うのが簡単。勿論、他のサイトを経由して予約しても良い。国や自治体のキャンペーンや株主優待、社員の家族割引などで安くなる場合もあるので、適宜利用する（当然だが研究機関から補填されるのは実費のみ）。
+<p>ホテル等の宿泊施設の予約はこのサイトを通じて行うのが簡単。勿論、他のサイトを経由して予約しても良い。国や自治体のキャンペーンや株主優待、社員の家族割引などで安くなる場合もあるので、適宜利用する（当然だが研究機関から補填されるのは実費のみ）。</p>
 
-学会発表することが決定した際は最低限、ホテル・航空機（行き／帰り）を予約しておけばOK。海外で発表する場合は前もって（遅くとも1か月以上前には）パスポートの発行を済ませておくこと。
+<p>学会発表することが決定した際は最低限、ホテル・航空機（行き／帰り）を予約しておけばOK。海外で発表する場合は前もって（遅くとも1か月以上前には）パスポートの発行を済ませておくこと。</p>
 
-海外出張の場合、現地通貨との両替は空港だとレートが悪いことが多い。着いた矢先に空港で全額換金してしまうのではなく、交通費などの必要分以外は市中の両替所で適宜両替すると良い。最近はクレジットカード決済が多くの店舗で利用できるため、用心のために多めに換金したとしても余らせてしまうことが多い。
+<p>海外出張の場合、現地通貨との両替は空港だとレートが悪いことが多い。着いた矢先に空港で全額換金してしまうのではなく、交通費などの必要分以外は市中の両替所で適宜両替すると良い。最近はクレジットカード決済が多くの店舗で利用できるため、用心のために多めに換金したとしても余らせてしまうことが多い。</p>
 
-（国内学会でも共通）紙ポスターは筒状にしてポスターホルダーに入れて現地まで運ぶ。荷物のサイズ（長さ）が大きくなるため、空港での受取場所が手荷物と異なり受け渡しに時間が掛かることがある。乗り継ぎの所要時間は多めに確保しておくのが吉（特にアメリカ経由の場合）。
-布ポスターは折り畳んで運べるので便利（折り目は付いてしまうが）。紙ポスターでも折り畳めないことはないが、布ポスターよりも傷みが目立つので気になる人は布でするのが良いだろう。あるいは見た目は簡素だが、A4×16枚でスライド風の形式で発表する人もいる（ただし学会の属性や審査員の趣味によっては悪印象を与えるかもしれない）。
-個人的にはポスターは布で持っていくのがラクで良いと思う。
+<p>（国内学会でも共通）紙ポスターは筒状にしてポスターホルダーに入れて現地まで運ぶ。荷物のサイズ（長さ）が大きくなるため、空港での受取場所が手荷物と異なり受け渡しに時間が掛かることがある。乗り継ぎの所要時間は多めに確保しておくのが吉（特にアメリカ経由の場合）。<br>
+布ポスターは折り畳んで運べるので便利（折り目は付いてしまうが）。紙ポスターでも折り畳めないことはないが、布ポスターよりも傷みが目立つので気になる人は布でするのが良いだろう。あるいは見た目は簡素だが、A4×16枚でスライド風の形式で発表する人もいる（ただし学会の属性や審査員の趣味によっては悪印象を与えるかもしれない）。<br>
+個人的にはポスターは布で持っていくのがラクで良いと思う。</p>
 
-航空券やホテル予約完了画面など、支出の確認できる書類や領収書は、PDFあるいは印刷体で保管しておくこと。基本的に交通費は既定の額（バス・JR乗車券代などを合算した上での考えられる限り最低の金額）しか支払われないが、公共交通機関の領収書なども一応保管しておくと良い。研究室が旅費を支給してくれる場合や、自分の予算を持っている場合に経費として支出できる根拠になる。
+<p>航空券やホテル予約完了画面など、支出の確認できる書類や領収書は、PDFあるいは印刷体で保管しておくこと。基本的に交通費は既定の額（バス・JR乗車券代などを合算した上での考えられる限り最低の金額）しか支払われないが、公共交通機関の領収書なども一応保管しておくと良い。研究室が旅費を支給してくれる場合や、自分の予算を持っている場合に経費として支出できる根拠になる。</p>
 
-基本的に航空券とホテルの予約は早めに済ませるのが良いが、学会の日程が確定する前に予約する場合は少し注意。例えば「余裕を持たせて後泊を含めて予約したが、後日公開された学会日程を確認すると学会終了後でも帰りの便の飛行機に間に合うことが分かった」などというケースが発生することがある。このような場合はあらかじめ、航空券をスーパーバリューで手配する（あるいは格安航空会社でチケットを取る）、ホテル代を（朝食を抜くなどして）5000～6000円程度と比較的安く抑える、といった工夫をしておき、出張費を安く収めるための合理的な理由を用意しておく。秘書さんとのコミュニケーションも重要。
-※北海道大学の場合、東京圏の宿泊費（日当）の目安は9000～10000円、それ以外の都市では8000円程度の上限が設定されているようです。
+<p>基本的に航空券とホテルの予約は早めに済ませるのが良いが、学会の日程が確定する前に予約する場合は少し注意。例えば「余裕を持たせて後泊を含めて予約したが、後日公開された学会日程を確認すると学会終了後でも帰りの便の飛行機に間に合うことが分かった」などというケースが発生することがある。このような場合はあらかじめ、航空券をスーパーバリューで手配する（あるいは格安航空会社でチケットを取る）、ホテル代を（朝食を抜くなどして）5000～6000円程度と比較的安く抑える、といった工夫をしておき、出張費を安く収めるための合理的な理由を用意しておく。秘書さんとのコミュニケーションも重要。<br>
+※北海道大学の場合、東京圏の宿泊費（日当）の目安は9000～10000円、それ以外の都市では8000円程度の上限が設定されているようです。</p>
 
-口頭発表の場合は念のため、自分のPCに合ったディスプレイ出力用のケーブルor変換器を用意しておくと良い。多くの場合VGAかHDMIかDVIのいずれかが接続できれば問題は無いので、特殊なノートPCでもない限り本番で特に困ることは無いだろう。
-（自分はMini DisplayPortをHDMI(メス)に変換するケーブルを持参してsurface pro4で口頭発表したことがある）
+<p>口頭発表の場合は念のため、自分のPCに合ったディスプレイ出力用のケーブルor変換器を用意しておくと良い。多くの場合VGAかHDMIかDVIのいずれかが接続できれば問題は無いので、特殊なノートPCでもない限り本番で特に困ることは無いだろう。<br>
+（自分はMini DisplayPortをHDMI(メス)に変換するケーブルを持参してsurface pro4で口頭発表したことがある）</p>
 
-宿泊施設でのデスクワークが必要になりそうなら、備え付けのモニタでデュアルディスプレイにできるようHDMIケーブルを持参すると良い（PCを持参する場合）。
+<p>宿泊施設でのデスクワークが必要になりそうなら、備え付けのモニタでデュアルディスプレイにできるようHDMIケーブルを持参すると良い（PCを持参する場合）。</p>
 
-学会プログラムに &quot;TBA&quot; とあるのは &quot;To be announced&quot;（後日発表；決定次第追って通知する）の略。</code></pre>
+<p>学会プログラムに &quot;TBA&quot; とあるのは &quot;To be announced&quot;（後日発表；決定次第追って通知する）の略。</p>
+</div>
 </section>
 
 <section id="doctoral-course">
   <h2>【博士課程への進学を検討している方へ】</h2>
-  <pre><code>大学院への進学について - ​信州大学 農学部/大学院農学専攻 ​創薬標的科学研究室（信州大の喜井勲先生のメッセージです）
+  <div class="note-text">
+<p>大学院への進学について - ​信州大学 農学部/大学院農学専攻 ​創薬標的科学研究室（信州大の喜井勲先生のメッセージです）</p>
 
-進学希望の場合はM2の5月にDC1の申請書を提出します（DC1は一般に学振と呼ばれている科研費の一つ）。これに採択されれば月20万円の給与と年間100万円程度の研究費が支給されます。DC1やDC2は研究者のステータスとも言える研究費で、全国の博士課程進学（予定）者が応募しているものです。しかし、採択率は20%程度と決して門戸が広いとは言えません。目を瞠るような輝ける業績を持っている人でもない限り、採択の成否には運の要素も多分に含まれます。学振の申請書の書き方などは研究室内で受け継がれているものを参考にしつつ、時間に余裕を持って作成を進めるのが良いでしょう（半年以上前から書き始める人もいます）。
+<p>進学希望の場合はM2の5月にDC1の申請書を提出します（DC1は一般に学振と呼ばれている科研費の一つ）。これに採択されれば月20万円の給与と年間100万円程度の研究費が支給されます。DC1やDC2は研究者のステータスとも言える研究費で、全国の博士課程進学（予定）者が応募しているものです。しかし、採択率は20%程度と決して門戸が広いとは言えません。目を瞠るような輝ける業績を持っている人でもない限り、採択の成否には運の要素も多分に含まれます。学振の申請書の書き方などは研究室内で受け継がれているものを参考にしつつ、時間に余裕を持って作成を進めるのが良いでしょう（半年以上前から書き始める人もいます）。</p>
 
-その他、博士課程教育リーディングプログラム（北大のものは物質科学フロンティアを開拓するAmbitiousリーダー育成プログラム）などのカリキュラム（経済支援付き）がありました（文科省からの予算は2020年で終了）。最近の北大では新たな博士課程進学者向けの経済支援パッケージ（アンビシャス博士人材フェローシップ、DX博士人材フェローシップなど）が豊富なので、かつてに比べると博士進学のハードルは下がっているように思います。
+<p>その他、博士課程教育リーディングプログラム（北大のものは物質科学フロンティアを開拓するAmbitiousリーダー育成プログラム）などのカリキュラム（経済支援付き）がありました（文科省からの予算は2020年で終了）。最近の北大では新たな博士課程進学者向けの経済支援パッケージ（アンビシャス博士人材フェローシップ、DX博士人材フェローシップなど）が豊富なので、かつてに比べると博士進学のハードルは下がっているように思います。</p>
 
-もちろん、日本学生支援機構の奨学金などもあるので、支援の必要な方はチェックしておきましょう。第1種奨学金の場合は無利子で借りることができるので、特に事情が無いのであれば第1種の方をお勧めします。
-（2023/03/08追記）財務省の方針により、博士課程の生活支援の重複受給が禁止されることになるようです。科学研究費は税金が元手の限られたリソースなので妥当と言えるでしょうが、民間の奨学金とは併給可能なのか、金額によるのか、･･･など未定の部分も多く、今後の発表が注目されています。
+<p>もちろん、日本学生支援機構の奨学金などもあるので、支援の必要な方はチェックしておきましょう。第1種奨学金の場合は無利子で借りることができるので、特に事情が無いのであれば第1種の方をお勧めします。<br>
+（2023/03/08追記）財務省の方針により、博士課程の生活支援の重複受給が禁止されることになるようです。科学研究費は税金が元手の限られたリソースなので妥当と言えるでしょうが、民間の奨学金とは併給可能なのか、金額によるのか、･･･など未定の部分も多く、今後の発表が注目されています。</p>
 
-アカデミアノートというウェブサイトは博士課程やその後の進路を考える上でとても有用です。博士課程で受けられる助成や研究費の支援についてはこちら→ https://www.academianote.site/scholarship/ のページが詳しいです。既に博士課程へ進学された方にも参考になると思います。</code></pre>
+<p>アカデミアノートというウェブサイトは博士課程やその後の進路を考える上でとても有用です。博士課程で受けられる助成や研究費の支援についてはこちら→ https://www.academianote.site/scholarship/ のページが詳しいです。既に博士課程へ進学された方にも参考になると思います。</p>
+</div>
 </section>
 
 <section id="desktop-pc-build">
   <h2>【デスクトップPCの自作について】</h2>
-  <pre><code>予算でパーツを購入してデスクトップPCを組む際のメモ。
+  <div class="note-text">
+<p>予算でパーツを購入してデスクトップPCを組む際のメモ。</p>
 
-必要となるPC部品
+<p>必要となるPC部品</p>
 
-CPU
+<p>CPU</p>
 
-マザーボード
+<p>マザーボード</p>
 
-グラフィックボード
+<p>グラフィックボード</p>
 
-メモリ
+<p>メモリ</p>
 
-ストレージ（最近は専らSSD）
+<p>ストレージ（最近は専らSSD）</p>
 
-電源ユニット（それなりにハイパワーなものを用意したい）
+<p>電源ユニット（それなりにハイパワーなものを用意したい）</p>
 
-ケース
+<p>ケース</p>
 
-取り敢えず以上のものを購入しておけばよい。実際に使用する際はモニターや電源ケーブル、HDMIケーブルなどは当然必要。また、組み立て時に ±ドライバーが必要になるので、先端が磁石になっているものを用意する（こういうところでケチらないで良いものを買うこと）。
-※各パーツに関する詳しい説明はGoogleに聞いて下さい。
+<p>取り敢えず以上のものを購入しておけばよい。実際に使用する際はモニターや電源ケーブル、HDMIケーブルなどは当然必要。また、組み立て時に ±ドライバーが必要になるので、先端が磁石になっているものを用意する（こういうところでケチらないで良いものを買うこと）。<br>
+※各パーツに関する詳しい説明はGoogleに聞いて下さい。</p>
 
-以下、個人的な雑感。
+<p>以下、個人的な雑感。</p>
 
-CPU
-PCの頭脳。どのスペック（スレッド数やクロック数）が必要かはマシンの用途による。用途の割に高性能なものを用意しても無駄に発熱するだけの機械になる。自作PCの場合は、Intel社のCore iシリーズか、AMD社のRyzenシリーズのいずれかを選択することになる。
+<p>CPU<br>
+PCの頭脳。どのスペック（スレッド数やクロック数）が必要かはマシンの用途による。用途の割に高性能なものを用意しても無駄に発熱するだけの機械になる。自作PCの場合は、Intel社のCore iシリーズか、AMD社のRyzenシリーズのいずれかを選択することになる。</p>
 
-マザーボード
-PCのパーツ一式を乗せる板。CPUに対応するチップセットをもつマザーボードでないとCPUが機能しないので規格に注意。あとは各パーツのスロットの数や配置、WiFiやBluetoothの受信機能、光り方(？)で選ぶ（光らないものはあまり無い）。マザーボードの交換は非常に面倒なので、上に載せるものがハイエンドであるほど、良いものを用意しておきたい（マザーボード側のコネクタの規格が古いとパーツの本来の性能を引き出せなくなる可能性があるので、取り敢えず最新のものを買っておくというのはアリ）。
+<p>マザーボード<br>
+PCのパーツ一式を乗せる板。CPUに対応するチップセットをもつマザーボードでないとCPUが機能しないので規格に注意。あとは各パーツのスロットの数や配置、WiFiやBluetoothの受信機能、光り方(？)で選ぶ（光らないものはあまり無い）。マザーボードの交換は非常に面倒なので、上に載せるものがハイエンドであるほど、良いものを用意しておきたい（マザーボード側のコネクタの規格が古いとパーツの本来の性能を引き出せなくなる可能性があるので、取り敢えず最新のものを買っておくというのはアリ）。</p>
 
-グラフィックボード
-GPUが乗った板。CPUやマザーボードによってはGPUが内蔵されているものもあるが、マルチディスプレイにするならグラフィックボードは必須。これもやたらと性能にこだわっても仕方がない。ゲーム専用機とかであれば高いものを用意したら良いだろうが少々値が張る。RTX3000番台などの立派なグラフィックボードだとPCIe端子からの給電では不足で、6ピン（最大75W）もしくは8ピン（最大150W）もしくはその両方で、さらに電力を供給する必要がある。
+<p>グラフィックボード<br>
+GPUが乗った板。CPUやマザーボードによってはGPUが内蔵されているものもあるが、マルチディスプレイにするならグラフィックボードは必須。これもやたらと性能にこだわっても仕方がない。ゲーム専用機とかであれば高いものを用意したら良いだろうが少々値が張る。RTX3000番台などの立派なグラフィックボードだとPCIe端子からの給電では不足で、6ピン（最大75W）もしくは8ピン（最大150W）もしくはその両方で、さらに電力を供給する必要がある。</p>
 
-メモリ
-データを一時的に記憶させるためのパーツ。基本的にはクロック数が大きいものほど高性能。規格（DDR4とかDDR5など）によってはマザーボードが対応していなかったりするので確認しておく。16 GB * 2枚 で十分動くが、本格的に3DCGなどをいじる場合は少なくとも倍は欲しい。必要分だけ用意すればよく、マザーボードのすべてのメモリスロットを埋める必要は無い。メモリを増設する場合、必ずしもすべて同じメーカーの同じ型のメモリにする必要は無いが、マザーボードのメモリスロットによって仕様が異なることがあるので注意。一般的には、同じメーカーのメモリ2枚を2組用意して使うというのが多い（自分が組んだPCでは4スロットすべてに同じ製品を刺している）。
+<p>メモリ<br>
+データを一時的に記憶させるためのパーツ。基本的にはクロック数が大きいものほど高性能。規格（DDR4とかDDR5など）によってはマザーボードが対応していなかったりするので確認しておく。16 GB * 2枚 で十分動くが、本格的に3DCGなどをいじる場合は少なくとも倍は欲しい。必要分だけ用意すればよく、マザーボードのすべてのメモリスロットを埋める必要は無い。メモリを増設する場合、必ずしもすべて同じメーカーの同じ型のメモリにする必要は無いが、マザーボードのメモリスロットによって仕様が異なることがあるので注意。一般的には、同じメーカーのメモリ2枚を2組用意して使うというのが多い（自分が組んだPCでは4スロットすべてに同じ製品を刺している）。</p>
 
-ストレージ
-データの収納スペース。それなりの容量（～ 1 TB）のSSDを買っておけば基本的には困らない。足りなければ後からドライブを付け足すこともできる。なお、マザーボードがSSDの規格に対応していないと本来の読み書き性能が発揮できないので注意。SSDとマザーボードのスロットの規格はよく確認しておこう。
+<p>ストレージ<br>
+データの収納スペース。それなりの容量（～ 1 TB）のSSDを買っておけば基本的には困らない。足りなければ後からドライブを付け足すこともできる。なお、マザーボードがSSDの規格に対応していないと本来の読み書き性能が発揮できないので注意。SSDとマザーボードのスロットの規格はよく確認しておこう。</p>
 
-電源ユニット
-PCの命。パフォーマンスを安定させる要なのでケチらないこと（ショボい電源を使っていると部品の寿命にも影響しかねない）。800 W～くらいのもの（&quot;80 PLUS GOLD&quot; 以上の認証を受けた製品）を用意しておけば将来的な拡張にも十分対応できる。付属ケーブルは後々必要になる場合があるのでしっかり保管しておく。
-要求される電源容量を簡易的に見積もる式（単位：ｗ） → (CPUのTDP + GPUのTDP) * 1.5 + 100   または   (CPUのTDP + GPUのTDP + 100) * 1.5
-例えば AMD Ryzen™ 5 5600X と GeForce GTX 1650 の組み合わせの場合は、大体 360 W 程度の電源容量が要求される。AMD Ryzen™ 7 5800X3D と GeForce RTX 3060Ti の組み合わせの場合は、大体 560 W 程度となる。私個人はCorsairのRMシリーズの850W PC電源ユニットを使用している。
+<p>電源ユニット<br>
+PCの命。パフォーマンスを安定させる要なのでケチらないこと（ショボい電源を使っていると部品の寿命にも影響しかねない）。800 W～くらいのもの（&quot;80 PLUS GOLD&quot; 以上の認証を受けた製品）を用意しておけば将来的な拡張にも十分対応できる。付属ケーブルは後々必要になる場合があるのでしっかり保管しておく。<br>
+要求される電源容量を簡易的に見積もる式（単位：ｗ） → (CPUのTDP + GPUのTDP) * 1.5 + 100   または   (CPUのTDP + GPUのTDP + 100) * 1.5<br>
+例えば AMD Ryzen™ 5 5600X と GeForce GTX 1650 の組み合わせの場合は、大体 360 W 程度の電源容量が要求される。AMD Ryzen™ 7 5800X3D と GeForce RTX 3060Ti の組み合わせの場合は、大体 560 W 程度となる。私個人はCorsairのRMシリーズの850W PC電源ユニットを使用している。</p>
 
-ケース
-各部品を入れる箱。メンテナンス作業のことを考えると、できるだけシンプルなものが良いだろう。ミニタワー/ミドルタワー/フルタワーの順に大きくなるが、ミドルタワー型で十分なサイズ感。大抵のマザーボードは取り付け可能なので、趣味に応じて色や形で決めればよい。PCの置き場所によっては冷却ファンの位置や室内のエアフローも気にした方が良いかもしれない。
+<p>ケース<br>
+各部品を入れる箱。メンテナンス作業のことを考えると、できるだけシンプルなものが良いだろう。ミニタワー/ミドルタワー/フルタワーの順に大きくなるが、ミドルタワー型で十分なサイズ感。大抵のマザーボードは取り付け可能なので、趣味に応じて色や形で決めればよい。PCの置き場所によっては冷却ファンの位置や室内のエアフローも気にした方が良いかもしれない。</p>
 
-組み立て作業は説明書を読みながら進める。ネジを紛失しないようにケース（空き箱の蓋などで良い）に逐一入れるなどして作業する。広い机の上や、埃の無い綺麗な床の上などで行うのがよい。冬場は特に静電気に注意（心配であれば静電気対策用の手袋を用意する（個人的にはあまり要らない気がする））。部品の温度はCPUID HWMonitorなどのソフトウェアで取得すればよい。</code></pre>
+<p>組み立て作業は説明書を読みながら進める。ネジを紛失しないようにケース（空き箱の蓋などで良い）に逐一入れるなどして作業する。広い机の上や、埃の無い綺麗な床の上などで行うのがよい。冬場は特に静電気に注意（心配であれば静電気対策用の手袋を用意する（個人的にはあまり要らない気がする））。部品の温度はCPUID HWMonitorなどのソフトウェアで取得すればよい。</p>
+</div>
 </section>
 
 <section id="ethernet-trouble">
   <h2>【LANケーブルを差しているのにイーサネットに接続できない場合】</h2>
-  <pre><code>マザーボードがLANケーブル（有線接続）に対応しているのであれば、大抵の場合はマザーボードのドライバがインストールされていないことが原因。
+  <div class="note-text">
+<p>マザーボードがLANケーブル（有線接続）に対応しているのであれば、大抵の場合はマザーボードのドライバがインストールされていないことが原因。</p>
 
-各マザーボードのドライバダウンロードページ（例えばこんなページ）から、LANに関するものをインストールすればよい。</code></pre>
+<p>各マザーボードのドライバダウンロードページ（例えばこんなページ）から、LANに関するものをインストールすればよい。</p>
+</div>
 </section>
 
 <section id="wol">
   <h2>【遠隔でPCを起動するWake-on-LAN（WOL）の設定手順】</h2>
-  <pre><code>遠隔からデスクトップPCを起動できるようにするにはWake-on-LAN（WOL）を設定するのが最も低コストである。ただし、以下の点に注意：
+  <div class="note-text">
+<p>遠隔からデスクトップPCを起動できるようにするにはWake-on-LAN（WOL）を設定するのが最も低コストである。ただし、以下の点に注意：</p>
 
-ルーターがWOLに対応している必要があるので事前に確認しておくのが望ましい。
+<p>ルーターがWOLに対応している必要があるので事前に確認しておくのが望ましい。</p>
 
-WAN側IPアドレスが「10.x.yy.zz」のようにプライベートIPアドレス帯（10.0.0.0/8）になっている場合は、プロバイダ（ISP）のルーターやONUの下にぶら下がっている状態（二重ルーター / CGNAT）を意味する。この場合、ルーター設定でポートフォワードしても外部から直接アクセスできず、DDNSを設定しても直接WOLが届かない可能性が高い。
-このような場合はWOLを実行したいPCのあるネットワーク内に常時稼働しているVPNサーバーなどを設置して対処できる。この際、余っている古いノートPCなどをLAN内でのWOLリレー機として利用できるため、眠っているPCがある場合は導入コストは不要である。ただし、ノートPCは常時給電していると排熱などの問題が生じるため、Raspberry Piなど省電力なマシンで中継用のサーバーを立てるのが理想的ではある。
+<p>WAN側IPアドレスが「10.x.yy.zz」のようにプライベートIPアドレス帯（10.0.0.0/8）になっている場合は、プロバイダ（ISP）のルーターやONUの下にぶら下がっている状態（二重ルーター / CGNAT）を意味する。この場合、ルーター設定でポートフォワードしても外部から直接アクセスできず、DDNSを設定しても直接WOLが届かない可能性が高い。<br>
+このような場合はWOLを実行したいPCのあるネットワーク内に常時稼働しているVPNサーバーなどを設置して対処できる。この際、余っている古いノートPCなどをLAN内でのWOLリレー機として利用できるため、眠っているPCがある場合は導入コストは不要である。ただし、ノートPCは常時給電していると排熱などの問題が生じるため、Raspberry Piなど省電力なマシンで中継用のサーバーを立てるのが理想的ではある。</p>
 
-※他にも例えばSwitchBot（スマートプラグ）などでPCの電源を遠隔でON/OFFできるが、導入費用が1万円近くするため、費用を抑えたいのであればあまりおすすめできない。Amazonなどで安いものであれば2000円以下で購入できるため、以下の手順が面倒だったりVPNサーバーを設定する必要がある場合には、タイムパフォーマンス的に良いかもしれない。
+<p>※他にも例えばSwitchBot（スマートプラグ）などでPCの電源を遠隔でON/OFFできるが、導入費用が1万円近くするため、費用を抑えたいのであればあまりおすすめできない。Amazonなどで安いものであれば2000円以下で購入できるため、以下の手順が面倒だったりVPNサーバーを設定する必要がある場合には、タイムパフォーマンス的に良いかもしれない。</p>
 
-例えばWindows11、MSIのマザーボード（MSI CLICK BIOS）の場合、以下のようにする。トラブル原因の切り分けやすさの観点から、上から順に実施するのが好ましい。
+<p>例えばWindows11、MSIのマザーボード（MSI CLICK BIOS）の場合、以下のようにする。トラブル原因の切り分けやすさの観点から、上から順に実施するのが好ましい。</p>
 
-【BIOS（UEFI）の設定】
+<h3>【BIOS（UEFI）の設定】</h3>
 
-PC起動時、deleteキー（連打）でbiosを開く
+<p>PC起動時、deleteキー（連打）でbiosを開く</p>
 
-Settings → Advanced → Wake Up Event Setup
-Resume By PCI-E Device：Enabled
-（LANコントローラはPCI-Eデバイス扱いのため、この設定でWOLが有効になる）
+<p>Settings → Advanced → Wake Up Event Setup<br>
+Resume By PCI-E Device：Enabled<br>
+（LANコントローラはPCI-Eデバイス扱いのため、この設定でWOLが有効になる）</p>
 
-ErP Ready の確認
-場所：Settings → Advanced → Power Management Setup
-ErP Ready を Disabled にする
-（有効のままだと電源OFF時にLANポートへの給電が止まり、WOLが効かなくなる）
+<p>ErP Ready の確認<br>
+場所：Settings → Advanced → Power Management Setup<br>
+ErP Ready を Disabled にする<br>
+（有効のままだと電源OFF時にLANポートへの給電が止まり、WOLが効かなくなる）</p>
 
-必要に応じて電源復帰設定もしておく
-Restore after AC Power Loss：Power On または Last State
+<p>必要に応じて電源復帰設定もしておく<br>
+Restore after AC Power Loss：Power On または Last State</p>
 
-[F10] Save &amp; Exit を選び、再起動する。
+<p>[F10] Save &amp; Exit を選び、再起動する。</p>
 
-最後に一度シャットダウンし、電源OFFにしてもLANポートLEDが点灯していることを確認する（この状態になっていればNICに給電されている）。
-LANケーブルの差込口が点灯・点滅していないようなら、そのシステムはS5（シャットダウン状態）からの復帰に対応していない。S3（スリープ状態）、S4（休止状態）からの復帰が可能かを追加でチェックする。
+<p>最後に一度シャットダウンし、電源OFFにしてもLANポートLEDが点灯していることを確認する（この状態になっていればNICに給電されている）。<br>
+LANケーブルの差込口が点灯・点滅していないようなら、そのシステムはS5（シャットダウン状態）からの復帰に対応していない。S3（スリープ状態）、S4（休止状態）からの復帰が可能かを追加でチェックする。</p>
 
-【Windowsの設定】
+<h3>【Windowsの設定】</h3>
 
-コントロールパネルなどからLANケーブルの差さっているネットワークを開く
+<p>コントロールパネルなどからLANケーブルの差さっているネットワークを開く</p>
 
-「イーサネット」をクリックして「イーサネットの状態」を表示して「プロパティ」&gt; 「構成」を選択
+<p>「イーサネット」をクリックして「イーサネットの状態」を表示して「プロパティ」&gt; 「構成」を選択</p>
 
-「電源の管理」タブで、
+<p>「電源の管理」タブで、</p>
 
-「このデバイスで・・・スタンバイ状態を解除できるようにする」に✔
+<p>「このデバイスで・・・スタンバイ状態を解除できるようにする」に✔</p>
 
-「Magic Packetでのみ解除できるようにする」に✔
-※S3（スリープ）、S4（休止）からの復帰にしか対応していない場合は「電力の節約のためにコンピューターとこのデバイスの電源をオフにできるようにする」のチェックを外すこと。
+<p>「Magic Packetでのみ解除できるようにする」に✔<br>
+※S3（スリープ）、S4（休止）からの復帰にしか対応していない場合は「電力の節約のためにコンピューターとこのデバイスの電源をオフにできるようにする」のチェックを外すこと。</p>
 
-このときついでに「イーサネットの状態」で「詳細」を選び、物理アドレス（MACアドレス）などを保存しておくとよい。
+<p>このときついでに「イーサネットの状態」で「詳細」を選び、物理アドレス（MACアドレス）などを保存しておくとよい。</p>
 
-【ルーターの設定】
+<h3>【ルーターの設定】</h3>
 
-ここではBuffaloのルーター（WSR-300HP）の場合の WOL設定について記す。
+<p>ここではBuffaloのルーター（WSR-300HP）の場合の WOL設定について記す。</p>
 
-管理画面へのログイン（参考：https://www.buffalo.jp/support/faq/detail/15257.html）
+<p>管理画面へのログイン（参考：https://www.buffalo.jp/support/faq/detail/15257.html）</p>
 
-PCをルーターに有線接続（またはWi-Fiでも可）。
+<p>PCをルーターに有線接続（またはWi-Fiでも可）。</p>
 
-ブラウザで　http://192.168.11.1　を入力
+<p>ブラウザで　http://192.168.11.1　を入力</p>
 
-ログイン画面が出たら　ユーザー名：admin　パスワード：password　を入力（初期値のままの場合）
+<p>ログイン画面が出たら　ユーザー名：admin　パスワード：password　を入力（初期値のままの場合）</p>
 
-DHCPリース（固定IP割り当て）
+<p>DHCPリース（固定IP割り当て）</p>
 
-メニューの 「LAN」→「DHCPリース」 を開く。
+<p>メニューの 「LAN」→「DHCPリース」 を開く。</p>
 
-WakeしたいPCの MACアドレスを登録し、固定のIP（例：192.168.11.50 など）を割り当てる。既に登録されているPCであれば、エントリを編集して上書きすればよい。末尾の数字が小さすぎると、ネットワークに接続された別の機器に同じIPが配られて衝突してしまうことがある。50程度の小さすぎない値で固定IPを割り当てるのが良いだろう。
+<p>WakeしたいPCの MACアドレスを登録し、固定のIP（例：192.168.11.50 など）を割り当てる。既に登録されているPCであれば、エントリを編集して上書きすればよい。末尾の数字が小さすぎると、ネットワークに接続された別の機器に同じIPが配られて衝突してしまうことがある。50程度の小さすぎない値で固定IPを割り当てるのが良いだろう。</p>
 
-ポート転送の設定（ポートフォワーディング）
+<p>ポート転送の設定（ポートフォワーディング）</p>
 
-「セキュリティ」→「ポート変換」 を開き、以下のように設定して「新規追加」を選択：
+<p>「セキュリティ」→「ポート変換」 を開き、以下のように設定して「新規追加」を選択：</p>
 
-プロトコル：任意のUDPポート
+<p>プロトコル：任意のUDPポート</p>
 
-ポート番号：9（または任意の大きな番号、例 40000 など）
+<p>ポート番号：9（または任意の大きな番号、例 40000 など）</p>
 
-宛先IP：先ほど固定したPCのIP（例：192.168.11.50）
+<p>宛先IP：先ほど固定したPCのIP（例：192.168.11.50）</p>
 
-宛先ポート：「ポート番号」と同じ番号
+<p>宛先ポート：「ポート番号」と同じ番号</p>
 
-ルーターの「Internet DDNS」機能を利用する
+<p>ルーターの「Internet DDNS」機能を利用する</p>
 
-メニューから「DDNS」を設定して、例えば　myrouter.ddo.jp　のようなアドレスを取得
+<p>メニューから「DDNS」を設定して、例えば　myrouter.ddo.jp　のようなアドレスを取得</p>
 
-【WOLアプリの設定】
+<h3>【WOLアプリの設定】</h3>
 
-スマホやノートPCのWOLアプリに以下を設定し、外部のネットワークから起動テストを行う。
+<p>スマホやノートPCのWOLアプリに以下を設定し、外部のネットワークから起動テストを行う。</p>
 
-宛先アドレス：myrouter.ddo.jp
+<p>宛先アドレス：myrouter.ddo.jp</p>
 
-ポート：9（設定した番号）
+<p>ポート：9（設定した番号）</p>
 
-MACアドレス：対象PCの物理アドレス（例：AA-BB-CC-DD-EE-FF）ここではBuffaloのルーター（WSR-300HP）の場合の WOL設定について記す。</code></pre>
+<p>MACアドレス：対象PCの物理アドレス（例：AA-BB-CC-DD-EE-FF）ここではBuffaloのルーター（WSR-300HP）の場合の WOL設定について記す。</p>
+</div>
 </section>
 
 <section id="dual-boot-storage">
   <h2>【ストレージを追加してOS別にデュアルブートする】</h2>
-  <pre><code>Windowsインストール済みのデスクトップPCに、Linux mint をインストールしたSSDを追加してデュアルブートできるようにした際のメモ（Ubuntu環境の場合も同様）。SATAケーブルはマザーボードの箱に余分に入っているものを使い、電源ケーブルは電源ユニットの付属品を使う（無ければ新たに調達する）。
+  <div class="note-text">
+<p>Windowsインストール済みのデスクトップPCに、Linux mint をインストールしたSSDを追加してデュアルブートできるようにした際のメモ（Ubuntu環境の場合も同様）。SATAケーブルはマザーボードの箱に余分に入っているものを使い、電源ケーブルは電源ユニットの付属品を使う（無ければ新たに調達する）。</p>
 
-SSDをPC本体に追加した後、以下の手順を実行する。
+<p>SSDをPC本体に追加した後、以下の手順を実行する。</p>
 
-F2キーでbiosを開く
+<p>F2キーでbiosを開く</p>
 
-アドバンスド（Advanced）のタブへ移動　→　SATAコントローラを「AHCI」にする
+<p>アドバンスド（Advanced）のタブへ移動　→　SATAコントローラを「AHCI」にする</p>
 
-起動（Boot）のタブへ移動　→　起動優先順位について、ブートドライブ #1 を Linux mint にする（#2 は自動的にWindowsになる）
+<p>起動（Boot）のタブへ移動　→　起動優先順位について、ブートドライブ #1 を Linux mint にする（#2 は自動的にWindowsになる）</p>
 
-Linux mint 環境を立ち上げ、ターミナルを起動して sudo update-grub というコマンドを実行して grub（Linuxのブートローダー）を更新する
-（これでgrubが既存のWindows環境を認識する）
+<p>Linux mint 環境を立ち上げ、ターミナルを起動して sudo update-grub というコマンドを実行して grub（Linuxのブートローダー）を更新する<br>
+（これでgrubが既存のWindows環境を認識する）</p>
 
-Linux mint 環境をシャットダウンしてからPCを起動してブート画面が表示されれば成功
+<p>Linux mint 環境をシャットダウンしてからPCを起動してブート画面が表示されれば成功</p>
 
-ブート画面では十字キーで起動するOSを選択できる。未設定のシステムを選択してしまった場合、エラーと警告が表示されるが Ctrl + Alt + Del で抜けられる。</code></pre>
+<p>ブート画面では十字キーで起動するOSを選択できる。未設定のシステムを選択してしまった場合、エラーと警告が表示されるが Ctrl + Alt + Del で抜けられる。</p>
+</div>
 </section>
 
 <section id="gpu-login-loop">
   <h2>【グラフィックボード換装後にdriverを更新してログインループに陥った場合】</h2>
-  <pre><code>GPU（NVIDIA製）をGTX1650からRTX3060Tiに換装してバージョンを上げた際にGUIでログインできなくなった時のメモ。
+  <div class="note-text">
+<p>GPU（NVIDIA製）をGTX1650からRTX3060Tiに換装してバージョンを上げた際にGUIでログインできなくなった時のメモ。</p>
 
-Linux OSの場合、ディスプレイのデバイスドライバのバージョンの関係でデュアルモニターにできなくなる場合がある（Windowsでは換装直後でも問題なくマルチディスプレイ出力できた）。具体的な不具合としては、不用意にnvidia-driverをアップデートするとログインループにハマる可能性がある、というものである。
+<p>Linux OSの場合、ディスプレイのデバイスドライバのバージョンの関係でデュアルモニターにできなくなる場合がある（Windowsでは換装直後でも問題なくマルチディスプレイ出力できた）。具体的な不具合としては、不用意にnvidia-driverをアップデートするとログインループにハマる可能性がある、というものである。</p>
 
-ログインループに陥っている画面において Ctrl + Alt + F1 でGUIからCUIへ切り替えることができる。以下、やること。
+<p>ログインループに陥っている画面において Ctrl + Alt + F1 でGUIからCUIへ切り替えることができる。以下、やること。</p>
 
-GPUの型番を調べて、その型番のGPUに推奨されるnvidia-driverの番号を特定する。dpkg -l | grep nvidia などで調べられる。あるいは、以下。
+<p>GPUの型番を調べて、その型番のGPUに推奨されるnvidia-driverの番号を特定する。dpkg -l | grep nvidia などで調べられる。あるいは、以下。</p>
 
-sudo update-pciids
+<pre tabindex="0"><code class="nohighlight">sudo update-pciids
 update-pciids
 dpkg -l | grep nvidia
 
-xserverを停止する。ディスプレイマネージャとしてLightDMが入っている場合は、sudo service lightdm stop としてGUIを停止（nvidiaのドライバをGUI制御から切り離す）。
+</code></pre>
 
-nvidiaとcudaの現在のバージョンを削除する。
+<p>xserverを停止する。ディスプレイマネージャとしてLightDMが入っている場合は、sudo service lightdm stop としてGUIを停止（nvidiaのドライバをGUI制御から切り離す）。</p>
 
-sudo apt-get -- remove nvidia-*
+<p>nvidiaとcudaの現在のバージョンを削除する。</p>
+
+<pre tabindex="0"><code class="nohighlight">sudo apt-get -- remove nvidia-*
 
 sudo apt-get -- remove cuda-*
 
-nvidia-driverをインストールする。下記コマンドの xxx の部分には 手順1. で調べたnvidia-driverの番号が入る。
+</code></pre>
 
-sudo apt-get update &amp;&amp; sudo apt-get install nvidia-driver-xxx
+<p>nvidia-driverをインストールする。下記コマンドの xxx の部分には 手順1. で調べたnvidia-driverの番号が入る。</p>
 
-E: Unable to locate package update とエラーが出る場合もある。このときは apt-get の代わりに apt を使ってみると通過する...？かもしれない（apt-get より apt の方が新しいパッケージマネージャであるため）。
+<pre tabindex="0"><code class="nohighlight">sudo apt-get update &amp;&amp; sudo apt-get install nvidia-driver-xxx
 
-sudo service lightdm start として、停止していたxserverを起動。
+</code></pre>
 
-PCを再起動するとログインループから解放されている（はず）。
+<p>E: Unable to locate package update とエラーが出る場合もある。このときは apt-get の代わりに apt を使ってみると通過する...？かもしれない（apt-get より apt の方が新しいパッケージマネージャであるため）。</p>
 
-上記手順は、自身の Linux mint 20.3 MATE 環境でワークした。ただし導入したドライバが古いとゲームエンジンなどでのレンダリングができなくなる場合があるので注意。</code></pre>
+<p>sudo service lightdm start として、停止していたxserverを起動。</p>
+
+<p>PCを再起動するとログインループから解放されている（はず）。</p>
+
+<p>上記手順は、自身の Linux mint 20.3 MATE 環境でワークした。ただし導入したドライバが古いとゲームエンジンなどでのレンダリングができなくなる場合があるので注意。</p>
+</div>
 </section>
 
 <section id="vpn">
   <h2>【VPN接続まわり】</h2>
-  <pre><code>Softetherというソフトウェアを使って仮想VPNサーバーを建て、トンネルを掘ることができる。これにより自宅から仮想VPNサーバーを経由して大学のネットワークに接続することが（理論上）可能。
+  <div class="note-text">
+<p>Softetherというソフトウェアを使って仮想VPNサーバーを建て、トンネルを掘ることができる。これにより自宅から仮想VPNサーバーを経由して大学のネットワークに接続することが（理論上）可能。</p>
 
-例えば、大学のネットワークからでしかインストールできないソフトウェアを自宅PCに入れたいという場合、大学PCを経由して自宅PCから学内ネットワークに繋ぐ必要がある。大まかな作業手順は以下の通り。
-※SoftEtherのソフトウェア（「SoftEther VPN サーバー管理」と「SoftEtherVPN クライアント接続」）はインストール済みであるものとする。
+<p>例えば、大学のネットワークからでしかインストールできないソフトウェアを自宅PCに入れたいという場合、大学PCを経由して自宅PCから学内ネットワークに繋ぐ必要がある。大まかな作業手順は以下の通り。<br>
+※SoftEtherのソフトウェア（「SoftEther VPN サーバー管理」と「SoftEtherVPN クライアント接続」）はインストール済みであるものとする。</p>
 
-【大学PCでの作業】
+<h3>【大学PCでの作業】</h3>
 
-「SoftEther VPN サーバー管理」を起動し「新しい接続設定」を作成。このときホスト名、ポート番号、仮想HUB名を控えておくこと（後で必要になる）。
+<p>「SoftEther VPN サーバー管理」を起動し「新しい接続設定」を作成。このときホスト名、ポート番号、仮想HUB名を控えておくこと（後で必要になる）。</p>
 
-「接続」→「仮想HUBの作成」で適当な仮想HUBを設置（ユーザー名やパスワード、接続を許可するIPアドレスを設定したりする）。大学や企業のネットワークに穴を開ける場合はセキュリティレベルに気を付けること（必要に応じてネットワーク管理者に連絡する）。このときユーザー名やパスワードを控えておくこと（後で必要になる）。
+<p>「接続」→「仮想HUBの作成」で適当な仮想HUBを設置（ユーザー名やパスワード、接続を許可するIPアドレスを設定したりする）。大学や企業のネットワークに穴を開ける場合はセキュリティレベルに気を付けること（必要に応じてネットワーク管理者に連絡する）。このときユーザー名やパスワードを控えておくこと（後で必要になる）。</p>
 
-仮想HUBのウィンドウにある「ローカルブリッジ設定」にてローカルブリッジを設定する。以下のような警告が出る場合はVPNサーバーとして利用するのは難しいので、別のPCを使う（VPNサーバーはノートPCでも建てられる）。
+<p>仮想HUBのウィンドウにある「ローカルブリッジ設定」にてローカルブリッジを設定する。以下のような警告が出る場合はVPNサーバーとして利用するのは難しいので、別のPCを使う（VPNサーバーはノートPCでも建てられる）。</p>
 
-ローカルブリッジを作成することができる物理的なLANカードがVPNサーパーのコンピュータに1枚も見つかりませんでした。
+<p>ローカルブリッジを作成することができる物理的なLANカードがVPNサーパーのコンピュータに1枚も見つかりませんでした。</p>
 
-ローカルブリッジを作成するには、物理的なLANカードを1枚以上コンピュータにインストールする必要があります。
+<p>ローカルブリッジを作成するには、物理的なLANカードを1枚以上コンピュータにインストールする必要があります。</p>
 
-...
+<p>...</p>
 
-仮想HUBには先ほど作成した仮想HUBを指定。物理LANは基本的にデフォルトのものが自動で設定されている（はず）。
+<p>仮想HUBには先ほど作成した仮想HUBを指定。物理LANは基本的にデフォルトのものが自動で設定されている（はず）。</p>
 
-以上で大学PCでの作業は終了。大学PC（VPNサーバー）がスリーブになると接続が切れるので、スリープまでの時間を作業可能な時間まで伸ばしておくのを忘れずに。自宅PCでの作業が終わるまで大学PC（VPNサーバー）は起動しっぱなしにする。
+<p>以上で大学PCでの作業は終了。大学PC（VPNサーバー）がスリーブになると接続が切れるので、スリープまでの時間を作業可能な時間まで伸ばしておくのを忘れずに。自宅PCでの作業が終わるまで大学PC（VPNサーバー）は起動しっぱなしにする。</p>
 
-【自宅PCでの作業】
+<h3>【自宅PCでの作業】</h3>
 
-「SoftEtherVPN クライアント接続」を起動して「新しい接続設定の作成」から接続したいVPNサーバーを指定する。ホスト名、ポート番号、仮想HUB名は手順1.で控えておいたものを入力する。ユーザー認証の部分には手順2.で控えておいたユーザー名とパスワードを入力する。以上で接続設定が可能。
+<p>「SoftEtherVPN クライアント接続」を起動して「新しい接続設定の作成」から接続したいVPNサーバーを指定する。ホスト名、ポート番号、仮想HUB名は手順1.で控えておいたものを入力する。ユーザー認証の部分には手順2.で控えておいたユーザー名とパスワードを入力する。以上で接続設定が可能。</p>
 
-作成した接続設定からVPNサーバーに接続。PCのネットワークがVPN接続になったことを確認する。切り替わっていない場合は「設定」の「ネットワークの状態」から手動で切り替える。
+<p>作成した接続設定からVPNサーバーに接続。PCのネットワークがVPN接続になったことを確認する。切り替わっていない場合は「設定」の「ネットワークの状態」から手動で切り替える。</p>
 
-大学のネットワークに接続できたのでソフトウェアをダウンロードする。
+<p>大学のネットワークに接続できたのでソフトウェアをダウンロードする。</p>
 
-セキュリティ上の懸念が大いにあるので、接続設定には注意する（不特定多数のクライアントからのアクセスを不可能にするなど最低限の対策を施す）。使用後は速やかに接続を切り、VPNサーバーを停止すること。不明点がある場合はVPNを使用しないのがよい。
+<p>セキュリティ上の懸念が大いにあるので、接続設定には注意する（不特定多数のクライアントからのアクセスを不可能にするなど最低限の対策を施す）。使用後は速やかに接続を切り、VPNサーバーを停止すること。不明点がある場合はVPNを使用しないのがよい。</p>
 
-【参考】「【まとめ】無料できるVPN環境の作り方（SoftEther VPN）」</code></pre>
+<p>【参考】「【まとめ】無料できるVPN環境の作り方（SoftEther VPN）」</p>
+</div>
 </section>
 
 <section id="python-setup">
   <h2>【Pythonの環境構築について】</h2>
-  <pre><code>※慎重に導入したいという場合はmakeの後に　make test　を挟む（通例）。ただし、理論研の古いサーバーに導入する場合、比較的新しいバージョンのPythonではライブラリの関係でtestに失敗することがある。そのため以下では省略している。
+  <div class="note-text">
+<p>※慎重に導入したいという場合はmakeの後に　make test　を挟む（通例）。ただし、理論研の古いサーバーに導入する場合、比較的新しいバージョンのPythonではライブラリの関係でtestに失敗することがある。そのため以下では省略している。</p>
 
-【2系の場合】
+<h3>【2系の場合】</h3>
 
-基本的な導入手順①（2.7系の例）
+<p>基本的な導入手順①（2.7系の例）</p>
 
-Python-2.7.18.tgzなどをダウンロードし、$HOME/usr/local などの場所に置く。（ $HOME/usr/local に相当するディレクトリを事前に作成しておく。）
+<p>Python-2.7.18.tgzなどをダウンロードし、$HOME/usr/local などの場所に置く。（ $HOME/usr/local に相当するディレクトリを事前に作成しておく。）</p>
 
-cd $HOME/usr/local
+<pre tabindex="0"><code class="nohighlight">cd $HOME/usr/local
 
 tar -xf Python-2.7.18.tgz
 
@@ -2358,45 +2485,53 @@ make -j4（並列数は任意）
 
 make install
 
-Python2.xではpipのサポートが終了しており手作業で導入するしかない。pipは get-pip.py を使ってインストールするのがよい。古いバージョンなので https://bootstrap.pypa.io/pip/2.7/get-pip.py からダウンロードする。手順としては以下。
+</code></pre>
 
-https://bootstrap.pypa.io/pip/2.7/　に get-pip.py が置いてあるので、これをpy形式のファイルとしてダウンロードする。
+<p>Python2.xではpipのサポートが終了しており手作業で導入するしかない。pipは get-pip.py を使ってインストールするのがよい。古いバージョンなので https://bootstrap.pypa.io/pip/2.7/get-pip.py からダウンロードする。手順としては以下。</p>
 
-ダウンロードした get-pip.py を $HOME/usr/local/Python2/bin に置く。
+<p>https://bootstrap.pypa.io/pip/2.7/　に get-pip.py が置いてあるので、これをpy形式のファイルとしてダウンロードする。</p>
 
-$HOME/usr/local/Python2/bin に移動し、 ./python2.7 get-pip2.py を実行。pip2.7 などがカレントディレクトリに生成する。
-※このとき、 get-pip2.py がその起動に使用した “python2.7” の環境を自動で認識して、パッケージを適切なパスのディレクトリ（私の場合は $HOME/usr/local/Python2/lib/python2.7/site-packages ）にインストールするように設定される。
+<p>ダウンロードした get-pip.py を $HOME/usr/local/Python2/bin に置く。</p>
 
-get-pip.pyが TLS/SSL が存在していないことにより動作しない場合、whlファイルでソースコードをダウンロードしてインストールする。$HOME/usr/local/Python2/bin に2系pipのwhlファイルをアップロード、ここに移動して下記を実行。
+<p>$HOME/usr/local/Python2/bin に移動し、 ./python2.7 get-pip2.py を実行。pip2.7 などがカレントディレクトリに生成する。<br>
+※このとき、 get-pip2.py がその起動に使用した “python2.7” の環境を自動で認識して、パッケージを適切なパスのディレクトリ（私の場合は $HOME/usr/local/Python2/lib/python2.7/site-packages ）にインストールするように設定される。</p>
 
-curl -O https://files.pythonhosted.org/packages/27/79/8a850fe3496446ff0d584327ae44e7500daf6764ca1a382d2d02789accf7/pip-20.3.4-py2.py3-none-any.whl
+<p>get-pip.pyが TLS/SSL が存在していないことにより動作しない場合、whlファイルでソースコードをダウンロードしてインストールする。$HOME/usr/local/Python2/bin に2系pipのwhlファイルをアップロード、ここに移動して下記を実行。</p>
+
+<pre tabindex="0"><code class="nohighlight">curl -O https://files.pythonhosted.org/packages/27/79/8a850fe3496446ff0d584327ae44e7500daf6764ca1a382d2d02789accf7/pip-20.3.4-py2.py3-none-any.whl
 
 ./python2.7 pip-20.3.4-py2.py3-none-any.whl/pip install --no-index pip-20.3.4-py2.py3-none-any.whl
 
-カレントディレクトリにpip2.7が生成している。
+</code></pre>
 
-一通りの作業を終えたら以下の行を .cshrc に追記してsourceする。
+<p>カレントディレクトリにpip2.7が生成している。</p>
 
-set path = ( $HOME/usr/local/Python2/bin $path )
+<p>一通りの作業を終えたら以下の行を .cshrc に追記してsourceする。</p>
+
+<pre tabindex="0"><code class="nohighlight">set path = ( $HOME/usr/local/Python2/bin $path )
 
 alias py2 $HOME/usr/local/Python2/bin/python2.7
 
 alias pip2 $HOME/usr/local/Python2/bin/pip2.7
 alias python $HOME/usr/local/Python2/bin/python2.7
 
-※既存のpython2系との衝突を避けるため、最後の行（太字）も足しておくと良い。
-※これで py2 というコマンドでPython2系が呼び出せる。Python2系でpyスクリプトを実行したいときは以下のようにすればよい。
+</code></pre>
 
-py2 hogehoge.py
+<p>※既存のpython2系との衝突を避けるため、最後の行（太字）も足しておくと良い。<br>
+※これで py2 というコマンドでPython2系が呼び出せる。Python2系でpyスクリプトを実行したいときは以下のようにすればよい。</p>
 
-【3系の場合】
+<pre tabindex="0"><code class="nohighlight">py2 hogehoge.py
 
-基本的な導入手順（以下は3.10系を導入する場合の例；理論研内部の古いサーバーではOpenSSLのバージョン（CentOSのバージョン）が古いため、 Python-3.6.8 など少し前のバージョンを導入すること）
+</code></pre>
 
-Python-3.10.10.tgzなどをダウンロードし、$HOME/usr/local などの場所に置く。（ $HOME/usr/local に相当するディレクトリを事前に作成しておく。）
-※LINUX版をダウンロードすること。Active Python Releasesのソースは https://www.python.org/downloads/source/ からダウンロードできる。
+<h3>【3系の場合】</h3>
 
-cd $HOME/usr/local
+<p>基本的な導入手順（以下は3.10系を導入する場合の例；理論研内部の古いサーバーではOpenSSLのバージョン（CentOSのバージョン）が古いため、 Python-3.6.8 など少し前のバージョンを導入すること）</p>
+
+<p>Python-3.10.10.tgzなどをダウンロードし、$HOME/usr/local などの場所に置く。（ $HOME/usr/local に相当するディレクトリを事前に作成しておく。）<br>
+※LINUX版をダウンロードすること。Active Python Releasesのソースは https://www.python.org/downloads/source/ からダウンロードできる。</p>
+
+<pre tabindex="0"><code class="nohighlight">cd $HOME/usr/local
 
 tar -xf Python-3.10.10.tgz
 
@@ -2409,39 +2544,51 @@ make -j4（並列数は任意；cpuinfoコマンドなどで確認できる）
 
 make install
 
-一通りの作業を終えたら以下の行を .cshrc に追記し、source ~/.cshrc でsourceする。
+</code></pre>
 
-set path = ( $HOME/usr/local/Python3/bin $path )
+<p>一通りの作業を終えたら以下の行を .cshrc に追記し、source ~/.cshrc でsourceする。</p>
+
+<pre tabindex="0"><code class="nohighlight">set path = ( $HOME/usr/local/Python3/bin $path )
 
 alias py $HOME/usr/local/Python3/bin/python3.10
 
 alias pip $HOME/usr/local/Python3/bin/pip3.10
 
-※ .bashrcの場合は下記のようにする。
+</code></pre>
 
-export PATH=&quot;$HOME/usr/local/Python3/bin:$PATH&quot;
+<p>※ .bashrcの場合は下記のようにする。</p>
+
+<pre tabindex="0"><code class="nohighlight">export PATH=&quot;$HOME/usr/local/Python3/bin:$PATH&quot;
 
 alias py=&quot;$HOME/usr/local/Python3/bin/python3.10&quot;
 
 alias pip=&quot;$HOME/usr/local/Python3/bin/pip3.10&quot;
 
-※これで py というコマンドでPython3系が呼び出せる。Python3系でpyスクリプトを実行したいときは以下のようにすればよい。
+</code></pre>
 
-py hogehoge.py
+<p>※これで py というコマンドでPython3系が呼び出せる。Python3系でpyスクリプトを実行したいときは以下のようにすればよい。</p>
 
-※また、この環境にパッケージをインストールしたいときは以下のようにすればよい（以下は numpy を入れる場合）。Python3.6.8 の場合、 pip3 は $HOME/usr/local/Python3/bin/pip3 にある。
+<pre tabindex="0"><code class="nohighlight">py hogehoge.py
 
-pip3 install numpy
+</code></pre>
 
-【3系のPython環境をAnacondaで導入する場合】
+<p>※また、この環境にパッケージをインストールしたいときは以下のようにすればよい（以下は numpy を入れる場合）。Python3.6.8 の場合、 pip3 は $HOME/usr/local/Python3/bin/pip3 にある。</p>
 
-ソースコードからビルドして各種ライブラリを揃えるのが手間、という場合はAnacondaの利用も考慮したい。https://www.anaconda.com/download#downloads からLinux向けのAnacondaセットアップ用シェルスクリプトをダウンロードし、実行権限を付与して実行すると $HOME に anaconda3 という名前のディレクトリが生成する。あとは $HOME/anaconda3/bin にパスを通せば3系のPyhotn環境が一通り揃う。
+<pre tabindex="0"><code class="nohighlight">pip3 install numpy
 
-$ bash ./Anaconda3-2023.03-1-Linux-x86_64.sh
+</code></pre>
 
-以下の行を .cshrc に追記してsourceする。
+<h3>【3系のPython環境をAnacondaで導入する場合】</h3>
 
-# my Python3 (conda)
+<p>ソースコードからビルドして各種ライブラリを揃えるのが手間、という場合はAnacondaの利用も考慮したい。https://www.anaconda.com/download#downloads からLinux向けのAnacondaセットアップ用シェルスクリプトをダウンロードし、実行権限を付与して実行すると $HOME に anaconda3 という名前のディレクトリが生成する。あとは $HOME/anaconda3/bin にパスを通せば3系のPyhotn環境が一通り揃う。</p>
+
+<pre tabindex="0"><code class="nohighlight">$ bash ./Anaconda3-2023.03-1-Linux-x86_64.sh
+
+</code></pre>
+
+<p>以下の行を .cshrc に追記してsourceする。</p>
+
+<pre tabindex="0"><code class="nohighlight"># my Python3 (conda)
 
 set path = ( $HOME/anaconda3/bin $path )
 
@@ -2449,20 +2596,24 @@ alias py $HOME/anaconda3/bin/python3.10
 
 alias pip $HOME/anaconda3/bin/pip3
 
-Anaconda公式がサポートしているパッケージは conda install [package] で基本的にはインストール可能だが、公式にサポートされていないものについては conda-forge （コミュニティ主導のインストール可能なパッケージの conda チャネル）を利用してインストールする。例えば、三角グラフを生成する際に重宝する python-ternary パッケージをconda環境に導入するには以下のようにすればよい。
+</code></pre>
 
-$ conda config --add channels conda-forge
+<p>Anaconda公式がサポートしているパッケージは conda install [package] で基本的にはインストール可能だが、公式にサポートされていないものについては conda-forge （コミュニティ主導のインストール可能なパッケージの conda チャネル）を利用してインストールする。例えば、三角グラフを生成する際に重宝する python-ternary パッケージをconda環境に導入するには以下のようにすればよい。</p>
+
+<pre tabindex="0"><code class="nohighlight">$ conda config --add channels conda-forge
 $ conda install python-ternary
 
-pipによるライブラリとcondaによるライブラリが混在することになるため、バージョン管理が煩雑になる＆再現性が損なわれることを嫌気するユーザーも多い。実用上の問題点もあるので、AnacondaでPythonを導入する場合は個人利用に留めるのが良いかもしれない。
+</code></pre>
 
-【所望のパッケージのwhlファイルがプラットフォームのC標準ライブラリのバージョンに対応していない場合の応急処置（※実行は自己責任※）】
+<p>pipによるライブラリとcondaによるライブラリが混在することになるため、バージョン管理が煩雑になる＆再現性が損なわれることを嫌気するユーザーも多い。実用上の問題点もあるので、AnacondaでPythonを導入する場合は個人利用に留めるのが良いかもしれない。</p>
 
-古いマシンによってはGNU C Library (glibc)のバージョンがあまりにも古く、そのままではPythonのパッケージがインストールできないことがある。例えば、https://pypi.org/project/numpy/#files では numpy-2.2.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl というwhl（ホイールファイル）が配布されているが、GLIBC 2.12の古いマシンでは対応していないため、そのままではpip installが不可能である。
+<h3>【所望のパッケージのwhlファイルがプラットフォームのC標準ライブラリのバージョンに対応していない場合の応急処置（※実行は自己責任※）】</h3>
 
-そのような場合、whlファイルを一度展開してラベルをリネームして再度圧縮したものをインストールに使う、という荒業が使える。コマンドは以下の通り（whlファイルの存在するディレクトリで実行する）。
+<p>古いマシンによってはGNU C Library (glibc)のバージョンがあまりにも古く、そのままではPythonのパッケージがインストールできないことがある。例えば、https://pypi.org/project/numpy/#files では numpy-2.2.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl というwhl（ホイールファイル）が配布されているが、GLIBC 2.12の古いマシンでは対応していないため、そのままではpip installが不可能である。</p>
 
-$ unzip numpy-2.2.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl -d numpy_tmp_whl
+<p>そのような場合、whlファイルを一度展開してラベルをリネームして再度圧縮したものをインストールに使う、という荒業が使える。コマンドは以下の通り（whlファイルの存在するディレクトリで実行する）。</p>
+
+<pre tabindex="0"><code class="nohighlight">$ unzip numpy-2.2.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl -d numpy_tmp_whl
 
 $ cd numpy_tmp_whl
 
@@ -2470,15 +2621,19 @@ $ zip -r ../numpy-2.2.6-cp310-cp310-manylinux_2_12_x86_64.manylinux2010_x86_64.w
 
 $ cd ..
 
-これにより、元のディレクトリに「GLIBC 2.12対応」のラベルに変更されたwhlファイルが生成する。これを
+</code></pre>
 
-$ pip install --no-index --find-links=. numpy-2.2.6-cp310-cp310-manylinux_2_12_x86_64.manylinux2010_x86_64.whl
+<p>これにより、元のディレクトリに「GLIBC 2.12対応」のラベルに変更されたwhlファイルが生成する。これを</p>
 
-などとしてインストールする。
+<pre tabindex="0"><code class="nohighlight">$ pip install --no-index --find-links=. numpy-2.2.6-cp310-cp310-manylinux_2_12_x86_64.manylinux2010_x86_64.whl
 
-GNU C Library (glibc)のバージョンは ldd --version で確認できる。GLIBC 2.12のマシンでは以下のように表示される。
+</code></pre>
 
-$ ldd --version
+<p>などとしてインストールする。</p>
+
+<p>GNU C Library (glibc)のバージョンは ldd --version で確認できる。GLIBC 2.12のマシンでは以下のように表示される。</p>
+
+<pre tabindex="0"><code class="nohighlight">$ ldd --version
 
 ldd (GNU libc) 2.12
 
@@ -2490,46 +2645,58 @@ warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 
 Written by Roland McGrath and Ulrich Drepper.
 
-因みに、アーキテクチャ（x86_64など）は uname -m で確認できる。</code></pre>
+</code></pre>
+
+<p>因みに、アーキテクチャ（x86_64など）は uname -m で確認できる。</p>
+</div>
 </section>
 
 <section id="julia-setup">
   <h2>【Juliaの環境構築について】</h2>
-  <pre><code>基本的な導入手順（2023年8月現在の安定版はv1.9.2なので、以下ではこれをインストールしている）
+  <div class="note-text">
+<p>基本的な導入手順（2023年8月現在の安定版はv1.9.2なので、以下ではこれをインストールしている）</p>
 
-公式サイトから julia-1.9.2-linux-x86_64.tar.gz などをダウンロードし、$HOME/usr/ などの場所に置く。（ $HOME/usr/ に相当するディレクトリを事前に作成しておく。）
+<p>公式サイトから julia-1.9.2-linux-x86_64.tar.gz などをダウンロードし、$HOME/usr/ などの場所に置く。（ $HOME/usr/ に相当するディレクトリを事前に作成しておく。）</p>
 
-cd $HOME/usr
+<pre tabindex="0"><code class="nohighlight">cd $HOME/usr
 
 tar -xf julia-1.9.2-linux-x86_64.tar.gz
 
-.cshrc などに $HOME/usr/julia-1.9.2/bin のパスを追加
-※ csh系の場合は .cshrc に以下のような行を追加して source する。
+</code></pre>
 
-set path = ( $HOME/usr/julia-1.9.2/bin $path )
+<p>.cshrc などに $HOME/usr/julia-1.9.2/bin のパスを追加<br>
+※ csh系の場合は .cshrc に以下のような行を追加して source する。</p>
 
-基本的にはこれだけの手順で済む。 julia のコマンドで呼べば動作する。スクリプトを実行する場合は julia xxx.jl を叩けばよい。</code></pre>
+<pre tabindex="0"><code class="nohighlight">set path = ( $HOME/usr/julia-1.9.2/bin $path )
+
+</code></pre>
+
+<p>基本的にはこれだけの手順で済む。 julia のコマンドで呼べば動作する。スクリプトを実行する場合は julia xxx.jl を叩けばよい。</p>
+</div>
 </section>
 
 <section id="google-colab">
   <h2>【Google Colaboratory関連】</h2>
-  <pre><code>「Google Colaboratory」はGoogle社が提供するノートブック形式のREPL（対話型実行環境）である。ネット上のノートブック形式のコードはPythonのものも多く見かける。Jupyter Notebookを使っても同じことが可能だがGoogle Colaboratoryは環境構築の手間が省けるので手っ取り早く計算を始められる。
+  <div class="note-text">
+<p>「Google Colaboratory」はGoogle社が提供するノートブック形式のREPL（対話型実行環境）である。ネット上のノートブック形式のコードはPythonのものも多く見かける。Jupyter Notebookを使っても同じことが可能だがGoogle Colaboratoryは環境構築の手間が省けるので手っ取り早く計算を始められる。</p>
 
-◎ Google Colaboratoryでは、ライブラリやモジュールは !pip install ase のようにして先頭に書いておけばpip経由でインストール可能。
+<p>◎ Google Colaboratoryでは、ライブラリやモジュールは !pip install ase のようにして先頭に書いておけばpip経由でインストール可能。</p>
 
-Google Colaboratoryを使って無料で第一原理計算（Quantum ESPRESSOをビルドして結晶の電子状態計算にトライする記事）
+<p>Google Colaboratoryを使って無料で第一原理計算（Quantum ESPRESSOをビルドして結晶の電子状態計算にトライする記事）</p>
 
-Modeling materials using density functional theory（DFT（密度汎関数理論）を用いた材料研究スキル習得のためのテキスト）</code></pre>
+<p>Modeling materials using density functional theory（DFT（密度汎関数理論）を用いた材料研究スキル習得のためのテキスト）</p>
+</div>
 </section>
 
 <section id="github">
   <h2>【GitHub関連】</h2>
-  <pre><code>GitHubは、ソフトウェア開発プロジェクトのバージョン管理とコラボレーションを支援するウェブベースのプラットフォームである。Gitという分散バージョン管理システムが使用されている。
+  <div class="note-text">
+<p>GitHubは、ソフトウェア開発プロジェクトのバージョン管理とコラボレーションを支援するウェブベースのプラットフォームである。Gitという分散バージョン管理システムが使用されている。</p>
 
-SSH接続により所望のリポジトリを一括ダウンロードする
-LinuxサーバーからGitHubにSSH接続する手順を示す。まず、以下のようにssh-keygenコマンドを用いて秘密鍵と公開鍵のペアを作成する。暗号方式は rsa 4096 でよい。
+<p>SSH接続により所望のリポジトリを一括ダウンロードする<br>
+LinuxサーバーからGitHubにSSH接続する手順を示す。まず、以下のようにssh-keygenコマンドを用いて秘密鍵と公開鍵のペアを作成する。暗号方式は rsa 4096 でよい。</p>
 
-[nabata@karura ~/.ssh]$ ssh-keygen -t rsa -b 4096 -C &quot;nabata.tcl@gmail.com&quot;
+<pre tabindex="0"><code class="nohighlight">[nabata@karura ~/.ssh]$ ssh-keygen -t rsa -b 4096 -C &quot;nabata.tcl@gmail.com&quot;
 
 Generating public/private rsa key pair.
 
@@ -2571,9 +2738,11 @@ The key&#x27;s randomart image is:
 
 +-----------------+
 
-ここでは秘密鍵の名前を githubkey23719、公開鍵を githubkey23719.pub としている。このとき公開鍵 githubkey23719.pub の中身（ssh-rsa から始まる文字列）を丸ごと https://github.com/settings/ssh の [New SSH key] をクリックしてテキストボックス経由でGitHubにアップロードする。終えたら以下の行をLinuxサーバーの /home/${USER}/.ssh/config に追記する。User のIDは適宜書き換えること。
+</code></pre>
 
-Host github github.com
+<p>ここでは秘密鍵の名前を githubkey23719、公開鍵を githubkey23719.pub としている。このとき公開鍵 githubkey23719.pub の中身（ssh-rsa から始まる文字列）を丸ごと https://github.com/settings/ssh の [New SSH key] をクリックしてテキストボックス経由でGitHubにアップロードする。終えたら以下の行をLinuxサーバーの /home/${USER}/.ssh/config に追記する。User のIDは適宜書き換えること。</p>
+
+<pre tabindex="0"><code class="nohighlight">Host github github.com
 
     HostName github.com
 
@@ -2581,21 +2750,27 @@ Host github github.com
 
     User h-nabata
 
-ここまでで鍵の設定は終了。以下のコマンドで接続テストができる。このとき秘密鍵のパーミッションを 600 （-rw------- の状態）にするのを忘れないこと。
+</code></pre>
 
-ssh -T h-nabata@github.com
+<p>ここまでで鍵の設定は終了。以下のコマンドで接続テストができる。このとき秘密鍵のパーミッションを 600 （-rw------- の状態）にするのを忘れないこと。</p>
 
-※ 接続が上手くいかない場合は ~/.ssh/known_hosts に以下を追加する。
+<pre tabindex="0"><code class="nohighlight">ssh -T h-nabata@github.com
 
-github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
+</code></pre>
+
+<p>※ 接続が上手くいかない場合は ~/.ssh/known_hosts に以下を追加する。</p>
+
+<pre tabindex="0"><code class="nohighlight">github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl
 
 github.com ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBEmKSENjQEezOmxkZMy7opKgwFB9nkt5YRrYMjNuG5N87uRgg6CLrbo5wAdT/y6v0mKV0U2w0WZ2YB/++Tpockg=
 
 github.com ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCj7ndNxQowgcQnjshcLrqPEiiphnt+VTTvDP6mHBL9j1aNUkY4Ue1gvwnGLVlOhGeYrnZaMgRK6+PKCUXaDbC7qtbW8gIkhL7aGCsOr/C56SJMy/BCZfxd1nWzAOxSDPgVsmerOBYfNqltV9/hWCqBywINIR+5dIg6JTJ72pcEpEjcYgXkE2YEFXV1JHnsKgbLWNlhScqb2UmyRkQyytRLtL+38TGxkxCflmO+5Z8CSSNY7GidjMIZ7Q4zMjA2n1nGrlTDkzwDCsw+wqFPGQA179cnfGWOWRVruj16z6XyvxvjJwbz0wQZ75XK5tKSb7FNyeIEs4TT4jk+S4dhPeAUC5y+bDYirYgM4GC7uEnztnZyaVWQ7B381AK4Qdrwt51ZqExKbQpTUNn+EjqoTwvqNj4kqx5QUCI0ThS/YkOxJCXmPUWZbhjpCg56i+2aB6CmK2JGhn57K5mj0MNdBXA4/WnwH6XoPWJzK5Nyu2zB3nAZp+S5hpQs+p1vN1/wsjk=
 
-SSH接続ができるようになったので、リポジトリのダウンロードが可能となる。例えば、以下のようにしてリポジトリをダウンロードする。Privateのリポジトリでも自分のアカウントにパーミッションがあればダウンロードできる。
+</code></pre>
 
-[nabata@hoge ~/.ssh]$ git clone git@github.com:h-nabata/PES.git
+<p>SSH接続ができるようになったので、リポジトリのダウンロードが可能となる。例えば、以下のようにしてリポジトリをダウンロードする。Privateのリポジトリでも自分のアカウントにパーミッションがあればダウンロードできる。</p>
+
+<pre tabindex="0"><code class="nohighlight">[nabata@hoge ~/.ssh]$ git clone git@github.com:h-nabata/PES.git
 
 Cloning into &#x27;PES&#x27;...
 
@@ -2613,69 +2788,83 @@ Receiving objects: 100% (148/148), 75.69 KiB | 280.00 KiB/s, done.
 
 Resolving deltas: 100% (46/46), done.
 
-※ SSH用のリンクはリポジトリのページで、下の図のようにして取得できる。</code></pre>
+</code></pre>
+
+<p>※ SSH用のリンクはリポジトリのページで、下の図のようにして取得できる。</p>
+</div>
 </section>
 
 <section id="database">
   <h2>【Database関連】</h2>
-  <pre><code>How To Programmatically Obtain Chemical Data From PubChem
+  <div class="note-text">
+<p>How To Programmatically Obtain Chemical Data From PubChem</p>
 
-Using the Materials Project Website - The Materials Project Workshop（Materials Projectの使い方の解説；pymatgenの解説ページも参考に）</code></pre>
+<p>Using the Materials Project Website - The Materials Project Workshop（Materials Projectの使い方の解説；pymatgenの解説ページも参考に）</p>
+</div>
 </section>
 
 <section id="website">
   <h2>【ウェブサイト関連】</h2>
-  <pre><code>このサイトはGoogleの提供する Google Site というアプリケーションで作成しているが、カスタマイズ性はよろしくない。本格的なウェブサイトを作成する場合は専用のレンタルサーバー（おすすめはXserver；私も実際に契約して趣味でウェブサイトを運営している）を契約するのがよい。
+  <div class="note-text">
+<p>このサイトはGoogleの提供する Google Site というアプリケーションで作成しているが、カスタマイズ性はよろしくない。本格的なウェブサイトを作成する場合は専用のレンタルサーバー（おすすめはXserver；私も実際に契約して趣味でウェブサイトを運営している）を契約するのがよい。</p>
 
-シンプルなブログ記事程度で良ければ、はてなブログやFC2ブログ、Amebaブログなどで適当に作成可能。あるいは、執筆の敷居はNoteの方が低いかもしれない（ただしNoteはサブスクリプションに特化していて検索流入が伸びにくい印象がある；読者層のtargetingやリピーターを増やすためのmarketingが重要）。
+<p>シンプルなブログ記事程度で良ければ、はてなブログやFC2ブログ、Amebaブログなどで適当に作成可能。あるいは、執筆の敷居はNoteの方が低いかもしれない（ただしNoteはサブスクリプションに特化していて検索流入が伸びにくい印象がある；読者層のtargetingやリピーターを増やすためのmarketingが重要）。</p>
 
-WordPressを用いたウェブサイト作成方法を指南するブログ記事や書籍は世の中に溢れているので、適宜参考にすべし。</code></pre>
+<p>WordPressを用いたウェブサイト作成方法を指南するブログ記事や書籍は世の中に溢れているので、適宜参考にすべし。</p>
+</div>
 </section>
 
 <section id="chatgpt">
   <h2>【ChatGPT関連】</h2>
-  <pre><code>ChatGPTはOpenAI社が提供する大規模言語モデル（LLM：Large Language Model）をチャット形式で利用者に提供するサービス。月額20ドルからGPT-4モデルが利用できる。ただし3時間あたり25クエリという制約がある。
+  <div class="note-text">
+<p>ChatGPTはOpenAI社が提供する大規模言語モデル（LLM：Large Language Model）をチャット形式で利用者に提供するサービス。月額20ドルからGPT-4モデルが利用できる。ただし3時間あたり25クエリという制約がある。</p>
 
-有料版はGPT-3.5のレスポンス速度も速くなる。</code></pre>
+<p>有料版はGPT-3.5のレスポンス速度も速くなる。</p>
+</div>
 </section>
 
 <section id="cif-files">
   <h2>【Cifファイル関連】</h2>
-  <pre><code>結晶構造データベースと結晶学共通データ・フォーマット CIF について
+  <div class="note-text">
+<p>結晶構造データベースと結晶学共通データ・フォーマット CIF について</p>
 
-xyz2cif.py  - xyz座標をcif形式に変換する自作プログラム（複数ファイルをまとめて変換可能）</code></pre>
+<p>xyz2cif.py  - xyz座標をcif形式に変換する自作プログラム（複数ファイルをまとめて変換可能）</p>
+</div>
 </section>
 
 <section id="surface-model">
   <h2>【表面モデル関連】</h2>
-  <pre><code>結晶構造から特定の指数面を切り出す - Qiita
+  <div class="note-text">
+<p>結晶構造から特定の指数面を切り出す - Qiita</p>
 
-In computational chemistry, slab models are commonly used to study surface reactions and interactions with molecules and other species. The slab model notation describes the dimensions and orientation of the slab with respect to the crystal lattice, and typically takes the form of &quot;p(nx × ny)&quot;, where &quot;n&quot; is the number of primitive cells in each direction. The &quot;p&quot; in the notation stands for &quot;primitive&quot;, indicating that the slab is constructed from repeating units of the primitive cell of the crystal lattice. The primitive cell is the smallest unit of the crystal that can be repeated to form the full lattice. The &quot;nx&quot; and &quot;ny&quot; values indicate the number of primitive cells that are stacked in the x and y directions, respectively, to form the slab. For example, &quot;p(2x4)&quot; indicates that two primitive cells are stacked in the x direction and four in the y direction, resulting in a rectangular slab with dimensions that are twice as long in the x direction as they are in the y direction. The slab model notation is important in computational chemistry because it determines the size and shape of the simulation cell used to study surface reactions and interactions. This in turn affects the accuracy and relevance of the results obtained from the simulation, as well as the computational resources required to perform the simulation.</code></pre>
+<p>In computational chemistry, slab models are commonly used to study surface reactions and interactions with molecules and other species. The slab model notation describes the dimensions and orientation of the slab with respect to the crystal lattice, and typically takes the form of &quot;p(nx × ny)&quot;, where &quot;n&quot; is the number of primitive cells in each direction. The &quot;p&quot; in the notation stands for &quot;primitive&quot;, indicating that the slab is constructed from repeating units of the primitive cell of the crystal lattice. The primitive cell is the smallest unit of the crystal that can be repeated to form the full lattice. The &quot;nx&quot; and &quot;ny&quot; values indicate the number of primitive cells that are stacked in the x and y directions, respectively, to form the slab. For example, &quot;p(2x4)&quot; indicates that two primitive cells are stacked in the x direction and four in the y direction, resulting in a rectangular slab with dimensions that are twice as long in the x direction as they are in the y direction. The slab model notation is important in computational chemistry because it determines the size and shape of the simulation cell used to study surface reactions and interactions. This in turn affects the accuracy and relevance of the results obtained from the simulation, as well as the computational resources required to perform the simulation.</p>
+</div>
 </section>
 
 <section id="vesta">
   <h2>【VESTA関連】</h2>
-  <pre><code>VESTA；結晶構造の可視化プログラムで、表面モデル構造を作成する際に重宝する（無償のソフトウェア）；K. Momma and F. Izumi, &quot;VESTA 3 for three-dimensional visualization of crystal, volumetric and morphology data,&quot; J. Appl. Crystallogr. 2011, 44, 1272–1276.
+  <div class="note-text">
+<p>VESTA；結晶構造の可視化プログラムで、表面モデル構造を作成する際に重宝する（無償のソフトウェア）；K. Momma and F. Izumi, &quot;VESTA 3 for three-dimensional visualization of crystal, volumetric and morphology data,&quot; J. Appl. Crystallogr. 2011, 44, 1272–1276.</p>
 
-GPUの性能が低いと構造の描画に要する時間が膨大となるので、大きな結晶構造を読み込んだりスーパーセルを表示したりする場合は注意。
+<p>GPUの性能が低いと構造の描画に要する時間が膨大となるので、大きな結晶構造を読み込んだりスーパーセルを表示したりする場合は注意。</p>
 
-VESTAには回転行列によって座標変換を施す機能が実装されている。ある結晶相の(111)面がab平面となるセルに変換する行列は、例えば [[2, 0, 1], [-1, 1, 1], [-1, -1, 1]] である（立方晶の場合は立方晶に変換される；ただしこの行列は最小単位格子を与えるとは限らないので注意）。これらの要素の値は新たな並進ベクトルの係数に整数だけでなく小数も指定することができる。
+<p>VESTAには回転行列によって座標変換を施す機能が実装されている。ある結晶相の(111)面がab平面となるセルに変換する行列は、例えば [[2, 0, 1], [-1, 1, 1], [-1, -1, 1]] である（立方晶の場合は立方晶に変換される；ただしこの行列は最小単位格子を与えるとは限らないので注意）。これらの要素の値は新たな並進ベクトルの係数に整数だけでなく小数も指定することができる。</p>
 
-【座標変換の手順】
-Edit &gt; Unit cell &gt; Transform... &gt; 回転行列 P を指定 &gt; &quot;Normalize the range of fractional coordinates&quot; のチェックを外して [OK]（&quot;セルの体積が変化する...&quot; という警告は無視して「はい」） &gt; &quot;How to convert...&quot; の選択肢は &quot;Add new equivalent positions to ...&quot; を選択して [OK] &gt; Apply &gt; 新しく生成したセルからはみ出している原子があれば消去する
-座標変換後はウィンドウ下部のSummaryのタブを開きセルの軸情報をメモ帳などに保存し、構造はxyz形式でエクスポートする（&quot;hidden atoms ...&quot; は [no] を選択）。保存したセルの軸情報を基にプログラム等を用いて並進ベクトルをカーテシアン座標系に変換する。
+<p>【座標変換の手順】<br>
+Edit &gt; Unit cell &gt; Transform... &gt; 回転行列 P を指定 &gt; &quot;Normalize the range of fractional coordinates&quot; のチェックを外して [OK]（&quot;セルの体積が変化する...&quot; という警告は無視して「はい」） &gt; &quot;How to convert...&quot; の選択肢は &quot;Add new equivalent positions to ...&quot; を選択して [OK] &gt; Apply &gt; 新しく生成したセルからはみ出している原子があれば消去する<br>
+座標変換後はウィンドウ下部のSummaryのタブを開きセルの軸情報をメモ帳などに保存し、構造はxyz形式でエクスポートする（&quot;hidden atoms ...&quot; は [no] を選択）。保存したセルの軸情報を基にプログラム等を用いて並進ベクトルをカーテシアン座標系に変換する。</p>
 
-参考記事：
+<p>参考記事：</p>
 
-結晶構造から特定の指数面を切り出す
+<p>結晶構造から特定の指数面を切り出す</p>
 
-xyz座標の結晶構造をcif形式に変換する
+<p>xyz座標の結晶構造をcif形式に変換する</p>
 
-簡単なスラブモデルの作り方
+<p>簡単なスラブモデルの作り方</p>
 
-例として、Materials Projectから入手できるCu2O結晶（赤銅鉱 - キュプライト；cifはprimitive cellを選択）について、上記の手順に則って(111)面がab平面に平行となるように座標変換することで得られるカーテシアン座標を以下に示す。（12単位のスーパーセルに拡大している）
+<p>例として、Materials Projectから入手できるCu2O結晶（赤銅鉱 - キュプライト；cifはprimitive cellを選択）について、上記の手順に則って(111)面がab平面に平行となるように座標変換することで得られるカーテシアン座標を以下に示す。（12単位のスーパーセルに拡大している）</p>
 
-Cu    9.627708000000      4.547912000000      3.094462000000
+<pre tabindex="0"><code class="nohighlight">Cu    9.627708000000      4.547912000000      3.094462000000
 
 Cu    4.376231000000      1.515971000000      3.094462000000
 
@@ -2753,9 +2942,11 @@ TV    0.000000000000      6.063880000000      0.000000000000
 
 TV    0.000000000000      0.000000000000      7.426710000000
 
-オリジナルのcifの座標系におけるCu2O結晶のカーテシアン座標は次の通り。
+</code></pre>
 
-Cu    1.071953000000      1.071953000000      3.215860000000
+<p>オリジナルのcifの座標系におけるCu2O結晶のカーテシアン座標は次の通り。</p>
+
+<pre tabindex="0"><code class="nohighlight">Cu    1.071953000000      1.071953000000      3.215860000000
 
 Cu    3.215860000000      1.071953000000      1.071953000000
 
@@ -2773,9 +2964,11 @@ TV    0.000000000000      4.287810000000      0.000000000000
 
 TV    0.000000000000      0.000000000000      4.287810000000
 
-同様に、CuO結晶（黒銅鉱 - テノライト）について、(111)面がab平面に平行となるように座標変換することで得られるカーテシアン座標を以下に示す。（24単位のスーパーセルに拡大している）
+</code></pre>
 
-O     3.137503000000      2.373369000000      6.788310000000
+<p>同様に、CuO結晶（黒銅鉱 - テノライト）について、(111)面がab平面に平行となるように座標変換することで得られるカーテシアン座標を以下に示す。（24単位のスーパーセルに拡大している）</p>
+
+<pre tabindex="0"><code class="nohighlight">O     3.137503000000      2.373369000000      6.788310000000
 
 O     9.132084000000      2.373369000000      6.788310000000
 
@@ -2877,9 +3070,11 @@ TV   -0.043910000000      6.221896000000      0.000000000000
 
 TV   -1.482259000000      0.718084000000      7.838641000000
 
-オリジナルのcifの座標系におけるCu2O結晶のカーテシアン座標は次の通り。cifファイルによって結晶構造が異なる場合があるので注意（先行研究のモデル構造の形と比較して確認する）。
+</code></pre>
 
-Cu    1.170925000000      0.855650000000      0.000000000000
+<p>オリジナルのcifの座標系におけるCu2O結晶のカーテシアン座標は次の通り。cifファイルによって結晶構造が異なる場合があるので注意（先行研究のモデル構造の形と比較して確認する）。</p>
+
+<pre tabindex="0"><code class="nohighlight">Cu    1.170925000000      0.855650000000      0.000000000000
 
 Cu    3.512775000000      2.566950000000      0.000000000000
 
@@ -2900,14 +3095,16 @@ TV    4.683700000000      0.000000000000      0.000000000000
 TV    0.000000000000      3.422600000000      0.000000000000
 
 TV   -0.850027426800      0.000000000000      5.126864753000</code></pre>
+</div>
 </section>
 
 <section id="gaussian-standalone">
   <h2>【Gaussianプログラムの計算をstand-aloneで実行する手順】</h2>
-  <pre><code>Gaussianプログラムのinputファイルを用意する
-ここではホルムアルデヒドの1点計算を実行してみる。以下の中身のinputファイルを test.gjf という名前で保存する。最後に複数の空行を入れておくこと。
+  <div class="note-text">
+<p>Gaussianプログラムのinputファイルを用意する<br>
+ここではホルムアルデヒドの1点計算を実行してみる。以下の中身のinputファイルを test.gjf という名前で保存する。最後に複数の空行を入れておくこと。</p>
 
-%chk=test.chk
+<pre tabindex="0"><code class="nohighlight">%chk=test.chk
 
 %nprocshared=1
 
@@ -2927,10 +3124,12 @@ C    -0.616991246338     -0.000001892618     -0.000011405189
 
 H    -1.203792290384      0.933500655100      0.000045987240
 
-submit用のシェルスクリプトを用意する
-次に、JOBをsubmitするためのシェルスクリプトを用意する。以下の中身のinputファイルを g16.csh という名前で保存する。ここではcsh形式で書いている。こちらも最後に複数の空行を入れるのを忘れずに。パスは適宜変更すること。
+</code></pre>
 
-#!/bin/csh -f
+<p>submit用のシェルスクリプトを用意する<br>
+次に、JOBをsubmitするためのシェルスクリプトを用意する。以下の中身のinputファイルを g16.csh という名前で保存する。ここではcsh形式で書いている。こちらも最後に複数の空行を入れるのを忘れずに。パスは適宜変更すること。</p>
+
+<pre tabindex="0"><code class="nohighlight">#!/bin/csh -f
 
 setenv g16root /usr/local/gaussian16c01
 
@@ -2950,37 +3149,45 @@ if ( -d $GAUSS_SCRDIR ) \rm -rf $GAUSS_SCRDIR
 
 exit 0
 
-chmod u+x g16.csh などとしてシェルスクリプトのパーミッション（実行権限）を付与する。 
+</code></pre>
 
-bsubコマンドで計算機にJOBを投入する
-以下のようにbsubコマンドでJOBを投入する。ホスト名は適宜変更すること。
+<p>chmod u+x g16.csh などとしてシェルスクリプトのパーミッション（実行権限）を付与する。</p>
 
- bsub -n 4 -q &quot;normal&quot; -m &quot;host1 host2 host3 host4 host5 host6 host7 host8 host9 host10&quot; -R &quot;span[hosts=1]&quot; &quot;./g16.csh test.gjf&quot;
+<p>bsubコマンドで計算機にJOBを投入する<br>
+以下のようにbsubコマンドでJOBを投入する。ホスト名は適宜変更すること。</p>
 
-このようにしてGaussianプログラムの計算を実行できる。上記の例では test.log に計算のログが出力される。
+<pre tabindex="0"><code class="nohighlight"> bsub -n 4 -q &quot;normal&quot; -m &quot;host1 host2 host3 host4 host5 host6 host7 host8 host9 host10&quot; -R &quot;span[hosts=1]&quot; &quot;./g16.csh test.gjf&quot;
 
-opt などのキーワードを指定すれば同様の手順で構造最適化なども実行できる。
+</code></pre>
 
-参考 ☞ https://www5.hp-ez.com/hp/calculations/page318</code></pre>
+<p>このようにしてGaussianプログラムの計算を実行できる。上記の例では test.log に計算のログが出力される。</p>
+
+<p>opt などのキーワードを指定すれば同様の手順で構造最適化なども実行できる。</p>
+
+<p>参考 ☞ https://www5.hp-ez.com/hp/calculations/page318</p>
+</div>
 </section>
 
 <section id="siesta-related">
   <h2>【電子状態計算ソフトウェア「SIESTA」関連】</h2>
-  <pre><code>最新版のマニュアル → https://siesta-project.org/SIESTA_MATERIAL/Docs/Manuals/siesta-4.1.5.pdf
-SIESTA-4.1.5 の DOI: www.doi.org/10.1088/0953-8984/14/11/302 (https://iopscience.iop.org/article/10.1088/0953-8984/14/11/302)
+  <div class="note-text">
+<p>最新版のマニュアル → https://siesta-project.org/SIESTA_MATERIAL/Docs/Manuals/siesta-4.1.5.pdf<br>
+SIESTA-4.1.5 の DOI: www.doi.org/10.1088/0953-8984/14/11/302 (https://iopscience.iop.org/article/10.1088/0953-8984/14/11/302)</p>
 
-4.1-b4のマニュアル → https://departments.icmab.es/leem/SIESTA_MATERIAL/Docs/Manuals/siesta-4.1-b4.pdf 
+<p>4.1-b4のマニュアル → https://departments.icmab.es/leem/SIESTA_MATERIAL/Docs/Manuals/siesta-4.1-b4.pdf</p>
 
-SIESTAは局在基底+擬ポテンシャルを用いる電子状態計算ソフトウェアである（VASPやQUANTUM ESPRESSOなどは平面波基底+（主に）擬ポテンシャルを用いる）。
-また、デフォルト設定ではSCF計算と同時にスピン状態が最適化されるため、計算者がスピン多重度を指定する必要は無い（スピン多重度の固定は可能）。
+<p>SIESTAは局在基底+擬ポテンシャルを用いる電子状態計算ソフトウェアである（VASPやQUANTUM ESPRESSOなどは平面波基底+（主に）擬ポテンシャルを用いる）。<br>
+また、デフォルト設定ではSCF計算と同時にスピン状態が最適化されるため、計算者がスピン多重度を指定する必要は無い（スピン多重度の固定は可能）。</p>
 
-siesta-4.1.5 自体は以下のようにしてローカルにビルドできる（ただしこれはSERIAL版）。Packagesは https://gitlab.com/siesta-project/siesta/-/releases/v4.1.5 からダウンロード可能。まず $HOME 直下に以下のようなディレクトリを作成する（ディレクトリ名は任意）。
+<p>siesta-4.1.5 自体は以下のようにしてローカルにビルドできる（ただしこれはSERIAL版）。Packagesは https://gitlab.com/siesta-project/siesta/-/releases/v4.1.5 からダウンロード可能。まず $HOME 直下に以下のようなディレクトリを作成する（ディレクトリ名は任意）。</p>
 
-mkdir usr/local -p
+<pre tabindex="0"><code class="nohighlight">mkdir usr/local -p
 
-$HOME/usr/local に siesta-4.1.5.tar.gz をアップロードする。READMEを参照しながら以下のような手順でインストールする。
+</code></pre>
 
-cd $HOME/usr/local
+<p>$HOME/usr/local に siesta-4.1.5.tar.gz をアップロードする。READMEを参照しながら以下のような手順でインストールする。</p>
+
+<pre tabindex="0"><code class="nohighlight">cd $HOME/usr/local
 tar -xvf siesta-4.1.5.tar.gz
 
 cd siesta-4.1.5/Obj/
@@ -2991,20 +3198,24 @@ cp intel.make arch.make
 
 make -j4
 
-.bashrc に PATH=$PATH:$HOME/usr/local/siesta-4.1.5/Obj などと追記してsourceしておく（.cshrc であれば set path = ( $HOME/SIESTA_materials/siesta-4.1.5/Obj $path ) などとする）。
+</code></pre>
 
-付属のユーティリティもbuildしておくとよい。$HOME/usr/local/siesta-4.1.5/Util に行って以下のコマンドを実行。
+<p>.bashrc に PATH=$PATH:$HOME/usr/local/siesta-4.1.5/Obj などと追記してsourceしておく（.cshrc であれば set path = ( $HOME/SIESTA_materials/siesta-4.1.5/Obj $path ) などとする）。</p>
 
-./build_all.sh
+<p>付属のユーティリティもbuildしておくとよい。$HOME/usr/local/siesta-4.1.5/Util に行って以下のコマンドを実行。</p>
 
-【理論研内部向け】ここでは siesta-v4.1-b4 のPARALLEL version（並列計算可能なバージョン）をコンパイルする。手順は以下。
-① SIESTA-v4.1-b4 をダウンロードする（Packagesは https://gitlab.com/siesta-project/siesta/-/releases/v4.1-b4 からダウンロード可能）
-② tar -xzf siesta-v4.1-b4.tgz
-③ cd siesta-v4.1-b4/Obj
-④ sh ../Src/obj_setup.sh --enable-mpi --enable-fast
-⑤ vi arch.make（以下を作成）
+<pre tabindex="0"><code class="nohighlight">./build_all.sh
 
-#
+</code></pre>
+
+<p>【理論研内部向け】ここでは siesta-v4.1-b4 のPARALLEL version（並列計算可能なバージョン）をコンパイルする。手順は以下。<br>
+① SIESTA-v4.1-b4 をダウンロードする（Packagesは https://gitlab.com/siesta-project/siesta/-/releases/v4.1-b4 からダウンロード可能）<br>
+② tar -xzf siesta-v4.1-b4.tgz<br>
+③ cd siesta-v4.1-b4/Obj<br>
+④ sh ../Src/obj_setup.sh --enable-mpi --enable-fast<br>
+⑤ vi arch.make（以下を作成）</p>
+
+<pre tabindex="0"><code class="nohighlight">#
 
 # Copyright (C) 1996-2018       The SIESTA group
 
@@ -3100,21 +3311,25 @@ FFLAGS_DEBUG = -g
 
 	$(FC) -c $(FFLAGS) $(INCFLAGS) $(FCFLAGS_free_f90)  $&lt;
 
-⑥ make
-⑦  vi ~/.cshrc（siestaバイナリのパスを追記して source ~/.cshrc ；例えば以下のような内容となる）
+</code></pre>
 
-## for siesta
+<p>⑥ make<br>
+⑦  vi ~/.cshrc（siestaバイナリのパスを追記して source ~/.cshrc ；例えば以下のような内容となる）</p>
+
+<pre tabindex="0"><code class="nohighlight">## for siesta
 
 set path = ( 【SIESTAのパス】/siesta-v4.1-b4/Obj $path )
 
-⑧ cd ../Util/
-⑨ ./build_all.sh（SIESTAの付属ユーティリティをコンパイルする）
+</code></pre>
 
-以上により並列版SIESTAプログラムが導入できる。
+<p>⑧ cd ../Util/<br>
+⑨ ./build_all.sh（SIESTAの付属ユーティリティをコンパイルする）</p>
 
-※ERATO用のマシンで計算する場合は /scr/ に ${USER} と同じの名前のディレクトリが必要になるため、以下のようなシェルスクリプトで作成しておく。
+<p>以上により並列版SIESTAプログラムが導入できる。</p>
 
-#!/bin/csh
+<p>※ERATO用のマシンで計算する場合は /scr/ に ${USER} と同じの名前のディレクトリが必要になるため、以下のようなシェルスクリプトで作成しておく。</p>
+
+<pre tabindex="0"><code class="nohighlight">#!/bin/csh
 
 set HOSTshortname=`echo $HOSTNAME | cut -c -2`
 
@@ -3144,15 +3359,17 @@ end
 
 echo &quot;done.&quot;
 
-SIESTA ver.4.1以降では擬ポテンシャルとして.psf形式のファイルの他に、新たに.psml形式のファイルが利用可能となった（電子状態計算ソフトウェア「ATOM」で擬ポテンシャル（.psfファイル）を作成する必要がある）。.psml形式の擬ポテンシャルは &quot;PseudoDojo project&quot; のページからダウンロードできる。SIESTAの計算ディレクトリ内に.psfと.psmlのファイルが共存している場合は.psf形式のファイルが優先的に読み込まれるので、inputデータをまとめてWorkノードにコピーしているなどの場合は注意が必要（マニュアル p28）。
+</code></pre>
 
-GRRMとリンクさせた場合、JOB名が長すぎるとJOBが落ちる（GRRMがsegmentation faultになる）場合がある。現在では修正されていると思われるが念のため注意。
+<p>SIESTA ver.4.1以降では擬ポテンシャルとして.psf形式のファイルの他に、新たに.psml形式のファイルが利用可能となった（電子状態計算ソフトウェア「ATOM」で擬ポテンシャル（.psfファイル）を作成する必要がある）。.psml形式の擬ポテンシャルは &quot;PseudoDojo project&quot; のページからダウンロードできる。SIESTAの計算ディレクトリ内に.psfと.psmlのファイルが共存している場合は.psf形式のファイルが優先的に読み込まれるので、inputデータをまとめてWorkノードにコピーしているなどの場合は注意が必要（マニュアル p28）。</p>
 
-GRRMで計算する場合はコア数を多く割り当てるよりも並列数を稼いだ方が計算効率が良い。（2core*20並列よりも1core*40並列でSCやRePATHをした方が早く終わることが多い）
+<p>GRRMとリンクさせた場合、JOB名が長すぎるとJOBが落ちる（GRRMがsegmentation faultになる）場合がある。現在では修正されていると思われるが念のため注意。</p>
 
-SIESTAではGrimmeの2体間分散力補正が利用できる。例えば以下のように指定する。
+<p>GRRMで計算する場合はコア数を多く割り当てるよりも並列数を稼いだ方が計算効率が良い。（2core*20並列よりも1core*40並列でSCやRePATHをした方が早く終わることが多い）</p>
 
-%block MM.Potentials
+<p>SIESTAではGrimmeの2体間分散力補正が利用できる。例えば以下のように指定する。</p>
+
+<pre tabindex="0"><code class="nohighlight">%block MM.Potentials
 
  1 1 Grimme  7.2549   2.684   # O-O
 
@@ -3172,15 +3389,17 @@ MM.Grimme.D 20.0
 
 MM.Grimme.S6 0.75
 
-元素記号のリストからGrimmeの分散力補正（https://onlinelibrary.wiley.com/doi/full/10.1002/jcc.20495）のパラメータセットを計算して表示する自作プログラムをGitHubで公開しています（高周期元素の一部はパラメータが整備されていない） → https://github.com/h-nabata/utility/blob/main/Python/SIESTA_grimme_parameters.py
+</code></pre>
 
-【Pseudopotential（擬ポテンシャル）の作成】（SIESTA）
-SIESTAで用いる擬ポテンシャルは、「ATOM」という電子状態計算ソフトウェアに対応する擬ポテンシャルを用いる。詳細はATOMユーザーマニュアルを参照のこと。ATOMプログラムのユーティリティである pg.sh（恐らく &quot;pseudopotential generator&quot; の略）というスクリプトを利用し、Abinit用のinputから擬ポテンシャルを生成する。
-擬ポテンシャル作成用のinputは &quot;GGA Pseudopotential Database&quot; で公開されているものを利用する。周期表の元素記号をクリックして遷移したページに &quot;Input file for the ATOM program&quot; の項目があるので、ここから X.inp といったinputファイルをダウンロードする。（ATOM programが未インストールの場合は適宜コンパイルする）
+<p>元素記号のリストからGrimmeの分散力補正（https://onlinelibrary.wiley.com/doi/full/10.1002/jcc.20495）のパラメータセットを計算して表示する自作プログラムをGitHubで公開しています（高周期元素の一部はパラメータが整備されていない） → https://github.com/h-nabata/utility/blob/main/Python/SIESTA_grimme_parameters.py</p>
 
-例えば、Cu.inp の中身は以下のように修正する。
+<p>【Pseudopotential（擬ポテンシャル）の作成】（SIESTA）<br>
+SIESTAで用いる擬ポテンシャルは、「ATOM」という電子状態計算ソフトウェアに対応する擬ポテンシャルを用いる。詳細はATOMユーザーマニュアルを参照のこと。ATOMプログラムのユーティリティである pg.sh（恐らく &quot;pseudopotential generator&quot; の略）というスクリプトを利用し、Abinit用のinputから擬ポテンシャルを生成する。<br>
+擬ポテンシャル作成用のinputは &quot;GGA Pseudopotential Database&quot; で公開されているものを利用する。周期表の元素記号をクリックして遷移したページに &quot;Input file for the ATOM program&quot; の項目があるので、ここから X.inp といったinputファイルをダウンロードする。（ATOM programが未インストールの場合は適宜コンパイルする）</p>
 
-   pe                 -- file generated from Cu ps file
+<p>例えば、Cu.inp の中身は以下のように修正する。</p>
+
+<pre tabindex="0"><code class="nohighlight">   pe                 -- file generated from Cu ps file
 
         tm2
 
@@ -3202,44 +3421,46 @@ SIESTAで用いる擬ポテンシャルは、「ATOM」という電子状態計�
 
 #23456789012345678901234567890123456789012345678901234567890      Ruler
 
-Core Correction（部分内殻補正）を擬ポテンシャルに適用するには赤字部分を &quot;pe&quot; とする。適用しない場合（第2周期以下の元素など）は &quot;pg&quot; とする。
-2行目は対数導関数の計算に関するパラメータ（特に変更しなくて良い）。
-3行目の青字部分で汎関数の種類（+相対論補正の有無）を指定する。指定可能な汎関数の一部を以下に示す。詳細についてはマニュアルを参照のこと。
+</code></pre>
 
-【指定可能なGGA汎関数の例】
-pb: PBE (Perdew, Burke, and Ernzerhof, PRL 77, 3865 (1996)) (recommended GGA)
-wp: PW91 (Perdew and Wang, JCP, 100, 1290 (1994))
-rp: RPBE (Hammer, Hansen, and Norskov, PRB 59, 7413 (1999))
-rv: revPBE (Zhang and Yang, PRL 80, 890 (1998))
-ps: PBEsol (Perdew et al, PRL 100, 136406 (2008))
+<p>Core Correction（部分内殻補正）を擬ポテンシャルに適用するには赤字部分を &quot;pe&quot; とする。適用しない場合（第2周期以下の元素など）は &quot;pg&quot; とする。<br>
+2行目は対数導関数の計算に関するパラメータ（特に変更しなくて良い）。<br>
+3行目の青字部分で汎関数の種類（+相対論補正の有無）を指定する。指定可能な汎関数の一部を以下に示す。詳細についてはマニュアルを参照のこと。</p>
 
-末尾の &quot;r&quot; は &quot;relativistic effect&quot; の略で、これを付けると相対論効果が加味される（第4周期以上の重い元素には適用する）。
+<p>【指定可能なGGA汎関数の例】<br>
+pb: PBE (Perdew, Burke, and Ernzerhof, PRL 77, 3865 (1996)) (recommended GGA)<br>
+wp: PW91 (Perdew and Wang, JCP, 100, 1290 (1994))<br>
+rp: RPBE (Hammer, Hansen, and Norskov, PRB 59, 7413 (1999))<br>
+rv: revPBE (Zhang and Yang, PRL 80, 890 (1998))<br>
+ps: PBEsol (Perdew et al, PRL 100, 136406 (2008))</p>
 
-inputが準備できたら pg.sh Cu.inp などとして擬ポテンシャル（.psfファイル）を作成する。内殻補正や相対論の有無、汎関数の種類が分かる形式で名前を付けて利用すること。
+<p>末尾の &quot;r&quot; は &quot;relativistic effect&quot; の略で、これを付けると相対論効果が加味される（第4周期以上の重い元素には適用する）。</p>
 
-前田研では以下のようなルールでpsfファイルを作成している。（目安）
-第2周期まで:		非相対論・内殻補正(NLCC)なし
-第3周期:			非相対論・NLCCあり
-第4周期以降:		相対論・NLCCあり
+<p>inputが準備できたら pg.sh Cu.inp などとして擬ポテンシャル（.psfファイル）を作成する。内殻補正や相対論の有無、汎関数の種類が分かる形式で名前を付けて利用すること。</p>
 
-【計算パラメータについて】（SIESTA）
+<p>前田研では以下のようなルールでpsfファイルを作成している。（目安）<br>
+第2周期まで:		非相対論・内殻補正(NLCC)なし<br>
+第3周期:			非相対論・NLCCあり<br>
+第4周期以降:		相対論・NLCCあり</p>
 
-k点メッシュ
-系にも依るが、スラブモデルの計算においてk点メッシュを1×1×1から2×2×1に増やして計算すると計算時間は3倍以上になる。cutoff半径が小さすぎなければk点メッシュの細かさによって構造が大きく変わることは少ない。まず粗いLUP計算やRePATH計算などを1×1×1のレベルで実施して様子を見るのが良い。
+<p>【計算パラメータについて】（SIESTA）</p>
 
-MeshCutoff
-探索の際は 75. Ry 程度で良く、精密なRePATH計算などの場合は 200. Ry などと計算資源的に無理のない範囲で大きくする。
+<p>k点メッシュ<br>
+系にも依るが、スラブモデルの計算においてk点メッシュを1×1×1から2×2×1に増やして計算すると計算時間は3倍以上になる。cutoff半径が小さすぎなければk点メッシュの細かさによって構造が大きく変わることは少ない。まず粗いLUP計算やRePATH計算などを1×1×1のレベルで実施して様子を見るのが良い。</p>
 
-DM.MixingWeight（SCF計算の初期MOを既存のMOから作成する際にどれだけ混ぜ込むかを調節するパラメータ）
-スピン二乗値が乱雑に変化していなければ、0.1程度にして計算すると良い。0.01程度（＝ほとんどミキシングしない場合）だと0.1のときに比べて計算時間が1.5倍程度になる。SCFの収束性に問題が無ければ0.1程度にして様子を見るのが良い。
+<p>MeshCutoff<br>
+探索の際は 75. Ry 程度で良く、精密なRePATH計算などの場合は 200. Ry などと計算資源的に無理のない範囲で大きくする。</p>
 
-【basis setについて】（SIESTA）
-※psfファイルによっては基底を増やしても精度が出ない場合もありそう？
-PAO基底（擬原子軌道；Pseudo Atomic Orbital）の種類は PAO.BasisType のフラグと引数で指定可能。（デフォルトではsplit）
-PAO基底のサイズは PAO.BasisSize のフラグと引数で指定可能。（デフォルトではDZP） ※ PAO ･･･ pseudo-atomic orbital
-以下のように %block PAO.BasisSizes のブロックでspecies別に細かく指定することもできる。ここで &quot;H&quot; とか &quot;O&quot; はインプット内のspeciesのラベルである。
+<p>DM.MixingWeight（SCF計算の初期MOを既存のMOから作成する際にどれだけ混ぜ込むかを調節するパラメータ）<br>
+スピン二乗値が乱雑に変化していなければ、0.1程度にして計算すると良い。0.01程度（＝ほとんどミキシングしない場合）だと0.1のときに比べて計算時間が1.5倍程度になる。SCFの収束性に問題が無ければ0.1程度にして様子を見るのが良い。</p>
 
-%block PAO.BasisSizes
+<p>【basis setについて】（SIESTA）<br>
+※psfファイルによっては基底を増やしても精度が出ない場合もありそう？<br>
+PAO基底（擬原子軌道；Pseudo Atomic Orbital）の種類は PAO.BasisType のフラグと引数で指定可能。（デフォルトではsplit）<br>
+PAO基底のサイズは PAO.BasisSize のフラグと引数で指定可能。（デフォルトではDZP） ※ PAO ･･･ pseudo-atomic orbital<br>
+以下のように %block PAO.BasisSizes のブロックでspecies別に細かく指定することもできる。ここで &quot;H&quot; とか &quot;O&quot; はインプット内のspeciesのラベルである。</p>
+
+<pre tabindex="0"><code class="nohighlight">%block PAO.BasisSizes
 
 H  DZP
 
@@ -3249,9 +3470,11 @@ Si DZ
 
 %endblock PAO.BasisSizes
 
-すべてのspeciesについてDZ基底を指定する場合は以下のように書く。
+</code></pre>
 
-%block PAO.BasisSizes
+<p>すべてのspeciesについてDZ基底を指定する場合は以下のように書く。</p>
+
+<pre tabindex="0"><code class="nohighlight">%block PAO.BasisSizes
 
 H-pgpb    DZ
 
@@ -3263,19 +3486,25 @@ Pd-pepbr  DZ
 
 %endblock PAO.BasisSizes
 
-あるいは、一括指定の場合は以下のように書いても良い。
+</code></pre>
 
-PAO.BasisSizes    DZ
+<p>あるいは、一括指定の場合は以下のように書いても良い。</p>
 
-擬ポテンシャルのspeciesを分けておけば、酸化物表面の酸素原子と基質の酸素原子で割り当てる基底の大きさを変える、といった計算も可能になる。（参考→Basis sets）
+<pre tabindex="0"><code class="nohighlight">PAO.BasisSizes    DZ
 
-（例）O、H、C の元素からなる系で計算する場合を考える。このとき
+</code></pre>
 
-PAO.BasisSize     TZ
+<p>擬ポテンシャルのspeciesを分けておけば、酸化物表面の酸素原子と基質の酸素原子で割り当てる基底の大きさを変える、といった計算も可能になる。（参考→Basis sets）</p>
 
-とした場合の計算は、SIESTAのインプットにPAO.Basisブロックを追加して
+<p>（例）O、H、C の元素からなる系で計算する場合を考える。このとき</p>
 
-%block PAO.Basis                 # Define Basis set
+<pre tabindex="0"><code class="nohighlight">PAO.BasisSize     TZ
+
+</code></pre>
+
+<p>とした場合の計算は、SIESTAのインプットにPAO.Basisブロックを追加して</p>
+
+<pre tabindex="0"><code class="nohighlight">%block PAO.Basis                 # Define Basis set
 
 O-pgpb                2                    # Species label, number of l-shells
 
@@ -3315,10 +3544,12 @@ C-pgpb                2                    # Species label, number of l-shells
 
 %endblock PAO.Basis
 
-と書くのと同じことになる。
-また、PAO.BasisSizeをTZPとした場合は、Hでは1s軌道に、OとCには2p軌道にそれぞれ分極関数1つが追加される。これは以下のように書いた場合と同様。
+</code></pre>
 
-%block PAO.Basis                 # Define Basis set
+<p>と書くのと同じことになる。<br>
+また、PAO.BasisSizeをTZPとした場合は、Hでは1s軌道に、OとCには2p軌道にそれぞれ分極関数1つが追加される。これは以下のように書いた場合と同様。</p>
+
+<pre tabindex="0"><code class="nohighlight">%block PAO.Basis                 # Define Basis set
 
 O-pgpb                2                    # Species label, number of l-shells
 
@@ -3358,9 +3589,11 @@ C-pgpb                2                    # Species label, number of l-shells
 
 %endblock PAO.Basis
 
-バージョン4.1.5ではTZやTZPも指定可能だが、QZ以上には対応していない 。Siesta-4.1.5の時点で利用可能なbasis-sizeは次の通り。
+</code></pre>
 
-size_name: Incorrect basis-size option specified, active options are:
+<p>バージョン4.1.5ではTZやTZPも指定可能だが、QZ以上には対応していない 。Siesta-4.1.5の時点で利用可能なbasis-sizeは次の通り。</p>
+
+<pre tabindex="0"><code class="nohighlight">size_name: Incorrect basis-size option specified, active options are:
 
   SZ or MINIMAL
 
@@ -3380,29 +3613,33 @@ size_name: Incorrect basis-size option specified, active options are:
 
   TZTP, TZP3, TZ3P
 
-※ triple-ζはdouble-ζに比べて（系が大きな場合は特に）計算が重たくなるので、特に重要な経路や構造に限って高精度で計算することが推奨される。感触としては、もしDZPの計算をグレードアップするとすれば、DZP→TZではなくDZP→TZPの方が（構造の変化が比較的小さくて）良さそうに思われる。
+</code></pre>
 
-※ 参考： PAO Basis Sets in SIESTA
+<p>※ triple-ζはdouble-ζに比べて（系が大きな場合は特に）計算が重たくなるので、特に重要な経路や構造に限って高精度で計算することが推奨される。感触としては、もしDZPの計算をグレードアップするとすれば、DZP→TZではなくDZP→TZPの方が（構造の変化が比較的小さくて）良さそうに思われる。</p>
 
-スピン偏極を考慮した計算（SIESTA）
-3.2 では NonCollinearSpin ( https://siesta-project.org/SIESTA_MATERIAL/Docs/Manuals/siesta-3.2-manual.pdf )
-4.1.5 では Spin non-colinear ( https://siesta-project.org/SIESTA_MATERIAL/Docs/Manuals/siesta-4.1.5.pdf )
-により、角度（up-down and angles）も変数に含めて計算可能。【参考文献： https://iopscience.iop.org/article/10.1088/2515-7639/aae7db 】
-※ defaultは 「Spin      non-polarized」の設定。
+<p>※ 参考： PAO Basis Sets in SIESTA</p>
 
-Bader電荷解析の手順（SIESTA）
-（Bader chargeについて → 参考PDF）
-「Bader analysis with SIESTA : How to Use」のPDFも参考に。
-※SIESTAで直方体でないセルでBader電荷解析する手順については不明。直方体でないセルの場合、grid2cubeを用いると ERROR: this progam can only handle orthogonal cells と出て怒られる。➡スラブモデルの場合、電荷分布を見てみたいだけ（エネルギーは議論しない）なら無理やり並進ベクトル（TV）を直角になるように取り直すことも可能（著しい構造変化が無いことの確認＆MIN計算によるoptは必要？）。
-以下ではorthogonal cellであることを前提とする。gridからcubeファイルに変換するにはSIESTAプログラムのユーティリティである grid2cube を利用する。分子研の場合、パスは /apl/siesta/4.1.5-mpi/Util/Grid/grid2cube 。xxx.inpの中に以下の行を追加する。
+<p>スピン偏極を考慮した計算（SIESTA）<br>
+3.2 では NonCollinearSpin ( https://siesta-project.org/SIESTA_MATERIAL/Docs/Manuals/siesta-3.2-manual.pdf )<br>
+4.1.5 では Spin non-colinear ( https://siesta-project.org/SIESTA_MATERIAL/Docs/Manuals/siesta-4.1.5.pdf )<br>
+により、角度（up-down and angles）も変数に含めて計算可能。【参考文献： https://iopscience.iop.org/article/10.1088/2515-7639/aae7db 】<br>
+※ defaultは 「Spin      non-polarized」の設定。</p>
 
-DM.UseSaveDM            .true.
+<p>Bader電荷解析の手順（SIESTA）<br>
+（Bader chargeについて → 参考PDF）<br>
+「Bader analysis with SIESTA : How to Use」のPDFも参考に。<br>
+※SIESTAで直方体でないセルでBader電荷解析する手順については不明。直方体でないセルの場合、grid2cubeを用いると ERROR: this progam can only handle orthogonal cells と出て怒られる。➡スラブモデルの場合、電荷分布を見てみたいだけ（エネルギーは議論しない）なら無理やり並進ベクトル（TV）を直角になるように取り直すことも可能（著しい構造変化が無いことの確認＆MIN計算によるoptは必要？）。<br>
+以下ではorthogonal cellであることを前提とする。gridからcubeファイルに変換するにはSIESTAプログラムのユーティリティである grid2cube を利用する。分子研の場合、パスは /apl/siesta/4.1.5-mpi/Util/Grid/grid2cube 。xxx.inpの中に以下の行を追加する。</p>
+
+<pre tabindex="0"><code class="nohighlight">DM.UseSaveDM            .true.
 SaveBaderCharge         .true.
 SaveRho                 .true.
 
-例えば testMIN_bader_SiestaJOB という名前のJOBの結果を読み込んでBader電荷解析を行う場合は、bader_calc.input のような分かりやすい名前を付けて以下のような中身のファイルを作成する。1行目は読み込む先のファイル名、2行目はbader電荷解析であることの指定、3行目はセルの原点の座標のシフト（Bohr単位）。4行目は「出力のグリッドポイントの密度を指定する整数」らしい。このとき、
+</code></pre>
 
-testMIN_bader_SiestaJOB
+<p>例えば testMIN_bader_SiestaJOB という名前のJOBの結果を読み込んでBader電荷解析を行う場合は、bader_calc.input のような分かりやすい名前を付けて以下のような中身のファイルを作成する。1行目は読み込む先のファイル名、2行目はbader電荷解析であることの指定、3行目はセルの原点の座標のシフト（Bohr単位）。4行目は「出力のグリッドポイントの密度を指定する整数」らしい。このとき、</p>
+
+<pre tabindex="0"><code class="nohighlight">testMIN_bader_SiestaJOB
 
 bader
 
@@ -3412,9 +3649,11 @@ bader
 
 unformatted
 
-/apl/siesta/4.1.5-mpi/Util/Grid/grid2cube &lt; bader_calc.input を実行すると、以下のように出力される。 Cell vectorsはBohr単位（Angstrom単位ではない）で出力され、Grid meshとスピン多重度も一緒に出力される。
+</code></pre>
 
- Reading grid data from file testMIN_bader_SiestaJOB.BADER
+<p>/apl/siesta/4.1.5-mpi/Util/Grid/grid2cube &lt; bader_calc.input を実行すると、以下のように出力される。 Cell vectorsはBohr単位（Angstrom単位ではない）で出力され、Grid meshとスピン多重度も一緒に出力される。</p>
+
+<pre tabindex="0"><code class="nohighlight"> Reading grid data from file testMIN_bader_SiestaJOB.BADER
 
  Cell vectors
 
@@ -3430,13 +3669,13 @@ unformatted
 
  Writing CUBE file testMIN_bader_SiestaJOB.BADER.cube
 
-以上によりCube形式のファイル（この例では testMIN_bader_SiestaJOB.BADER.cube というファイル）が生成される。
-続いて、このページからBader Charge Analysisのプログラムをダウンロードする（分子研で使う場合はLinux版）。ダウンロードしたtar.gzファイルを解凍すると &quot;bader&quot; という名前の実行ファイルが展開されるので、bader testMIN_bader_SiestaJOB.BADER.cube を実行して解析を行う（適宜パスを通しておくと良い）。
-出力は以下のようになる。
+</code></pre>
 
- 
+<p>以上によりCube形式のファイル（この例では testMIN_bader_SiestaJOB.BADER.cube というファイル）が生成される。<br>
+続いて、このページからBader Charge Analysisのプログラムをダウンロードする（分子研で使う場合はLinux版）。ダウンロードしたtar.gzファイルを解凍すると &quot;bader&quot; という名前の実行ファイルが展開されるので、bader testMIN_bader_SiestaJOB.BADER.cube を実行して解析を行う（適宜パスを通しておくと良い）。<br>
+出力は以下のようになる。</p>
 
- GRID BASED BADER ANALYSIS  (Version 1.04 02/08/20)
+<pre tabindex="0"><code class="nohighlight"> GRID BASED BADER ANALYSIS  (Version 1.04 02/08/20)
 
   OPEN ... testMIN_bader_
 
@@ -3492,17 +3731,19 @@ unformatted
 
   RUN TIME:  140.77 SECONDS
 
-ACF.datに原子ごとのBader電荷が書き出される。以上の手順でBader電荷の解析を行う。なお、DENSITY-GRID が粗いと NUMBER OF ELECTRONS が整数値にならないことがあるので、SIESTAの電子状態計算の際にGrid meshを上げておくことが望ましい。
-Bader電荷は　Bader net atomic charge = ZVAL - Bader population charge printed in ACF.dat　の計算式から求める。
+</code></pre>
 
-参考動画 ☞ https://youtu.be/UxPrN7KcswA?t=843
+<p>ACF.datに原子ごとのBader電荷が書き出される。以上の手順でBader電荷の解析を行う。なお、DENSITY-GRID が粗いと NUMBER OF ELECTRONS が整数値にならないことがあるので、SIESTAの電子状態計算の際にGrid meshを上げておくことが望ましい。<br>
+Bader電荷は　Bader net atomic charge = ZVAL - Bader population charge printed in ACF.dat　の計算式から求める。</p>
 
-A grid-based Bader analysis algorithm without lattice bias
+<p>参考動画 ☞ https://youtu.be/UxPrN7KcswA?t=843</p>
 
-SIESTAによるDOS・PDOSの計算（SIESTA）
-DOSまたはPDOSを計算する手順を示す。まず、以下のような内容で TiO2_PDOS1_Submit.sh を作成する。
+<p>A grid-based Bader analysis algorithm without lattice bias</p>
 
-#!/bin/csh -f
+<p>SIESTAによるDOS・PDOSの計算（SIESTA）<br>
+DOSまたはPDOSを計算する手順を示す。まず、以下のような内容で TiO2_PDOS1_Submit.sh を作成する。</p>
+
+<pre tabindex="0"><code class="nohighlight">#!/bin/csh -f
 
 set JOBNAME=TiO2_PDOS1
 
@@ -3534,9 +3775,11 @@ cp -r ${WORK} ${DATA}
 
 rm -rf ${JOBNAME}
 
-SIESTAのインプットを TiO2_PDOS1.fdf という名前で以下のように作成する。以下はギ酸が解離吸着したアナターゼ型TiO2(101)面のインプットの例。
+</code></pre>
 
-SystemName                 TiO2_PDOS1          # Descriptive name of the system
+<p>SIESTAのインプットを TiO2_PDOS1.fdf という名前で以下のように作成する。以下はギ酸が解離吸着したアナターゼ型TiO2(101)面のインプットの例。</p>
+
+<pre tabindex="0"><code class="nohighlight">SystemName                 TiO2_PDOS1          # Descriptive name of the system
 
 SystemLabel                TiO2_PDOS1          # Short name for naming files
 
@@ -3858,7 +4101,11 @@ WriteSiestaDim              .false.     # Write minimum dim to siesta.h and stop
 
 WriteDenchar                .false.     # Write information for DENCHAR
 
-SIESTAを並列で起動したい場合は以下のようなマシンファイルを作成する。ここでは TiO2_PDOS1_Machine.txt という名前で作成している（名前は何でもよいが、これに合わせて Submit.sh の実行コマンドも適宜変更すること）。
+</code></pre>
+
+<p>SIESTAを並列で起動したい場合は以下のようなマシンファイルを作成する。ここでは TiO2_PDOS1_Machine.txt という名前で作成している（名前は何でもよいが、これに合わせて Submit.sh の実行コマンドも適宜変更すること）。</p>
+
+<pre tabindex="0"><code class="nohighlight">ka06.sci.hokudai.ac.jp
 
 ka06.sci.hokudai.ac.jp
 
@@ -3898,17 +4145,19 @@ ka06.sci.hokudai.ac.jp
 
 ka06.sci.hokudai.ac.jp
 
-ka06.sci.hokudai.ac.jp
+</code></pre>
 
-以下のコマンドでSIESTAのJOBを投入する。
+<p>以下のコマンドでSIESTAのJOBを投入する。</p>
 
-bsub -n 20 -q &quot;normal&quot; -m &quot;ka06&quot; -R &quot;span[hosts=1]&quot; &quot;/home/nabata/surfaces/TiO2/TiO2_PDOS1_Submit.sh&quot;
+<pre tabindex="0"><code class="nohighlight">bsub -n 20 -q &quot;normal&quot; -m &quot;ka06&quot; -R &quot;span[hosts=1]&quot; &quot;/home/nabata/surfaces/TiO2/TiO2_PDOS1_Submit.sh&quot;
 
-計算が終わるとDATAディレクトリに nabata.TiO2_PDOS1.20116 などといったディレクトリがコピーされている。その中に TiO2_PDOS1.DOS というファイルが生成しており、この中にDOSが出力されている。これを適当なExcelファイルなどに貼り付け、グラフを描画すればよい。
+</code></pre>
 
-TiO2_PDOS1.EIG にはk点ごとの軌道のエネルギーが出力されている。各k点でのα軌道のエネルギーが各行10個ずつ書き出されている。各k点でのβ軌道のエネルギーも続けて書かれている。
+<p>計算が終わるとDATAディレクトリに nabata.TiO2_PDOS1.20116 などといったディレクトリがコピーされている。その中に TiO2_PDOS1.DOS というファイルが生成しており、この中にDOSが出力されている。これを適当なExcelファイルなどに貼り付け、グラフを描画すればよい。</p>
 
-       0.0000
+<p>TiO2_PDOS1.EIG にはk点ごとの軌道のエネルギーが出力されている。各k点でのα軌道のエネルギーが各行10個ずつ書き出されている。各k点でのβ軌道のエネルギーも続けて書かれている。</p>
+
+<pre tabindex="0"><code class="nohighlight">       0.0000
 
   1033     2    11
 
@@ -3982,21 +4231,27 @@ TiO2_PDOS1.EIG にはk点ごとの軌道のエネルギーが出力されてい�
 
 （以下略）
 
-いま、この系の価電子数は402個（➡ 価電子は O：6、Ti：4、H：1、C：4 であり、系中にはそれぞれ 50、24、2、1 個の原子が存在するので価電子の総和は α が201、β が201の計402個と求められる）であるから、HOMO（201番目のエネルギー準位）とLUMO（202番目のエネルギー準位）のエネルギーが割り出せるので、フェルミ準位は (-7.55839 + (-5.68486)) / 2.0 = -6.621625 として求められる。
+</code></pre>
 
-SIESTAプログラムのユーティリティの一つである Eig2DOS を利用する。以下のようなコマンドで起動する。
+<p>いま、この系の価電子数は402個（➡ 価電子は O：6、Ti：4、H：1、C：4 であり、系中にはそれぞれ 50、24、2、1 個の原子が存在するので価電子の総和は α が201、β が201の計402個と求められる）であるから、HOMO（201番目のエネルギー準位）とLUMO（202番目のエネルギー準位）のエネルギーが割り出せるので、フェルミ準位は (-7.55839 + (-5.68486)) / 2.0 = -6.621625 として求められる。</p>
 
-/usr/local/siesta-3.2-pl-4/bin/Eig2DOS TiO2_PDOS1.EIG &gt; TiO2_PDOS1_DOS.dat 
+<p>SIESTAプログラムのユーティリティの一つである Eig2DOS を利用する。以下のようなコマンドで起動する。</p>
 
-このとき TiO2_PDOS1_DOS.dat にはフェルミ準位（# E_F の欄）などのプロパティとともに DOS が書き出される。なお、ここで記載されているフェルミ準位には化学的な意味が無いことに注意。フェルミ準位は上記のようにHOMO-LUMOのエネルギー準位から求める必要がある。
+<pre tabindex="0"><code class="nohighlight">/usr/local/siesta-3.2-pl-4/bin/Eig2DOS TiO2_PDOS1.EIG &gt; TiO2_PDOS1_DOS.dat 
 
-あるいはSIESTAプログラムのユーティリティの一つである fmpdos を利用する。以下のようなコマンドで起動する。
+</code></pre>
 
-/usr/local/siesta-3.2-pl-4/Util/Contrib/APostnikov/fmpdos
+<p>このとき TiO2_PDOS1_DOS.dat にはフェルミ準位（# E_F の欄）などのプロパティとともに DOS が書き出される。なお、ここで記載されているフェルミ準位には化学的な意味が無いことに注意。フェルミ準位は上記のようにHOMO-LUMOのエネルギー準位から求める必要がある。</p>
 
-対話形式で入出力ファイル名、DOSを取り出す原子（0 なら全原子）、DOSを描画する軌道（0 なら全軌道）をインプットする。
+<p>あるいはSIESTAプログラムのユーティリティの一つである fmpdos を利用する。以下のようなコマンドで起動する。</p>
 
-Input file name (PDOS):
+<pre tabindex="0"><code class="nohighlight">/usr/local/siesta-3.2-pl-4/Util/Contrib/APostnikov/fmpdos
+
+</code></pre>
+
+<p>対話形式で入出力ファイル名、DOSを取り出す原子（0 なら全原子）、DOSを描画する軌道（0 なら全軌道）をインプットする。</p>
+
+<pre tabindex="0"><code class="nohighlight">Input file name (PDOS):
 
 TiO2_PDOS1.PDOS
 
@@ -4014,11 +4269,13 @@ TiO2_PDOS1_PDOS.dat
 
 0
 
-上記のインプットの場合は TiO2_PDOS1_test.dat に結果が全原子＆全軌道のDOSが出力される。特定の原子・特定の軌道を指定することでPDOSが取得できる。
+</code></pre>
 
-【以下おまけ】各原子ごとにPDOSを取得する作業を対話形式で行うのは面倒なので、以下のようなシェルスクリプトでまとめて実行すると良い（この場合は TiO2_PDOS1_atom1.dat といったファイルが生成される）。以下のスクリプトをそのまま使用する場合はfmpdosにはパスを通しておくこと。
+<p>上記のインプットの場合は TiO2_PDOS1_test.dat に結果が全原子＆全軌道のDOSが出力される。特定の原子・特定の軌道を指定することでPDOSが取得できる。</p>
 
-#!/bin/bash
+<p>【以下おまけ】各原子ごとにPDOSを取得する作業を対話形式で行うのは面倒なので、以下のようなシェルスクリプトでまとめて実行すると良い（この場合は TiO2_PDOS1_atom1.dat といったファイルが生成される）。以下のスクリプトをそのまま使用する場合はfmpdosにはパスを通しておくこと。</p>
+
+<pre tabindex="0"><code class="nohighlight">#!/bin/bash
 
 for i in {0..8}
 
@@ -4028,9 +4285,11 @@ do
 
 done
 
-PDOSのデータは以下のようなPythonスクリプトでExcelブックにまとめることができる。適当にアレンジして使って頂きたい。
+</code></pre>
 
-import pandas as pd
+<p>PDOSのデータは以下のようなPythonスクリプトでExcelブックにまとめることができる。適当にアレンジして使って頂きたい。</p>
+
+<pre tabindex="0"><code class="nohighlight">import pandas as pd
 
 import os
 
@@ -4066,10 +4325,12 @@ with pd.ExcelWriter(output_filename, engine=&#x27;openpyxl&#x27;) as writer:
 
 print(f&#x27;Data written to {output_filename}&#x27;)
 
-PDOSの計算結果を用いて電荷を推定する方法（SIESTA）
-PDOSは原子ごとの電子状態を調べる有用な量であるが、化学種の電荷の簡易的な推定にも利用することができる。フェルミ準位以下の（＝価電子帯の）PDOSの積分値はそのまま価電子の電子数に対応することが知られている。各原子の価電子に対する有効核電荷は既知（アウトプットファイルに書き出されている）なので、ある原子の価電子数が分かれば有効核電荷との差分から電荷を割り出すことができる。例えば、手頃で自明な系として、以下のようなインプットにより H3O + HCOO の計算をしてみる。この構造はオキソニウムカチオンとギ酸アニオンに分かれてそれぞれ+1と-1の電荷をもつことが予想される。（各原子ごとのPDOSは上記のように取得可能である）
+</code></pre>
 
-SystemName                 H3O_HCOO_testPDOS
+<p>PDOSの計算結果を用いて電荷を推定する方法（SIESTA）<br>
+PDOSは原子ごとの電子状態を調べる有用な量であるが、化学種の電荷の簡易的な推定にも利用することができる。フェルミ準位以下の（＝価電子帯の）PDOSの積分値はそのまま価電子の電子数に対応することが知られている。各原子の価電子に対する有効核電荷は既知（アウトプットファイルに書き出されている）なので、ある原子の価電子数が分かれば有効核電荷との差分から電荷を割り出すことができる。例えば、手頃で自明な系として、以下のようなインプットにより H3O + HCOO の計算をしてみる。この構造はオキソニウムカチオンとギ酸アニオンに分かれてそれぞれ+1と-1の電荷をもつことが予想される。（各原子ごとのPDOSは上記のように取得可能である）</p>
+
+<pre tabindex="0"><code class="nohighlight">SystemName                 H3O_HCOO_testPDOS
 
 SystemLabel                H3O_HCOO_testPDOS
 
@@ -4267,29 +4528,33 @@ WriteSiestaDim              .false.
 
 WriteDenchar                .true.     
 
-計算したPDOSのデータをH3OとHCOOでそれぞれ統合して価電子帯にわたって積分すると、H3Oでは8.5、HCOOでは17.5という結果を得る。いま、計算で考慮している価電子は H：1、C：4、O：6 であり、有効核電荷も同じ値である。したがって原子核の電荷の和はH3Oで+9、HCOOで+17ということになる。ここから先ほどの積分値を差し引くと、およそ +0.5、-0.5 となり、それぞれの化学種に対応する部分電荷が求められる。DOSの積分値から電子数を求める方法は分子系だけでなく表面系でも適用可能である。
+</code></pre>
 
-※ 適切な値にならない場合、大抵の原因はDOSの計算範囲が狭すぎる（計算の範囲外（特に下限よりも低い領域）にエネルギー準位が存在する）ことが考えられる。特に初めてDOSを計算する場合は ProjectedDensityOfStates の範囲は広めに取ることが推奨される。例えば上記の例では -30.00 ～ 10.00 eV の範囲でPDOSを求めているが、下限を -20.00 にすると積分値が電子数にならず、適切に解釈できなくなってしまう。SIESTAのインプットで WriteEigenvalues のフラグを .true. にした場合、MOのエネルギー準位（Eigenvalues）が .out ファイルに書き出されるので、これを参照してPDOSの計算範囲を決めるという手段も有効。
-もう一つの原因は、積分の方法が悪い場合である。データの性質上、数値的に積分するしかないが、特に上記の例のように系内でスピン分極が発生している場合は非積分関数（PDOS）が適切でないと誤った積分値を得ることがある（e.g. Up spin と Down spin のPDOSの和を積分してしまう ...etc. ➡ PDOSは Up spin と Down spin を分けてそれぞれ積分しなければならない）。他には、PDOSのsmearingのブロードニング係数（ガウス関数の幅）やメッシュの細かさもなども効いてくる可能性がある。数値積分の際はグリッド数（上の例では 2000 の値がこれに相当）を増やすなどして精度を上げた方が良い。
-あるいは、根本的にHOMO-LUMOギャップが狭く、DOS積分値が電子数に一致するエネルギー準位が不明瞭になっているケースも考えられる。上の例はSpin分極が発生しておりHOMO-LUMOギャップがかなり狭いので、PDOSのメッシュ数に対して敏感であることに注意。
+<p>計算したPDOSのデータをH3OとHCOOでそれぞれ統合して価電子帯にわたって積分すると、H3Oでは8.5、HCOOでは17.5という結果を得る。いま、計算で考慮している価電子は H：1、C：4、O：6 であり、有効核電荷も同じ値である。したがって原子核の電荷の和はH3Oで+9、HCOOで+17ということになる。ここから先ほどの積分値を差し引くと、およそ +0.5、-0.5 となり、それぞれの化学種に対応する部分電荷が求められる。DOSの積分値から電子数を求める方法は分子系だけでなく表面系でも適用可能である。</p>
 
-※フェルミ準位が不明瞭な場合は、系全体のDOSの積分値がちょうど系の全価電子数に一致する領域を調べればよい。例えば上の H3O + HCOO の場合だとDOSの積分値が 26 に近い値に達するエネルギー準位が価電子帯の上限に相当する。
+<p>※ 適切な値にならない場合、大抵の原因はDOSの計算範囲が狭すぎる（計算の範囲外（特に下限よりも低い領域）にエネルギー準位が存在する）ことが考えられる。特に初めてDOSを計算する場合は ProjectedDensityOfStates の範囲は広めに取ることが推奨される。例えば上記の例では -30.00 ～ 10.00 eV の範囲でPDOSを求めているが、下限を -20.00 にすると積分値が電子数にならず、適切に解釈できなくなってしまう。SIESTAのインプットで WriteEigenvalues のフラグを .true. にした場合、MOのエネルギー準位（Eigenvalues）が .out ファイルに書き出されるので、これを参照してPDOSの計算範囲を決めるという手段も有効。<br>
+もう一つの原因は、積分の方法が悪い場合である。データの性質上、数値的に積分するしかないが、特に上記の例のように系内でスピン分極が発生している場合は非積分関数（PDOS）が適切でないと誤った積分値を得ることがある（e.g. Up spin と Down spin のPDOSの和を積分してしまう ...etc. ➡ PDOSは Up spin と Down spin を分けてそれぞれ積分しなければならない）。他には、PDOSのsmearingのブロードニング係数（ガウス関数の幅）やメッシュの細かさもなども効いてくる可能性がある。数値積分の際はグリッド数（上の例では 2000 の値がこれに相当）を増やすなどして精度を上げた方が良い。<br>
+あるいは、根本的にHOMO-LUMOギャップが狭く、DOS積分値が電子数に一致するエネルギー準位が不明瞭になっているケースも考えられる。上の例はSpin分極が発生しておりHOMO-LUMOギャップがかなり狭いので、PDOSのメッシュ数に対して敏感であることに注意。</p>
 
-SIESTAプログラムの計算結果を用いた電子密度の可視化の手順（SIESTA）
-xxx_Siestaという &quot;SystemLabel&quot; の計算結果（特にSIESTAのDM）が既に存在すると仮定する。RHOファイルが最低限必要なので、もし無い場合は、xxx_Siestaという名前の計算結果があればxxx_Siesta.inpの中に以下の行を追加して1点計算を行ってxxx_Siesta.RHOを用意する（同じSystemLabelで流し直すと既存のDMが読み込まれるので計算時間が短くて済む）。
+<p>※フェルミ準位が不明瞭な場合は、系全体のDOSの積分値がちょうど系の全価電子数に一致する領域を調べればよい。例えば上の H3O + HCOO の場合だとDOSの積分値が 26 に近い値に達するエネルギー準位が価電子帯の上限に相当する。</p>
 
-DM.UseSaveDM            .true.
+<p>SIESTAプログラムの計算結果を用いた電子密度の可視化の手順（SIESTA）<br>
+xxx_Siestaという &quot;SystemLabel&quot; の計算結果（特にSIESTAのDM）が既に存在すると仮定する。RHOファイルが最低限必要なので、もし無い場合は、xxx_Siestaという名前の計算結果があればxxx_Siesta.inpの中に以下の行を追加して1点計算を行ってxxx_Siesta.RHOを用意する（同じSystemLabelで流し直すと既存のDMが読み込まれるので計算時間が短くて済む）。</p>
+
+<pre tabindex="0"><code class="nohighlight">DM.UseSaveDM            .true.
 SaveRho                 .true.
 
-使うユーティリティは分子研の場合、パスは /apl/siesta/4.1.5-mpi/Util/Contrib/APostnikov/rho2xsf となる。
+</code></pre>
 
-※（注意） JOB名（SystemLabel）が長すぎるとXVファイルを読み込む際にErrorが発生するため、該当する場合は適当な短い名前に書き換えること。
+<p>使うユーティリティは分子研の場合、パスは /apl/siesta/4.1.5-mpi/Util/Contrib/APostnikov/rho2xsf となる。</p>
 
-.RHOの存在するディレクトリで　/apl/siesta/4.1.5-mpi/Util/Contrib/APostnikov/rho2xsf　を起動
+<p>※（注意） JOB名（SystemLabel）が長すぎるとXVファイルを読み込む際にErrorが発生するため、該当する場合は適当な短い名前に書き換えること。</p>
 
-以下のように対話型でインプットする。
+<p>.RHOの存在するディレクトリで　/apl/siesta/4.1.5-mpi/Util/Contrib/APostnikov/rho2xsf　を起動</p>
 
-Specify  SystemLabel (or &#x27;siesta&#x27; if none): xxx_Siesta
+<p>以下のように対話型でインプットする。</p>
+
+<pre tabindex="0"><code class="nohighlight">Specify  SystemLabel (or &#x27;siesta&#x27; if none): xxx_Siesta
 
  Now define the grid cell for your XCrysDen plot.
 
@@ -4333,15 +4598,18 @@ Specify  SystemLabel (or &#x27;siesta&#x27; if none): xxx_Siesta
 
  ; close XSF and quit.
 
-xxx_Siesta.XSF が生成しているので、これを xcrysden または VESTA で読み込む。
+</code></pre>
 
-SIESTAの電子状態計算の並列効率について
-詳しくはテストしていないが、系によってはそれなりに並列効率の高い計算が可能。例えばPt(111)面上にプロトンが1個吸着した系のMIN計算では以下のようになった。コア数nに対して √n 程度で効率化できているように見える。</code></pre>
+<p>xxx_Siesta.XSF が生成しているので、これを xcrysden または VESTA で読み込む。</p>
+
+<p>SIESTAの電子状態計算の並列効率について<br>
+詳しくはテストしていないが、系によってはそれなりに並列効率の高い計算が可能。例えばPt(111)面上にプロトンが1個吸着した系のMIN計算では以下のようになった。コア数nに対して √n 程度で効率化できているように見える。</p>
+</div>
 </section>
 
 <section id="siesta-job-script">
   <h2>【SIESTAのJOBを分子研計算機に投入するシェルスクリプトの例】</h2>
-  <pre><code>#!/bin/tcsh -f
+  <pre tabindex="0"><code class="nohighlight">#!/bin/tcsh -f
 
 ###### setting section (begin)
 
@@ -4454,41 +4722,48 @@ siesta/4.1.5-mpi をloadする必要がある。他のmoduleは必要に応じ�
 
 <section id="qe-related">
   <h2>【電子状態計算ソフトウェア「Quantum ESPRESSO」関連】</h2>
-  <pre><code>general documentation → https://www.quantum-espresso.org/documentation/
+  <div class="note-text">
+<p>general documentation → https://www.quantum-espresso.org/documentation/</p>
 
-（＠分子研）pwSCFで電子状態計算を行う場合のメモ（自分用）
-分子研の計算機でpwSCFを利用する場合は intel_parallelstudio のバージョンに注意する。デフォルトでは intel_parallelstudio/2018update4 がロードされるが、バグの関係でpwSCFが落ちてしまう。そこで以下のようにして 2020update2 を読み込む必要がある。
-①「module purge」でモジュールの読み込みを全解除
-②「module load intel_parallelstudio/2020update2」で intel_parallelstudio/2020update2 を読み込む
-その後は通常通り。なお、「module list」で読み込み済みのモジュール一覧を取得、「module avail」で読み込み可能なモジュール一覧を取得することができる。
+<p>（＠分子研）pwSCFで電子状態計算を行う場合のメモ（自分用）<br>
+分子研の計算機でpwSCFを利用する場合は intel_parallelstudio のバージョンに注意する。デフォルトでは intel_parallelstudio/2018update4 がロードされるが、バグの関係でpwSCFが落ちてしまう。そこで以下のようにして 2020update2 を読み込む必要がある。<br>
+①「module purge」でモジュールの読み込みを全解除<br>
+②「module load intel_parallelstudio/2020update2」で intel_parallelstudio/2020update2 を読み込む<br>
+その後は通常通り。なお、「module list」で読み込み済みのモジュール一覧を取得、「module avail」で読み込み可能なモジュール一覧を取得することができる。</p>
 
-[JOB名].com、[JOB名].in、[JOB名].sh の他に、[JOB名].com0、[JOB名].in_COPY、[JOB名]mod.rrm（[JOB名].1dr は有れば）も用意する。
+<p>[JOB名].com、[JOB名].in、[JOB名].sh の他に、[JOB名].com0、[JOB名].in_COPY、[JOB名]mod.rrm（[JOB名].1dr は有れば）も用意する。</p>
 
-ESM-RISMを使って電場を課す場合は [JOBNAME].in の &amp;system セクションにて
+<p>ESM-RISMを使って電場を課す場合は [JOBNAME].in の &amp;system セクションにて</p>
 
-lfcpopt = .TRUE.
+<pre tabindex="0"><code class="nohighlight">lfcpopt = .TRUE.
 fcp_mu = -0.36325
 assume_isolaed=&#x27;esm&#x27;
 esm_bc=&#x27;bc2&#x27;
 
-などと指定し、 fcp_mu の値を与える必要がある。これはフェルミ準位（単位はRy.）に電位差に相当する値をRy.単位で加えた値を指定する（つまり、1度電位差ゼロの条件で電極のみで1点計算しておく必要がある）。例えば、ある金属表面のフェルミ準位が -0.40000 Ry. のとき、+0.5 V（vs 参照電極）を印加する場合は 0.5/13.60569 = 0.036749 (Ry.) を加えて fcp_mu = -0.36325 と指定する。
-また、このとき、[JOBNAME].in の中に &amp;ions のセクションを形式的に追加する必要があるので注意。内容としては
+</code></pre>
 
-&amp;ions
+<p>などと指定し、 fcp_mu の値を与える必要がある。これはフェルミ準位（単位はRy.）に電位差に相当する値をRy.単位で加えた値を指定する（つまり、1度電位差ゼロの条件で電極のみで1点計算しておく必要がある）。例えば、ある金属表面のフェルミ準位が -0.40000 Ry. のとき、+0.5 V（vs 参照電極）を印加する場合は 0.5/13.60569 = 0.036749 (Ry.) を加えて fcp_mu = -0.36325 と指定する。<br>
+また、このとき、[JOBNAME].in の中に &amp;ions のセクションを形式的に追加する必要があるので注意。内容としては</p>
+
+<pre tabindex="0"><code class="nohighlight">&amp;ions
 /
 
-などと書いておけばよい。これが無いとなぜかpwSCF内部で予期せぬエラーが発生する。</code></pre>
+</code></pre>
+
+<p>などと書いておけばよい。これが無いとなぜかpwSCF内部で予期せぬエラーが発生する。</p>
+</div>
 </section>
 
 <section id="turbomole-related">
   <h2>【電子状態計算ソフトウェア「TURBOMOLE」関連】</h2>
-  <pre><code>Official documentation (version 7.6) → https://www.turbomole.org/downloads/doc/Turbomole_Manual_76.pdf
+  <div class="note-text">
+<p>Official documentation (version 7.6) → https://www.turbomole.org/downloads/doc/Turbomole_Manual_76.pdf</p>
 
-【内部向け】TURBOMOLE 導入手順
-① turbolinux76-TMG.tar.gz を自homeにコピー・展開する
-② .cshrc 内で以下のようにパスを追加
+<p>【内部向け】TURBOMOLE 導入手順<br>
+① turbolinux76-TMG.tar.gz を自homeにコピー・展開する<br>
+② .cshrc 内で以下のようにパスを追加</p>
 
-setenv TURBODIR /home/nabata/TURBOMOLE
+<pre tabindex="0"><code class="nohighlight">setenv TURBODIR /home/nabata/TURBOMOLE
 
 set path = ( $TURBODIR/scripts $path)
 
@@ -4506,11 +4781,13 @@ set history=5
 
 set savehist=5
 
-※em64t-unknown-linux-gnu_smp により OpenMP を使った TURBOMOLE の並列計算が可能になる。historyとsavehistを5に制限しているのは、TURBOMOLE のログにコマンドのhistryが延々と書き出されてしまうのを防ぐため。
+</code></pre>
 
-③ [JOB名].com は以下のようにする。TmoleProcで要求コア数を指定する。
+<p>※em64t-unknown-linux-gnu_smp により OpenMP を使った TURBOMOLE の並列計算が可能になる。historyとsavehistを5に制限しているのは、TURBOMOLE のログにコマンドのhistryが延々と書き出されてしまうのを防ぐため。</p>
 
-%link=Turbomole
+<p>③ [JOB名].com は以下のようにする。TmoleProcで要求コア数を指定する。</p>
+
+<pre tabindex="0"><code class="nohighlight">%link=Turbomole
 
 # MIN
 
@@ -4534,30 +4811,11 @@ DownDC=15
 
 TmoleProc=1
 
-[JOB名].com と同じ階層に [JOB名] （.com と同じ名前）というサブディレクトリを作成し、その中で coord というファイルを用意する。coord の中身はTURBOMOLEの書式に従う。
+</code></pre>
 
-$coord
+<p>[JOB名].com と同じ階層に [JOB名] （.com と同じ名前）というサブディレクトリを作成し、その中で coord というファイルを用意する。coord の中身はTURBOMOLEの書式に従う。</p>
 
-    6.35272155984543      2.56563451083625      5.05778208657898      O
-
-    6.85706576447606      4.10780719801109      5.89149192367519      H
-
-    7.02835509012427      1.25292957127256      6.12925623031094      H
-
-    1.00909526217126      1.68667481024322      4.21410717356123      O
-
-    2.82121711277517      1.88040246976540      4.29420560674636      H
-
-    0.50984426646493      2.82788665631751      2.88139725308566      H
-
-$end
-
-この [JOB名] ディレクトリ内で define （TURBOMOLE のユーティリティ）を実行してその他の必要なインプットファイルを生成する。具体的な手順については下記の説明、もしくは内部向けマニュアル（Turbomole_manual_6427.pdf または AFIR-T.8830.pdf）を参照のこと。
-
-TURBOMOLE の define を利用したインプットの作成手順
-“coord”というファイルを用意し、計算対象のxyz座標を書いておく。水2量体であれば以下のようにする。TURBOMOLE の形式に合わせて長さの単位はBohrとする。
-
-$coord
+<pre tabindex="0"><code class="nohighlight">$coord
 
     6.35272155984543      2.56563451083625      5.05778208657898      O
 
@@ -4573,9 +4831,34 @@ $coord
 
 $end
 
-define を起動する。以下、赤字はキーボード操作を表す。
+</code></pre>
 
- ***********************************************************
+<p>この [JOB名] ディレクトリ内で define （TURBOMOLE のユーティリティ）を実行してその他の必要なインプットファイルを生成する。具体的な手順については下記の説明、もしくは内部向けマニュアル（Turbomole_manual_6427.pdf または AFIR-T.8830.pdf）を参照のこと。</p>
+
+<p>TURBOMOLE の define を利用したインプットの作成手順<br>
+“coord”というファイルを用意し、計算対象のxyz座標を書いておく。水2量体であれば以下のようにする。TURBOMOLE の形式に合わせて長さの単位はBohrとする。</p>
+
+<pre tabindex="0"><code class="nohighlight">$coord
+
+    6.35272155984543      2.56563451083625      5.05778208657898      O
+
+    6.85706576447606      4.10780719801109      5.89149192367519      H
+
+    7.02835509012427      1.25292957127256      6.12925623031094      H
+
+    1.00909526217126      1.68667481024322      4.21410717356123      O
+
+    2.82121711277517      1.88040246976540      4.29420560674636      H
+
+    0.50984426646493      2.82788665631751      2.88139725308566      H
+
+$end
+
+</code></pre>
+
+<p>define を起動する。以下、赤字はキーボード操作を表す。</p>
+
+<pre tabindex="0"><code class="nohighlight"> ***********************************************************
 
  *                                                         *
 
@@ -5233,19 +5516,21 @@ return（Enterキー押下）
 
 ...
 
-以上の手順で control（TURBOMOLE用のインプット）を作成する。中身を確認して問題が無いか確かめておく。この他にauxbasis、basis、mosが生成されている。
+</code></pre>
 
-開殻系の計算の場合はSCF計算のモードをfermiとし、tmstrt=300.00、tmend=300.00（スピン状態の収束性が悪ければ変更する）にして計算する。このときnatural orbitalは使用しない設定が推奨される（らしい）。また、このときGRRMの.comのスピン多重度は &quot;0 3&quot; に指定しなければならないことに注意（GRRMはSinglet指定だとMOファイルを1つしか認識しないため）。
+<p>以上の手順で control（TURBOMOLE用のインプット）を作成する。中身を確認して問題が無いか確かめておく。この他にauxbasis、basis、mosが生成されている。</p>
 
-TURBOMOLE を利用した周期系の計算
-TmolInpBセクションに riper と書けば TURBOMOLE の riper モジュールが起動するので周期系の計算とGRRMを接続可能。通常は ridft と rdgrad が走る設定になっている。TURBOMOLE には専用の組み込みインターフェースが存在するのでGeneral interfaceを利用しなくても良い。詳しいcomの描き方は次の項を参考に。
+<p>開殻系の計算の場合はSCF計算のモードをfermiとし、tmstrt=300.00、tmend=300.00（スピン状態の収束性が悪ければ変更する）にして計算する。このときnatural orbitalは使用しない設定が推奨される（らしい）。また、このときGRRMの.comのスピン多重度は &quot;0 3&quot; に指定しなければならないことに注意（GRRMはSinglet指定だとMOファイルを1つしか認識しないため）。</p>
 
-TURBOMOLE で周期系を扱う場合のインプットについて
-coordやcontrolの作り方は孤立系と同様。セルのパラメータ等はcontrolに記載する。TURBOMOLE で周期系の計算を行うには riper モジュールを使用する必要がある。これをGRRMに起動させるには .com 中のTmoleInpBセクションに以下の通り記載する。JOBNAMEの部分は適宜書き換えること。
+<p>TURBOMOLE を利用した周期系の計算<br>
+TmolInpBセクションに riper と書けば TURBOMOLE の riper モジュールが起動するので周期系の計算とGRRMを接続可能。通常は ridft と rdgrad が走る設定になっている。TURBOMOLE には専用の組み込みインターフェースが存在するのでGeneral interfaceを利用しなくても良い。詳しいcomの描き方は次の項を参考に。</p>
 
-【[JOBNAME].com】
+<p>TURBOMOLE で周期系を扱う場合のインプットについて<br>
+coordやcontrolの作り方は孤立系と同様。セルのパラメータ等はcontrolに記載する。TURBOMOLE で周期系の計算を行うには riper モジュールを使用する必要がある。これをGRRMに起動させるには .com 中のTmoleInpBセクションに以下の通り記載する。JOBNAMEの部分は適宜書き換えること。</p>
 
-%link=Turbomole
+<h3>【[JOBNAME].com】</h3>
+
+<pre tabindex="0"><code class="nohighlight">%link=Turbomole
 
 # MIN
 
@@ -5291,11 +5576,13 @@ riper
 
 END
 
-まず、TmoleInpBセクションに記入されたコマンドはすべて [JOBNAME]_Submit.rrm（GRRMが電子状態計算ソフトウェアを呼び出すためのcshスクリプト）に以下のように書き出されることに注意する。Submit.rrmは中間ファイルなのでGRRMがERRORまたはLinkERRORにならない限り出力としては残らない。
+</code></pre>
 
-【[JOBNAME]_Submit.rrm】
+<p>まず、TmoleInpBセクションに記入されたコマンドはすべて [JOBNAME]_Submit.rrm（GRRMが電子状態計算ソフトウェアを呼び出すためのcshスクリプト）に以下のように書き出されることに注意する。Submit.rrmは中間ファイルなのでGRRMがERRORまたはLinkERRORにならない限り出力としては残らない。</p>
 
-#!/bin/csh
+<h3>【[JOBNAME]_Submit.rrm】</h3>
+
+<pre tabindex="0"><code class="nohighlight">#!/bin/csh
 
 if ( -d JOBNAME ) rm -rf JOBNAME
 
@@ -5337,13 +5624,15 @@ cp -f JOBNAME/mos JOBNAME_mos
 
 rm -rf JOBNAME
 
-TmoleInpBセクションの内容は次の通り。1行目はそれぞれ、:（コロン）は「何もしない」という意味のコマンド、if節の部分はmos（mosが有れば）もしくはJOBNAME_mosをサブディレクトリにmosという名前でコピーするコマンドであり、末尾のls -lはファイルの有無を確認するためのコマンド（無くても良い）である。2行目はGRRMが書き換えた control の &quot;$scfmo none file=mos&quot; の none の部分を削除するコマンド。3行目がTURBOMOLEの riper モジュールを起動するコマンド。
+</code></pre>
 
-※GRRMはmosをサブディレクトリにコピーしないため、そのままriperを起動すると初期MOが読み込めずエラーになる。また、TURBOMOLEに作成させたmosはJOBNAME_mosとして.comのある上位のディレクトリにコピーされるので、2回目以降のSCF計算ではJOBNAME_mosをmosとしてサブディレクトリにコピーしなければならないことに注意（1行目のif文はこの条件分岐のために付けている）。
+<p>TmoleInpBセクションの内容は次の通り。1行目はそれぞれ、:（コロン）は「何もしない」という意味のコマンド、if節の部分はmos（mosが有れば）もしくはJOBNAME_mosをサブディレクトリにmosという名前でコピーするコマンドであり、末尾のls -lはファイルの有無を確認するためのコマンド（無くても良い）である。2行目はGRRMが書き換えた control の &quot;$scfmo none file=mos&quot; の none の部分を削除するコマンド。3行目がTURBOMOLEの riper モジュールを起動するコマンド。</p>
 
-.comの中身をいちいち書き換えたくない場合（使い回しやすくしたい場合）はややテクニカルだが、
+<p>※GRRMはmosをサブディレクトリにコピーしないため、そのままriperを起動すると初期MOが読み込めずエラーになる。また、TURBOMOLEに作成させたmosはJOBNAME_mosとして.comのある上位のディレクトリにコピーされるので、2回目以降のSCF計算ではJOBNAME_mosをmosとしてサブディレクトリにコピーしなければならないことに注意（1行目のif文はこの条件分岐のために付けている）。</p>
 
-TmoleInpB
+<p>.comの中身をいちいち書き換えたくない場合（使い回しやすくしたい場合）はややテクニカルだが、</p>
+
+<pre tabindex="0"><code class="nohighlight">TmoleInpB
 
 :; set JN=`echo -n ${0} | sed &quot;s/_Submit.rrm//&quot;`; if ( ! -f mos ) cp -f ../mos ./mos; if ( ! -f ../${JN}_mos ) cp -f ../${JN}_mos ./mos; ls -l
 
@@ -5353,13 +5642,15 @@ riper
 
 END
 
-としてワンラインにすることも可能。行われていることは上記と同じ。
+</code></pre>
 
-control の中身も周期系用にカスタマイズしておくこと（重要な部分を赤字で強調した；パラメータの値はこの限りでない）。
+<p>としてワンラインにすることも可能。行われていることは上記と同じ。</p>
 
-【control（周期系用）】
+<p>control の中身も周期系用にカスタマイズしておくこと（重要な部分を赤字で強調した；パラメータの値はこの限りでない）。</p>
 
-$title
+<h3>【control（周期系用）】</h3>
+
+<pre tabindex="0"><code class="nohighlight">$title
 
 $symmetry c1
 
@@ -5503,18 +5794,22 @@ $last step     define
 
 $end
 
-JOB投入前のサブディレクトリ [JOBNAME] には auxbasis、basis、control、coord、mos が入っている状態にしておく。これは孤立系の場合と同様。
+</code></pre>
 
-Intel(R) Xeon(R)  E5-2690 v3 で 16 core 並列でH2O二分子が入ったユニットセルの構造最適化（PBE汎関数（gridsize 3）、D3分散力補正あり、k点1x1x1、RI近似あり）をすると、1点あたりの計算時間は平均18秒程度であった。</code></pre>
+<p>JOB投入前のサブディレクトリ [JOBNAME] には auxbasis、basis、control、coord、mos が入っている状態にしておく。これは孤立系の場合と同様。</p>
+
+<p>Intel(R) Xeon(R)  E5-2690 v3 で 16 core 並列でH2O二分子が入ったユニットセルの構造最適化（PBE汎関数（gridsize 3）、D3分散力補正あり、k点1x1x1、RI近似あり）をすると、1点あたりの計算時間は平均18秒程度であった。</p>
+</div>
 </section>
 
 <section id="orca-related">
   <h2>【電子状態計算ソフトウェア「Orca」関連】</h2>
-  <pre><code>GRRMで計算する場合は.comの他に.inpファイル（Orca用のインプット）が必要。
+  <div class="note-text">
+<p>GRRMで計算する場合は.comの他に.inpファイル（Orca用のインプット）が必要。</p>
 
-.comには %link=Orca と書き、コア数とメモリ数を指定する。なお、Optionsには NOFC が必要であることに注意。NOFCが無いと.inpに&quot;Freq&quot;という誤ったフラグが建てられてしまうが、これはORCA-6.xでは用いられていない。（余談：ORCAの振動数解析のオプションとしては&quot;NumFreq&quot;が正しい）
+<p>.comには %link=Orca と書き、コア数とメモリ数を指定する。なお、Optionsには NOFC が必要であることに注意。NOFCが無いと.inpに&quot;Freq&quot;という誤ったフラグが建てられてしまうが、これはORCA-6.xでは用いられていない。（余談：ORCAの振動数解析のオプションとしては&quot;NumFreq&quot;が正しい）</p>
 
-%link=Orca
+<pre tabindex="0"><code class="nohighlight">%link=Orca
 
 # MIN
 
@@ -5536,13 +5831,15 @@ DownDC=12
 
 NOFC
 
-【内部向け】GRRMsで生成されるシェルスクリプトには環境変数 &quot;suborca&quot; が指定されていない。そのため、GRRMsの-testで作成したシェルスクリプトにsetenv suborca [Orcaのパス]を書き足してから流す必要がある。
+</code></pre>
 
-Orcaをシングルコアで計算する場合はパスを通すだけで良いが、マルチコア（並列）で流すにはローカルにOpenMPをインストールしておく必要がある。
+<p>【内部向け】GRRMsで生成されるシェルスクリプトには環境変数 &quot;suborca&quot; が指定されていない。そのため、GRRMsの-testで作成したシェルスクリプトにsetenv suborca [Orcaのパス]を書き足してから流す必要がある。</p>
 
-構造最適化など1点計算の場合は.inpに以下のように書けばよい。これはOrca内蔵のGFN-xTBプログラムを利用した例。
+<p>Orcaをシングルコアで計算する場合はパスを通すだけで良いが、マルチコア（並列）で流すにはローカルにOpenMPをインストールしておく必要がある。</p>
 
-! XTB2 NoUseSym @job
+<p>構造最適化など1点計算の場合は.inpに以下のように書けばよい。これはOrca内蔵のGFN-xTBプログラムを利用した例。</p>
+
+<pre tabindex="0"><code class="nohighlight">! XTB2 NoUseSym @job
 
 * xyz  0 1
 
@@ -5550,11 +5847,13 @@ Orcaをシングルコアで計算する場合はパスを通すだけで良い�
 
 * 
 
-xTBを利用する際は.comでNOFCを付けること。また、DFT計算の場合などは汎関数と基底関数を指定する必要がある。
+</code></pre>
 
-溶媒効果を含める場合は.inpにCPCM(WATER)のように書く。あるいは!CPCMセクションを作って記述することもできる。パラメータの存在しない溶媒もあるので注意。
+<p>xTBを利用する際は.comでNOFCを付けること。また、DFT計算の場合などは汎関数と基底関数を指定する必要がある。</p>
 
-! XTB2 NoUseSym CPCM(WATER) @job
+<p>溶媒効果を含める場合は.inpにCPCM(WATER)のように書く。あるいは!CPCMセクションを作って記述することもできる。パラメータの存在しない溶媒もあるので注意。</p>
+
+<pre tabindex="0"><code class="nohighlight">! XTB2 NoUseSym CPCM(WATER) @job
 
 * xyz  0 1
 
@@ -5562,9 +5861,11 @@ xTBを利用する際は.comでNOFCを付けること。また、DFT計算の場
 
 *
 
-def2系の基底関数でdiffuse関数が入ったma-def2基底を使う場合。
+</code></pre>
 
-!RKS B3lyp ma-def2-SVP def2/J autoaux RIJCOSX TightSCF SoSCF  @TasK
+<p>def2系の基底関数でdiffuse関数が入ったma-def2基底を使う場合。</p>
+
+<pre tabindex="0"><code class="nohighlight">!RKS B3lyp ma-def2-SVP def2/J autoaux RIJCOSX TightSCF SoSCF  @TasK
 
 %PAL Nprocs 10
 
@@ -5576,33 +5877,38 @@ def2系の基底関数でdiffuse関数が入ったma-def2基底を使う場合�
 
 *
 
-RKS：制限付きコーン・シャム
-B3lyp：汎関数
-ma-def2-SVP：def2-SVP基底に加え、水素以外の原子に対してs軌道とp軌道の分散関数を加えた基底
-def2/J：補助基底</code></pre>
+</code></pre>
+
+<p>RKS：制限付きコーン・シャム<br>
+B3lyp：汎関数<br>
+ma-def2-SVP：def2-SVP基底に加え、水素以外の原子に対してs軌道とp軌道の分散関数を加えた基底<br>
+def2/J：補助基底</p>
+</div>
 </section>
 
 <section id="dftb-related">
   <h2>【電子状態計算ソフトウェア「DFTB+」関連】</h2>
-  <pre><code>GRRMで計算する場合は.comの他に.hsdファイル（DFTB+用のインプット）が必要。
+  <div class="note-text">
+<p>GRRMで計算する場合は.comの他に.hsdファイル（DFTB+用のインプット）が必要。</p>
 
-DftD3 dispersion constants について
-例えば Dispersion = DftD3 { } とするとDFTB3の &quot;old default&quot; のパラメータが適用される。
+<p>DftD3 dispersion constants について<br>
+例えば Dispersion = DftD3 { } とするとDFTB3の &quot;old default&quot; のパラメータが適用される。</p>
 
-※ 3OB: The Third-Order Parametrization for Organic and Biological Systems
-※ DFTB3: Third Order Density Functional Tight Binding
-※ 公式マニュアル→こちら
+<p>※ 3OB: The Third-Order Parametrization for Organic and Biological Systems<br>
+※ DFTB3: Third Order Density Functional Tight Binding<br>
+※ 公式マニュアル→こちら</p>
 
-Slater-Koster files について
-dispersion のパラメータが元素のペアごとに用意されているデータセット
-※ 参考：Download of Slater-Koster files （こちらも参考に）
+<p>Slater-Koster files について<br>
+dispersion のパラメータが元素のペアごとに用意されているデータセット<br>
+※ 参考：Download of Slater-Koster files （こちらも参考に）</p>
 
-DFTB+を使う場合、割り当てるコア数を増やすよりも、コア数を1にして並列数を稼いで探索する方が速い。</code></pre>
+<p>DFTB+を使う場合、割り当てるコア数を増やすよりも、コア数を1にして並列数を稼いで探索する方が速い。</p>
+</div>
 </section>
 
 <section id="grimme-d2">
   <h2>【GrimmeのDFT-D（D2）パラメータ】</h2>
-  <pre><code>VdW radii, C6 parameters
+  <pre tabindex="0"><code class="nohighlight">VdW radii, C6 parameters
 
 H    1.001     0.14
 
@@ -5779,230 +6085,238 @@ Rn   1.924    56.64</code></pre>
 
 <section id="tax-filing">
   <h2>【確定申告･納税周りについて】</h2>
-  <pre><code>納税は日本国民の義務であり、無申告者は懲罰的課税（無申告加算税、延滞税）の対象となる。意図的な脱税など特に悪質な場合は罰金や懲役刑が科されることもある。
+  <div class="note-text">
+<p>納税は日本国民の義務であり、無申告者は懲罰的課税（無申告加算税、延滞税）の対象となる。意図的な脱税など特に悪質な場合は罰金や懲役刑が科されることもある。</p>
 
-フェローシップ（FS）制度の助成金は80%近くが雑所得扱いなので確定申告が必要となる。また、FSに採用された時点で扶養家族から外れることが確定するため、扶養者の勤務先への連絡・世帯分離の手続き・国民健康保険への加入手続き...などは早めに済ませておくこと（遅れると税務署から扶養者に追徴課税の請求書が来る）。
+<p>フェローシップ（FS）制度の助成金は80%近くが雑所得扱いなので確定申告が必要となる。また、FSに採用された時点で扶養家族から外れることが確定するため、扶養者の勤務先への連絡・世帯分離の手続き・国民健康保険への加入手続き...などは早めに済ませておくこと（遅れると税務署から扶養者に追徴課税の請求書が来る）。</p>
 
-因みに、学振の給料は（一応）給与所得区分なので基本的には年末調整のみで完結するが、生命保険料控除や医療費控除（年間10万円以上の医療費を要した場合）、配偶者控除（配偶者がいる場合）、扶養控除（子供などの扶養家族がいる場合）などの適用要件に該当する者は、節税の観点から各自が確定申告すべきである。その際は証明書の添付が必要になるので適宜用意する。（2023年時点での情報）
+<p>因みに、学振の給料は（一応）給与所得区分なので基本的には年末調整のみで完結するが、生命保険料控除や医療費控除（年間10万円以上の医療費を要した場合）、配偶者控除（配偶者がいる場合）、扶養控除（子供などの扶養家族がいる場合）などの適用要件に該当する者は、節税の観点から各自が確定申告すべきである。その際は証明書の添付が必要になるので適宜用意する。（2023年時点での情報）</p>
 
-「所得」の計算期間：1月1日~12月31日の1年間の収入と費用を計算する。
+<p>「所得」の計算期間：1月1日~12月31日の1年間の収入と費用を計算する。</p>
 
-確定申告書の提出・納税期間：（通例）2月16日~3月15日の1カ月以内（この期間内であれば何度でも申告書の提出が可能）
+<p>確定申告書の提出・納税期間：（通例）2月16日~3月15日の1カ月以内（この期間内であれば何度でも申告書の提出が可能）</p>
 
-給与所得と雑所得のみ発生している場合は「確定申告書A」の様式で提出する。事業を営んでいる場合は「確定申告書B」の様式で提出する。
-※ 令和5年1月以降は様式が確定申告書Bのタイプに統一されることになっている（2023年現在）。
+<p>給与所得と雑所得のみ発生している場合は「確定申告書A」の様式で提出する。事業を営んでいる場合は「確定申告書B」の様式で提出する。<br>
+※ 令和5年1月以降は様式が確定申告書Bのタイプに統一されることになっている（2023年現在）。</p>
 
-納税額の計算は基本的には以下の4つのステップで考える。
-① 収入金額の計算（総ての収入の算出）
-② 必要経費の計算（総ての所得の算出）
-③ 所得控除の計算（課税所得の算出）
-④ 税率の計算（納税額の算出）
-税金は最終的に計算された課税所得に課されるものである。
+<p>納税額の計算は基本的には以下の4つのステップで考える。<br>
+① 収入金額の計算（総ての収入の算出）<br>
+② 必要経費の計算（総ての所得の算出）<br>
+③ 所得控除の計算（課税所得の算出）<br>
+④ 税率の計算（納税額の算出）<br>
+税金は最終的に計算された課税所得に課されるものである。</p>
 
-大学からの源泉徴収票は年明けに送付されるので保管しておくこと。自分で確定申告する場合は源泉徴収額の入力が必要となるため。
+<p>大学からの源泉徴収票は年明けに送付されるので保管しておくこと。自分で確定申告する場合は源泉徴収額の入力が必要となるため。</p>
 
-e-TAXで確定申告する場合はマイナンバーカードを作成しておくとラクに済む。できれば早いうちに作っておく。確定申告しない場合でもマイナンバーカードを作成しておくと何かと便利な場合がある（マイナポータルのUI・UXには改善の余地がかなりあるが我慢する）。
-※マイナンバーカードの交付申請、個人情報の提出から、手元に届くまでには1ヶ月程度掛かるので、1月中には交付申請していないとその年の確定申告に間に合わない。
+<p>e-TAXで確定申告する場合はマイナンバーカードを作成しておくとラクに済む。できれば早いうちに作っておく。確定申告しない場合でもマイナンバーカードを作成しておくと何かと便利な場合がある（マイナポータルのUI・UXには改善の余地がかなりあるが我慢する）。<br>
+※マイナンバーカードの交付申請、個人情報の提出から、手元に届くまでには1ヶ月程度掛かるので、1月中には交付申請していないとその年の確定申告に間に合わない。</p>
 
-【参考】確定申告に関する手引き等 - 国税庁
+<p>【参考】確定申告に関する手引き等 - 国税庁</p>
 
-【経費について】
+<h3>【経費について】</h3>
 
-【重要】DX博士人材FSなどの「科学技術イノベーション創出に向けた大学フェローシップ創設事業」（以下、FSと表記）や「JST次世代研究者挑戦的研究プログラム」を財源とするプロジェクトから研究支援費を受け取っている者は授業料や入学金、研究費用を雑所得から必要経費として差し引くことができる（税理事務所の問い合わせに対するJSTの公式回答とされる）。
-※例えば2022年現在、国立大学の授業料は一般の理系学生の場合535,800円/年なので、これを必要経費として所得から差し引くことができる。ただし、開始年と終了年は学費納入期間に応じて按分する必要があり、助成金の受給期間に対応する期間の学費のみを費用計上するのが税制上適切である（例えば、DX博士人材FSは2021年10月から開始されているため、必要経費として計上できるのは2021年10月以降の学費のみと考えるのが妥当であろう）。
-※授業料を経費として計上する場合、証拠として支払い時の領収書を用意しておくこと。または、振込額が分かる資料（通帳の支払い記録など）を保管しておく。
+<p>【重要】DX博士人材FSなどの「科学技術イノベーション創出に向けた大学フェローシップ創設事業」（以下、FSと表記）や「JST次世代研究者挑戦的研究プログラム」を財源とするプロジェクトから研究支援費を受け取っている者は授業料や入学金、研究費用を雑所得から必要経費として差し引くことができる（税理事務所の問い合わせに対するJSTの公式回答とされる）。<br>
+※例えば2022年現在、国立大学の授業料は一般の理系学生の場合535,800円/年なので、これを必要経費として所得から差し引くことができる。ただし、開始年と終了年は学費納入期間に応じて按分する必要があり、助成金の受給期間に対応する期間の学費のみを費用計上するのが税制上適切である（例えば、DX博士人材FSは2021年10月から開始されているため、必要経費として計上できるのは2021年10月以降の学費のみと考えるのが妥当であろう）。<br>
+※授業料を経費として計上する場合、証拠として支払い時の領収書を用意しておくこと。または、振込額が分かる資料（通帳の支払い記録など）を保管しておく。</p>
 
-例えば「アンビシャス博士人材FS」では、年間で144万円（80%）が雑所得区分の収入、36万円（20%）が給与所得区分の収入となっている。雑所得がFS以外に無い場合は授業料を差し引いて 1,440,000 - 535,800 = 904,200 が雑所得の合計金額となる（その他の研究費用があればさらに差し引く）。なお、アンビシャス博士人材FS採用初年は4月～12月の学費9ヵ月分（月割り）に相当する401,850円を、採用最終年は1月～3月の学費3ヵ月分（月割り）に相当する133,950円を、それぞれ必要経費として差し引くのが妥当であろう。
-※（2022/03/17追記）「北海道大学アンビシャス博士人材フェローシップ」の受給者は2022年度前期から授業料が全額免除となることが通知された。（2023/04/13追記）DX対象者についても2023年度前期から授業料が全額免除となることが通知された。
+<p>例えば「アンビシャス博士人材FS」では、年間で144万円（80%）が雑所得区分の収入、36万円（20%）が給与所得区分の収入となっている。雑所得がFS以外に無い場合は授業料を差し引いて 1,440,000 - 535,800 = 904,200 が雑所得の合計金額となる（その他の研究費用があればさらに差し引く）。なお、アンビシャス博士人材FS採用初年は4月～12月の学費9ヵ月分（月割り）に相当する401,850円を、採用最終年は1月～3月の学費3ヵ月分（月割り）に相当する133,950円を、それぞれ必要経費として差し引くのが妥当であろう。<br>
+※（2022/03/17追記）「北海道大学アンビシャス博士人材フェローシップ」の受給者は2022年度前期から授業料が全額免除となることが通知された。（2023/04/13追記）DX対象者についても2023年度前期から授業料が全額免除となることが通知された。</p>
 
-研究に関連する書籍代や学会などの参加費・旅費（食費は除く）は当然、研究遂行上の必要経費として計上可能である。
+<p>研究に関連する書籍代や学会などの参加費・旅費（食費は除く）は当然、研究遂行上の必要経費として計上可能である。</p>
 
-例えば、研究用にノートPCを購入した場合、そのPCを全く私生活で使用していなければ基本的には全額を必要経費に計上できる。一方で、ノートPCを私生活でも使っている場合（趣味にも使用する場合など）は合理的な根拠に基づいて適宜按分しなければならない。家賃や電気代なども同様で、使用面積や消費電力などの客観的な基準に基づいて按分しなければならない。
+<p>例えば、研究用にノートPCを購入した場合、そのPCを全く私生活で使用していなければ基本的には全額を必要経費に計上できる。一方で、ノートPCを私生活でも使っている場合（趣味にも使用する場合など）は合理的な根拠に基づいて適宜按分しなければならない。家賃や電気代なども同様で、使用面積や消費電力などの客観的な基準に基づいて按分しなければならない。</p>
 
-FSから支給される研究費（「研究専念費」（＝生活費）とは別）は年度内使い切りの予算であるが、制度上これは収入扱いになっていると考えられる。（使い切れない場合は（繰越せないにもかかわらず）課税対象となるという話も耳にする。年度内使い切りなのはそのため？）
+<p>FSから支給される研究費（「研究専念費」（＝生活費）とは別）は年度内使い切りの予算であるが、制度上これは収入扱いになっていると考えられる。（使い切れない場合は（繰越せないにもかかわらず）課税対象となるという話も耳にする。年度内使い切りなのはそのため？）</p>
 
-FSから支給される研究費で10万円以上の物品（耐用年数1年以上）を購入した場合、その物品は大学の「少額備品」や「固定資産」として扱われ、資産登録の必要が生じる。例えばPCであれば耐用年数が4年なので、導入後4年間は外部への持ち出しが不可能となる（損壊するなどの例外を除いて処分も不可能となる）。なお、減価償却の手続きや計算は基本的に大学側で行うので、受給者が特別に何かする必要は無い。
+<p>FSから支給される研究費で10万円以上の物品（耐用年数1年以上）を購入した場合、その物品は大学の「少額備品」や「固定資産」として扱われ、資産登録の必要が生じる。例えばPCであれば耐用年数が4年なので、導入後4年間は外部への持ち出しが不可能となる（損壊するなどの例外を除いて処分も不可能となる）。なお、減価償却の手続きや計算は基本的に大学側で行うので、受給者が特別に何かする必要は無い。</p>
 
-10万円未満（※「以下」ではないことに注意）の物品は「消耗品」に分類される。パソコンやタブレット端末は区分上「高換金性消耗品」として取り扱われるが、事務手続きはその他の消耗品と基本的には変わらない。
-※（2023/04/13追記）1円以上のパソコンやタブレット端末などを購入する場合は大学への届け出が義務付けられているらしい（北海道大学の場合）
+<p>10万円未満（※「以下」ではないことに注意）の物品は「消耗品」に分類される。パソコンやタブレット端末は区分上「高換金性消耗品」として取り扱われるが、事務手続きはその他の消耗品と基本的には変わらない。<br>
+※（2023/04/13追記）1円以上のパソコンやタブレット端末などを購入する場合は大学への届け出が義務付けられているらしい（北海道大学の場合）</p>
 
-FSからの助成金を事業所得とした上で、何らかの形で無理やり経費計上して作った赤字と相殺すれば給与所得などとも損益通算可能となる…が、やりすぎる(？)と税務調査の対象となる可能性がある（小規模の事業主がよくやるグレーな節税の手口だそうだが、最近は税務署も厳しくチェックしているらしい）。何でもかんでも経費計上すれば良いというものではない。
-※受給者が開業して個人事業主となりFSからの研究専念費（ただし給与所得分を除く）を事業所得として扱うこと自体には何ら違法性は無い。
+<p>FSからの助成金を事業所得とした上で、何らかの形で無理やり経費計上して作った赤字と相殺すれば給与所得などとも損益通算可能となる…が、やりすぎる(？)と税務調査の対象となる可能性がある（小規模の事業主がよくやるグレーな節税の手口だそうだが、最近は税務署も厳しくチェックしているらしい）。何でもかんでも経費計上すれば良いというものではない。<br>
+※受給者が開業して個人事業主となりFSからの研究専念費（ただし給与所得分を除く）を事業所得として扱うこと自体には何ら違法性は無い。</p>
 
-学会開催に伴う宴席（意見交換会）などに参加した場合、その参加費用が研究を遂行する上で必要な経費であると客観的に認められるのであれば問題無く経費計上できる（意見交換によって研究遂行に寄与する重要な示唆を得る、新しいポスト･共同研究などの誘いを受ける、など）。しかし実態が、週に何度も研究室のメンバーで飲み歩いていただけ、といった場合は不正な経費計上と見なされて当然であり、追徴課税は免れない。
+<p>学会開催に伴う宴席（意見交換会）などに参加した場合、その参加費用が研究を遂行する上で必要な経費であると客観的に認められるのであれば問題無く経費計上できる（意見交換によって研究遂行に寄与する重要な示唆を得る、新しいポスト･共同研究などの誘いを受ける、など）。しかし実態が、週に何度も研究室のメンバーで飲み歩いていただけ、といった場合は不正な経費計上と見なされて当然であり、追徴課税は免れない。</p>
 
-【参考動画】北海道大学DX博士人材フェローシップ生向け確定申告セミナー - 北海道大学DX博士人材フェローシップ（2022/02/21閲覧）
+<p>【参考動画】北海道大学DX博士人材フェローシップ生向け確定申告セミナー - 北海道大学DX博士人材フェローシップ（2022/02/21閲覧）</p>
 
-【参考資料】研究活動に関するハンドブック／Research Handbook - 北海道大学
+<p>【参考資料】研究活動に関するハンドブック／Research Handbook - 北海道大学</p>
 
-【開業について】
+<h3>【開業について】</h3>
 
-弁護士顧問料事件最高裁昭和56年4月24日判決によると、「事業所得とは、自己の計算と危険において独立して営まれ、営利性、有償性を有し、かつ反復継続して遂行する意思と社会的地位とが客観的に認められる業務から生ずる所得」とされている。「事業」といえる程度の規模･態様においてなされている活動か否かは以下の観点に基づいて判断される。
+<p>弁護士顧問料事件最高裁昭和56年4月24日判決によると、「事業所得とは、自己の計算と危険において独立して営まれ、営利性、有償性を有し、かつ反復継続して遂行する意思と社会的地位とが客観的に認められる業務から生ずる所得」とされている。「事業」といえる程度の規模･態様においてなされている活動か否かは以下の観点に基づいて判断される。</p>
 
-営利性（利益目的である）
+<p>営利性（利益目的である）</p>
 
-有償性（対価を得ている）
+<p>有償性（対価を得ている）</p>
 
-反復継続性（継続している）
+<p>反復継続性（継続している）</p>
 
-平成26年9月1日の裁決事例によると、これらの要件を満たすか否かは以下の点を「総合的に勘案して」判断すべきだとされている。
+<p>平成26年9月1日の裁決事例によると、これらの要件を満たすか否かは以下の点を「総合的に勘案して」判断すべきだとされている。</p>
 
-自己の計算と危険においてする企画遂行性の有無
+<p>自己の計算と危険においてする企画遂行性の有無</p>
 
-本人の精神的肉体的労務の投入の有無
+<p>本人の精神的肉体的労務の投入の有無</p>
 
-人的・物的設備の有無
+<p>人的・物的設備の有無</p>
 
-本人の職業・経験及び社会的地位等
+<p>本人の職業・経験及び社会的地位等</p>
 
-これらの観点を考慮すると、FS等からの所得を事業所得と見なすことの妥当性は否定し去れないだろう。
-※ 参考：フェローシップや次世代研究者挑戦的研究プログラムに採択された博士課程の学生は開業届を出して個人事業主になろう - たぐれおん氏（2022/02/21閲覧）
+<p>これらの観点を考慮すると、FS等からの所得を事業所得と見なすことの妥当性は否定し去れないだろう。<br>
+※ 参考：フェローシップや次世代研究者挑戦的研究プログラムに採択された博士課程の学生は開業届を出して個人事業主になろう - たぐれおん氏（2022/02/21閲覧）</p>
 
-FSからの雑所得を事業所得として申告するためには、納税地を管轄する税務署（事業所の所在地ではない）に開業届を提出しておく必要がある。開業届を出さなくても事業所得として申告可能だが、事前に個人事業主として登録しておかないと税務署から「この所得は雑所得に該当するのではないか」と問い合わせが来る恐れがある。
+<p>FSからの雑所得を事業所得として申告するためには、納税地を管轄する税務署（事業所の所在地ではない）に開業届を提出しておく必要がある。開業届を出さなくても事業所得として申告可能だが、事前に個人事業主として登録しておかないと税務署から「この所得は雑所得に該当するのではないか」と問い合わせが来る恐れがある。</p>
 
-例えば「研究員」などとして開業（個人事業主になるということ）して賃貸物件を事業所とすれば、家賃を必要経費と主張することも可能である。ただし家事関連費には明確な按分基準が求められるので、生活空間と仕事場の境界や時間的区分はよく考えること。特に、遠方の実家を離れて大学付近の賃貸物件に一人暮らししている場合は事業所兼住居としての性格が強まるため、家賃全額を経費と見なすのは社会通念上難しいと考えられる。
+<p>例えば「研究員」などとして開業（個人事業主になるということ）して賃貸物件を事業所とすれば、家賃を必要経費と主張することも可能である。ただし家事関連費には明確な按分基準が求められるので、生活空間と仕事場の境界や時間的区分はよく考えること。特に、遠方の実家を離れて大学付近の賃貸物件に一人暮らししている場合は事業所兼住居としての性格が強まるため、家賃全額を経費と見なすのは社会通念上難しいと考えられる。</p>
 
-税制面で優遇される青色申告を行う場合は「青色申告承認申請書」を「青色申告の対象年の3月15日まで」に納税地を管轄する税務署に提出しなければならない。例えば、2022年の3月15日までに青色申告承認申請書を提出した場合は、2023年に青色申告で（2022年の分を）確定申告できる。
+<p>税制面で優遇される青色申告を行う場合は「青色申告承認申請書」を「青色申告の対象年の3月15日まで」に納税地を管轄する税務署に提出しなければならない。例えば、2022年の3月15日までに青色申告承認申請書を提出した場合は、2023年に青色申告で（2022年の分を）確定申告できる。</p>
 
-青色申告では最大65万円の青色申告特別控除が受けられるほか、30万円未満の減価償却資産を「少額減価償却資産」として経費に一括計上できる（少額減価償却資産の特例）。例えば、白色申告者は10万円未満のPCを消耗品として経費で購入できるが、青色申告者は30万円未満のPCを消耗品と同じように購入して一事業年度内の必要経費に計上できる。ただし、この特例の適用を受けられる減価償却資産の総額は一事業年度あたり300万円が上限。
+<p>青色申告では最大65万円の青色申告特別控除が受けられるほか、30万円未満の減価償却資産を「少額減価償却資産」として経費に一括計上できる（少額減価償却資産の特例）。例えば、白色申告者は10万円未満のPCを消耗品として経費で購入できるが、青色申告者は30万円未満のPCを消耗品と同じように購入して一事業年度内の必要経費に計上できる。ただし、この特例の適用を受けられる減価償却資産の総額は一事業年度あたり300万円が上限。</p>
 
-ただし青色申告の場合は確定申告時に提出すべき書類が一気に増えるので、それらを準備する時間や労力など費用対効果を考慮した方がよい。ただ、既に複数の事業を副業的に営んでいるのであれば十分検討に値する。青色申告に関連する経理は信頼できる税理士に依頼するのが最も安全で確実だが、提出書類一式は市販の会計ソフトで揃えることも可能。とにかく、申告期間内に納税することが何よりも重要である。
+<p>ただし青色申告の場合は確定申告時に提出すべき書類が一気に増えるので、それらを準備する時間や労力など費用対効果を考慮した方がよい。ただ、既に複数の事業を副業的に営んでいるのであれば十分検討に値する。青色申告に関連する経理は信頼できる税理士に依頼するのが最も安全で確実だが、提出書類一式は市販の会計ソフトで揃えることも可能。とにかく、申告期間内に納税することが何よりも重要である。</p>
 
-FSの助成期間が終了するなどして研究員としての事業を継続できなくなったら廃業届を提出すればよい。なお、別の事業で生計を立てられていればその限りではない。
+<p>FSの助成期間が終了するなどして研究員としての事業を継続できなくなったら廃業届を提出すればよい。なお、別の事業で生計を立てられていればその限りではない。</p>
 
-因みに、税務調査の遡及期間は原則5年なので、事業を畳んでから少なくとも5年間は領収書などの支払証明書類を保存しておくことが望ましい（脱税が疑われるような悪質な場合は最長7年まで遡及して調査される）。
+<p>因みに、税務調査の遡及期間は原則5年なので、事業を畳んでから少なくとも5年間は領収書などの支払証明書類を保存しておくことが望ましい（脱税が疑われるような悪質な場合は最長7年まで遡及して調査される）。</p>
 
-【その他】
+<h3>【その他】</h3>
 
-単発バイトやブログ収入（各種アフィリエイト含む）、電子データや物品の(通信)販売、競取り･転売、フードデリバリー、YouTuberなどの配信業、その他の接待業等で（事業とは言えない規模で）収入を得ている場合は、それらすべての所得を合算して雑所得とする。（助成金受給者が研究員として開業していて自身の研究に関わるウェブサイトやYouTubeチャンネルを運営して一定額の広告収入を得ている場合、それらの運営をアウトリーチ活動の一環と見なして広告収入を事業所得に含めることは可能...かもしれない；税務署に要確認）
+<p>単発バイトやブログ収入（各種アフィリエイト含む）、電子データや物品の(通信)販売、競取り･転売、フードデリバリー、YouTuberなどの配信業、その他の接待業等で（事業とは言えない規模で）収入を得ている場合は、それらすべての所得を合算して雑所得とする。（助成金受給者が研究員として開業していて自身の研究に関わるウェブサイトやYouTubeチャンネルを運営して一定額の広告収入を得ている場合、それらの運営をアウトリーチ活動の一環と見なして広告収入を事業所得に含めることは可能...かもしれない；税務署に要確認）</p>
 
-雑所得区分の赤字は雑所得区分の黒字のみと損益通算可能である。雑所得の赤字は事業所得や給与所得と損益通算できないことに注意。
+<p>雑所得区分の赤字は雑所得区分の黒字のみと損益通算可能である。雑所得の赤字は事業所得や給与所得と損益通算できないことに注意。</p>
 
-不動産所得や事業所得、総合課税の譲渡所得、山林所得の赤字は経常所得（＝事業所得 + 不動産所得 + 利子所得 + 配当所得 + 給与所得 + 雑所得）との損益通算が可能。所得区分が多岐に亘る大学生や大学院生はそう多くはないと思われるが、これらの所得が発生していて、なおかつ赤字が発生する見込みがあれば「損益通算の順序」も確認して損益通算する。あるいは税理士に一任する。
-※ 参考：損益通算を行う場合の申告書の記載要領 - 国税庁（2022/02/21閲覧）
+<p>不動産所得や事業所得、総合課税の譲渡所得、山林所得の赤字は経常所得（＝事業所得 + 不動産所得 + 利子所得 + 配当所得 + 給与所得 + 雑所得）との損益通算が可能。所得区分が多岐に亘る大学生や大学院生はそう多くはないと思われるが、これらの所得が発生していて、なおかつ赤字が発生する見込みがあれば「損益通算の順序」も確認して損益通算する。あるいは税理士に一任する。<br>
+※ 参考：損益通算を行う場合の申告書の記載要領 - 国税庁（2022/02/21閲覧）</p>
 
-上場株式等の売買益（キャピタルゲイン）や配当益（インカムゲイン）には現物/先物のいずれにも20.315%の税率が一律で課される。これらは分離課税の対象となるため損益通算は上場株式等の運用損益の間でのみ可能（ただし配当金は源泉分離課税）。FXも分離課税の対象なので同様。特定口座を開設して取引している場合、自動的に源泉徴収されるという点では確定申告が不要だが、給与と上場株式等の譲渡益以外の収入がある場合は確定申告が必要となる場合がある。
+<p>上場株式等の売買益（キャピタルゲイン）や配当益（インカムゲイン）には現物/先物のいずれにも20.315%の税率が一律で課される。これらは分離課税の対象となるため損益通算は上場株式等の運用損益の間でのみ可能（ただし配当金は源泉分離課税）。FXも分離課税の対象なので同様。特定口座を開設して取引している場合、自動的に源泉徴収されるという点では確定申告が不要だが、給与と上場株式等の譲渡益以外の収入がある場合は確定申告が必要となる場合がある。</p>
 
-NISA預り／積み立てNISA預りの株式や各種ETF類の売買益は非課税というメリットがある一方、NISA／積み立てNISA枠内の実現損･実現益はともに翌年には繰り越せないので注意。未実現損益（特に損失の場合）はロールオーバーしなければ繰り越し可能と思われそうだが、課税口座へ移管後は買い付け時の価格ではなく、非課税期間最終年の年末時点（非課税期間満了時）の時価を基準として課税対象の差額が計算される。そのため、年末時点の時価によっては当初買付時からは値下がりしていたとしても、その後の利益確定時に利益が出ていれば課税されてしまうことに注意。（最近、NISAなどに関する法改正の議論が行われており上記の内容が変更される可能性があるので、予期しておきたい）なお、NISA預りの場合は損益通算できないため、損失を他の所得と相殺することはできないという点に注意（一般論として、例えばレバレッジ型ETFなどの手数料が高く減価しやすい商品は長期的には損失が発生しやすく積み立てには向かない。これは投資助言などではなく、単なる自明な事実である）。
+<p>NISA預り／積み立てNISA預りの株式や各種ETF類の売買益は非課税というメリットがある一方、NISA／積み立てNISA枠内の実現損･実現益はともに翌年には繰り越せないので注意。未実現損益（特に損失の場合）はロールオーバーしなければ繰り越し可能と思われそうだが、課税口座へ移管後は買い付け時の価格ではなく、非課税期間最終年の年末時点（非課税期間満了時）の時価を基準として課税対象の差額が計算される。そのため、年末時点の時価によっては当初買付時からは値下がりしていたとしても、その後の利益確定時に利益が出ていれば課税されてしまうことに注意。（最近、NISAなどに関する法改正の議論が行われており上記の内容が変更される可能性があるので、予期しておきたい）なお、NISA預りの場合は損益通算できないため、損失を他の所得と相殺することはできないという点に注意（一般論として、例えばレバレッジ型ETFなどの手数料が高く減価しやすい商品は長期的には損失が発生しやすく積み立てには向かない。これは投資助言などではなく、単なる自明な事実である）。</p>
 
-iDeCo（個人型確定拠出年金）は掛金を全額所得控除に回せるので有力な節税の選択肢としてよく知られているが、これは年金という性格上、積み立てた金額は早くとも60歳（2023年現在）を超えなければ受け取ることができない（掛金が数十年単位で拘束される）ことに留意すべきであり、インフレ等による日本円そのものの価値毀損などのリスクも考慮した上で投資すべき商品と言える（投資額程度であれば十分にpayできるだろう（ただしインフレ率を加味しない））。NISAには無いiDeCoのメリットとしては、積み立てた金額の全額が所得控除の対象となるため、所得税や住民税が軽減できる点が挙げられる。最低5000円/月から積み立てでき、会社員の場合は月額2～3万円程度の上限がある。大学（院）卒業後に検討するとよい。
+<p>iDeCo（個人型確定拠出年金）は掛金を全額所得控除に回せるので有力な節税の選択肢としてよく知られているが、これは年金という性格上、積み立てた金額は早くとも60歳（2023年現在）を超えなければ受け取ることができない（掛金が数十年単位で拘束される）ことに留意すべきであり、インフレ等による日本円そのものの価値毀損などのリスクも考慮した上で投資すべき商品と言える（投資額程度であれば十分にpayできるだろう（ただしインフレ率を加味しない））。NISAには無いiDeCoのメリットとしては、積み立てた金額の全額が所得控除の対象となるため、所得税や住民税が軽減できる点が挙げられる。最低5000円/月から積み立てでき、会社員の場合は月額2～3万円程度の上限がある。大学（院）卒業後に検討するとよい。</p>
 
-仮想通貨（暗号資産；crypto currency）の売買損益は雑所得内でのみ損益通算可能である。たとえ雑所得区分の収入が赤字でも給与所得などとは通算できないので注意。2023年現在、日本において仮想通貨は分離課税の対象でないので、実現した損失の翌年繰り越しが不可能であり、いわゆる損出し（タックスロス･セリング；節税のために実現利益を含み損で相殺すること）は年内に行わなければならない。個人口座ではなく法人口座で運用している場合は期末時の市場価格で評価しなければならないが、この辺りは税理士に頼るのが良いだろう（2024年現在、税制改正により法人の暗号資産保有が税制面で優遇される（他社発行の暗号資産保有時の期末時価評価課税が撤廃される）ことが決定している）。また、日本の税制において利益確定ないし所得発生と見なされるタイミングや、トークン類の運用上の様々なリスクについては当然ながら個々人が事前によく勉強しておくべきであり、特に金融庁の告示（加えて、SEC（米国証券取引委員会）の告示も）はよくウォッチしておくべきである。投資は自己の責任の下で行われるべきものであるが、意図せぬ脱税行為を犯してしまわないように細心の注意を払うこと。税金の支払いは自己破産手続きをしても免除されない（「租税等の請求権」は非免責債権である）ため、極めて悲惨な状況となる例もある。間接的に暗号資産に投資する方法としては、①暗号資産を保有or採掘している企業の株式を保有する、②暗号資産の現物ETFを購入する、などが挙げられる。
+<p>仮想通貨（暗号資産；crypto currency）の売買損益は雑所得内でのみ損益通算可能である。たとえ雑所得区分の収入が赤字でも給与所得などとは通算できないので注意。2023年現在、日本において仮想通貨は分離課税の対象でないので、実現した損失の翌年繰り越しが不可能であり、いわゆる損出し（タックスロス･セリング；節税のために実現利益を含み損で相殺すること）は年内に行わなければならない。個人口座ではなく法人口座で運用している場合は期末時の市場価格で評価しなければならないが、この辺りは税理士に頼るのが良いだろう（2024年現在、税制改正により法人の暗号資産保有が税制面で優遇される（他社発行の暗号資産保有時の期末時価評価課税が撤廃される）ことが決定している）。また、日本の税制において利益確定ないし所得発生と見なされるタイミングや、トークン類の運用上の様々なリスクについては当然ながら個々人が事前によく勉強しておくべきであり、特に金融庁の告示（加えて、SEC（米国証券取引委員会）の告示も）はよくウォッチしておくべきである。投資は自己の責任の下で行われるべきものであるが、意図せぬ脱税行為を犯してしまわないように細心の注意を払うこと。税金の支払いは自己破産手続きをしても免除されない（「租税等の請求権」は非免責債権である）ため、極めて悲惨な状況となる例もある。間接的に暗号資産に投資する方法としては、①暗号資産を保有or採掘している企業の株式を保有する、②暗号資産の現物ETFを購入する、などが挙げられる。</p>
 
-寄付型クラウドファンディングによって（法人ではなく）研究者個人が資金調達を行う場合、提供された資金は収入として扱われるため課税対象となる。個人からの資金調達は贈与とみなされ「贈与税」が課される。贈与税には年間110万円の基礎控除があり、調達額が110万円超の場合にのみ贈与税の申告と納税が必要となる。一方、法人からの資金調達は一時所得とみなされ「所得税」が課される。一時所得には50万円の特別控除があり、出資額が50万円を超える場合にのみ確定申告と納税が必要となる。
-※ 研究者個人が個人の資金提供者から資金調達を行う場合、年間110万円以内の金額であれば実質無税で資産の譲渡が可能である（ただしこの場合は資金提供者が寄付控除を受けられるケースに該当しない）。
-※ 但し、大学における学術研究の実施･教育研究の奨励などを支援する目的で寄附される現金や有価証券は原則として大学への寄附金として取り扱われる。この取り決め（財団等からの研究助成金に係る個人経理の禁止）が存在するため、上述のケースは個人もしくは自身が設立するなどした法人として研究を実施している場合に限られる点に注意。
-※ 参考：クラウドファンディングにかかる税金は？確定申告が必要？種類ごとに解説！ - Money Forward（2022/02/21閲覧）
+<p>寄付型クラウドファンディングによって（法人ではなく）研究者個人が資金調達を行う場合、提供された資金は収入として扱われるため課税対象となる。個人からの資金調達は贈与とみなされ「贈与税」が課される。贈与税には年間110万円の基礎控除があり、調達額が110万円超の場合にのみ贈与税の申告と納税が必要となる。一方、法人からの資金調達は一時所得とみなされ「所得税」が課される。一時所得には50万円の特別控除があり、出資額が50万円を超える場合にのみ確定申告と納税が必要となる。<br>
+※ 研究者個人が個人の資金提供者から資金調達を行う場合、年間110万円以内の金額であれば実質無税で資産の譲渡が可能である（ただしこの場合は資金提供者が寄付控除を受けられるケースに該当しない）。<br>
+※ 但し、大学における学術研究の実施･教育研究の奨励などを支援する目的で寄附される現金や有価証券は原則として大学への寄附金として取り扱われる。この取り決め（財団等からの研究助成金に係る個人経理の禁止）が存在するため、上述のケースは個人もしくは自身が設立するなどした法人として研究を実施している場合に限られる点に注意。<br>
+※ 参考：クラウドファンディングにかかる税金は？確定申告が必要？種類ごとに解説！ - Money Forward（2022/02/21閲覧）</p>
 
-税務署への個別相談は確定申告期間である2月16日~3月15日以外の期間に行うことが望ましい。これは確定申告期間は税務署員が忙殺されていて対応が遅くなるためである。</code></pre>
+<p>税務署への個別相談は確定申告期間である2月16日~3月15日以外の期間に行うことが望ましい。これは確定申告期間は税務署員が忙殺されていて対応が遅くなるためである。</p>
+</div>
 </section>
 
 <section id="asset-building">
   <h2>【資産形成について】</h2>
-  <pre><code>資産形成の基本は「①入る量を増やす」と「②出る量を減らす」の2つである。②は節約･節税して生活していればよい。一方、①には様々な方法がある。最もポピュラーな蓄財方法は貯金であるが、金利の極めて低い現代ではインフレ率に全く太刀打ちできない。そうなると自ずと証券（株式や債券）への投資による蓄財が視野に入ってくる。
+  <div class="note-text">
+<p>資産形成の基本は「①入る量を増やす」と「②出る量を減らす」の2つである。②は節約･節税して生活していればよい。一方、①には様々な方法がある。最もポピュラーな蓄財方法は貯金であるが、金利の極めて低い現代ではインフレ率に全く太刀打ちできない。そうなると自ずと証券（株式や債券）への投資による蓄財が視野に入ってくる。</p>
 
-元手となる資金額の限られる若年層にとって唯一の武器は「時間」である。例えば、利回りが2%（一定とする）の商品を保有している場合、30年で1.8倍になる。一般論として投資を始めるタイミングが早いほど有利であるという根拠は、複利の効果に基づく。急いで金持ちになろうとすると、多くの場合で過剰なリスクを負うことになる。あくまでも時間を味方に付けるべし。
+<p>元手となる資金額の限られる若年層にとって唯一の武器は「時間」である。例えば、利回りが2%（一定とする）の商品を保有している場合、30年で1.8倍になる。一般論として投資を始めるタイミングが早いほど有利であるという根拠は、複利の効果に基づく。急いで金持ちになろうとすると、多くの場合で過剰なリスクを負うことになる。あくまでも時間を味方に付けるべし。</p>
 
-口座を開設するなら手数料の安いネット銀行･ネット証券が良い。それ以外の選択肢は基本的に無い。
+<p>口座を開設するなら手数料の安いネット銀行･ネット証券が良い。それ以外の選択肢は基本的に無い。</p>
 
-住信SBIネット銀行
+<p>住信SBIネット銀行</p>
 
-SBI証券
+<p>SBI証券</p>
 
-投資は自己の責任の下で行われるべき（相場に王道なし）であるが、いくつかの幾つかの留意事項を共有しておく。
+<p>投資は自己の責任の下で行われるべき（相場に王道なし）であるが、いくつかの幾つかの留意事項を共有しておく。</p>
 
-余剰資金のみを元手にすること（命金には手を出すな）
+<p>余剰資金のみを元手にすること（命金には手を出すな）</p>
 
-急いで金持ちになろうとしないこと（休むも相場なり）
+<p>急いで金持ちになろうとしないこと（休むも相場なり）</p>
 
-自分の判断を過信したり他人の言うことを鵜呑みにしたりしないこと（相場は相場に聞け）
-ただし、日本や海外（主に米国）の金融政策や金利の動向はよくウォッチしておくべきである（ここでいう金利とは、長期国債･短期国債の金利のことである）。アメリカには「FEDには逆らうな」という相場の金言があるが、これは「連邦準備制度（Federal Reserve System）の方針に逆らった投資は慎め」という意味で、日本で言うと「日銀の金融政策には逆らうな」といった意味になる。通貨発行権を有する国家の中央銀行はその通貨の流通量をコントロールできるため、金融市場に与える影響が極めて大きい。具体的に中央銀行が何をすると市場がどういう反応を見せるのか、という点は各自がよく勉強する必要がある。
+<p>自分の判断を過信したり他人の言うことを鵜呑みにしたりしないこと（相場は相場に聞け）<br>
+ただし、日本や海外（主に米国）の金融政策や金利の動向はよくウォッチしておくべきである（ここでいう金利とは、長期国債･短期国債の金利のことである）。アメリカには「FEDには逆らうな」という相場の金言があるが、これは「連邦準備制度（Federal Reserve System）の方針に逆らった投資は慎め」という意味で、日本で言うと「日銀の金融政策には逆らうな」といった意味になる。通貨発行権を有する国家の中央銀行はその通貨の流通量をコントロールできるため、金融市場に与える影響が極めて大きい。具体的に中央銀行が何をすると市場がどういう反応を見せるのか、という点は各自がよく勉強する必要がある。</p>
 
-欲をかかず、予め決めたMyルールを遵守し、衆人の動向に惑わされず淡々と投資を続けること（人の行く裏に道あり花の山）</code></pre>
+<p>欲をかかず、予め決めたMyルールを遵守し、衆人の動向に惑わされず淡々と投資を続けること（人の行く裏に道あり花の山）</p>
+</div>
 </section>
 
 <section id="lab-trip-hokkaido">
   <h2>【北海道内の研究室旅行の行先候補一覧】</h2>
-  <pre><code>「北海道地区国立大学大滝セミナーハウス」や、「国立日高青少年自然の家」は研究室名義・教育目的なら（大学生・大学院生なら？）格安で借りられるので、低予算旅行を企画しているのであればオススメです。本物の低予算旅行の場合はオール車中泊（or ゼロ泊弾丸）となります。
+  <div class="note-text">
+<p>「北海道地区国立大学大滝セミナーハウス」や、「国立日高青少年自然の家」は研究室名義・教育目的なら（大学生・大学院生なら？）格安で借りられるので、低予算旅行を企画しているのであればオススメです。本物の低予算旅行の場合はオール車中泊（or ゼロ泊弾丸）となります。</p>
 
-札幌近郊であれば例えば、以下のような場所があります。
+<p>札幌近郊であれば例えば、以下のような場所があります。</p>
 
-ボールパークに野球観戦行く（日帰り）
+<p>ボールパークに野球観戦行く（日帰り）</p>
 
-増毛の国稀酒造に行く（日帰り）
+<p>増毛の国稀酒造に行く（日帰り）</p>
 
-余市のニッカウヰスキー蒸留所に行く（日帰り）
+<p>余市のニッカウヰスキー蒸留所に行く（日帰り）</p>
 
-旭川方面の観光（動物園とか；日帰り）
+<p>旭川方面の観光（動物園とか；日帰り）</p>
 
-旭川周りの美瑛富良野方面（日帰り）
+<p>旭川周りの美瑛富良野方面（日帰り）</p>
 
-積丹半島方面（積丹ブルーは夏がおすすめ）
+<p>積丹半島方面（積丹ブルーは夏がおすすめ）</p>
 
-苫小牧周りの登別方面（温泉アリ・日帰り）
+<p>苫小牧周りの登別方面（温泉アリ・日帰り）</p>
 
-支笏湖・洞爺湖方面（温泉アリ・日帰り）
+<p>支笏湖・洞爺湖方面（温泉アリ・日帰り）</p>
 
-羊蹄山周辺の観光（京極留寿都とか）
+<p>羊蹄山周辺の観光（京極留寿都とか）</p>
 
-札幌ダム豊平峡ダム（紅葉シーズンおすすめだけど激激混み）
+<p>札幌ダム豊平峡ダム（紅葉シーズンおすすめだけど激激混み）</p>
 
-泊りがけなら．．．
+<p>泊りがけなら．．．</p>
 
-函館観光
+<p>函館観光</p>
 
-トマムで雲海見る（早朝限定）
+<p>トマムで雲海見る（早朝限定）</p>
 
-帯広で豚丼を食べたり池田のワイン城に行くなどする
+<p>帯広で豚丼を食べたり池田のワイン城に行くなどする</p>
 
-屈斜路湖畔でゆっくりする（1泊2日ではゆっくりできないかも？）
+<p>屈斜路湖畔でゆっくりする（1泊2日ではゆっくりできないかも？）</p>
 
-摩周湖で霧に包まれる
+<p>摩周湖で霧に包まれる</p>
 
-北見のキツネ牧場＆山の水族館
+<p>北見のキツネ牧場＆山の水族館</p>
 
-網走で金カム聖地巡礼
+<p>網走で金カム聖地巡礼</p>
 
-知床観光（1泊2日でも遠い）
+<p>知床観光（1泊2日でも遠い）</p>
 
-釧路湿原観光（1泊2日でも遠い）
+<p>釧路湿原観光（1泊2日でも遠い）</p>
 
-取り敢えず根室に行く
+<p>取り敢えず根室に行く</p>
 
-取り敢えず稚内に行く
+<p>取り敢えず稚内に行く</p>
 
-大雪の山奥の秘湯に行く（上級者向け） </code></pre>
+<p>大雪の山奥の秘湯に行く（上級者向け）</p>
+</div>
 </section>
 
 <section id="research-sasisuseso">
   <h2>【研究の「さしすせそ」】</h2>
-  <pre><code>さ：再現性🔁（再現可能で普遍的な信頼できる成果）
+  <div class="note-text">
+<p>さ：再現性🔁（再現可能で普遍的な信頼できる成果）</p>
 
-し：新規性👀（surveyに基づく新規性や独創性の主張）
+<p>し：新規性👀（surveyに基づく新規性や独創性の主張）</p>
 
-す：数量性📊（定性的な議論に終始せず数値で有効性を示す）
+<p>す：数量性📊（定性的な議論に終始せず数値で有効性を示す）</p>
 
-せ：整合性📐（論理的な破綻のない首尾一貫した議論）
+<p>せ：整合性📐（論理的な破綻のない首尾一貫した議論）</p>
 
-そ：速報性🚀（さっさと書いて出す）
+<p>そ：速報性🚀（さっさと書いて出す）</p>
 
-出典：https://twitter.com/naemura/status/895084214101716992 - 苗村健 先生
+<p>出典：https://twitter.com/naemura/status/895084214101716992 - 苗村健 先生</p>
 
-（オマケ）学会の「さしすせそ」🥶
+<p>（オマケ）学会の「さしすせそ」🥶</p>
 
-さ：😇先ほどの質問に関連して...／🤨再現性は確認されているのでしょうか？
+<p>さ：😇先ほどの質問に関連して...／🤨再現性は確認されているのでしょうか？</p>
 
-し：😏素人質問で恐縮ですが...／😅初歩的な質問かもしれませんが...
+<p>し：😏素人質問で恐縮ですが...／😅初歩的な質問かもしれませんが...</p>
 
-す：😓すみません、よくフォローできなかったのですが...／🧐素晴らしい発表でした。しかし...
+<p>す：😓すみません、よくフォローできなかったのですが...／🧐素晴らしい発表でした。しかし...</p>
 
-せ：🤔先行研究との違いを訊きたいのですが...／🤓専門的な内容に踏み込んでしまうのですが...
+<p>せ：🤔先行研究との違いを訊きたいのですが...／🤓専門的な内容に踏み込んでしまうのですが...</p>
 
-そ：🥱その研究（手法）って意味あるんですか？／😊その理論を考えたのは私なのですが...
+<p>そ：🥱その研究（手法）って意味あるんですか？／😊その理論を考えたのは私なのですが...</p>
 
-（諸説あり）
+<p>（諸説あり）</p>
 
-このホームページはGoogle siteを利用して作成されています。</code></pre>
+<p>このホームページはGoogle siteを利用して作成されています。</p>
+</div>
 </section>
 
     <p><span style="color: red;">（以下、工事中）</span></p>
