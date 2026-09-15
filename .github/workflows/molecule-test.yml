@@ -1,0 +1,31 @@
+name: Molecule editor tests
+on:
+  push:
+    branches: [main, molecule-studio-v3]
+    paths: ['molecule-visualizer/**', '.github/workflows/molecule-test.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test molecule-visualizer/tests/*.test.cjs
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Browser integration
+        run: |
+          mkdir -p test-artifacts
+          python molecule-visualizer/scripts/preview.py > /tmp/preview.log 2>&1 &
+          node molecule-visualizer/tests/browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: molecule-browser-results
+          path: test-artifacts
+          retention-days: 7

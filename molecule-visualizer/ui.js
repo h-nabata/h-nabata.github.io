@@ -81,6 +81,7 @@
     updateAtomTable();
     updateBondTable();
     syncUI();
+    MV.Studio?.sync();
   }
 
   function setState(nextState, preserveCamera) {
@@ -94,6 +95,7 @@
     updateAtomTable();
     updateBondTable();
     syncUI();
+    MV.Studio?.sync();
   }
 
   function refreshBondsAndRender(preserveCamera) {
@@ -850,7 +852,10 @@
   MV.App = {
     init,
     getState: function () { return state; },
-    setState
+    setState,
+    renderer: () => renderer,
+    change(label, fn, fit=false) { const next=Model.cloneState(state); const result=fn(next)||next; pushHistory(label); setState(result,!fit); },
+    setStatus, loadText
   };
 })(window);
 

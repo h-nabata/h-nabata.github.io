@@ -31,7 +31,9 @@
       x: Number(data.x) || 0,
       y: Number(data.y) || 0,
       z: Number(data.z) || 0,
-      charge: Number(data.charge) || 0
+      charge: Number(data.charge) || 0,
+      xyzExtras: data.xyzExtras ? JSON.parse(JSON.stringify(data.xyzExtras)) : undefined,
+      selective: data.selective ? data.selective.slice() : undefined
     };
     bumpCounterFromId(atom.id, "atom");
     return atom;
@@ -75,7 +77,8 @@
         x: a.x,
         y: a.y,
         z: a.z,
-        charge: a.charge || 0
+        charge: a.charge || 0,
+        xyzExtras: a.xyzExtras, selective: a.selective
       })),
       bonds: state.bonds.map(b => ({
         id: b.id,
@@ -87,7 +90,7 @@
       })),
       selectedAtomIds: Array.from(state.selectedAtomIds || []),
       selectedBondIds: Array.from(state.selectedBondIds || []),
-      metadata: Object.assign({}, state.metadata || {}),
+      metadata: JSON.parse(JSON.stringify(state.metadata || {})),
       viewSettings: Object.assign({}, state.viewSettings || {})
     });
   }

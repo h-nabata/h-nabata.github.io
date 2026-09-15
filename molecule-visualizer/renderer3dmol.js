@@ -163,11 +163,17 @@
     this.projectedAtoms = atoms.map((atom,index) => Object.assign(this.project(atom, center, scale, width, height), {index:index+1}));
     const atomById = new Map(this.projectedAtoms.map(pa => [pa.atom.id, pa]));
 
-    this.projectedBonds = (this.state.bonds || []).map(bond => ({
-      bond,
-      a: atomById.get(bond.atom1),
-      b: atomById.get(bond.atom2)
-    })).filter(item => item.a && item.b);
+    this.projectedBonds = (this.state.bonds || []).flatMap(bond => {
+      const a=atomById.get(bond.atom1),b=atomById.get(bond.atom2);if(!a||!b)return [];
+      const cell=this.state.metadata.cell;
+      if(!cell)return [{bond,a,b}];
+      const image=MV.Periodic.minimumImage([b.atom.x-a.atom.x,b.atom.y-a.atom.y,b.atom.z-a.atom.z],cell);
+      if(!image.shift.some(Boolean))return [{bond,a,b}];
+      const offset=MV.Periodic.cartesian(image.shift,cell);
+      const translate=(atom,sign)=>this.project({x:atom.x+sign*offset[0],y:atom.y+sign*offset[1],z:atom.z+sign*offset[2]},center,scale,width,height);
+      return [{bond,a,b:translate(b.atom,1)},{bond,a:translate(a.atom,-1),b}];
+    });
+    if (this.state.metadata.cell) this.drawCell(center,scale,width,height);
 
     if (this.state.viewSettings.style !== "vdw") this.projectedBonds
       .slice()
@@ -179,6 +185,11 @@
       .sort((a, b) => a.z - b.z)
       .forEach(pa => this.drawAtom(pa));
 
+    const selected=[...this.state.selectedAtomIds].map(id=>atomById.get(id)).filter(Boolean);
+    if(selected.length>=2&&selected.length<=4){
+      const ctx=this.ctx;ctx.save();ctx.strokeStyle='#087e85';ctx.lineWidth=1.5;ctx.setLineDash([3,4]);ctx.beginPath();selected.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke();ctx.setLineDash([]);
+      try{const atoms=selected.map(p=>p.atom),text=atoms.length===2?MV.Geometry.distance(...atoms).toFixed(3)+' Å':atoms.length===3?MV.Geometry.angle(...atoms).toFixed(2)+'°':MV.Geometry.dihedral(...atoms).toFixed(2)+'°';ctx.fillStyle='#075c64';ctx.font='bold 13px sans-serif';ctx.textAlign='left';ctx.fillText(text,16,25);}catch(e){}ctx.restore();
+    }
     if (this.selectionBox) this.drawSelectionBox();
   };
 
@@ -197,7 +208,17 @@
       const dz = atom.z - center.z;
       max = Math.max(max, Math.sqrt(dx * dx + dy * dy + dz * dz));
     });
+    if(this.state.metadata.cell)this.cellCorners().forEach(p=>{max=Math.max(max,Math.hypot(p.x-center.x,p.y-center.y,p.z-center.z));});
     return max * 2;
+  };
+
+  Renderer3DMol.prototype.cellCorners = function(){
+    return Array.from({length:8},(_,i)=>{const p=MV.Periodic.cartesian([i&1,(i>>1)&1,(i>>2)&1],this.state.metadata.cell);return {x:p[0],y:p[1],z:p[2]};});
+  };
+  Renderer3DMol.prototype.drawCell = function(center,scale,width,height){
+    const corners=this.cellCorners().map(p=>this.project(p,center,scale,width,height)),ctx=this.ctx;ctx.save();ctx.lineWidth=1;ctx.strokeStyle='#8babb8';ctx.setLineDash([5,3]);
+    corners.forEach((p,i)=>{[1,2,4].forEach(bit=>{if(i&bit)return;const q=corners[i|bit];ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();});});
+    ctx.setLineDash([]);['a','b','c'].forEach((label,i)=>{const p=corners[0],q=corners[1<<i];ctx.strokeStyle=['#d35c59','#48a775','#527bce'][i];ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();ctx.fillStyle=ctx.strokeStyle;ctx.font='bold 13px sans-serif';ctx.fillText(label,q.x+5,q.y-5);});ctx.restore();
   };
 
   Renderer3DMol.prototype.drawBond = function (item) {

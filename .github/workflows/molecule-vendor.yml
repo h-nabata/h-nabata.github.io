@@ -1,8 +1,5 @@
 name: Prepare molecule editor engines
 on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/molecule-vendor.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -34,13 +31,3 @@ jobs:
           name: molecule-engines
           path: molecule-visualizer/vendor
           retention-days: 7
-      - name: Prepare browser for local verification
-        run: |
-          npm install --prefix /tmp/browser playwright@1.55.0
-          /tmp/browser/node_modules/.bin/playwright install chromium
-          tar -czf /tmp/chromium.tar.gz -C "$HOME/.cache" ms-playwright
-      - uses: actions/upload-artifact@v4
-        with:
-          name: verification-browser
-          path: /tmp/chromium.tar.gz
-          retention-days: 2

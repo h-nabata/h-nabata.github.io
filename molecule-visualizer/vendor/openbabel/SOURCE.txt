@@ -1,0 +1,1 @@
+Open Babel WebAssembly source and build instructions: https://github.com/partridgejiang/cheminfo-to-web/tree/4ccb195c2916e99905abf264bf6212f2b4f9a10d/OpenBabel3

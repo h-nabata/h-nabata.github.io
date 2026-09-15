@@ -48,7 +48,7 @@
     return METALS.has(element);
   }
 
-  function inferBonds(atoms) {
+  function inferBonds(atoms, cell) {
     const bonds = [];
     for (let i = 0; i < atoms.length; i++) {
       for (let j = i + 1; j < atoms.length; j++) {
@@ -58,7 +58,7 @@
         const r2 = COVALENT_RADII[b.element];
         if (!r1 || !r2) continue;
 
-        const d = distance(a, b);
+        const d = cell ? MV.Periodic.minimumImage([b.x-a.x,b.y-a.y,b.z-a.z],cell).distance : distance(a, b);
         if (d < MIN_BOND_DISTANCE) continue;
 
         const metalPair = isMetal(a.element) || isMetal(b.element);
@@ -78,7 +78,7 @@
   }
 
   function refreshInferredBonds(state) {
-    Model.mergeInferredBonds(state, inferBonds(state.atoms));
+    Model.mergeInferredBonds(state, inferBonds(state.atoms, state.metadata.cell));
   }
 
   MV.Bonding = {

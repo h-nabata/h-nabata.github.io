@@ -2,21 +2,23 @@
 layout: default
 title: 分子構造エディタ | Molecule Studio
 ---
-<link rel="stylesheet" href="./molecule-visualizer_style.css?v=2">
-<script defer src="./model.js?v=2"></script>
-<script defer src="./bonding.js?v=2"></script>
-<script defer src="./geometry.js?v=2"></script>
-<script defer src="./io.js?v=2"></script>
-<script defer src="./history.js?v=2"></script>
-<script defer src="./renderer3dmol.js?v=2"></script>
-<script defer src="./ui.js?v=2"></script>
-<script defer src="./molecule-visualizer_main.js?v=2"></script>
+<link rel="stylesheet" href="./molecule-visualizer_style.css?v=3">
+<script defer src="./model.js?v=3"></script>
+<script defer src="./bonding.js?v=3"></script>
+<script defer src="./geometry.js?v=3"></script>
+<script defer src="./io.js?v=3"></script>
+<script defer src="./periodic.js?v=3"></script>
+<script defer src="./history.js?v=3"></script>
+<script defer src="./renderer3dmol.js?v=3"></script>
+<script defer src="./ui.js?v=3"></script>
+<script defer src="./studio.js?v=3"></script>
+<script defer src="./molecule-visualizer_main.js?v=3"></script>
 
 <main class="mv-app">
   <header class="mv-app-header">
-    <div><p class="mv-eyebrow">MOLECULE STUDIO</p><h1>分子構造エディタ</h1><p class="mv-subtitle">構造を見ながら、選ぶ・測る・編集する。</p></div>
-    <div class="mv-row"><button class="mv-btn" id="btnNew">新規</button><button class="mv-btn" id="btnOpen">ファイルを開く</button><button class="mv-btn" id="btnPaste">座標を貼り付け</button><button class="mv-btn primary" id="btnExport">保存 / 書き出し</button></div>
-    <input id="fileInput" type="file" accept=".xyz,.mol,.sdf,.json,.txt" hidden>
+    <div><p class="mv-eyebrow">MOLECULE STUDIO</p><h1>分子構造エディタ</h1><p class="mv-subtitle">分子と結晶を、ひとつのワークスペースで。</p></div>
+    <div class="mv-row"><button class="mv-btn primary" id="btnKetcher">2D描画 / SMILES</button><button class="mv-btn" id="btnNew">新規</button><button class="mv-btn" id="btnOpen">ファイルを開く</button><button class="mv-btn" id="btnPaste">座標を貼り付け</button><button class="mv-btn primary" id="btnExport">保存 / 書き出し</button></div>
+    <input id="fileInput" type="file" accept=".xyz,.extxyz,.mol,.sdf,.json,.txt,.vasp,POSCAR,CONTCAR" hidden>
   </header>
   <div class="mv-document"><label for="structureTitle">構造名</label><input id="structureTitle" value="無題の構造"><span id="structureStats">0 原子 · 0 結合</span><span id="saveState">この端末に自動保存</span><button class="mv-btn" id="btnHelp">操作ガイド</button></div>
   <div class="mv-workspace">
@@ -31,7 +33,9 @@ title: 分子構造エディタ | Molecule Studio
         <div class="mv-row"><button class="mv-btn" id="btnUndo" title="元に戻す (Ctrl / ⌘ Z)">↶ 戻す</button><button class="mv-btn" id="btnRedo" title="やり直す (Ctrl / ⌘ Shift Z)">↷ やり直す</button></div>
       </div>
       <div class="mv-viewer-shell"><div id="viewer"></div><div class="mv-viewer-bottom"><span id="modeBadge">選択モード</span><span id="gestureHint">ドラッグで回転 · ホイールで拡大縮小</span></div></div>
-      <div class="mv-view-controls"><label for="styleSelect">表示</label><select id="styleSelect"><option value="stickball">球と棒</option><option value="stick">棒</option><option value="wire">ワイヤー</option><option value="vdw">空間充填（概略）</option></select><button class="mv-btn" id="btnToggleIndex" aria-pressed="false">原子番号</button><button class="mv-btn" id="btnFit">全体を表示</button><button class="mv-btn" id="btnZoomIn" aria-label="拡大">＋</button><button class="mv-btn" id="btnZoomOut" aria-label="縮小">−</button><button class="mv-btn" id="btnViewXY">XY</button><button class="mv-btn" id="btnViewXZ">XZ</button><button class="mv-btn" id="btnViewYZ">YZ</button><button class="mv-btn" id="btnPNG">画像を保存</button></div>
+      <div class="mv-view-controls"><label for="styleSelect">表示</label><select id="styleSelect"><option value="stickball">球と棒</option><option value="stick">棒</option><option value="wire">ワイヤー</option><option value="vdw">空間充填（概略）</option></select><button class="mv-btn" id="btnToggleIndex" aria-pressed="false">原子番号</button><button class="mv-btn" id="btnFit">全体を表示</button><button class="mv-btn" id="btnZoomIn" aria-label="拡大">＋</button><button class="mv-btn" id="btnZoomOut" aria-label="縮小">−</button><button class="mv-btn" id="btnViewXY">XY</button><button class="mv-btn" id="btnViewXZ">XZ</button><button class="mv-btn" id="btnViewYZ">YZ</button><button class="mv-btn" id="btnFullScreen">全画面</button><button class="mv-btn" id="btnDataDock">XYZを直接編集</button><button class="mv-btn" id="btnPNG">画像を保存</button></div>
+      <div class="mv-trajectory"><span class="mv-eyebrow">FRAMES</span><button class="mv-btn" id="framePrev" aria-label="前のフレーム">‹</button><button class="mv-btn" id="framePlay">▶ 再生</button><input id="frameRange" type="range" min="0" max="0" value="0" aria-label="フレーム"><button class="mv-btn" id="frameNext" aria-label="次のフレーム">›</button><output id="frameLabel">1 / 1</output></div>
+      <div class="mv-cellbar"><button class="mv-btn" id="btnCell">周期セル・スーパーセル</button><span id="cellStatus">非周期構造</span><span id="pbcMeasure"></span><span id="fractionalInfo"></span></div>
       <div class="mv-selection-bar"><strong id="selectionSummary">原子をクリックして選択</strong><label class="mv-check"><input id="multiSelect" type="checkbox">複数選択</label><button class="mv-btn" id="btnClearSel">解除</button></div>
       <div class="mv-feedback" id="statusBadge" role="status" aria-live="polite">準備完了</div>
       <p class="mv-footnote">座標は Å。XYZの結合は原子間距離からの推定です。結合次数・配位の妥当性は確認してください。</p>
@@ -152,7 +156,7 @@ title: 分子構造エディタ | Molecule Studio
       </div>
 
       
-      <div class="mv-panel"><h2>選択原子をまとめて平行移動</h2><div class="mv-grid"><label>ΔX (Å)<input id="translateX" type="number" value="0" step="0.1"></label><label>ΔY (Å)<input id="translateY" type="number" value="0" step="0.1"></label><label>ΔZ (Å)<input id="translateZ" type="number" value="0" step="0.1"></label></div><button class="mv-btn primary" id="btnTranslate">移動を適用</button></div><p class="mv-small">測定は選択した順序 A → B → C → D に従います。幾何編集は最後の原子だけを動かします（原子団の自動回転や構造最適化は行いません）。</p></div>
+      <div class="mv-panel"><h2>選択原子をまとめて平行移動</h2><div class="mv-grid"><label>ΔX (Å)<input id="translateX" type="number" value="0" step="0.1"></label><label>ΔY (Å)<input id="translateY" type="number" value="0" step="0.1"></label><label>ΔZ (Å)<input id="translateZ" type="number" value="0" step="0.1"></label></div><button class="mv-btn primary" id="btnTranslate">移動を適用</button></div><div class="mv-panel"><h2>選択原子団の回転</h2><p class="mv-small">選択原子の重心を中心に、内部形状を保って回転します。</p><div class="mv-row"><label>軸 <select id="rotationAxis"><option value="x">X</option><option value="y">Y</option><option value="z" selected>Z</option></select></label><label>角度 (°) <input id="rotationAngle" type="number" value="15" step="1"></label><button class="mv-btn" id="rotateSelection">回転</button></div></div><p class="mv-small">測定は選択した順序 A → B → C → D に従います。幾何編集は最後の原子だけを動かします（原子団の自動回転や構造最適化は行いません）。</p></div>
     </aside>
   </div>
   <details class="mv-atom-list"><summary>原子一覧・選択</summary><div class="mv-row"><button class="mv-btn" id="btnSelectAll">全選択</button><button class="mv-btn" id="btnSelectInvert">選択を反転</button><button class="mv-btn" id="btnSelectConnected">つながった分子を選択</button><button class="mv-btn" id="btnExpandSelection">隣接原子も選択</button><label for="selByElem">元素</label><select id="selByElem"></select><button class="mv-btn" id="btnSelectByElem">選択</button></div><div class="mv-panel">
@@ -169,14 +173,14 @@ title: 分子構造エディタ | Molecule Studio
         </div>
       </div>
     </details>
-  <section class="mv-examples"><span>サンプルから試す</span><button class="mv-btn" data-example="water">水</button><button class="mv-btn" data-example="methane">メタン</button><button class="mv-btn" data-example="ethanol">エタノール</button><button class="mv-btn" data-example="benzene">ベンゼン</button></section>
-  <dialog id="importDialog"><h2>構造を読み込む</h2><p>XYZ（原子数・コメント行あり／座標のみ）または MOL / SDF (V2000) を貼り付けてください。1構造ずつ読み込みます。</p><label for="xyz_input">構造データ</label><textarea id="xyz_input" rows="13" spellcheck="false" placeholder="3
+  <section class="mv-examples"><span>サンプルから試す</span><button class="mv-btn" data-example="water">水</button><button class="mv-btn" data-example="methane">メタン</button><button class="mv-btn" data-example="ethanol">エタノール</button><button class="mv-btn" data-example="benzene">ベンゼン</button><button class="mv-btn" id="sampleCrystal">NaCl結晶</button></section>
+  <dialog id="importDialog"><h2>構造を読み込む</h2><p>XYZ・複数フレームXYZ・拡張XYZ（Lattice）・POSCAR・MOL / SDF (V2000) を貼り付けてください。SMILESは「2D描画 / SMILES」から読み込めます。</p><label for="xyz_input">構造データ</label><textarea id="xyz_input" rows="13" spellcheck="false" placeholder="3
 Water
 O 0 0 0
 H 0.9572 0 0
 H -0.239987 0.926627 0"></textarea><p class="mv-small" id="importError" role="alert"></p><div class="mv-row mv-end"><button class="mv-btn" data-close="importDialog">キャンセル</button><button class="mv-btn primary" id="btnRender">読み込む</button></div></dialog>
-  <dialog id="exportDialog"><h2>保存・書き出し</h2><p>編集を再開するにはプロジェクト形式を保存してください。XYZは座標のみ、MOL/SDFは共有結合と形式電荷を保存します。SDFの追加プロパティは保持しますが、編集後の値へ再計算はしません。</p><div class="mv-row"><button class="mv-btn primary" id="btnSaveProject">プロジェクト保存</button><button class="mv-btn" id="btnDownloadXYZ">XYZを保存</button><button class="mv-btn" id="btnDownloadSdf">SDFを保存</button></div><div class="mv-row"><button class="mv-btn" id="btnCopyXYZ">XYZをコピー</button><button class="mv-btn" id="btnCopyMol">MOLをコピー</button><button class="mv-btn" id="btnExportText">最新のXYZを表示</button></div><textarea id="exportText" rows="9" readonly aria-label="書き出すXYZ"></textarea><p id="exportMessage" role="status"></p><div class="mv-row mv-end"><button class="mv-btn" data-close="exportDialog">閉じる</button></div></dialog>
-  <dialog id="helpDialog"><h2>操作ガイド</h2><ul><li><b>選択：</b>クリック／タップで原子を選択。Shift・Ctrl・⌘ または「複数選択」で追加選択。</li><li><b>回転：</b>選択モードでドラッグ。原子の上からでも座標は変わりません。</li><li><b>表示の移動：</b>右ドラッグまたは Alt + ドラッグ。タッチでは2本指で移動・ピンチで拡大縮小。</li><li><b>原子移動：</b>モードを切り替えて原子をドラッグ。選択した原子を一緒に移動。Shiftで世界座標のZ方向に移動。</li><li><b>範囲選択：</b>専用モードでドラッグ。複数選択も併用できます。</li><li><b>キー操作（描画領域にフォーカス時）：</b>V 選択、M 移動、B 結合、R 全体表示、E 隣接選択、W 分子選択、Delete 削除、Ctrl / ⌘ Z 元に戻す。</li><li><b>データ：</b>ファイルを画面へドロップ可能。編集内容はこのブラウザに自動保存されます。プロジェクト保存で結合種類・表示設定も保持できます。</li></ul><div class="mv-row mv-end"><button class="mv-btn" data-close="helpDialog">閉じる</button></div></dialog>
+  <dialog id="exportDialog"><h2>保存・書き出し</h2><p>編集を再開するにはプロジェクト形式を保存してください。拡張XYZは座標・周期セル、MOL/SDFは共有結合と形式電荷を保存します。SDFの追加プロパティは保持しますが、編集後の値へ再計算はしません。</p><div class="mv-row"><button class="mv-btn primary" id="btnSaveProject">プロジェクト保存</button><button class="mv-btn" id="btnDownloadXYZ">XYZを保存</button><button class="mv-btn" id="savePOSCAR">POSCARを保存</button><button class="mv-btn" id="allFrames">全フレームXYZ</button><button class="mv-btn" id="btnDownloadSdf">SDFを保存</button></div><div class="mv-row"><button class="mv-btn" id="btnCopyXYZ">XYZをコピー</button><button class="mv-btn" id="btnCopyMol">MOLをコピー</button><button class="mv-btn" id="btnExportText">最新のXYZを表示</button></div><textarea id="exportText" rows="9" readonly aria-label="書き出すXYZ"></textarea><p id="exportMessage" role="status"></p><div class="mv-row mv-end"><button class="mv-btn" data-close="exportDialog">閉じる</button></div></dialog>
+  <dialog id="helpDialog"><h2>操作ガイド</h2><ul><li><b>選択：</b>クリック／タップで原子を選択。Shift・Ctrl・⌘ または「複数選択」で追加選択。</li><li><b>回転：</b>選択モードでドラッグ。原子の上からでも座標は変わりません。</li><li><b>表示の移動：</b>右ドラッグまたは Alt + ドラッグ。タッチでは2本指で移動・ピンチで拡大縮小。</li><li><b>原子移動：</b>モードを切り替えて原子をドラッグ。選択した原子を一緒に移動。Shiftで世界座標のZ方向に移動。</li><li><b>範囲選択：</b>専用モードでドラッグ。複数選択も併用できます。</li><li><b>キー操作（描画領域にフォーカス時）：</b>V 選択、M 移動、B 結合、R 全体表示、E 隣接選択、W 分子選択、Delete 削除、Ctrl / ⌘ Z 元に戻す。</li><li><b>追加操作：</b>ダブルクリックで分子を選択。X / Y / Zで移動方向を拘束。矢印で0.01 Å（Shiftで0.1 Å）移動、PageUp / DownでZ移動。選択原子団の回転は「測定・移動」から。</li><li><b>周期系：</b>セルの3ベクトル・周期方向・スーパーセルを編集できます。選択2原子の最小像距離はセル欄、通常の距離・角度は表示座標を使います。結合推定は各原子対の最小像1本です。周期像自身との結合・全近接像は未表示です。</li><li><b>2D / 3D：</b>Ketcherで描画・SMILES入出力。UFFで水素を追加して初期3D配座を作成します。計算化学の構造最適化を代替するものではありません。</li><li><b>データ：</b>ファイルを画面へドロップ可能。編集内容はこのブラウザに自動保存されます。プロジェクト保存で結合種類・表示設定も保持できます。</li></ul><div class="mv-row mv-end"><button class="mv-btn" data-close="helpDialog">閉じる</button></div></dialog>
 <dialog id="fragDialog">
     <form method="dialog">
       <h3>原子団（XYZ）を追加</h3>
@@ -246,4 +250,7 @@ H 1.0 0 0
       </div>
     </form>
   </dialog>
+<dialog id="cellDialog"><h2>周期セル</h2><p>格子ベクトル a・b・c を1行ずつ、Å単位で入力します。斜交セルに対応します。</p><label for="cellVectors">格子ベクトル（3行 × 3成分）</label><textarea id="cellVectors" rows="3" spellcheck="false"></textarea><div class="mv-row"><label><input id="pbcA" type="checkbox" checked> a方向周期</label><label><input id="pbcB" type="checkbox" checked> b方向周期</label><label><input id="pbcC" type="checkbox" checked> c方向周期</label></div><label class="mv-check"><input id="keepFractional" type="checkbox">セル変更時に分率座標を保持（未選択ではCartesian座標を保持）</label><div class="mv-row"><button class="mv-btn primary" id="cellApply">セルを適用</button><button class="mv-btn" id="cellWrap">原子をセル内へ折り返す</button><button class="mv-btn" id="cellRemove">周期セルを解除</button></div><hr><h3>スーパーセルを作成</h3><p>原子を実際に複製します。軌跡の場合は現在のフレームを独立した構造として扱います。「戻す」で復元できます。</p><label for="repeatCell">a b c の反復数</label><input id="repeatCell" value="2 2 2"><button class="mv-btn" id="cellSuper">スーパーセルを作成</button><div class="mv-row mv-end"><button class="mv-btn" data-close="cellDialog">閉じる</button></div></dialog>
+<dialog id="dataDialog"><h2>XYZ座標を直接編集</h2><p>現在のフレームの座標です。適用すると構造を読み直します。「戻す」で復元できます。</p><textarea id="dataText" rows="18" spellcheck="false" aria-label="XYZ座標エディタ"></textarea><div class="mv-row mv-end"><button class="mv-btn" data-close="dataDialog">キャンセル</button><button class="mv-btn primary" id="dataApply">構造へ適用</button></div></dialog>
+<dialog id="chemDialog" class="mv-chem-dialog"><div class="mv-row mv-between"><div><h2>2D構造を描く</h2><p class="mv-small">Ketcher · SMILES / MOL · UFFによる初期3D構造生成</p></div><button class="mv-btn" data-close="chemDialog">閉じる</button></div><div class="mv-row"><button class="mv-btn" id="chemFrom3D">現在の3D構造を読み込む</button><button class="mv-btn" id="chemSaveMol">MOLを保存</button><button class="mv-btn primary" id="chemTo3D">水素追加 → 3D構造を生成</button><button class="mv-btn" id="chemCancel" disabled>生成を中止</button></div><iframe id="ketcherFrame" title="Ketcher 分子構造描画エディタ" allow="clipboard-read; clipboard-write"></iframe><label for="smilesText">SMILES</label><textarea id="smilesText" rows="2" placeholder="例: CC(=O)Oc1ccccc1C(=O)O" spellcheck="false"></textarea><div class="mv-row"><button class="mv-btn" id="chemReadSmiles">SMILESを描画</button><button class="mv-btn" id="chemSmiles">描画からSMILESを取得</button><button class="mv-btn" id="chemSaveSmiles">SMILESを保存</button></div><p id="chemMessage" role="status" aria-live="polite"></p></dialog>
 </main>
