@@ -704,7 +704,7 @@
     if (key === "m") { consumeShortcut(e); setMode("move"); return; }
     if (inCanvas && key === "e") { consumeShortcut(e); expandSelectionOneBond(); return; }
     if (inCanvas && key === "w") { consumeShortcut(e); selectConnectedMoleculesFromSelection(); return; }
-    if (key === "escape") { consumeShortcut(e); clearSelection(); return; }
+    if (key === "escape") { consumeShortcut(e); MV.Studio?.clearAxis(); clearSelection(); return; }
     if (key === "a" && !(e.ctrlKey || e.metaKey)) { consumeShortcut(e); selectAll(); return; }
     if (key === "1" || key === "2" || key === "3") { consumeShortcut(e); setSelectedBondOrder(Number(key)); return; }
     if (key === "r") {

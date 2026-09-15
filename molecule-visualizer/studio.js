@@ -86,5 +86,5 @@
     renderer.canvas.addEventListener('keydown',e=>{if(e.ctrlKey||e.metaKey||e.altKey)return;try{const key=e.key.toLowerCase();if(['x','y','z'].includes(key)){axis=axis===key?null:key;message(axis?`${axis.toUpperCase()}軸に移動を拘束（同じキーで解除）`:'移動拘束を解除');e.preventDefault();}else if(key==='escape'){axis=null;}else if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','PageUp','PageDown'].includes(e.key)){e.preventDefault();const step=e.shiftKey?.1:.01;transform(atoms=>atoms.forEach(a=>{if(e.key==='ArrowLeft')a.x-=step;if(e.key==='ArrowRight')a.x+=step;if(e.key==='ArrowUp')a.y+=step;if(e.key==='ArrowDown')a.y-=step;if(e.key==='PageUp')a.z+=step;if(e.key==='PageDown')a.z-=step;}));}}catch(err){message(err.message,true);}});
     sync();
   }
-  MV.Studio={init,sync,convert,allXYZ,frame};
+  MV.Studio={init,sync,convert,allXYZ,frame,clearAxis(){axis=null;}};
 })(window);

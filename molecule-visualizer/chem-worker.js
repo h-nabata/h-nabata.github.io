@@ -6,10 +6,10 @@ self.onmessage=async function(event){
     importScripts('./vendor/openbabel/openbabel.js');
     const resource=async name=>{const r=await fetch(new URL('./vendor/openbabel/'+name,self.location.href));if(!r.ok)throw Error('化学エンジンのデータを取得できません: '+r.status);return r.arrayBuffer();};
     const [packageData,wasmBinary]=await Promise.all([resource('openbabel.data'),resource('openbabel.wasm')]);
-    const Module=await new Promise((resolve,reject)=>{
+    const {module:Module}=await new Promise((resolve,reject)=>{
       // This pinned wrapper supplies its own onRuntimeInitialized and locateFile.
       // Use its documented initialization hook and preload both binary resources.
-      self.__$openBabelInitialized$__=event=>resolve(event.module);
+      self.__$openBabelInitialized$__=event=>resolve(event);
       OpenBabelModule({wasmBinary:new Uint8Array(wasmBinary),getPreloadedPackage:()=>packageData,onAbort:reason=>reject(Error(String(reason))),print:()=>{},printErr:()=>{}});
     });
     const {data,input,output,generate}=event.data;
