@@ -35,8 +35,9 @@
     const selected=selectedAtoms();byId("structureStats").textContent=`${state.atoms.length} 原子 · ${state.bonds.length} 結合`;
     if(document.activeElement!==byId("structureTitle"))byId("structureTitle").value=state.metadata.title||"無題の構造";
     byId("selectionSummary").textContent=selected.length ? `選択順: ${selected.slice(0,8).map(atomLabel).join(" → ")}${selected.length>8?` ほか ${selected.length-8} 原子`:""}` : "原子をクリックして選択";
-    ["coordX","coordY","coordZ","atomCharge","btnApplyCoords"].forEach(id=>byId(id).disabled=selected.length!==1);
-    if(selected.length===1){["coordX","coordY","coordZ"].forEach((id,i)=>byId(id).value=selected[0][["x","y","z"][i]].toFixed(6));byId("atomCharge").value=selected[0].charge||0;}
+    ["atomCharge","btnApplyCharge"].forEach(id=>byId(id).disabled=selected.length!==1);
+    if(selected.length===1)byId("atomCharge").value=selected[0].charge||0;else byId("atomCharge").value="";
+    syncXYZEditor();
     byId("btnUndo").disabled=!history.undoStack.length;byId("btnRedo").disabled=!history.redoStack.length;
     ["btnDeleteSel","btnChangeElem","btnTranslate"].forEach(id=>byId(id).disabled=!selected.length);
     byId("btnAddBond").disabled=selected.length!==2;
@@ -45,6 +46,25 @@
     byId("styleSelect").value=state.viewSettings.style;byId("btnToggleIndex").setAttribute("aria-pressed",String(state.viewSettings.showIndexLabels));
     const values=selected;
     try{setMeasure(values.length===2?`${Geometry.distance(...values).toFixed(3)} Å`:values.length===3?`${Geometry.angle(...values).toFixed(2)}°`:values.length===4?`${Geometry.dihedral(...values).toFixed(2)}°`:"2 / 3 / 4 原子を順に選択してください");}catch(e){setMeasure(e.message);}
+  }
+  let xyzDirty=false, xyzBase='';
+  function syncXYZEditor(){
+    const el=byId('dataText');if(!el)return;
+    let text;try{text=IO.stateToXYZText(state);}catch(error){byId('xyzEditStatus').textContent=error.message;return;}
+    if(!xyzDirty){if(el.value!==text)el.value=text;xyzBase=text;}
+    byId('xyzEditStatus').textContent=xyzDirty?(text!==xyzBase?'編集中に構造が変更されました。「現在の構造を再表示」で更新してから編集してください。':'未適用の編集があります。'):'表示中の構造と同期しています。';
+  }
+  function applyXYZEditor(){
+    if(xyzDirty&&IO.stateToXYZText(state)!==xyzBase)throw Error('構造が変更されています。編集内容を控え、「現在の構造を再表示」で更新してください。');
+    const input=byId('dataText').value,parsed=IO.parseXYZToState(input);
+    if(parsed.metadata.trajectory)throw Error('ここでは現在の1フレームを編集してください。複数フレームは「ファイルを開く」から読み込めます。');
+    const next=Model.cloneState(state),same=next.atoms.length===parsed.atoms.length&&next.atoms.every((a,i)=>a.element===parsed.atoms[i].element);
+    if(same)next.atoms.forEach((a,i)=>{const b=parsed.atoms[i];Object.assign(a,{x:b.x,y:b.y,z:b.z});if(Object.keys(b.xyzExtras||{}).length)a.xyzExtras=b.xyzExtras;});
+    else{next.atoms=parsed.atoms;next.bonds=[];next.selectedAtomIds.clear();next.selectedBondIds.clear();next.metadata.suppressedBondKeys=[];}
+    if(/^\s*\d+\s*\n/.test(input))next.metadata.title=parsed.metadata.title;
+    if(parsed.metadata.cell)next.metadata.cell=parsed.metadata.cell;
+    Bonding.refreshInferredBonds(next);
+    pushHistory('XYZ coordinates');xyzDirty=false;setState(next,true);setStatus('全原子のXYZ座標を適用しました。「戻す」で復元できます。');
   }
   function setMeasure(msg) { const el = byId("measureBadge"); if (el) el.textContent = msg; }
   function pushHistory(label) { history.push(label, state); }
@@ -809,7 +829,11 @@
     const tabs=[...document.querySelectorAll('[data-tab]')];
     function activate(tab){tabs.forEach(t=>{const active=t===tab;t.setAttribute('aria-selected',String(active));t.tabIndex=active?0:-1;byId('pane-'+t.dataset.tab).hidden=!active;});}
     tabs.forEach((tab,i)=>{tab.tabIndex=i===0?0:-1;tab.addEventListener('click',()=>activate(tab));tab.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const next=e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;activate(tabs[next]);tabs[next].focus();});});
-    bind('btnApplyCoords','click',()=>{const atoms=selectedAtoms();if(atoms.length!==1)return;const data={x:numberInput('coordX'),y:numberInput('coordY'),z:numberInput('coordZ'),charge:numberInput('atomCharge',-15,15)};if(!Number.isInteger(data.charge))throw Error('形式電荷は整数にしてください。');pushHistory('coordinates');Object.assign(atoms[0],data);refreshBondsAndRender(true);setStatus('座標・形式電荷を変更しました。');});
+    bind('btnApplyCharge','click',()=>{const atoms=selectedAtoms();if(atoms.length!==1)return;const charge=numberInput('atomCharge',-15,15);if(!Number.isInteger(charge))throw Error('形式電荷は整数にしてください。');pushHistory('charge');atoms[0].charge=charge;render(true);setStatus('形式電荷を変更しました。');});
+    bind('dataText','input',()=>{xyzDirty=byId('dataText').value!==xyzBase;syncXYZEditor();});
+    bind('dataReset','click',()=>{xyzDirty=false;syncXYZEditor();});
+    bind('dataApply','click',()=>{try{applyXYZEditor();}catch(error){byId('xyzEditStatus').textContent=error.message;report(error);}});
+    bind('btnDataDock','click',()=>{byId('tab-atoms').click();byId('dataText').focus();byId('dataText').scrollIntoView?.({block:'center',behavior:'smooth'});});
     bind('btnTranslate','click',()=>{const delta=['translateX','translateY','translateZ'].map(id=>numberInput(id));if(!state.selectedAtomIds.size)return;pushHistory('translate');selectedAtoms().forEach(a=>['x','y','z'].forEach((k,i)=>a[k]+=delta[i]));refreshBondsAndRender(true);setStatus('選択原子を平行移動しました。');});
     bind('btnFit','click',()=>renderer.fit());
     bind('btnZoomIn','click',()=>{renderer.zoom=Math.min(12,renderer.zoom*1.2);renderer.draw();});

@@ -68,8 +68,7 @@
     bind('framePlay',()=>{if(timer)return stop();$('framePlay').textContent='Ⅱ 停止';timer=setInterval(()=>{const frames=state().metadata.trajectory;if(!frames)return stop();frame(((state().metadata.frameIndex||0)+1)%frames.length);},500);});
     bind('rotateSelection',rotateSelection);
     bind('btnFullScreen',async()=>{const el=document.querySelector('.mv-app');if(document.fullscreenElement)await document.exitFullscreen();else await el.requestFullscreen();});
-    bind('btnDataDock',()=>{$('dataText').value=IO.stateToXYZText(state());$('dataDialog').showModal();});
-    bind('dataApply',()=>{app().loadText($('dataText').value);$('dataDialog').close();});
+
     bind('btnKetcher',openChem);
     bind('chemReadSmiles',async()=>{await(await ketcher()).setMolecule($('smilesText').value.trim());message('SMILESを描画しました。');});
     bind('chemSmiles',async()=>{$('smilesText').value=await(await ketcher()).getSmiles();message('描画中の構造をSMILESに変換しました。');});

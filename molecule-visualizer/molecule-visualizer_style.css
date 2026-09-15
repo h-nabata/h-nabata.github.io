@@ -19,3 +19,9 @@
 .mv-app:fullscreen #viewer{height:62vh}
 @media(min-width:1450px){.mv-app .mv-workspace{grid-template-columns:minmax(0,1fr) 370px}}
 @media(max-width:650px){.mv-app dialog.mv-chem-dialog{padding:10px}.mv-app #ketcherFrame{min-height:320px;height:52vh}.mv-app .mv-trajectory{gap:4px}}
+
+/* Persistent whole-structure XYZ editor. */
+.mv-app .mv-xyz-panel textarea{display:block;width:100%;min-height:360px;resize:vertical;overflow:auto;white-space:pre;font-size:13px;line-height:1.7}
+.mv-app .mv-xyz-panel label{display:block;margin-bottom:6px}
+.mv-app .mv-xyz-panel #xyzEditStatus{min-height:2.5em}
+@media(min-width:1150px){.mv-app .mv-workspace{grid-template-columns:minmax(0,1fr) minmax(420px,38%)}}

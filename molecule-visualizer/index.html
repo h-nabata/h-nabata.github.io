@@ -2,17 +2,17 @@
 layout: default
 title: 分子構造エディタ | Molecule Studio
 ---
-<link rel="stylesheet" href="./molecule-visualizer_style.css?v=3">
-<script defer src="./model.js?v=3"></script>
-<script defer src="./bonding.js?v=3"></script>
-<script defer src="./geometry.js?v=3"></script>
-<script defer src="./io.js?v=3"></script>
-<script defer src="./periodic.js?v=3"></script>
-<script defer src="./history.js?v=3"></script>
-<script defer src="./renderer3dmol.js?v=3"></script>
-<script defer src="./ui.js?v=3"></script>
-<script defer src="./studio.js?v=3"></script>
-<script defer src="./molecule-visualizer_main.js?v=3"></script>
+<link rel="stylesheet" href="./molecule-visualizer_style.css?v=4">
+<script defer src="./model.js?v=4"></script>
+<script defer src="./bonding.js?v=4"></script>
+<script defer src="./geometry.js?v=4"></script>
+<script defer src="./io.js?v=4"></script>
+<script defer src="./periodic.js?v=4"></script>
+<script defer src="./history.js?v=4"></script>
+<script defer src="./renderer3dmol.js?v=4"></script>
+<script defer src="./ui.js?v=4"></script>
+<script defer src="./studio.js?v=4"></script>
+<script defer src="./molecule-visualizer_main.js?v=4"></script>
 
 <main class="mv-app">
   <header class="mv-app-header">
@@ -43,7 +43,8 @@ title: 分子構造エディタ | Molecule Studio
     <aside class="mv-inspector" aria-label="編集パネル">
       <div class="mv-tabs" role="tablist" aria-label="編集項目"><button role="tab" id="tab-atoms" aria-controls="pane-atoms" aria-selected="true" data-tab="atoms">原子</button><button role="tab" id="tab-bonds" aria-controls="pane-bonds" aria-selected="false" data-tab="bonds">結合</button><button role="tab" id="tab-geometry" aria-controls="pane-geometry" aria-selected="false" data-tab="geometry">測定・移動</button></div>
       <div id="pane-atoms" role="tabpanel" aria-labelledby="tab-atoms">
-        <div class="mv-panel"><h2>選択原子の座標</h2><p class="mv-small">原子を1つ選ぶと、座標と形式電荷を直接編集できます。</p><div class="mv-grid"><label>X (Å)<input id="coordX" type="number" step="0.01"></label><label>Y (Å)<input id="coordY" type="number" step="0.01"></label><label>Z (Å)<input id="coordZ" type="number" step="0.01"></label><label>形式電荷<input id="atomCharge" type="number" step="1" min="-15" max="15"></label></div><button class="mv-btn primary" id="btnApplyCoords">座標・電荷を適用</button></div>
+        <div class="mv-panel mv-xyz-panel"><h2>全原子のXYZ座標</h2><p class="mv-small">現在のフレームをまとめて編集できます。1行に「元素 X Y Z」を記入し、構造へ適用してください。原子数・コメント行付きのXYZにも対応します。</p><label for="dataText">XYZ座標（Å）</label><textarea id="dataText" rows="18" wrap="off" spellcheck="false" aria-describedby="xyzEditStatus"></textarea><p id="xyzEditStatus" class="mv-small" role="status" aria-live="polite"></p><div class="mv-row"><button class="mv-btn primary" id="dataApply">構造へ適用</button><button class="mv-btn" id="dataReset">現在の構造を再表示</button></div></div>
+        <details class="mv-panel"><summary>選択原子の形式電荷</summary><label>形式電荷<input id="atomCharge" type="number" step="1" min="-15" max="15"></label><button class="mv-btn" id="btnApplyCharge">電荷を適用</button></details>
 <div class="mv-panel">
         <h2>原子の追加 / 削除</h2>
 
@@ -251,6 +252,6 @@ H 1.0 0 0
     </form>
   </dialog>
 <dialog id="cellDialog"><h2>周期セル</h2><p>格子ベクトル a・b・c を1行ずつ、Å単位で入力します。斜交セルに対応します。</p><label for="cellVectors">格子ベクトル（3行 × 3成分）</label><textarea id="cellVectors" rows="3" spellcheck="false"></textarea><div class="mv-row"><label><input id="pbcA" type="checkbox" checked> a方向周期</label><label><input id="pbcB" type="checkbox" checked> b方向周期</label><label><input id="pbcC" type="checkbox" checked> c方向周期</label></div><label class="mv-check"><input id="keepFractional" type="checkbox">セル変更時に分率座標を保持（未選択ではCartesian座標を保持）</label><div class="mv-row"><button class="mv-btn primary" id="cellApply">セルを適用</button><button class="mv-btn" id="cellWrap">原子をセル内へ折り返す</button><button class="mv-btn" id="cellRemove">周期セルを解除</button></div><hr><h3>スーパーセルを作成</h3><p>原子を実際に複製します。軌跡の場合は現在のフレームを独立した構造として扱います。「戻す」で復元できます。</p><label for="repeatCell">a b c の反復数</label><input id="repeatCell" value="2 2 2"><button class="mv-btn" id="cellSuper">スーパーセルを作成</button><div class="mv-row mv-end"><button class="mv-btn" data-close="cellDialog">閉じる</button></div></dialog>
-<dialog id="dataDialog"><h2>XYZ座標を直接編集</h2><p>現在のフレームの座標です。適用すると構造を読み直します。「戻す」で復元できます。</p><textarea id="dataText" rows="18" spellcheck="false" aria-label="XYZ座標エディタ"></textarea><div class="mv-row mv-end"><button class="mv-btn" data-close="dataDialog">キャンセル</button><button class="mv-btn primary" id="dataApply">構造へ適用</button></div></dialog>
+
 <dialog id="chemDialog" class="mv-chem-dialog"><div class="mv-row mv-between"><div><h2>2D構造を描く</h2><p class="mv-small">Ketcher · SMILES / MOL · UFFによる初期3D構造生成</p></div><button class="mv-btn" data-close="chemDialog">閉じる</button></div><div class="mv-row"><button class="mv-btn" id="chemFrom3D">現在の3D構造を読み込む</button><button class="mv-btn" id="chemSaveMol">MOLを保存</button><button class="mv-btn primary" id="chemTo3D">水素追加 → 3D構造を生成</button><button class="mv-btn" id="chemCancel" disabled>生成を中止</button></div><iframe id="ketcherFrame" title="Ketcher 分子構造描画エディタ" allow="clipboard-read; clipboard-write"></iframe><label for="smilesText">SMILES</label><textarea id="smilesText" rows="2" placeholder="例: CC(=O)Oc1ccccc1C(=O)O" spellcheck="false"></textarea><div class="mv-row"><button class="mv-btn" id="chemReadSmiles">SMILESを描画</button><button class="mv-btn" id="chemSmiles">描画からSMILESを取得</button><button class="mv-btn" id="chemSaveSmiles">SMILESを保存</button></div><p id="chemMessage" role="status" aria-live="polite"></p></dialog>
 </main>
