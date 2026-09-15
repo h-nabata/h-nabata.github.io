@@ -158,7 +158,7 @@
     }
     const center = this.cameraCenter || this.center();
     const span = this.cameraSpan || this.estimateSpan(center);
-    const scale = Math.min(width, height) / Math.max(4.2, span * 1.65) * this.zoom;
+    const scale = Math.min(width, height) / Math.max(4.2, span * 1.15) * this.zoom;
     this.currentScale = scale;
     this.projectedAtoms = atoms.map((atom,index) => Object.assign(this.project(atom, center, scale, width, height), {index:index+1}));
     const atomById = new Map(this.projectedAtoms.map(pa => [pa.atom.id, pa]));
@@ -283,7 +283,7 @@
   };
 
   Renderer3DMol.prototype.fit = function () {
-    this.cameraCenter = this.center(); this.cameraSpan = this.estimateSpan(this.cameraCenter);
+    this.cameraCenter = this.state?.metadata.cell ? (()=>{const v=MV.Periodic.cartesian([.5,.5,.5],this.state.metadata.cell);return {x:v[0],y:v[1],z:v[2]};})() : this.center(); this.cameraSpan = this.estimateSpan(this.cameraCenter);
     this.zoom = 1; this.panX = 0; this.panY = 0; this.draw();
   };
   Renderer3DMol.prototype.atomRadius = function(element,scale) {
