@@ -9,6 +9,18 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  await page.click('#dataApply');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[0].x),2.5);
  await page.click('#btnUndo');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[0].x),0);
 
+
+ await page.uncheck('#xyzHeader');assert.match(await page.locator('#dataText').inputValue(),/^O /);
+ await page.fill('#dataText','O\u30000\t0 0\rH .9572 0 0\u2028H -.239987 .926627 0');await page.click('#dataApply');
+ await page.check('#xyzHeader');assert.match(await page.locator('#dataText').inputValue(),/^3\n/);
+ const bounds=await page.locator('canvas').boundingBox();
+ await page.mouse.move(bounds.x+5,bounds.y+5);await page.mouse.down({button:'right'});await page.mouse.move(bounds.x+bounds.width-5,bounds.y+bounds.height-5,{steps:6});await page.mouse.up({button:'right'});
+ assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().selectedAtomIds.size),3);
+ const original=await page.evaluate(()=>({atoms:MoleculeVisualizer.App.getState().atoms.map(a=>({...a})),rotX:MoleculeVisualizer.App.renderer().rotX}));
+ const altDrag=async button=>{await page.keyboard.down('Alt');await page.mouse.move(bounds.x+20,bounds.y+20);await page.mouse.down({button});await page.mouse.move(bounds.x+65,bounds.y+45,{steps:6});await page.mouse.up({button});await page.keyboard.up('Alt');};
+ await altDrag('left');assert.notEqual(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[0].x),original.atoms[0].x);await page.click('#btnUndo');
+ await altDrag('right');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.renderer().rotX),original.rotX);
+ assert.notEqual(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[1].z),original.atoms[1].z);await page.click('#btnUndo');await page.click('#btnClearSel');
  await page.click('#sampleCrystal');assert.match(await page.locator('#cellStatus').textContent(),/周期境界 abc/);
  await page.click('#btnCell');await page.fill('#repeatCell','2 2 2');await page.click('#cellSuper');assert.match(await page.locator('#structureStats').textContent(),/16 原子/);
  await page.screenshot({path:'test-artifacts/periodic.png',fullPage:true});await page.click('#btnUndo');assert.match(await page.locator('#structureStats').textContent(),/2 原子/);

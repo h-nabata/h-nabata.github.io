@@ -304,8 +304,8 @@
       if(touches.size===2){if(self.pointer?.historyStarted) self.onDragEnd?.(e);self.pointer=null;self.selectionBox=null;gesture=pinch();return;}
       if(touches.size>2)return;
       const atom=self.pickAtom(p.x,p.y),bond=atom?null:self.pickBond(p.x,p.y);
-      let action=e.button===2||e.altKey?"pan":self.mode==="box"?"box":self.mode==="move"&&atom?"move":"rotate";
-      self.pointer={id:e.pointerId,x:e.clientX,y:e.clientY,lastX:e.clientX,lastY:e.clientY,moved:false,atomId:atom?.id,bondId:bond?.id,action,historyStarted:false};
+      let action=e.button===1?"pan":e.altKey?(e.button===2?"groupRotate":"groupMove"):e.button===2||self.mode==="box"?"box":self.mode==="move"&&atom?"move":"rotate";
+      self.pointer={id:e.pointerId,x:e.clientX,y:e.clientY,lastX:e.clientX,lastY:e.clientY,moved:false,atomId:atom?.id,bondId:bond?.id,groupSeed:atom?.id||bond?.atom1,action,historyStarted:false};
       if(action==="box")self.selectionBox={x1:p.x,y1:p.y,x2:p.x,y2:p.y};
       e.preventDefault();
     });
@@ -317,24 +317,34 @@
       ptr.moved=true;const dx=e.clientX-ptr.lastX,dy=e.clientY-ptr.lastY;ptr.lastX=e.clientX;ptr.lastY=e.clientY;
       if(ptr.action==="box"){self.selectionBox.x2=p.x;self.selectionBox.y2=p.y;}
       else if(ptr.action==="pan"){self.panX+=dx;self.panY+=dy;}
+      else if(ptr.action==='groupMove'||ptr.action==='groupRotate'){
+        if(!ptr.historyStarted){if(self.onGroupDragStart?.(ptr.groupSeed)===false){ptr.action='none';return;}ptr.historyStarted=true;}
+        self.onGroupDrag?.(ptr.action,dx,dy);
+      }
       else if(ptr.action==="move"){
         if(!ptr.historyStarted){self.onAtomDragStart?.(ptr.atomId,e);ptr.historyStarted=true;}
         self.onAtomsDrag?.(ptr.atomId,self.screenDeltaToWorld(dx,dy,e.shiftKey),e);
-      }else {self.rotY+=dx*.008;self.rotX+=dy*.008;}
+      }else if(ptr.action==="rotate") {self.rotY+=dx*.008;self.rotX+=dy*.008;}
       self.draw();
     });
     const finish=function(e){
       touches.delete(e.pointerId);if(gesture){if(touches.size<2)gesture=null;self.pointer=null;return;}
       const ptr=self.pointer;if(!ptr||ptr.id!==e.pointerId)return;self.pointer=null;
       if(ptr.historyStarted)self.onDragEnd?.(e);
-      if(ptr.action==="box"){const ids=self.atomIdsInBox(self.selectionBox);self.selectionBox=null;if(e.type!=="pointercancel")self.onBoxSelect?.(ids,e);}
-      else if(!ptr.moved&&ptr.action!=="pan"&&e.type!=="pointercancel") {if(ptr.atomId)self.onAtomClick?.(ptr.atomId,e,self);else if(ptr.bondId)self.onBondClick?.(ptr.bondId,e,self);else self.onBlankClick?.(e);}
+      if(ptr.action==="box"){const ids=self.atomIdsInBox(self.selectionBox);self.selectionBox=null;if(ptr.moved&&e.type!=="pointercancel"&&e.type!=="lostpointercapture")self.onBoxSelect?.(ids,e);}
+      else if(!ptr.moved&&["rotate","move"].includes(ptr.action)&&e.type!=="pointercancel") {if(ptr.atomId)self.onAtomClick?.(ptr.atomId,e,self);else if(ptr.bondId)self.onBondClick?.(ptr.bondId,e,self);else self.onBlankClick?.(e);}
       self.draw();
     };
     this.canvas.addEventListener("pointerup",finish);this.canvas.addEventListener("pointercancel",finish);this.canvas.addEventListener("lostpointercapture",finish);
     this.canvas.addEventListener("wheel",e=>{e.preventDefault();self.zoom=Math.max(.1,Math.min(12,self.zoom*Math.exp(-e.deltaY*.001)));self.draw();},{passive:false});
     this.canvas.addEventListener("contextmenu",e=>e.preventDefault());
     global.addEventListener("resize",()=>{self.resize();self.draw();});
+  };
+
+  Renderer3DMol.prototype.viewVectorToWorld = function(v){
+    const cy=Math.cos(this.rotY),sy=Math.sin(this.rotY),cx=Math.cos(this.rotX),sx=Math.sin(this.rotX);
+    const y=v[1]*cx+v[2]*sx,z=-v[1]*sx+v[2]*cx;
+    return [v[0]*cy-z*sy,y,v[0]*sy+z*cy];
   };
 
   Renderer3DMol.prototype.screenDeltaToWorld = function (dx, dy, zMode) {

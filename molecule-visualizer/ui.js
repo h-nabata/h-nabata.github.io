@@ -47,16 +47,17 @@
     const values=selected;
     try{setMeasure(values.length===2?`${Geometry.distance(...values).toFixed(3)} Å`:values.length===3?`${Geometry.angle(...values).toFixed(2)}°`:values.length===4?`${Geometry.dihedral(...values).toFixed(2)}°`:"2 / 3 / 4 原子を順に選択してください");}catch(e){setMeasure(e.message);}
   }
-  let xyzDirty=false, xyzBase='';
+  let xyzDirty=false, xyzBase='', xyzDisplayBase='';
+  function editorXYZ(s){return byId('xyzHeader').checked?IO.stateToXYZText(s):s.atoms.map(a=>`${a.element} ${a.x.toFixed(10)} ${a.y.toFixed(10)} ${a.z.toFixed(10)}`).join('\n')+'\n';}
   function syncXYZEditor(){
     const el=byId('dataText');if(!el)return;
     let text;try{text=IO.stateToXYZText(state);}catch(error){byId('xyzEditStatus').textContent=error.message;return;}
-    if(!xyzDirty){if(el.value!==text)el.value=text;xyzBase=text;}
+    if(!xyzDirty){const display=editorXYZ(state);if(el.value!==display)el.value=display;xyzBase=text;xyzDisplayBase=display;}
     byId('xyzEditStatus').textContent=xyzDirty?(text!==xyzBase?'編集中に構造が変更されました。「現在の構造を再表示」で更新してから編集してください。':'未適用の編集があります。'):'表示中の構造と同期しています。';
   }
   function applyXYZEditor(){
     if(xyzDirty&&IO.stateToXYZText(state)!==xyzBase)throw Error('構造が変更されています。編集内容を控え、「現在の構造を再表示」で更新してください。');
-    const input=byId('dataText').value,parsed=IO.parseXYZToState(input);
+    const input=IO.normalizeXYZInput(byId('dataText').value),parsed=IO.parseXYZToState(input);
     if(parsed.metadata.trajectory)throw Error('ここでは現在の1フレームを編集してください。複数フレームは「ファイルを開く」から読み込めます。');
     const next=Model.cloneState(state),same=next.atoms.length===parsed.atoms.length&&next.atoms.every((a,i)=>a.element===parsed.atoms[i].element);
     if(same)next.atoms.forEach((a,i)=>{const b=parsed.atoms[i];Object.assign(a,{x:b.x,y:b.y,z:b.z});if(Object.keys(b.xyzExtras||{}).length)a.xyzExtras=b.xyzExtras;});
@@ -477,12 +478,34 @@
     renderer.updateSelection(state);
   }
 
+  let groupDragIds=[];
+  function startGroupDrag(atomId){
+    groupDragIds=Array.from(state.selectedAtomIds);
+    if(!groupDragIds.length&&atomId){
+      const seen=new Set([atomId]),queue=[atomId];
+      for(let i=0;i<queue.length;i++)state.bonds.forEach(b=>{const other=b.atom1===queue[i]?b.atom2:b.atom2===queue[i]?b.atom1:null;if(other&&!seen.has(other)){seen.add(other);queue.push(other);}});
+      groupDragIds=queue;
+    }
+    if(!groupDragIds.length){setStatus('原子・結合からドラッグするか、対象原子を選択してください。');return false;}
+    pushHistory('transform group');dragMoved=false;return true;
+  }
+  function transformGroup(action,dx,dy){
+    const atoms=state.atoms.filter(a=>groupDragIds.includes(a.id));
+    if(action==='groupMove'){
+      const delta=renderer.screenDeltaToWorld(dx,dy,false);atoms.forEach(a=>{a.x+=delta.x;a.y+=delta.y;a.z+=delta.z;});
+    }else{
+      const center=['x','y','z'].map(k=>atoms.reduce((v,a)=>v+a[k],0)/atoms.length);
+      const rotate=(axis,angle)=>{const c=Math.cos(angle),sin=Math.sin(angle);atoms.forEach(a=>{const v=[a.x-center[0],a.y-center[1],a.z-center[2]],dot=v.reduce((sum,x,i)=>sum+x*axis[i],0),cross=[axis[1]*v[2]-axis[2]*v[1],axis[2]*v[0]-axis[0]*v[2],axis[0]*v[1]-axis[1]*v[0]];[a.x,a.y,a.z]=v.map((x,i)=>center[i]+x*c+cross[i]*sin+axis[i]*dot*(1-c));});};
+      rotate(renderer.viewVectorToWorld([0,1,0]),dx*.008);rotate(renderer.viewVectorToWorld([1,0,0]),dy*.008);
+    }
+    dragMoved=true;renderer.updateSelection(state);
+  }
   function handleCanvasDragEnd() {
     if (!dragMoved) return;
     dragMoved = false;
     Bonding.refreshInferredBonds(state);
     render(true);
-    setStatus("原子の移動を確定しました。");
+    groupDragIds=[];setStatus("構造の移動・回転を確定しました。");
   }
 
   function handleBoxSelect(atomIds, event) {
@@ -830,8 +853,17 @@
     function activate(tab){tabs.forEach(t=>{const active=t===tab;t.setAttribute('aria-selected',String(active));t.tabIndex=active?0:-1;byId('pane-'+t.dataset.tab).hidden=!active;});}
     tabs.forEach((tab,i)=>{tab.tabIndex=i===0?0:-1;tab.addEventListener('click',()=>activate(tab));tab.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const next=e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;activate(tabs[next]);tabs[next].focus();});});
     bind('btnApplyCharge','click',()=>{const atoms=selectedAtoms();if(atoms.length!==1)return;const charge=numberInput('atomCharge',-15,15);if(!Number.isInteger(charge))throw Error('形式電荷は整数にしてください。');pushHistory('charge');atoms[0].charge=charge;render(true);setStatus('形式電荷を変更しました。');});
-    bind('dataText','input',()=>{xyzDirty=byId('dataText').value!==xyzBase;syncXYZEditor();});
-    bind('dataReset','click',()=>{xyzDirty=false;syncXYZEditor();});
+    bind('dataText','input',()=>{xyzDirty=byId('dataText').value!==xyzDisplayBase;syncXYZEditor();});
+    bind('xyzHeader','change',()=>{
+      try{
+        if(xyzDirty){const draft=IO.parseXYZToState(byId('dataText').value);if(draft.metadata.trajectory)throw Error('1フレームのみ入力してください。');
+          if(!/^\s*\d+\s*\n/.test(IO.normalizeXYZInput(byId('dataText').value)))draft.metadata={...state.metadata,...draft.metadata,title:state.metadata.title,cell:state.metadata.cell};
+          byId('dataText').value=editorXYZ(draft);
+        }
+        syncXYZEditor();
+      }catch(error){byId('xyzHeader').checked=!byId('xyzHeader').checked;byId('xyzEditStatus').textContent='入力を修正してからヘッダーを切り替えてください。'+error.message;}
+    });
+    bind('dataReset' ,'click',()=>{xyzDirty=false;syncXYZEditor();});
     bind('dataApply','click',()=>{try{applyXYZEditor();}catch(error){byId('xyzEditStatus').textContent=error.message;report(error);}});
     bind('btnDataDock','click',()=>{byId('tab-atoms').click();byId('dataText').focus();byId('dataText').scrollIntoView?.({block:'center',behavior:'smooth'});});
     bind('btnTranslate','click',()=>{const delta=['translateX','translateY','translateZ'].map(id=>numberInput(id));if(!state.selectedAtomIds.size)return;pushHistory('translate');selectedAtoms().forEach(a=>['x','y','z'].forEach((k,i)=>a[k]+=delta[i]));refreshBondsAndRender(true);setStatus('選択原子を平行移動しました。');});
@@ -855,6 +887,8 @@
       handleBondClick(bondId, event);
       if (viewer) viewer.render();
     };
+    renderer.onGroupDragStart = startGroupDrag;
+    renderer.onGroupDrag = transformGroup;
     renderer.onAtomDragStart = handleAtomDragStart;
     renderer.onAtomsDrag = handleAtomsDrag;
     renderer.onDragEnd = handleCanvasDragEnd;

@@ -48,14 +48,22 @@
     const s=M.createState({atoms,metadata:{title,sourceFormat:'xyz',cell:c}});MV.Bonding.refreshInferredBonds(s);return s;
   }
   function snapshot(s){const metadata=JSON.parse(JSON.stringify(s.metadata));delete metadata.trajectory;delete metadata.frameIndex;return {atoms:JSON.parse(JSON.stringify(s.atoms)),bonds:JSON.parse(JSON.stringify(s.bonds)),metadata};}
+  // Normalize Unicode whitespace without collapsing the XYZ comment line.
+  function normalizeXYZInput(text){return String(text).replace(/\r\n|[\r\u0085\u2028\u2029\v\f]/g,'\n').replace(/[\uFEFF\u200B]/g,'').replace(/[^\S\n]/gu,' ');}
   function parseXYZ(text){
-    const lines=String(text).replace(/\r/g,'').split('\n');while(lines.length&&!lines[0].trim())lines.shift();
+    const lines=normalizeXYZInput(text).split('\n');while(lines.length&&!lines[0].trim())lines.shift();
     if(!/^\d+$/.test(lines[0]?.trim()||'')){
-      while(lines.length&&!lines.at(-1).trim())lines.pop();const tv=lines.filter(l=>/^TV\s/.test(l)),body=lines.filter(l=>!/^TV\s/.test(l));
+      const nonempty=lines.map(l=>l.trim()).filter(Boolean);if(!nonempty.length)throw Error('XYZが空です。');const tv=nonempty.filter(l=>/^TV\s/.test(l)),body=nonempty.filter(l=>!/^TV\s/.test(l));
       const s=parseFrame([String(body.length),'',...body]);if(tv.length){s.metadata.cell=cell(tv.map(l=>l.trim().split(/\s+/).slice(1).map(number)));MV.Bonding.refreshInferredBonds(s);}return s;
     }
     const frames=[];let total=0;
-    while(lines.length){if(!lines[0].trim()){lines.shift();continue;}const n=Number(lines[0]);if(!Number.isInteger(n)||n<0||n>2000||lines.length<n+2)throw Error('XYZの原子数またはコメント行を確認してください。');frames.push(parseFrame(lines.splice(0,n+2)));total+=n;if(frames.length>200||total>100000)throw Error('軌跡は200フレーム・合計100000原子までです。');}
+    while(lines.length){
+      if(!lines[0].trim()){lines.shift();continue;}
+      const n=Number(lines.shift());if(!Number.isInteger(n)||n<0||n>2000||!lines.length)throw Error('XYZの原子数またはコメント行を確認してください。');
+      const comment=lines.shift(),body=[];
+      while(body.length<n&&lines.length){const line=lines.shift();if(line.trim())body.push(line);}
+      frames.push(parseFrame([String(n),comment,...body]));total+=n;if(frames.length>200||total>100000)throw Error('軌跡は200フレーム・合計100000原子までです。');
+    }
     const s=frames[0];if(!s)throw Error('XYZが空です。');if(frames.length>1){s.metadata.trajectory=frames.map(snapshot);s.metadata.frameIndex=0;}return s;
   }
   function toXYZ(s){
@@ -76,6 +84,7 @@
   }
   function toPOSCAR(s){const c=s.metadata.cell;if(!c||!c.pbc.every(Boolean))throw Error('POSCARには3方向すべてが周期的なセルが必要です。');const elements=[...new Set(s.atoms.map(a=>a.element))],selective=s.atoms.some(a=>a.selective);return [s.metadata.title||'Structure','1.0',...c.vectors.map(r=>r.join(' ')),elements.join(' '),elements.map(e=>s.atoms.filter(a=>a.element===e).length).join(' '),...(selective?['Selective dynamics']:[]),'Direct',...elements.flatMap(e=>s.atoms.filter(a=>a.element===e).map(a=>fractional(xyz(a),c).map(x=>x.toFixed(12)).join(' ')+(selective?' '+(a.selective||['T','T','T']).join(' '):'')))].join('\n')+'\n';}
   const oldAuto=IO.parseAuto, oldProject=IO.parseProject,oldMol=IO.stateToMolText;
+  IO.normalizeXYZInput=normalizeXYZInput;
   IO.parseXYZToState=parseXYZ;IO.stateToXYZText=toXYZ;
   IO.parseXYZAtoms=t=>{const s=parseXYZ(t);if(s.metadata.cell||s.metadata.trajectory)throw Error('原子団の追加は単一の非周期XYZを使用してください。');return {atoms:s.atoms,title:s.metadata.title};};
   IO.parseProject=t=>{const s=oldProject(t);if(s.metadata.cell)s.metadata.cell=cell(s.metadata.cell.vectors,s.metadata.cell.pbc);if(s.metadata.trajectory){if(!Array.isArray(s.metadata.trajectory)||s.metadata.trajectory.length>200)throw Error('軌跡データが不正です。');s.metadata.trajectory=s.metadata.trajectory.map(f=>snapshot(IO.parseProject(JSON.stringify({format:'molecule-studio',version:1,...f,metadata:{...f.metadata,trajectory:undefined}}))));if(!Number.isInteger(s.metadata.frameIndex)||s.metadata.frameIndex<0||s.metadata.frameIndex>=s.metadata.trajectory.length)throw Error('フレーム番号が不正です。');}return s;};
