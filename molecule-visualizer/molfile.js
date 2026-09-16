@@ -24,7 +24,7 @@
     const records=raw.split(/^\$\$\$\$\s*$/m).filter(t=>t.trim());if(records.length!==1)throw Error('MOL/SDFは1構造ずつ入力してください。');
     const lines=records[0].split('\n');if(!/V[23]000/.test(lines[3]||''))throw Error('MOLは3行のヘッダーとV2000/V3000のcounts行が必要です。');
     const end=lines.findIndex(l=>/^M\s+END\s*$/.test(l));if(end<0)throw Error('MOLの終端M ENDがありません。');
-    const meta={title:lines[0],sourceFormat:raw.includes('$$$$')?'sdf':'mol',bondsInferred:false,molVersion:lines[3].includes('V3000')?'V3000':'V2000',molHeader:lines.slice(1,3),sdfProperties:lines.slice(end+1).join('\n').trim()};
+    const meta={title:lines[0],sourceFormat:raw.includes('$$$$')?'sdf':'mol',bondsInferred:false,stereoGroups:[],molVersion:lines[3].includes('V3000')?'V3000':'V2000',molHeader:lines.slice(1,3),sdfProperties:lines.slice(end+1).join('\n').trim()};
     const s=meta.molVersion==='V3000'?readV3000(lines.slice(4,end),meta):readV2000(lines,meta,end);
     s.metadata.molSource=raw;return s;
   }
@@ -53,9 +53,9 @@
     return M.createState({atoms,bonds,metadata:meta});
   }
   function readV3000(lines,meta){
-    const logical=[];let pending='';for(const l of lines){if(!l.trim())continue;if(!/^M\s+V30 /.test(l))throw Error('V3000の行接頭辞が不正です。');const part=l.replace(/^M\s+V30 /,'');if(part.endsWith('-'))pending+=part.slice(0,-1);else {logical.push(pending+part);pending='';}}
+    const logical=[];let pending='';for(const l of lines){if(!l.trim())continue;if(!/^M\s+V30 /.test(l))throw Error('V3000の行接頭辞が不正です。');const part=l.replace(/^M\s+V30 /,'');if(part.endsWith('-'))pending+=part.slice(0,-1);else {logical.push((pending+part).trim());pending='';}}
     if(pending||logical[0]!=='BEGIN CTAB'||logical.at(-1)!=='END CTAB')throw Error('V3000のCTABが不完全です。');
-    const counts=logical[1]?.match(/^COUNTS (\d+) (\d+) (\d+) (\d+) (\d+)(?:\s.*)?$/);if(!counts)throw Error('V3000 COUNTSが不正です。');const n=integer(counts[1],0,2000),nb=integer(counts[2],0,10000);if(Number(counts[3])||Number(counts[4]))throw Error('Sgroup・3D制約ブロックは未対応です。Ketcherで通常の原子・結合へ展開してください。');meta.chiralFlag=integer(counts[5],0,1);
+    const counts=logical[1]?.match(/^COUNTS\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)(?:\s.*)?$/);if(!counts)throw Error('V3000 COUNTSが不正です。');const n=integer(counts[1],0,2000),nb=integer(counts[2],0,10000);if(Number(counts[3])||Number(counts[4]))throw Error('Sgroup・3D制約ブロックは未対応です。Ketcherで通常の原子・結合へ展開してください。');meta.chiralFlag=integer(counts[5],0,1);
     const atoms=[],bonds=[],byIndex=new Map(),bondIndices=new Set(),keys=new Set(),groups=[];let section='',seenAtoms=false,seenBonds=false;
     for(const l of logical.slice(2,-1)){
       if(l.startsWith('BEGIN ')){if(section)throw Error('V3000ブロックが入れ子になっています。');section=l.slice(6);if(!['ATOM','BOND','COLLECTION'].includes(section))throw Error('未対応のV3000ブロック: '+section);if(section==='ATOM'){if(seenAtoms)throw Error('ATOMが重複しています。');seenAtoms=true;}if(section==='BOND'){if(seenBonds)throw Error('BONDが重複しています。');seenBonds=true;}continue;}
@@ -93,5 +93,6 @@
   IO.parseMolToState=parse;IO.parseAuto=t=>/V[23]000/.test(t)?parse(t):oldAuto(t);
   IO.stateToMolV3000Text=toV3000;
   IO.stateToMolText=(s,version)=>{if(version==='V3000'||(!version&&s.metadata.molVersion==='V3000'))return toV3000(s);if(version==='V2000')return toV2000(s);try{return toV2000(s);}catch(e){return toV3000(s);}};
+  MV.Molfile={parse,write:IO.stateToMolText};
   IO.stateToSDFText=s=>IO.stateToMolText(s)+(s.metadata.sdfProperties?s.metadata.sdfProperties+'\n\n':'')+'$$$$\n';
 })(window);

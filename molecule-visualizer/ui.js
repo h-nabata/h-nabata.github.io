@@ -60,7 +60,7 @@
     const input=IO.normalizeXYZInput(byId('dataText').value),isMol=/V[23]000/.test(input),parsed=isMol?IO.parseMolToState(input):IO.parseXYZToState(input);
     if(parsed.metadata.trajectory)throw Error('ここでは現在の1フレームを編集してください。複数フレームは「ファイルを開く」から読み込めます。');
     const next=Model.cloneState(state),same=next.atoms.length===parsed.atoms.length&&next.atoms.every((a,i)=>a.element===parsed.atoms[i].element);
-    if(isMol){next.atoms=parsed.atoms;next.bonds=parsed.bonds;next.metadata={...next.metadata,...parsed.metadata};next.selectedAtomIds.clear();next.selectedBondIds.clear();next.metadata.suppressedBondKeys=[];byId('coordinateFormat').value='mol3000';}
+    if(isMol){next.atoms=parsed.atoms;next.bonds=parsed.bonds;next.metadata={...next.metadata,...parsed.metadata,cell:null};next.selectedAtomIds.clear();next.selectedBondIds.clear();next.metadata.suppressedBondKeys=[];byId('coordinateFormat').value='mol3000';}
     else if(same)next.atoms.forEach((a,i)=>{const b=parsed.atoms[i];Object.assign(a,{x:b.x,y:b.y,z:b.z});if(Object.keys(b.xyzExtras||{}).length)a.xyzExtras=b.xyzExtras;});
     else{next.atoms=parsed.atoms;next.bonds=[];next.selectedAtomIds.clear();next.selectedBondIds.clear();next.metadata.suppressedBondKeys=[];}
     if(/^\s*\d+\s*\n/.test(input))next.metadata.title=parsed.metadata.title;
