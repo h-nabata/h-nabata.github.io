@@ -3,7 +3,7 @@
   'use strict';
   const MV=global.MoleculeVisualizer, P=MV.Periodic, IO=MV.IO, M=MV.Model;
   const $=id=>document.getElementById(id), app=()=>MV.App, state=()=>app().getState();
-  let ready=false, timer=null, axis=null, worker=null, jobId=0, pending=null, ketcherPromise=null;
+  let ready=false, timer=null, axis=null, worker=null, jobId=0, pending=null, ketcherPromise=null, chemBusy=false;
   function message(text,error=false){app().setStatus(text,error);if($('chemMessage'))$('chemMessage').textContent=text;}
   function bind(id,fn){$(id).addEventListener('click',async()=>{try{await fn();}catch(e){message(e.message,true);}});}
   function download(text,name){const url=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
@@ -44,13 +44,24 @@
     return ketcherPromise;
   }
   async function openChem(){ $('chemDialog').showModal();message('Ketcherを準備しています…');await ketcher();message('描画、SMILESの入力、ファイルの読み込みができます。'); }
-  async function make3D(){
-    const editor=await ketcher(),mol=await editor.getMolfile('v2000');
-    message('3D座標を生成しています（UFF・水素追加）。中止できます。');
-    const result=await convert(mol,'mol','mol',true);
-    // Keep strict import: unsupported stereochemical records are never silently discarded.
-    const next=IO.parseMolToState(result);next.metadata.title='Ketcher → 3D';next.metadata.sourceFormat='ketcher';
-    app().change('Ketcher 3D',()=>next,true);$('chemDialog').close();message('UFFで初期3D構造を生成しました。計算投入前に配座・電荷・立体化学を確認してください。');
+  async function make3D(fromSmiles=false){
+    if(chemBusy)throw Error('3D生成中です。完了するか中止してください。');
+    const smiles=fromSmiles?$('smilesText').value.trim():null;
+    if(fromSmiles&&!smiles)throw Error('SMILESを入力してください。');
+    chemBusy=true;['chemTo3D','chemSmilesTo3D'].forEach(id=>$(id).disabled=true);
+    try{
+      const editor=await ketcher();
+      if(fromSmiles)await editor.setMolecule(smiles);
+      if(!$('chemDialog').open)throw Error('3D生成を中止しました。');
+      const mol=await editor.getMolfile('v2000');
+      message('3D座標を生成しています（UFF・水素追加）。中止できます。');
+      const result=await convert(mol,'mol','mol',true);
+      // Keep strict import: unsupported stereochemical records are never silently discarded.
+      const next=IO.parseMolToState(result);next.metadata.title=fromSmiles?'SMILES → 3D':'Ketcher → 3D';next.metadata.sourceFormat=fromSmiles?'smiles':'ketcher';
+      if(fromSmiles)next.metadata.sourceSmiles=smiles;
+      app().change('SMILES / Ketcher 3D',()=>next,true);$('chemDialog').close();
+      $('tab-atoms').click();message('UFFで初期3D座標を生成しました。XYZ欄で編集し、「保存 / 書き出し」からXYZを保存できます。');
+    }finally{chemBusy=false;['chemTo3D','chemSmilesTo3D'].forEach(id=>$(id).disabled=false);}
   }
   function init(){
     ready=true;
@@ -75,7 +86,7 @@
     bind('chemSaveSmiles',async()=>download(await(await ketcher()).getSmiles()+'\n','structure.smi'));
     bind('chemSaveMol',async()=>download(await(await ketcher()).getMolfile('v3000'),'drawing.mol'));
     bind('chemFrom3D',async()=>{if(state().metadata.cell)throw Error('周期構造をSMILESへ直接変換できません。分子を非周期構造として切り出してください。');await(await ketcher()).setMolecule(IO.stateToMolText(state()));message('3D構造の結合情報を取り込みました。XYZ由来の結合次数・価数を描画画面で確認してください。');});
-    bind('chemTo3D',make3D);bind('chemCancel',cancelChem);
+    bind('chemTo3D',()=>make3D());bind('chemSmilesTo3D',()=>make3D(true));bind('chemCancel',cancelChem);
     $('chemDialog').addEventListener('close',cancelChem);
     bind('sampleCrystal',()=>app().loadText('2\nNaCl primitive Lattice="0 2.82 2.82 2.82 0 2.82 2.82 2.82 0" pbc="T T T"\nNa 0 0 0\nCl 2.82 2.82 2.82\n'));
     // Axis constraints work on the canvas; text fields retain normal browser shortcuts.

@@ -14,6 +14,10 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  await page.fill('#dataText','O\u30000\t0 0\rH .9572 0 0\u2028H -.239987 .926627 0');await page.click('#dataApply');
  await page.check('#xyzHeader');assert.match(await page.locator('#dataText').inputValue(),/^3\n/);
  const bounds=await page.locator('canvas').boundingBox();
+ const picks=await page.evaluate(()=>MoleculeVisualizer.App.renderer().projectedAtoms.slice(0,2).map(p=>({x:p.x,y:p.y})));
+ for(const i of [0,1,1])await page.mouse.click(bounds.x+picks[i].x,bounds.y+picks[i].y,{button:'right'});
+ assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().selectedAtomIds.size),2);await page.click('#btnClearSel');
+
  await page.mouse.move(bounds.x+5,bounds.y+5);await page.mouse.down({button:'right'});await page.mouse.move(bounds.x+bounds.width-5,bounds.y+bounds.height-5,{steps:6});await page.mouse.up({button:'right'});
  assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().selectedAtomIds.size),3);
  const original=await page.evaluate(()=>({atoms:MoleculeVisualizer.App.getState().atoms.map(a=>({...a})),rotX:MoleculeVisualizer.App.renderer().rotX}));
@@ -27,11 +31,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  await page.evaluate(()=>MoleculeVisualizer.App.loadText('1\nframe 1\nHe 0 0 0\n1\nframe 2\nHe 1 0 0\n'));await page.click('#frameNext');assert.equal(await page.locator('#frameLabel').textContent(),'2 / 2');
  await page.locator('canvas').click();await page.evaluate(()=>{const s=MoleculeVisualizer.App.getState();s.selectedAtomIds.add(s.atoms[0].id);MoleculeVisualizer.App.setState(s,true);});await page.locator('canvas').press('ArrowRight');assert.ok(await page.evaluate(()=>Math.abs(MoleculeVisualizer.App.getState().atoms[0].x-1.01)<1e-8));await page.click('#framePrev');await page.click('#frameNext');assert.ok(await page.evaluate(()=>Math.abs(MoleculeVisualizer.App.getState().atoms[0].x-1.01)<1e-8));
  await page.click('#btnKetcher');await page.waitForFunction(()=>document.querySelector('#ketcherFrame').contentWindow.ketcher,{},{timeout:90000});
- await page.fill('#smilesText','CCO');await page.click('#chemReadSmiles');await page.waitForFunction(()=>document.querySelector('#chemMessage').textContent.includes('描画しました'));await page.click('#chemSmiles');await page.waitForFunction(()=>document.querySelector('#chemMessage').textContent.includes('変換しました'));assert.match(await page.locator('#smilesText').inputValue(),/C/);
- await page.screenshot({path:'test-artifacts/ketcher.png',fullPage:true});await page.click('#chemTo3D');
+ await page.fill('#smilesText','C');await page.click('#chemReadSmiles');await page.waitForFunction(()=>document.querySelector('#chemMessage').textContent.includes('描画しました'));await page.click('#chemSmiles');await page.waitForFunction(()=>document.querySelector('#chemMessage').textContent.includes('変換しました'));assert.match(await page.locator('#smilesText').inputValue(),/C/);
+ await page.screenshot({path:'test-artifacts/ketcher.png',fullPage:true});await page.fill('#smilesText','CCO');await page.click('#chemSmilesTo3D');
  await page.waitForFunction(()=>!document.querySelector('#chemDialog').open||document.querySelector('#statusBadge').classList.contains('error'),{},{timeout:130000});
  assert.equal(await page.locator('#chemDialog').evaluate(e=>e.open),false,await page.locator('#chemMessage').textContent());
- const atoms=await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms);assert.equal(atoms.length,9);assert.ok(atoms.every(a=>[a.x,a.y,a.z].every(Number.isFinite)));
+ const atoms=await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms);assert.equal(atoms.length,9);assert.match(await page.locator('#dataText').inputValue(),/^9\n/);assert.ok(atoms.every(a=>[a.x,a.y,a.z].every(Number.isFinite)));
  await page.screenshot({path:'test-artifacts/studio.png',fullPage:true});
  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'test-artifacts/mobile.png',fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1));
  assert.deepEqual(errors,[]);console.log('PASS: periodic cell, supercell undo, trajectory editing, shortcuts, Ketcher SMILES, UFF 3D generation, mobile layout');await browser.close();

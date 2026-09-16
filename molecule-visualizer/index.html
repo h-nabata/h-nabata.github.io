@@ -2,17 +2,17 @@
 layout: default
 title: 分子構造エディタ | Molecule Studio
 ---
-<link rel="stylesheet" href="./molecule-visualizer_style.css?v=5">
-<script defer src="./model.js?v=5"></script>
-<script defer src="./bonding.js?v=5"></script>
-<script defer src="./geometry.js?v=5"></script>
-<script defer src="./io.js?v=5"></script>
-<script defer src="./periodic.js?v=5"></script>
-<script defer src="./history.js?v=5"></script>
-<script defer src="./renderer3dmol.js?v=5"></script>
-<script defer src="./ui.js?v=5"></script>
-<script defer src="./studio.js?v=5"></script>
-<script defer src="./molecule-visualizer_main.js?v=5"></script>
+<link rel="stylesheet" href="./molecule-visualizer_style.css?v=6">
+<script defer src="./model.js?v=6"></script>
+<script defer src="./bonding.js?v=6"></script>
+<script defer src="./geometry.js?v=6"></script>
+<script defer src="./io.js?v=6"></script>
+<script defer src="./periodic.js?v=6"></script>
+<script defer src="./history.js?v=6"></script>
+<script defer src="./renderer3dmol.js?v=6"></script>
+<script defer src="./ui.js?v=6"></script>
+<script defer src="./studio.js?v=6"></script>
+<script defer src="./molecule-visualizer_main.js?v=6"></script>
 
 <main class="mv-app">
   <header class="mv-app-header">
@@ -181,7 +181,7 @@ O 0 0 0
 H 0.9572 0 0
 H -0.239987 0.926627 0"></textarea><p class="mv-small" id="importError" role="alert"></p><div class="mv-row mv-end"><button class="mv-btn" data-close="importDialog">キャンセル</button><button class="mv-btn primary" id="btnRender">読み込む</button></div></dialog>
   <dialog id="exportDialog"><h2>保存・書き出し</h2><p>編集を再開するにはプロジェクト形式を保存してください。拡張XYZは座標・周期セル、MOL/SDFは共有結合と形式電荷を保存します。SDFの追加プロパティは保持しますが、編集後の値へ再計算はしません。</p><div class="mv-row"><button class="mv-btn primary" id="btnSaveProject">プロジェクト保存</button><button class="mv-btn" id="btnDownloadXYZ">XYZを保存</button><button class="mv-btn" id="savePOSCAR">POSCARを保存</button><button class="mv-btn" id="allFrames">全フレームXYZ</button><button class="mv-btn" id="btnDownloadSdf">SDFを保存</button></div><div class="mv-row"><button class="mv-btn" id="btnCopyXYZ">XYZをコピー</button><button class="mv-btn" id="btnCopyMol">MOLをコピー</button><button class="mv-btn" id="btnExportText">最新のXYZを表示</button></div><textarea id="exportText" rows="9" readonly aria-label="書き出すXYZ"></textarea><p id="exportMessage" role="status"></p><div class="mv-row mv-end"><button class="mv-btn" data-close="exportDialog">閉じる</button></div></dialog>
-  <dialog id="helpDialog"><h2>操作ガイド</h2><ul><li><b>選択：</b>クリック／タップで原子を選択。Shift・Ctrl・⌘ または「複数選択」で追加選択。</li><li><b>回転：</b>選択モードでドラッグ。原子の上からでも座標は変わりません。</li><li><b>表示の移動：</b>中ボタンドラッグ。タッチでは2本指で移動・ピンチで拡大縮小。</li><li><b>原子移動：</b>モードを切り替えて原子をドラッグ。選択した原子を一緒に移動。Shiftで世界座標のZ方向に移動。</li><li><b>範囲選択：</b>右ドラッグ、または専用モードでドラッグ。Shift・Ctrl・⌘で追加選択。</li><li><b>原子団の操作：</b>Alt＋左ドラッグで平行移動、Alt＋右ドラッグで重心まわりに回転。選択中は選択原子群、未選択なら開始位置の原子・結合につながる部分が対象です。未選択で空白から開始した場合は動きません。座標の変更はUndoで復元できます。</li><li><b>キー操作（描画領域にフォーカス時）：</b>V 選択、M 移動、B 結合、R 全体表示、E 隣接選択、W 分子選択、Delete 削除、Ctrl / ⌘ Z 元に戻す。</li><li><b>追加操作：</b>ダブルクリックで分子を選択。X / Y / Zで移動方向を拘束。矢印で0.01 Å（Shiftで0.1 Å）移動、PageUp / DownでZ移動。選択原子団の回転は「測定・移動」から。</li><li><b>周期系：</b>セルの3ベクトル・周期方向・スーパーセルを編集できます。選択2原子の最小像距離はセル欄、通常の距離・角度は表示座標を使います。結合推定は各原子対の最小像1本です。周期像自身との結合・全近接像は未表示です。</li><li><b>2D / 3D：</b>Ketcherで描画・SMILES入出力。UFFで水素を追加して初期3D配座を作成します。計算化学の構造最適化を代替するものではありません。</li><li><b>データ：</b>ファイルを画面へドロップ可能。編集内容はこのブラウザに自動保存されます。プロジェクト保存で結合種類・表示設定も保持できます。</li></ul><div class="mv-row mv-end"><button class="mv-btn" data-close="helpDialog">閉じる</button></div></dialog>
+  <dialog id="helpDialog"><h2>操作ガイド</h2><ul><li><b>選択：</b>クリック／タップで原子を選択。原子上の右クリックで現在の選択へ追加（再度右クリックしても解除しません）。Shift・Ctrl・⌘ または「複数選択」で追加選択。</li><li><b>回転：</b>選択モードでドラッグ。原子の上からでも座標は変わりません。</li><li><b>表示の移動：</b>中ボタンドラッグ。タッチでは2本指で移動・ピンチで拡大縮小。</li><li><b>原子移動：</b>モードを切り替えて原子をドラッグ。選択した原子を一緒に移動。Shiftで世界座標のZ方向に移動。</li><li><b>範囲選択：</b>右ドラッグ、または専用モードでドラッグ。Shift・Ctrl・⌘で追加選択。</li><li><b>原子団の操作：</b>Alt＋左ドラッグで平行移動、Alt＋右ドラッグで重心まわりに回転。選択中は選択原子群、未選択なら開始位置の原子・結合につながる部分が対象です。未選択で空白から開始した場合は動きません。座標の変更はUndoで復元できます。</li><li><b>キー操作（描画領域にフォーカス時）：</b>V 選択、M 移動、B 結合、R 全体表示、E 隣接選択、W 分子選択、Delete 削除、Ctrl / ⌘ Z 元に戻す。</li><li><b>追加操作：</b>ダブルクリックで分子を選択。X / Y / Zで移動方向を拘束。矢印で0.01 Å（Shiftで0.1 Å）移動、PageUp / DownでZ移動。選択原子団の回転は「測定・移動」から。</li><li><b>周期系：</b>セルの3ベクトル・周期方向・スーパーセルを編集できます。選択2原子の最小像距離はセル欄、通常の距離・角度は表示座標を使います。結合推定は各原子対の最小像1本です。周期像自身との結合・全近接像は未表示です。</li><li><b>2D / 3D：</b>Ketcherで描画・SMILES入出力。SMILES欄へ入力し「SMILES → 3D / XYZ」を押すと、直接3D座標を生成してXYZ欄に反映します。UFFで水素を追加して初期3D配座を作成します。計算化学の構造最適化を代替するものではありません。</li><li><b>データ：</b>ファイルを画面へドロップ可能。編集内容はこのブラウザに自動保存されます。プロジェクト保存で結合種類・表示設定も保持できます。</li></ul><div class="mv-row mv-end"><button class="mv-btn" data-close="helpDialog">閉じる</button></div></dialog>
 <dialog id="fragDialog">
     <form method="dialog">
       <h3>原子団（XYZ）を追加</h3>
@@ -253,5 +253,5 @@ H 1.0 0 0
   </dialog>
 <dialog id="cellDialog"><h2>周期セル</h2><p>格子ベクトル a・b・c を1行ずつ、Å単位で入力します。斜交セルに対応します。</p><label for="cellVectors">格子ベクトル（3行 × 3成分）</label><textarea id="cellVectors" rows="3" spellcheck="false"></textarea><div class="mv-row"><label><input id="pbcA" type="checkbox" checked> a方向周期</label><label><input id="pbcB" type="checkbox" checked> b方向周期</label><label><input id="pbcC" type="checkbox" checked> c方向周期</label></div><label class="mv-check"><input id="keepFractional" type="checkbox">セル変更時に分率座標を保持（未選択ではCartesian座標を保持）</label><div class="mv-row"><button class="mv-btn primary" id="cellApply">セルを適用</button><button class="mv-btn" id="cellWrap">原子をセル内へ折り返す</button><button class="mv-btn" id="cellRemove">周期セルを解除</button></div><hr><h3>スーパーセルを作成</h3><p>原子を実際に複製します。軌跡の場合は現在のフレームを独立した構造として扱います。「戻す」で復元できます。</p><label for="repeatCell">a b c の反復数</label><input id="repeatCell" value="2 2 2"><button class="mv-btn" id="cellSuper">スーパーセルを作成</button><div class="mv-row mv-end"><button class="mv-btn" data-close="cellDialog">閉じる</button></div></dialog>
 
-<dialog id="chemDialog" class="mv-chem-dialog"><div class="mv-row mv-between"><div><h2>2D構造を描く</h2><p class="mv-small">Ketcher · SMILES / MOL · UFFによる初期3D構造生成</p></div><button class="mv-btn" data-close="chemDialog">閉じる</button></div><div class="mv-row"><button class="mv-btn" id="chemFrom3D">現在の3D構造を読み込む</button><button class="mv-btn" id="chemSaveMol">MOLを保存</button><button class="mv-btn primary" id="chemTo3D">水素追加 → 3D構造を生成</button><button class="mv-btn" id="chemCancel" disabled>生成を中止</button></div><iframe id="ketcherFrame" title="Ketcher 分子構造描画エディタ" allow="clipboard-read; clipboard-write"></iframe><label for="smilesText">SMILES</label><textarea id="smilesText" rows="2" placeholder="例: CC(=O)Oc1ccccc1C(=O)O" spellcheck="false"></textarea><div class="mv-row"><button class="mv-btn" id="chemReadSmiles">SMILESを描画</button><button class="mv-btn" id="chemSmiles">描画からSMILESを取得</button><button class="mv-btn" id="chemSaveSmiles">SMILESを保存</button></div><p id="chemMessage" role="status" aria-live="polite"></p></dialog>
+<dialog id="chemDialog" class="mv-chem-dialog"><div class="mv-row mv-between"><div><h2>2D構造を描く</h2><p class="mv-small">Ketcher · SMILES / MOL · UFFによる初期3D構造生成</p></div><button class="mv-btn" data-close="chemDialog">閉じる</button></div><div class="mv-row"><button class="mv-btn" id="chemFrom3D">現在の3D構造を読み込む</button><button class="mv-btn" id="chemSaveMol">MOLを保存</button><button class="mv-btn primary" id="chemTo3D">水素追加 → 3D構造を生成</button><button class="mv-btn" id="chemCancel" disabled>生成を中止</button></div><iframe id="ketcherFrame" title="Ketcher 分子構造描画エディタ" allow="clipboard-read; clipboard-write"></iframe><label for="smilesText">SMILES</label><textarea id="smilesText" rows="2" placeholder="例: CC(=O)Oc1ccccc1C(=O)O" spellcheck="false"></textarea><div class="mv-row"><button class="mv-btn primary" id="chemSmilesTo3D">SMILES → 3D / XYZ</button><button class="mv-btn" id="chemReadSmiles">SMILESを描画</button><button class="mv-btn" id="chemSmiles">描画からSMILESを取得</button><button class="mv-btn" id="chemSaveSmiles">SMILESを保存</button></div><p id="chemMessage" role="status" aria-live="polite"></p></dialog>
 </main>

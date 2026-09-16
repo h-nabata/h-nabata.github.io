@@ -305,7 +305,7 @@
       if(touches.size>2)return;
       const atom=self.pickAtom(p.x,p.y),bond=atom?null:self.pickBond(p.x,p.y);
       let action=e.button===1?"pan":e.altKey?(e.button===2?"groupRotate":"groupMove"):e.button===2||self.mode==="box"?"box":self.mode==="move"&&atom?"move":"rotate";
-      self.pointer={id:e.pointerId,x:e.clientX,y:e.clientY,lastX:e.clientX,lastY:e.clientY,moved:false,atomId:atom?.id,bondId:bond?.id,groupSeed:atom?.id||bond?.atom1,action,historyStarted:false};
+      self.pointer={button:e.button,id:e.pointerId,x:e.clientX,y:e.clientY,lastX:e.clientX,lastY:e.clientY,moved:false,atomId:atom?.id,bondId:bond?.id,groupSeed:atom?.id||bond?.atom1,action,historyStarted:false};
       if(action==="box")self.selectionBox={x1:p.x,y1:p.y,x2:p.x,y2:p.y};
       e.preventDefault();
     });
@@ -331,7 +331,13 @@
       touches.delete(e.pointerId);if(gesture){if(touches.size<2)gesture=null;self.pointer=null;return;}
       const ptr=self.pointer;if(!ptr||ptr.id!==e.pointerId)return;self.pointer=null;
       if(ptr.historyStarted)self.onDragEnd?.(e);
-      if(ptr.action==="box"){const ids=self.atomIdsInBox(self.selectionBox);self.selectionBox=null;if(ptr.moved&&e.type!=="pointercancel"&&e.type!=="lostpointercapture")self.onBoxSelect?.(ids,e);}
+      if(ptr.action==="box"){
+        const ids=self.atomIdsInBox(self.selectionBox);self.selectionBox=null;
+        if(e.type==='pointerup'){
+          if(ptr.moved)self.onBoxSelect?.(ids,e);
+          else if(ptr.button===2&&ptr.atomId)self.onAtomContextSelect?.(ptr.atomId,e);
+        }
+      }
       else if(!ptr.moved&&["rotate","move"].includes(ptr.action)&&e.type!=="pointercancel") {if(ptr.atomId)self.onAtomClick?.(ptr.atomId,e,self);else if(ptr.bondId)self.onBondClick?.(ptr.bondId,e,self);else self.onBlankClick?.(e);}
       self.draw();
     };
