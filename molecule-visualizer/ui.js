@@ -48,7 +48,7 @@
     try{setMeasure(values.length===2?`${Geometry.distance(...values).toFixed(3)} Å`:values.length===3?`${Geometry.angle(...values).toFixed(2)}°`:values.length===4?`${Geometry.dihedral(...values).toFixed(2)}°`:"2 / 3 / 4 原子を順に選択してください");}catch(e){setMeasure(e.message);}
   }
   let xyzDirty=false, xyzBase='', xyzDisplayBase='';
-  function editorXYZ(s){return MV.Periodic.editorText(s,byId('xyzHeader').checked);}
+  function editorXYZ(s){const format=byId('coordinateFormat');if(s.metadata.cell)format.value='xyz';const mol=format.value==='mol3000';byId('xyzHeader').disabled=mol;return mol?IO.stateToMolV3000Text(s):MV.Periodic.editorText(s,byId('xyzHeader').checked);}
   function syncXYZEditor(){
     const el=byId('dataText');if(!el)return;
     let text;try{text=IO.stateToXYZText(state);}catch(error){byId('xyzEditStatus').textContent=error.message;return;}
@@ -57,15 +57,16 @@
   }
   function applyXYZEditor(){
     if(xyzDirty&&IO.stateToXYZText(state)!==xyzBase)throw Error('構造が変更されています。編集内容を控え、「現在の構造を再表示」で更新してください。');
-    const input=IO.normalizeXYZInput(byId('dataText').value),parsed=IO.parseXYZToState(input);
+    const input=IO.normalizeXYZInput(byId('dataText').value),isMol=/V[23]000/.test(input),parsed=isMol?IO.parseMolToState(input):IO.parseXYZToState(input);
     if(parsed.metadata.trajectory)throw Error('ここでは現在の1フレームを編集してください。複数フレームは「ファイルを開く」から読み込めます。');
     const next=Model.cloneState(state),same=next.atoms.length===parsed.atoms.length&&next.atoms.every((a,i)=>a.element===parsed.atoms[i].element);
-    if(same)next.atoms.forEach((a,i)=>{const b=parsed.atoms[i];Object.assign(a,{x:b.x,y:b.y,z:b.z});if(Object.keys(b.xyzExtras||{}).length)a.xyzExtras=b.xyzExtras;});
+    if(isMol){next.atoms=parsed.atoms;next.bonds=parsed.bonds;next.metadata={...next.metadata,...parsed.metadata};next.selectedAtomIds.clear();next.selectedBondIds.clear();next.metadata.suppressedBondKeys=[];byId('coordinateFormat').value='mol3000';}
+    else if(same)next.atoms.forEach((a,i)=>{const b=parsed.atoms[i];Object.assign(a,{x:b.x,y:b.y,z:b.z});if(Object.keys(b.xyzExtras||{}).length)a.xyzExtras=b.xyzExtras;});
     else{next.atoms=parsed.atoms;next.bonds=[];next.selectedAtomIds.clear();next.selectedBondIds.clear();next.metadata.suppressedBondKeys=[];}
     if(/^\s*\d+\s*\n/.test(input))next.metadata.title=parsed.metadata.title;
     if(parsed.metadata.cell){if(next.metadata.cell&&!/\bLattice=/.test(input))parsed.metadata.cell.pbc=next.metadata.cell.pbc.slice();next.metadata.cell=parsed.metadata.cell;}
-    Bonding.refreshInferredBonds(next);
-    pushHistory('XYZ coordinates');xyzDirty=false;setState(next,true);setStatus('全原子のXYZ座標を適用しました。「戻す」で復元できます。');
+    if(!isMol)Bonding.refreshInferredBonds(next);
+    pushHistory('structure text');xyzDirty=false;setState(next,true);setStatus('座標・構造データを適用しました。「戻す」で復元できます。');
   }
   function setMeasure(msg) { const el = byId("measureBadge"); if (el) el.textContent = msg; }
   function pushHistory(label) { history.push(label, state); }
@@ -838,6 +839,7 @@
     bind('btnPaste','click',()=>{byId('importError').textContent='';byId('importDialog').showModal();byId('xyz_input').focus();});
     bind('btnHelp','click',()=>byId('helpDialog').showModal());
     bind('btnExport','click',()=>{byId('exportText').value=IO.stateToXYZText(state);byId('exportMessage').textContent='';byId('exportDialog').showModal();});
+    bind('btnDownloadMol3000','click',()=>downloadText(IO.stateToMolV3000Text(state),'structure.mol'));
     bind('btnExportText','click',()=>byId('exportText').value=IO.stateToXYZText(state));
     bind('btnSaveProject','click',()=>{downloadText(IO.stateToProjectText(state),safeFilename()+'.json');setStatus('プロジェクトを保存しました。');});
     bind('btnNew','click',()=>{pushHistory('new');state=Model.createState();setMode('select');render(false);setStatus('新規構造です。原子追加またはサンプルから始めてください。');});
@@ -854,6 +856,11 @@
     tabs.forEach((tab,i)=>{tab.tabIndex=i===0?0:-1;tab.addEventListener('click',()=>activate(tab));tab.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const next=e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+(e.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;activate(tabs[next]);tabs[next].focus();});});
     bind('btnApplyCharge','click',()=>{const atoms=selectedAtoms();if(atoms.length!==1)return;const charge=numberInput('atomCharge',-15,15);if(!Number.isInteger(charge))throw Error('形式電荷は整数にしてください。');pushHistory('charge');atoms[0].charge=charge;render(true);setStatus('形式電荷を変更しました。');});
     bind('dataText','input',()=>{xyzDirty=byId('dataText').value!==xyzDisplayBase;syncXYZEditor();});
+    bind('coordinateFormat','change',()=>{
+      const select=byId('coordinateFormat'),target=select.value;
+      try{if(xyzDirty)applyXYZEditor();select.value=target;if(target==='mol3000'&&state.metadata.cell)throw Error('周期セルはXYZ + TVで編集してください。');syncXYZEditor();}
+      catch(error){select.value=/V3000/.test(byId('dataText').value)?'mol3000':'xyz';report(error);}
+    });
     bind('xyzHeader','change',()=>{
       try{
         if(xyzDirty){const draft=IO.parseXYZToState(byId('dataText').value);if(draft.metadata.trajectory)throw Error('1フレームのみ入力してください。');

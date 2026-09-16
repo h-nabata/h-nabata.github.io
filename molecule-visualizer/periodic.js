@@ -110,7 +110,7 @@
   IO.parseXYZAtoms=t=>{const s=parseXYZ(t);if(s.metadata.cell||s.metadata.trajectory)throw Error('原子団の追加は単一の非周期XYZを使用してください。');return {atoms:s.atoms,title:s.metadata.title};};
   IO.parseProject=t=>{const s=oldProject(t);if(s.metadata.cell)s.metadata.cell=cell(s.metadata.cell.vectors,s.metadata.cell.pbc);if(s.metadata.trajectory){if(!Array.isArray(s.metadata.trajectory)||s.metadata.trajectory.length>200)throw Error('軌跡データが不正です。');s.metadata.trajectory=s.metadata.trajectory.map(f=>snapshot(IO.parseProject(JSON.stringify({format:'molecule-studio',version:1,...f,metadata:{...f.metadata,trajectory:undefined}}))));if(!Number.isInteger(s.metadata.frameIndex)||s.metadata.frameIndex<0||s.metadata.frameIndex>=s.metadata.trajectory.length)throw Error('フレーム番号が不正です。');}return s;};
   IO.parseAuto=t=>String(t).trim().startsWith('{')?IO.parseProject(t):/V[23]000/.test(t)?oldAuto(t):/^\s*[+-]?(?:\d+\.?\d*|\.\d+)\s*$/.test(String(t).split('\n')[1]||'')&&!/^\d+\s*$/.test(String(t).split('\n')[0])?parsePOSCAR(t):parseXYZ(t);
-  IO.stateToMolText=s=>{if(s.metadata.cell)throw Error('MOLは周期セルを保持できません。拡張XYZ・POSCAR・プロジェクトで保存してください。');return oldMol(s);};
+  IO.stateToMolText=(s,version)=>{if(s.metadata.cell)throw Error('MOLは周期セルを保持できません。拡張XYZ・POSCAR・プロジェクトで保存してください。');return oldMol(s,version);};
   IO.stateToSDFText=s=>IO.stateToMolText(s)+(s.metadata.sdfProperties?String(s.metadata.sdfProperties)+'\n\n':'')+'$$$$\n';
   MV.Periodic={cell,fractional,cartesian,minimumImage,wrap,supercell,parsePOSCAR,toPOSCAR,snapshot,xyz,editorText,lowerTriangular};
 })(window);

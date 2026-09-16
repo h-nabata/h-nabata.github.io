@@ -33,7 +33,7 @@
   function convert(data,input,output,generate=false){
     if(pending)return Promise.reject(Error('変換中です。完了するか中止してください。'));
     return new Promise((resolve,reject)=>{
-      const id=++jobId;worker=new Worker('./chem-worker.js?v=7');
+      const id=++jobId;worker=new Worker('./chem-worker.js?v=8');
       const finish=(err,result)=>{if(!pending||pending.id!==id)return;clearTimeout(pending.timeout);pending=null;worker.terminate();worker=null;$('chemCancel').disabled=true;err?reject(Error(err)):resolve(result);};
       pending={id,reject,timeout:setTimeout(()=>finish('変換が120秒を超えました。小さい分子でお試しください。'),120000)};
       worker.onmessage=e=>finish(e.data.error,e.data.result);worker.onerror=e=>finish(e.message||'化学エンジンを起動できません。');$('chemCancel').disabled=false;worker.postMessage({data,input,output,generate});
@@ -54,8 +54,8 @@
       const input=fromSmiles?smiles:await(await ketcher()).getMolfile('v2000');
       if(!$('chemDialog').open)throw Error('3D生成を中止しました。');
       const result=await convert(input,fromSmiles?'smi':'mol','mol',true);
-      // Generated 3D coordinates encode stereochemistry; retain the source MOL as provenance.
-      const next=IO.parseMolToState(result,{generated3D:true});next.metadata.title=fromSmiles?'SMILES → 3D':'Ketcher → 3D';next.metadata.sourceFormat=fromSmiles?'smiles':'ketcher';
+      // Import generated coordinates together with isotopes, stereo, radicals and mappings.
+      const next=IO.parseMolToState(result);next.metadata.title=fromSmiles?'SMILES → 3D':'Ketcher → 3D';next.metadata.sourceFormat=fromSmiles?'smiles':'ketcher';
       if(fromSmiles)next.metadata.sourceSmiles=smiles;
       $('chemDialog').close();app().change('SMILES / Ketcher 3D',()=>next,true);
       // Keep an unapplied draft available without hiding the newly generated coordinates.

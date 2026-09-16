@@ -2,17 +2,18 @@
 layout: default
 title: 分子構造エディタ | Molecule Studio
 ---
-<link rel="stylesheet" href="./molecule-visualizer_style.css?v=7">
-<script defer src="./model.js?v=7"></script>
-<script defer src="./bonding.js?v=7"></script>
-<script defer src="./geometry.js?v=7"></script>
-<script defer src="./io.js?v=7"></script>
-<script defer src="./periodic.js?v=7"></script>
-<script defer src="./history.js?v=7"></script>
-<script defer src="./renderer3dmol.js?v=7"></script>
-<script defer src="./ui.js?v=7"></script>
-<script defer src="./studio.js?v=7"></script>
-<script defer src="./molecule-visualizer_main.js?v=7"></script>
+<link rel="stylesheet" href="./molecule-visualizer_style.css?v=8">
+<script defer src="./model.js?v=8"></script>
+<script defer src="./bonding.js?v=8"></script>
+<script defer src="./geometry.js?v=8"></script>
+<script defer src="./io.js?v=8"></script>
+<script defer src="./molfile.js?v=8"></script>
+<script defer src="./periodic.js?v=8"></script>
+<script defer src="./history.js?v=8"></script>
+<script defer src="./renderer3dmol.js?v=8"></script>
+<script defer src="./ui.js?v=8"></script>
+<script defer src="./studio.js?v=8"></script>
+<script defer src="./molecule-visualizer_main.js?v=8"></script>
 
 <main class="mv-app">
   <header class="mv-app-header">
@@ -43,7 +44,7 @@ title: 分子構造エディタ | Molecule Studio
     <aside class="mv-inspector" aria-label="編集パネル">
       <div class="mv-tabs" role="tablist" aria-label="編集項目"><button role="tab" id="tab-atoms" aria-controls="pane-atoms" aria-selected="true" data-tab="atoms">原子</button><button role="tab" id="tab-bonds" aria-controls="pane-bonds" aria-selected="false" data-tab="bonds">結合</button><button role="tab" id="tab-geometry" aria-controls="pane-geometry" aria-selected="false" data-tab="geometry">測定・移動</button></div>
       <div id="pane-atoms" role="tabpanel" aria-labelledby="tab-atoms">
-        <div class="mv-panel mv-xyz-panel"><h2>全原子のXYZ座標</h2><p class="mv-small">現在のフレームをまとめて編集できます。1行に「元素 X Y Z」を記入し、構造へ適用してください。ヘッダーの有無は自動判別し、全角スペース・タブ・各種改行も読み取ります。単位格子は末尾に TV ax 0 0 / TV bx by 0 / TV cx cy cz の3行で指定できます（Å）。TVは原子数に含めません。「格子を下三角化」は原子も一緒に回転し、構造を保ちます。</p><div class="mv-row"><label for="dataText">XYZ座標（Å）</label><label class="mv-check"><input id="xyzHeader" type="checkbox" checked>ヘッダー（原子数・コメント）を表示</label></div><textarea id="dataText" rows="18" wrap="off" spellcheck="false" aria-describedby="xyzEditStatus"></textarea><details id="previousXYZDraftPanel" hidden><summary>生成前の未適用XYZを復元用に表示</summary><textarea id="previousXYZDraft" rows="6" readonly></textarea></details><p id="xyzEditStatus" class="mv-small" role="status" aria-live="polite"></p><div class="mv-row"><button class="mv-btn primary" id="dataApply">構造へ適用</button><button class="mv-btn" id="cellLowerTriangular">格子を下三角化</button><button class="mv-btn" id="dataReset">現在の構造を再表示</button></div></div>
+        <div class="mv-panel mv-xyz-panel"><h2>全原子の座標・構造データ</h2><p class="mv-small">現在のフレームをまとめて編集できます。MOL V2000 / V3000もそのまま貼り付けられ、結合・同位体・形式電荷・ラジカル・立体指定・原子マッピングを保持します。1行に「元素 X Y Z」を記入し、構造へ適用してください。ヘッダーの有無は自動判別し、全角スペース・タブ・各種改行も読み取ります。単位格子は末尾に TV ax 0 0 / TV bx by 0 / TV cx cy cz の3行で指定できます（Å）。TVは原子数に含めません。「格子を下三角化」は原子も一緒に回転し、構造を保ちます。</p><div class="mv-row"><label for="dataText">座標・構造データ（Å）</label><label for="coordinateFormat">表示形式</label><select id="coordinateFormat"><option value="xyz">XYZ + TV</option><option value="mol3000">MOL V3000</option></select><label class="mv-check"><input id="xyzHeader" type="checkbox" checked>ヘッダー（原子数・コメント）を表示</label></div><textarea id="dataText" rows="18" wrap="off" spellcheck="false" aria-describedby="xyzEditStatus"></textarea><details id="previousXYZDraftPanel" hidden><summary>生成前の未適用XYZを復元用に表示</summary><textarea id="previousXYZDraft" rows="6" readonly></textarea></details><p id="xyzEditStatus" class="mv-small" role="status" aria-live="polite"></p><div class="mv-row"><button class="mv-btn primary" id="dataApply">構造へ適用</button><button class="mv-btn" id="cellLowerTriangular">格子を下三角化</button><button class="mv-btn" id="dataReset">現在の構造を再表示</button></div></div>
         <details class="mv-panel"><summary>選択原子の形式電荷</summary><label>形式電荷<input id="atomCharge" type="number" step="1" min="-15" max="15"></label><button class="mv-btn" id="btnApplyCharge">電荷を適用</button></details>
 <div class="mv-panel">
         <h2>原子の追加 / 削除</h2>
@@ -180,7 +181,7 @@ Water
 O 0 0 0
 H 0.9572 0 0
 H -0.239987 0.926627 0"></textarea><p class="mv-small" id="importError" role="alert"></p><div class="mv-row mv-end"><button class="mv-btn" data-close="importDialog">キャンセル</button><button class="mv-btn primary" id="btnRender">読み込む</button></div></dialog>
-  <dialog id="exportDialog"><h2>保存・書き出し</h2><p>編集を再開するにはプロジェクト形式を保存してください。拡張XYZは座標・周期セル、MOL/SDFは共有結合と形式電荷を保存します。SDFの追加プロパティは保持しますが、編集後の値へ再計算はしません。</p><div class="mv-row"><button class="mv-btn primary" id="btnSaveProject">プロジェクト保存</button><button class="mv-btn" id="btnDownloadXYZ">XYZを保存</button><button class="mv-btn" id="savePOSCAR">POSCARを保存</button><button class="mv-btn" id="allFrames">全フレームXYZ</button><button class="mv-btn" id="btnDownloadSdf">SDFを保存</button></div><div class="mv-row"><button class="mv-btn" id="btnCopyXYZ">XYZをコピー</button><button class="mv-btn" id="btnCopyMol">MOLをコピー</button><button class="mv-btn" id="btnExportText">最新のXYZを表示</button></div><textarea id="exportText" rows="9" readonly aria-label="書き出すXYZ"></textarea><p id="exportMessage" role="status"></p><div class="mv-row mv-end"><button class="mv-btn" data-close="exportDialog">閉じる</button></div></dialog>
+  <dialog id="exportDialog"><h2>保存・書き出し</h2><p>編集を再開するにはプロジェクト形式を保存してください。拡張XYZは座標・周期セル、MOL/SDFは結合・形式電荷・同位体・ラジカル・立体指定・原子マッピングを保存します。SDFの追加プロパティは保持しますが、編集後の値へ再計算はしません。</p><div class="mv-row"><button class="mv-btn primary" id="btnSaveProject">プロジェクト保存</button><button class="mv-btn" id="btnDownloadXYZ">XYZを保存</button><button class="mv-btn" id="savePOSCAR">POSCARを保存</button><button class="mv-btn" id="allFrames">全フレームXYZ</button><button class="mv-btn" id="btnDownloadSdf">SDFを保存</button></div><div class="mv-row"><button class="mv-btn" id="btnCopyXYZ">XYZをコピー</button><button class="mv-btn" id="btnCopyMol">MOLをコピー</button><button class="mv-btn" id="btnDownloadMol3000">MOL V3000を保存</button><button class="mv-btn" id="btnExportText">最新のXYZを表示</button></div><textarea id="exportText" rows="9" readonly aria-label="書き出すXYZ"></textarea><p id="exportMessage" role="status"></p><div class="mv-row mv-end"><button class="mv-btn" data-close="exportDialog">閉じる</button></div></dialog>
   <dialog id="helpDialog"><h2>操作ガイド</h2><ul><li><b>選択：</b>クリック／タップで原子を選択。原子上の右クリックで現在の選択へ追加（再度右クリックしても解除しません）。Shift・Ctrl・⌘ または「複数選択」で追加選択。</li><li><b>回転：</b>選択モードでドラッグ。原子の上からでも座標は変わりません。</li><li><b>表示の移動：</b>中ボタンドラッグ。タッチでは2本指で移動・ピンチで拡大縮小。</li><li><b>原子移動：</b>モードを切り替えて原子をドラッグ。選択した原子を一緒に移動。Shiftで世界座標のZ方向に移動。</li><li><b>範囲選択：</b>右ドラッグ、または専用モードでドラッグ。Shift・Ctrl・⌘で追加選択。</li><li><b>原子団の操作：</b>Alt＋左ドラッグで平行移動、Alt＋右ドラッグで重心まわりに回転。選択中は選択原子群、未選択なら開始位置の原子・結合につながる部分が対象です。未選択で空白から開始した場合は動きません。座標の変更はUndoで復元できます。</li><li><b>キー操作（描画領域にフォーカス時）：</b>V 選択、M 移動、B 結合、R 全体表示、E 隣接選択、W 分子選択、Delete 削除、Ctrl / ⌘ Z 元に戻す。</li><li><b>追加操作：</b>ダブルクリックで分子を選択。X / Y / Zで移動方向を拘束。矢印で0.01 Å（Shiftで0.1 Å）移動、PageUp / DownでZ移動。選択原子団の回転は「測定・移動」から。</li><li><b>周期系：</b>セルの3ベクトル・周期方向・スーパーセルを編集できます。選択2原子の最小像距離はセル欄、通常の距離・角度は表示座標を使います。結合推定は各原子対の最小像1本です。周期像自身との結合・全近接像は未表示です。</li><li><b>2D / 3D：</b>Ketcherで描画・SMILES入出力。SMILES欄へ入力し「SMILES → 3D / XYZ」を押すと、直接3D座標を生成してXYZ欄に反映します。UFFで水素を追加して初期3D配座を作成します。計算化学の構造最適化を代替するものではありません。</li><li><b>データ：</b>ファイルを画面へドロップ可能。編集内容はこのブラウザに自動保存されます。プロジェクト保存で結合種類・表示設定も保持できます。</li></ul><div class="mv-row mv-end"><button class="mv-btn" data-close="helpDialog">閉じる</button></div></dialog>
 <dialog id="fragDialog">
     <form method="dialog">

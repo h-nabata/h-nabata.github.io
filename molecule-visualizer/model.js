@@ -32,6 +32,7 @@
       y: Number(data.y) || 0,
       z: Number(data.z) || 0,
       charge: Number(data.charge) || 0,
+      mol: data.mol ? JSON.parse(JSON.stringify(data.mol)) : undefined,
       xyzExtras: data.xyzExtras ? JSON.parse(JSON.stringify(data.xyzExtras)) : undefined,
       selective: data.selective ? data.selective.slice() : undefined
     };
@@ -46,6 +47,7 @@
       atom2: data.atom2,
       order: data.order || 1,
       type: data.type || "covalent",
+      mol: data.mol ? JSON.parse(JSON.stringify(data.mol)) : undefined,
       source: data.source || "manual"
     };
     bumpCounterFromId(bond.id, "bond");
@@ -77,7 +79,7 @@
         x: a.x,
         y: a.y,
         z: a.z,
-        charge: a.charge || 0,
+        charge: a.charge || 0, mol: a.mol,
         xyzExtras: a.xyzExtras, selective: a.selective
       })),
       bonds: state.bonds.map(b => ({
@@ -86,7 +88,7 @@
         atom2: b.atom2,
         order: b.order || 1,
         type: b.type || "covalent",
-        source: b.source || "manual"
+        mol: b.mol, source: b.source || "manual"
       })),
       selectedAtomIds: Array.from(state.selectedAtomIds || []),
       selectedBondIds: Array.from(state.selectedBondIds || []),

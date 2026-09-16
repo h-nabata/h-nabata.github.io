@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
-const context={window:{},console};vm.createContext(context);for(const file of ['model','bonding','geometry','io','periodic','history'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',file+'.js'),'utf8'),context);
+const context={window:{},console};vm.createContext(context);for(const file of ['model','bonding','geometry','io','molfile','periodic','history'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',file+'.js'),'utf8'),context);
 const {IO,Periodic:P,Model:M}=context.window.MoleculeVisualizer;
 const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-8,`${a} != ${b}`);
 test('triclinic fractional conversion and exact minimum image',()=>{const c=P.cell([[4,0,0],[3.9,.8,0],[.5,.3,6]]),f=[.73,-.4,1.1];P.fractional(P.cartesian(f,c),c).forEach((x,i)=>close(x,f[i]));const delta=[3,2.1,-3.4];let best=Infinity;for(let i=-8;i<=8;i++)for(let j=-8;j<=8;j++)for(let k=-8;k<=8;k++){const n=P.cartesian([i,j,k],c);best=Math.min(best,Math.hypot(...delta.map((x,q)=>x-n[q])));}close(P.minimumImage(delta,c).distance,best);assert.throws(()=>P.cell([[1,0,0],[2,0,0],[0,0,1]]));});
