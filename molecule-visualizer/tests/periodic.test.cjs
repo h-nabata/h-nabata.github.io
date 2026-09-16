@@ -13,3 +13,11 @@ test('XYZ accepts Unicode spaces and newline variants with or without headers',(
  }
  assert.throws(()=>IO.parseXYZToState('2\n\nH 0 0 0'));
 });
+test('TV editor round trip with both header counts, Unicode whitespace, and triangular rotation',()=>{
+ const body='C 1 2 3\nO 2 2 3\nTV 4 0 0\nTV 1 5 0\nTV 2 3 6\n';
+ for(const prefix of ['', '2\ncell\n','5\ncell\n']){const s=IO.parseXYZToState(prefix+body.replaceAll(' ','\u3000'));assert.equal(s.atoms.length,2);close(s.metadata.cell.vectors[2][1],3);for(const h of [true,false]){const text=P.editorText(s,h);assert.equal((text.match(/^TV /gm)||[]).length,3);const t=IO.parseXYZToState(text);assert.equal(t.atoms.length,2);close(t.metadata.cell.vectors[1][0],1);}}
+ assert.throws(()=>IO.parseXYZToState('C 0 0 0\nTV 1 0 0\nTV 0 1 0'));
+ assert.throws(()=>IO.parseXYZToState('2\n\nC 0 0 0'));
+ const s=IO.parseXYZToState('2\nLattice="0 4 0 -5 1 0 2 3 6"\nC 1 2 3\nO 2 4 3\n'),before=P.fractional(P.xyz(s.atoms[0]),s.metadata.cell),d=Math.hypot(...P.xyz(s.atoms[0]).map((x,i)=>x-P.xyz(s.atoms[1])[i]));
+ P.lowerTriangular(s);const v=s.metadata.cell.vectors;close(v[0][1],0);close(v[0][2],0);close(v[1][2],0);P.fractional(P.xyz(s.atoms[0]),s.metadata.cell).forEach((x,i)=>close(x,before[i]));close(Math.hypot(...P.xyz(s.atoms[0]).map((x,i)=>x-P.xyz(s.atoms[1])[i])),d);
+});

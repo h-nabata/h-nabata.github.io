@@ -48,7 +48,7 @@
     try{setMeasure(values.length===2?`${Geometry.distance(...values).toFixed(3)} Å`:values.length===3?`${Geometry.angle(...values).toFixed(2)}°`:values.length===4?`${Geometry.dihedral(...values).toFixed(2)}°`:"2 / 3 / 4 原子を順に選択してください");}catch(e){setMeasure(e.message);}
   }
   let xyzDirty=false, xyzBase='', xyzDisplayBase='';
-  function editorXYZ(s){return byId('xyzHeader').checked?IO.stateToXYZText(s):s.atoms.map(a=>`${a.element} ${a.x.toFixed(10)} ${a.y.toFixed(10)} ${a.z.toFixed(10)}`).join('\n')+'\n';}
+  function editorXYZ(s){return MV.Periodic.editorText(s,byId('xyzHeader').checked);}
   function syncXYZEditor(){
     const el=byId('dataText');if(!el)return;
     let text;try{text=IO.stateToXYZText(state);}catch(error){byId('xyzEditStatus').textContent=error.message;return;}
@@ -63,7 +63,7 @@
     if(same)next.atoms.forEach((a,i)=>{const b=parsed.atoms[i];Object.assign(a,{x:b.x,y:b.y,z:b.z});if(Object.keys(b.xyzExtras||{}).length)a.xyzExtras=b.xyzExtras;});
     else{next.atoms=parsed.atoms;next.bonds=[];next.selectedAtomIds.clear();next.selectedBondIds.clear();next.metadata.suppressedBondKeys=[];}
     if(/^\s*\d+\s*\n/.test(input))next.metadata.title=parsed.metadata.title;
-    if(parsed.metadata.cell)next.metadata.cell=parsed.metadata.cell;
+    if(parsed.metadata.cell){if(next.metadata.cell&&!/\bLattice=/.test(input))parsed.metadata.cell.pbc=next.metadata.cell.pbc.slice();next.metadata.cell=parsed.metadata.cell;}
     Bonding.refreshInferredBonds(next);
     pushHistory('XYZ coordinates');xyzDirty=false;setState(next,true);setStatus('全原子のXYZ座標を適用しました。「戻す」で復元できます。');
   }
@@ -857,13 +857,14 @@
     bind('xyzHeader','change',()=>{
       try{
         if(xyzDirty){const draft=IO.parseXYZToState(byId('dataText').value);if(draft.metadata.trajectory)throw Error('1フレームのみ入力してください。');
-          if(!/^\s*\d+\s*\n/.test(IO.normalizeXYZInput(byId('dataText').value)))draft.metadata={...state.metadata,...draft.metadata,title:state.metadata.title,cell:state.metadata.cell};
+          if(!/^\s*\d+\s*\n/.test(IO.normalizeXYZInput(byId('dataText').value)))draft.metadata={...state.metadata,...draft.metadata,title:state.metadata.title,cell:draft.metadata.cell||state.metadata.cell};
           byId('dataText').value=editorXYZ(draft);
         }
         syncXYZEditor();
       }catch(error){byId('xyzHeader').checked=!byId('xyzHeader').checked;byId('xyzEditStatus').textContent='入力を修正してからヘッダーを切り替えてください。'+error.message;}
     });
     bind('dataReset' ,'click',()=>{xyzDirty=false;syncXYZEditor();});
+    bind('cellLowerTriangular','click',()=>{try{if(xyzDirty)applyXYZEditor();MV.App.change('lower triangular cell',s=>{MV.Periodic.lowerTriangular(s);Bonding.refreshInferredBonds(s);},true);setStatus('原子と格子を一緒に回転し、TVを下三角化しました。');}catch(error){report(error);}});
     bind('dataApply','click',()=>{try{applyXYZEditor();}catch(error){byId('xyzEditStatus').textContent=error.message;report(error);}});
     bind('btnDataDock','click',()=>{byId('tab-atoms').click();byId('dataText').focus();byId('dataText').scrollIntoView?.({block:'center',behavior:'smooth'});});
     bind('btnTranslate','click',()=>{const delta=['translateX','translateY','translateZ'].map(id=>numberInput(id));if(!state.selectedAtomIds.size)return;pushHistory('translate');selectedAtoms().forEach(a=>['x','y','z'].forEach((k,i)=>a[k]+=delta[i]));refreshBondsAndRender(true);setStatus('選択原子を平行移動しました。');});

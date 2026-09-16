@@ -38,8 +38,12 @@
   const number=x=>{const n=Number(String(x).replace(/[dD]/,'e'));if(!String(x).trim()||!Number.isFinite(n))throw Error('構造データに無効な数値があります。');return n;};
   function parseFrame(lines){
     const count=Number(lines[0]);if(!Number.isInteger(count)||count<0||count>2000||lines.length!==count+2)throw Error('XYZの原子数と座標行数が一致しません（上限2000原子）。');
+    const tv=lines.slice(2).filter(l=>/^TV\s/i.test(l.trim()));
+    if(tv.length&&tv.length!==3)throw Error('単位格子は TV X Y Z を3行で指定してください。');
+    lines=[lines[0],lines[1],...lines.slice(2).filter(l=>!/^TV\s/i.test(l.trim()))];
     const comment=lines[1]||'', lattice=comment.match(/\bLattice="([^"]+)"/i),pbc=comment.match(/\bpbc="([^"]+)"/i),props=comment.match(/\bProperties=([^\s]+)/i);
     let c=null;if(lattice){const v=lattice[1].trim().split(/\s+/).map(number);if(v.length!==9)throw Error('Latticeには9個の値が必要です。');const flags=pbc?pbc[1].trim().split(/\s+/).map(x=>{if(!/^(T|F|true|false|1|0)$/i.test(x))throw Error('pbcが不正です。');return /^(T|true|1)$/i.test(x);}):[true,true,true];c=cell([v.slice(0,3),v.slice(3,6),v.slice(6)],flags);}else if(pbc)throw Error('pbcにはLatticeが必要です。');
+    if(tv.length){const tc=cell(tv.map(l=>l.trim().split(/\s+/).slice(1).map(number)),c?.pbc);if(c&&c.vectors.some((r,i)=>r.some((v,j)=>Math.abs(v-tc.vectors[i][j])>1e-7)))throw Error('TVとLatticeの単位格子が一致しません。');c=tc;}
     const schema=(props?props[1]:'species:S:1:pos:R:3').split(':');let offset=0,fields=[];
     if(schema.length%3)throw Error('Propertiesが不正です。');for(let i=0;i<schema.length;i+=3){const size=Number(schema[i+2]);if(!Number.isInteger(size)||size<1||size>100)throw Error('Propertiesの列数が不正です。');fields.push({name:schema[i],type:schema[i+1],size,offset});offset+=size;}
     const species=fields.find(x=>x.name==='species'&&x.size===1),pos=fields.find(x=>x.name==='pos'&&x.size===3);if(!species||!pos)throw Error('Propertiesにはspeciesとposが必要です。');
@@ -53,7 +57,7 @@
   function parseXYZ(text){
     const lines=normalizeXYZInput(text).split('\n');while(lines.length&&!lines[0].trim())lines.shift();
     if(!/^\d+$/.test(lines[0]?.trim()||'')){
-      const nonempty=lines.map(l=>l.trim()).filter(Boolean);if(!nonempty.length)throw Error('XYZが空です。');const tv=nonempty.filter(l=>/^TV\s/.test(l)),body=nonempty.filter(l=>!/^TV\s/.test(l));
+      const nonempty=lines.map(l=>l.trim()).filter(Boolean);if(!nonempty.length)throw Error('XYZが空です。');const tv=nonempty.filter(l=>/^TV\s/i.test(l)),body=nonempty.filter(l=>!/^TV\s/i.test(l));
       const s=parseFrame([String(body.length),'',...body]);if(tv.length){s.metadata.cell=cell(tv.map(l=>l.trim().split(/\s+/).slice(1).map(number)));MV.Bonding.refreshInferredBonds(s);}return s;
     }
     const frames=[];let total=0;
@@ -62,7 +66,9 @@
       const n=Number(lines.shift());if(!Number.isInteger(n)||n<0||n>2000||!lines.length)throw Error('XYZの原子数またはコメント行を確認してください。');
       const comment=lines.shift(),body=[];
       while(body.length<n&&lines.length){const line=lines.shift();if(line.trim())body.push(line);}
-      frames.push(parseFrame([String(n),comment,...body]));total+=n;if(frames.length>200||total>100000)throw Error('軌跡は200フレーム・合計100000原子までです。');
+      if(body.length!==n)throw Error('XYZの原子数と座標行数が一致しません。');
+      while(lines.length&&(!lines[0].trim()||/^TV\s/i.test(lines[0].trim()))){const line=lines.shift();if(line.trim())body.push(line);}
+      frames.push(parseFrame([String(body.length),comment,...body]));total+=n;if(frames.length>200||total>100000)throw Error('軌跡は200フレーム・合計100000原子までです。');
     }
     const s=frames[0];if(!s)throw Error('XYZが空です。');if(frames.length>1){s.metadata.trajectory=frames.map(snapshot);s.metadata.frameIndex=0;}return s;
   }
@@ -73,6 +79,21 @@
     if(c)title+=` Lattice="${c.vectors.flat().map(x=>x.toFixed(10)).join(' ')}" pbc="${c.pbc.map(x=>x?'T':'F').join(' ')}"`;
     if(c||keys.length)title+=' Properties=species:S:1:pos:R:3'+keys.map(k=>`:${k}:${extras[k].type}:${extras[k].values.length}`).join('');
     return [s.atoms.length,title.trim(),...s.atoms.map(a=>`${a.element} ${xyz(a).map(x=>x.toFixed(10)).join(' ')}${keys.length?' '+keys.flatMap(k=>a.xyzExtras[k].values).join(' '):''}`)].join('\n')+'\n';
+  }
+  // GRRM-style editor: TV rows are cell vectors, never atoms.
+  function editorText(s,header=true){
+    const copy=M.cloneState(s),c=copy.metadata.cell;copy.metadata.cell=null;
+    const lines=toXYZ(copy).split('\n').slice(0,-1);
+    if(c)lines.push(...c.vectors.map(r=>'TV '+r.map(x=>x.toFixed(10)).join(' ')));
+    return (header?lines:lines.slice(2)).join('\n')+'\n';
+  }
+  function lowerTriangular(s){
+    const c=s.metadata.cell;if(!c)throw Error('まずTVを3行、または単位格子ダイアログで格子を指定してください。');
+    const e1=c.vectors[0].map(x=>x/Math.hypot(...c.vectors[0]));
+    const b=c.vectors[1].map((x,i)=>x-dot(c.vectors[1],e1)*e1[i]),e2=b.map(x=>x/Math.hypot(...b)),e3=cross(e1,e2);
+    const rotate=v=>[e1,e2,e3].map(e=>dot(v,e));
+    s.atoms.forEach(a=>{[a.x,a.y,a.z]=rotate(xyz(a));});
+    const v=c.vectors.map(rotate);v[0][1]=v[0][2]=v[1][2]=0;s.metadata.cell=cell(v,c.pbc);
   }
   function parsePOSCAR(text){
     const l=String(text).replace(/\r/g,'').trim().split('\n');if(l.length<8)throw Error('POSCARが短すぎます。');const scale=number(l[1]);if(!scale)throw Error('POSCARのスケールは0以外です。');const raw=l.slice(2,5).map(r=>r.trim().split(/\s+/).map(number));let c=cell(raw);const factor=scale>0?scale:Math.cbrt(-scale/Math.abs(dot(raw[0],cross(raw[1],raw[2]))));c=cell(raw.map(r=>r.map(x=>x*factor)));
@@ -91,5 +112,5 @@
   IO.parseAuto=t=>String(t).trim().startsWith('{')?IO.parseProject(t):/V[23]000/.test(t)?oldAuto(t):/^\s*[+-]?(?:\d+\.?\d*|\.\d+)\s*$/.test(String(t).split('\n')[1]||'')&&!/^\d+\s*$/.test(String(t).split('\n')[0])?parsePOSCAR(t):parseXYZ(t);
   IO.stateToMolText=s=>{if(s.metadata.cell)throw Error('MOLは周期セルを保持できません。拡張XYZ・POSCAR・プロジェクトで保存してください。');return oldMol(s);};
   IO.stateToSDFText=s=>IO.stateToMolText(s)+(s.metadata.sdfProperties?String(s.metadata.sdfProperties)+'\n\n':'')+'$$$$\n';
-  MV.Periodic={cell,fractional,cartesian,minimumImage,wrap,supercell,parsePOSCAR,toPOSCAR,snapshot,xyz};
+  MV.Periodic={cell,fractional,cartesian,minimumImage,wrap,supercell,parsePOSCAR,toPOSCAR,snapshot,xyz,editorText,lowerTriangular};
 })(window);

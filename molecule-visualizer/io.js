@@ -18,17 +18,17 @@
   function atomsToXYZText(atoms,title){return [String(atoms.length),String(title||'Edited structure').replace(/[\r\n]/g,' '),...atoms.map(a=>`${a.element} ${a.x.toFixed(8)} ${a.y.toFixed(8)} ${a.z.toFixed(8)}`)].join('\n')+'\n';}
   function stateToXYZText(s){return atomsToXYZText(s.atoms,s.metadata.title);}
   function normalizeXYZText(t){const p=parseXYZAtoms(t);return atomsToXYZText(p.atoms,p.title);}
-  function parseMolToState(input){
+  function parseMolToState(input,{generated3D=false}={}){
     const raw=String(input||'').replace(/\r/g,'');const records=raw.split('$$$$').filter(x=>x.trim());if(records.length>1)throw Error('複数構造のSDFは1構造ずつ読み込んでください。');
     const lines=records[0]?.split('\n')||[];if(lines.length<4||!lines[3].includes('V2000'))throw Error('MOL/SDFはV2000形式に対応しています。V3000はXYZまたはV2000へ変換してください。');
     const n=finite(lines[3].slice(0,3)),nb=finite(lines[3].slice(3,6));size(n);if(!Number.isInteger(nb)||nb<0||nb>999)throw Error('結合数が不正です。');
     const tail=lines.slice(4+n+nb);if(!tail.includes('M  END'))throw Error('MOLの終端 M  END がありません。');
     if(tail.some(l=>/^M  (?!END|CHG)/.test(l))||tail.some(l=>/^A  |^V  |^S  /.test(l)))throw Error('同位体・ラジカル・特殊注記を含むMOLは、情報を失わないよう読み込みを停止しました。');
-    const atoms=[];for(let i=0;i<n;i++){const l=lines[4+i]||'';const code=Number(l.slice(36,39));if(Number(l.slice(34,36))||Number(l.slice(39,42))||Number(l.slice(60,63))||code===4)throw Error('同位体・立体指定・ラジカル・原子マッピングを含むMOLは未対応です。');if(![0,1,2,3,5,6,7].includes(code))throw Error('MOLの電荷指定が不正です。');atoms.push(M.createAtom({element:element(l.slice(31,34).trim()),x:finite(l.slice(0,10)),y:finite(l.slice(10,20)),z:finite(l.slice(20,30)),charge:({1:3,2:2,3:1,5:-1,6:-2,7:-3})[code]||0}));}
-    const bonds=[];const keys=new Set();for(let i=0;i<nb;i++){const l=lines[4+n+i]||'',a=Number(l.slice(0,3)),b=Number(l.slice(3,6)),order=Number(l.slice(6,9));if(!atoms[a-1]||!atoms[b-1]||a===b||![1,2,3,4].includes(order))throw Error('MOLの結合指定が不正または未対応です。');if(Number(l.slice(9,12)))throw Error('くさび結合などの立体指定は未対応です。');const key=[a,b].sort().join(':');if(keys.has(key))throw Error('MOLに重複結合があります。');keys.add(key);bonds.push(M.createBond({atom1:atoms[a-1].id,atom2:atoms[b-1].id,order,source:'manual'}));}
+    const atoms=[];for(let i=0;i<n;i++){const l=lines[4+i]||'';const code=Number(l.slice(36,39));if(Number(l.slice(34,36))||(!generated3D&&Number(l.slice(39,42)))||Number(l.slice(60,63))||code===4)throw Error('同位体・立体指定・ラジカル・原子マッピングを含むMOLは未対応です。');if(![0,1,2,3,5,6,7].includes(code))throw Error('MOLの電荷指定が不正です。');atoms.push(M.createAtom({element:element(l.slice(31,34).trim()),x:finite(l.slice(0,10)),y:finite(l.slice(10,20)),z:finite(l.slice(20,30)),charge:({1:3,2:2,3:1,5:-1,6:-2,7:-3})[code]||0}));}
+    const bonds=[];const keys=new Set();for(let i=0;i<nb;i++){const l=lines[4+n+i]||'',a=Number(l.slice(0,3)),b=Number(l.slice(3,6)),order=Number(l.slice(6,9));if(!atoms[a-1]||!atoms[b-1]||a===b||![1,2,3,4].includes(order))throw Error('MOLの結合指定が不正または未対応です。');if(!generated3D&&Number(l.slice(9,12)))throw Error('くさび結合などの立体指定は未対応です。');const key=[a,b].sort().join(':');if(keys.has(key))throw Error('MOLに重複結合があります。');keys.add(key);bonds.push(M.createBond({atom1:atoms[a-1].id,atom2:atoms[b-1].id,order,source:'manual'}));}
     const chargeLines=tail.filter(l=>l.startsWith('M  CHG'));if(chargeLines.length)atoms.forEach(a=>a.charge=0);
     chargeLines.forEach(l=>{const p=l.trim().split(/\s+/);const count=Number(p[2]);if(!Number.isInteger(count)||p.length!==3+2*count)throw Error('M CHG行が不正です。');for(let i=0;i<count;i++){const a=atoms[Number(p[3+2*i])-1],c=Number(p[4+2*i]);if(!a||!Number.isInteger(c)||Math.abs(c)>15)throw Error('形式電荷が不正です。');a.charge=c;}});
-    return M.createState({atoms,bonds,metadata:{title:lines[0]||'MOL structure',sourceFormat:raw.includes('$$$$')?'sdf':'mol',bondsInferred:false,sdfProperties:tail.slice(tail.indexOf('M  END')+1).join('\n').trim()}});
+    return M.createState({atoms,bonds,metadata:{title:lines[0]||'MOL structure',generatedMol:generated3D?raw:undefined,sourceFormat:raw.includes('$$$$')?'sdf':'mol',bondsInferred:false,sdfProperties:tail.slice(tail.indexOf('M  END')+1).join('\n').trim()}});
   }
   const pad=(v,w)=>String(v).padStart(w,' ');
   function stateToMolText(s){

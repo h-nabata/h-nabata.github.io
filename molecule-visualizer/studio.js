@@ -33,7 +33,7 @@
   function convert(data,input,output,generate=false){
     if(pending)return Promise.reject(Error('変換中です。完了するか中止してください。'));
     return new Promise((resolve,reject)=>{
-      const id=++jobId;worker=new Worker('./chem-worker.js?v=3');
+      const id=++jobId;worker=new Worker('./chem-worker.js?v=7');
       const finish=(err,result)=>{if(!pending||pending.id!==id)return;clearTimeout(pending.timeout);pending=null;worker.terminate();worker=null;$('chemCancel').disabled=true;err?reject(Error(err)):resolve(result);};
       pending={id,reject,timeout:setTimeout(()=>finish('変換が120秒を超えました。小さい分子でお試しください。'),120000)};
       worker.onmessage=e=>finish(e.data.error,e.data.result);worker.onerror=e=>finish(e.message||'化学エンジンを起動できません。');$('chemCancel').disabled=false;worker.postMessage({data,input,output,generate});
@@ -50,17 +50,18 @@
     if(fromSmiles&&!smiles)throw Error('SMILESを入力してください。');
     chemBusy=true;['chemTo3D','chemSmilesTo3D'].forEach(id=>$(id).disabled=true);
     try{
-      const editor=await ketcher();
-      if(fromSmiles)await editor.setMolecule(smiles);
+      message('水素を追加して3D座標を生成しています（UFF）。完了後すぐに描画へ反映します。');
+      const input=fromSmiles?smiles:await(await ketcher()).getMolfile('v2000');
       if(!$('chemDialog').open)throw Error('3D生成を中止しました。');
-      const mol=await editor.getMolfile('v2000');
-      message('3D座標を生成しています（UFF・水素追加）。中止できます。');
-      const result=await convert(mol,'mol','mol',true);
-      // Keep strict import: unsupported stereochemical records are never silently discarded.
-      const next=IO.parseMolToState(result);next.metadata.title=fromSmiles?'SMILES → 3D':'Ketcher → 3D';next.metadata.sourceFormat=fromSmiles?'smiles':'ketcher';
+      const result=await convert(input,fromSmiles?'smi':'mol','mol',true);
+      // Generated 3D coordinates encode stereochemistry; retain the source MOL as provenance.
+      const next=IO.parseMolToState(result,{generated3D:true});next.metadata.title=fromSmiles?'SMILES → 3D':'Ketcher → 3D';next.metadata.sourceFormat=fromSmiles?'smiles':'ketcher';
       if(fromSmiles)next.metadata.sourceSmiles=smiles;
-      app().change('SMILES / Ketcher 3D',()=>next,true);$('chemDialog').close();
-      $('tab-atoms').click();message('UFFで初期3D座標を生成しました。XYZ欄で編集し、「保存 / 書き出し」からXYZを保存できます。');
+      $('chemDialog').close();app().change('SMILES / Ketcher 3D',()=>next,true);
+      // Keep an unapplied draft available without hiding the newly generated coordinates.
+      const box=$('dataText');if($('xyzEditStatus').textContent.includes('未適用')||$('xyzEditStatus').textContent.includes('編集中')){$('previousXYZDraft').value=box.value;$('previousXYZDraftPanel').hidden=false;}
+      $('dataReset').click();app().renderer().renderState(state(),false);
+      $('tab-atoms').click();$('viewer').scrollIntoView({block:'center'});message(`${next.atoms.length}原子（水素${next.atoms.filter(a=>a.element==='H').length}個）を描画へ反映しました。`+'UFFで初期3D座標を生成しました。XYZ欄で編集し、「保存 / 書き出し」からXYZを保存できます。');
     }finally{chemBusy=false;['chemTo3D','chemSmilesTo3D'].forEach(id=>$(id).disabled=false);}
   }
   function init(){
