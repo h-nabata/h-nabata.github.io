@@ -754,8 +754,7 @@
     if (key === "r") {
       consumeShortcut(e);
       renderer.fit();
-      renderer.rotX = -0.45;
-      renderer.rotY = 0.65;
+      renderer.setViewAngles(-0.45,0.65);
       renderer.zoom = 1;
       renderer.panX = 0;
       renderer.panY = 0;
@@ -878,7 +877,7 @@
     bind('btnFit','click',()=>renderer.fit());
     bind('btnZoomIn','click',()=>{renderer.zoom=Math.min(12,renderer.zoom*1.2);renderer.draw();});
     bind('btnZoomOut','click',()=>{renderer.zoom=Math.max(.1,renderer.zoom/1.2);renderer.draw();});
-    [['XY',0,0],['XZ',Math.PI/2,0],['YZ',0,Math.PI/2]].forEach(([name,x,y])=>bind('btnView'+name,'click',()=>{renderer.rotX=x;renderer.rotY=y;renderer.draw();}));
+    [['XY',0,0],['XZ',Math.PI/2,0],['YZ',0,Math.PI/2]].forEach(([name,x,y])=>bind('btnView'+name,'click',()=>{renderer.setViewAngles(x,y);renderer.draw();}));
     bind('btnPNG','click',()=>{const a=document.createElement('a');a.download=safeFilename()+'.png';a.href=renderer.canvas.toDataURL('image/png');a.click();setStatus('表示画像を保存しました。');});
     bind('btnSelectConnected','click',selectConnectedMoleculesFromSelection);bind('btnExpandSelection','click',expandSelectionOneBond);
     global.addEventListener('pagehide',()=>{try{localStorage.setItem('molecule-studio-v1',IO.stateToProjectText(state));}catch(error){/* Export remains available when storage is blocked. */}});

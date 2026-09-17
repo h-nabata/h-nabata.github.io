@@ -30,8 +30,7 @@
     this.onDragEnd = null;
     this.onBoxSelect = null;
     this.mode = "select";
-    this.rotX = -0.45;
-    this.rotY = 0.65;
+    this.setViewAngles(-0.45, 0.65);
     this.zoom = 1;
     this.panX = 0;
     this.panY = 0;
@@ -117,14 +116,33 @@
     }), { x: 0, y: 0, z: 0 });
   };
 
-  Renderer3DMol.prototype.rotate = function (p) {
-    const cy = Math.cos(this.rotY), sy = Math.sin(this.rotY);
-    const cx = Math.cos(this.rotX), sx = Math.sin(this.rotX);
-    const x1 = p.x * cy + p.z * sy;
-    const z1 = -p.x * sy + p.z * cy;
-    const y2 = p.y * cx - z1 * sx;
-    const z2 = p.y * sx + z1 * cx;
-    return { x: x1, y: y2, z: z2 };
+  // Unit quaternion [w,x,y,z], mapping world coordinates to the camera frame.
+  function multiplyQuaternion(a,b){
+    return [a[0]*b[0]-a[1]*b[1]-a[2]*b[2]-a[3]*b[3],
+      a[0]*b[1]+a[1]*b[0]+a[2]*b[3]-a[3]*b[2],
+      a[0]*b[2]-a[1]*b[3]+a[2]*b[0]+a[3]*b[1],
+      a[0]*b[3]+a[1]*b[2]-a[2]*b[1]+a[3]*b[0]];
+  }
+  function applyQuaternion(q,p){
+    const tx=2*(q[2]*p.z-q[3]*p.y),ty=2*(q[3]*p.x-q[1]*p.z),tz=2*(q[1]*p.y-q[2]*p.x);
+    return {x:p.x+q[0]*tx+q[2]*tz-q[3]*ty,y:p.y+q[0]*ty+q[3]*tx-q[1]*tz,z:p.z+q[0]*tz+q[1]*ty-q[2]*tx};
+  }
+  Renderer3DMol.prototype.setViewAngles=function(x,y){
+    this.orientation=multiplyQuaternion([Math.cos(x/2),Math.sin(x/2),0,0],[Math.cos(y/2),0,Math.sin(y/2),0]);
+  };
+  Renderer3DMol.prototype.rotate=function(p){return applyQuaternion(this.orientation,p);};
+  Renderer3DMol.prototype.trackballPoint=function(x,y){
+    const rect=this.canvas.getBoundingClientRect(),radius=Math.max(1,Math.min(rect.width,rect.height)*.45);
+    const px=(x-rect.width/2-this.panX)/radius,py=(rect.height/2+this.panY-y)/radius,d=Math.hypot(px,py);
+    return d>1?[px/d,py/d,0]:[px,py,Math.sqrt(Math.max(0,1-d*d))];
+  };
+  Renderer3DMol.prototype.rotateTrackball=function(x0,y0,x1,y1){
+    const a=this.trackballPoint(x0,y0),b=this.trackballPoint(x1,y1);
+    let q=[1+a[0]*b[0]+a[1]*b[1]+a[2]*b[2],a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+    // Antipodal rim points need a well-defined 180-degree rotation about screen Z.
+    if(Math.hypot(...q)<1e-10)q=[0,0,0,1];
+    q=multiplyQuaternion(q,this.orientation);const norm=Math.hypot(...q);
+    this.orientation=q.map(v=>v/norm);
   };
 
   Renderer3DMol.prototype.project = function (atom, center, scale, width, height) {
@@ -324,7 +342,7 @@
       else if(ptr.action==="move"){
         if(!ptr.historyStarted){self.onAtomDragStart?.(ptr.atomId,e);ptr.historyStarted=true;}
         self.onAtomsDrag?.(ptr.atomId,self.screenDeltaToWorld(dx,dy,e.shiftKey),e);
-      }else if(ptr.action==="rotate") {self.rotY+=dx*.008;self.rotX+=dy*.008;}
+      }else if(ptr.action==="rotate") {self.rotateTrackball(p.x-dx,p.y-dy,p.x,p.y);}
       self.draw();
     });
     const finish=function(e){
@@ -348,30 +366,14 @@
   };
 
   Renderer3DMol.prototype.viewVectorToWorld = function(v){
-    const cy=Math.cos(this.rotY),sy=Math.sin(this.rotY),cx=Math.cos(this.rotX),sx=Math.sin(this.rotX);
-    const y=v[1]*cx+v[2]*sx,z=-v[1]*sx+v[2]*cx;
-    return [v[0]*cy-z*sy,y,v[0]*sy+z*cy];
+    const q=this.orientation,p=applyQuaternion([q[0],-q[1],-q[2],-q[3]],{x:v[0],y:v[1],z:v[2]});
+    return [p.x,p.y,p.z];
   };
 
   Renderer3DMol.prototype.screenDeltaToWorld = function (dx, dy, zMode) {
-    const scale = this.currentScale || 80;
-    const sx = dx / scale;
-    const sy = -dy / scale;
-    if (zMode) return { x: 0, y: 0, z: sy };
-
-    const cy = Math.cos(this.rotY), syy = Math.sin(this.rotY);
-    const cx = Math.cos(this.rotX), sxx = Math.sin(this.rotX);
-    const rx = sx;
-    const ry = sy;
-    const rz = 0;
-
-    const y1 = ry * cx + rz * sxx;
-    const z1 = -ry * sxx + rz * cx;
-    return {
-      x: rx * cy - z1 * syy,
-      y: y1,
-      z: rx * syy + z1 * cy
-    };
+    const scale=this.currentScale||80,sy=-dy/scale;
+    if(zMode)return {x:0,y:0,z:sy};
+    const [x,y,z]=this.viewVectorToWorld([dx/scale,sy,0]);return {x,y,z};
   };
 
   Renderer3DMol.prototype.drawSelectionBox = function () {

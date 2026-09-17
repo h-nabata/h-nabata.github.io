@@ -14,16 +14,21 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  await page.fill('#dataText','O\u30000\t0 0\rH .9572 0 0\u2028H -.239987 .926627 0');await page.click('#dataApply');
  await page.check('#xyzHeader');assert.match(await page.locator('#dataText').inputValue(),/^3\n/);
  const bounds=await page.locator('canvas').boundingBox();
+ await page.click('#btnViewXY');const unchanged=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),cx=bounds.x+bounds.width/2,cy=bounds.y+bounds.height/2,radius=Math.min(bounds.width,bounds.height)*.46;
+ await page.mouse.move(cx+radius,cy);await page.mouse.down();for(let i=1;i<=12;i++){const a=i*Math.PI/24;await page.mouse.move(cx+radius*Math.cos(a),cy-radius*Math.sin(a));}await page.mouse.up();
+ const rolled=await page.evaluate(()=>MoleculeVisualizer.App.renderer().rotate({x:1,y:0,z:0}));assert.ok(Math.abs(rolled.x)<1e-8&&Math.abs(rolled.y-1)<1e-8,'screen-normal roll must be reachable');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),unchanged);
+ await page.click('#btnViewXY');await page.mouse.move(cx-radius,cy);await page.mouse.down();await page.mouse.move(cx+radius,cy,{steps:20});await page.mouse.up();assert.ok(await page.evaluate(()=>MoleculeVisualizer.App.renderer().rotate({x:0,y:0,z:1}).z<-.99));await page.click('#btnViewXY');
+
  const picks=await page.evaluate(()=>MoleculeVisualizer.App.renderer().projectedAtoms.slice(0,2).map(p=>({x:p.x,y:p.y})));
  for(const i of [0,1,1])await page.mouse.click(bounds.x+picks[i].x,bounds.y+picks[i].y,{button:'right'});
  assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().selectedAtomIds.size),2);await page.click('#btnClearSel');
 
  await page.mouse.move(bounds.x+5,bounds.y+5);await page.mouse.down({button:'right'});await page.mouse.move(bounds.x+bounds.width-5,bounds.y+bounds.height-5,{steps:6});await page.mouse.up({button:'right'});
  assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().selectedAtomIds.size),3);
- const original=await page.evaluate(()=>({atoms:MoleculeVisualizer.App.getState().atoms.map(a=>({...a})),rotX:MoleculeVisualizer.App.renderer().rotX}));
+ const original=await page.evaluate(()=>({atoms:MoleculeVisualizer.App.getState().atoms.map(a=>({...a})),orientation:MoleculeVisualizer.App.renderer().orientation.slice()}));
  const altDrag=async button=>{await page.keyboard.down('Alt');await page.mouse.move(bounds.x+20,bounds.y+20);await page.mouse.down({button});await page.mouse.move(bounds.x+65,bounds.y+45,{steps:6});await page.mouse.up({button});await page.keyboard.up('Alt');};
  await altDrag('left');assert.notEqual(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[0].x),original.atoms[0].x);await page.click('#btnUndo');
- await altDrag('right');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.renderer().rotX),original.rotX);
+ await altDrag('right');assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.renderer().orientation),original.orientation);
  assert.notEqual(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[1].z),original.atoms[1].z);await page.click('#btnUndo');await page.click('#btnClearSel');
  await page.click('#sampleCrystal');assert.match(await page.locator('#cellStatus').textContent(),/周期境界 abc/);
  await page.click('#btnCell');await page.fill('#repeatCell','2 2 2');await page.click('#cellSuper');assert.match(await page.locator('#structureStats').textContent(),/16 原子/);
