@@ -26,7 +26,7 @@ C1 C .1 .2 .3 1
 O1 O 0 0 0 1
 `;
 test('CIF reads uncertainty, oblique cell and symmetry, removes special-position duplicates and retains partial occupancy',()=>{
- const s=F.parse(cif);assert.equal(s.atoms.length,3);assert.ok(s.metadata.cell);near(P.fractional(xyz(s)[0],s.metadata.cell)[0],.1);near(P.fractional(xyz(s)[1],s.metadata.cell)[0],.9);assert.equal(s.atoms[2].element,'O');
+ const s=F.parse(cif);assert.equal(s.atoms.length,3);assert.ok(s.metadata.cell);near(P.fractional(xyz(s)[0],s.metadata.cell)[0],.1);near(P.fractional(xyz(s)[1],s.metadata.cell)[0],.9);assert.equal(s.atoms[2].element,'O');assert.equal(F.parse(cif.replace('O1 O','D1 D')).atoms[2].mol.props.MASS,'2');
  const partial=F.parse(cif.replace('.3 1','.3 0.5'));assert.equal(partial.atoms[0].xyzExtras.occupancy.values[0],'0.5');assert.match(partial.metadata.importWarnings[0],/部分占有/);
  assert.throws(()=>F.parse(cif.replace(/loop_\n_space_group_symop_id[\s\S]*?'\-x,-y,-z'\n/,'')),/対称操作/);assert.throws(()=>F.parse(cif.replace("'-x,-y,-z'","'alert(1),y,z'")),/対称操作/);
  assert.equal(F.parse(cif+'\n'+cif.replace('data_test','data_second')).metadata.trajectory.length,2);

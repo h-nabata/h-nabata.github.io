@@ -7,7 +7,7 @@
   const newline=t=>String(t).replace(/^\uFEFF/,'').replace(/\r\n|[\r\u0085\u2028\u2029]/g,'\n');
   const number=t=>{const v=String(t??'').replace(/\(\d+\)(?=[eE]|$)/,'').replace(/[dD]/,'e');if(!v.trim()||!Number.isFinite(Number(v)))throw Error('数値を読み取れません: '+t);return Number(v);};
   function element(s){s=String(s).replace(/\d+[+-]$|[+-]$/,'');if(s==='D'||s==='T')return 'H';const e=s[0]?.toUpperCase()+s.slice(1).toLowerCase();if(!IO.ELEMENTS.includes(e))throw Error('元素を特定できません: '+s);return e;}
-  function atom(e,p,extra={}){const v=p.map(number);if(v.length!==3)throw Error('座標は3成分必要です。');return M.createAtom({element:element(e),x:v[0],y:v[1],z:v[2],...extra});}
+  function atom(e,p,extra={}){const v=p.map(number);if(v.length!==3)throw Error('座標は3成分必要です。');return M.createAtom({element:element(e),x:v[0],y:v[1],z:v[2],...(['D','T'].includes(e)?{mol:{props:{MASS:e==='D'?'2':'3'}}}:{}),...extra});}
   function make(atoms,title,format,cell=null){if(!atoms.length||atoms.length>2000)throw Error('構造は1〜2000原子にしてください。');const s=M.createState({atoms,metadata:{title,sourceFormat:format,cell}});MV.Bonding.refreshInferredBonds(s);return s;}
   function frames(states){if(!states.length||states.length>200||states.reduce((n,s)=>n+s.atoms.length,0)>100000)throw Error('構造列は200フレーム・合計100000原子までです。');const s=states[0];if(states.length>1){s.metadata.trajectory=states.map(P.snapshot);s.metadata.frameIndex=0;}return s;}
   function sdf(text){
@@ -76,7 +76,7 @@
         }
       }
       if(partial)warnings.push('部分占有サイトを全て表示しています。計算前に占有・disorderを整理してください。');
-      const s=make(atoms,b.name||'CIF','cif',c);s.metadata.importWarnings=warnings;s.metadata.cifSource=text;return s;
+      const s=make(atoms,b.name||'CIF','cif',c);s.metadata.importWarnings=warnings;return s;
     });return frames(states);
   }
   function pdb(text){
