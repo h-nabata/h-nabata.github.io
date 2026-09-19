@@ -57,3 +57,12 @@ test('paths preserve exact endpoints and file order, validate mismatches, reliev
  b.atoms[0].element='N';assert.throws(()=>G.path(a,b,{count:5}),/File-order 1/);b.atoms[0].element='C';b.atoms.pop();assert.throws(()=>G.path(a,b,{count:5}),/原子数/);
  const p=IO.parseXYZToState('C .1 0 0\nTV 10 0 0\nTV 0 10 0\nTV 0 0 10'),q=IO.parseXYZToState('C 9.9 0 0\nTV 10 0 0\nTV 0 10 0\nTV 0 0 10');const short=G.path(p,q,{count:3,method:'linear',minimumImage:true}).state.metadata.trajectory;near(short[1].atoms[0].x,0);near(short[2].atoms[0].x,-.1);assert.equal(JSON.stringify(short[1].metadata.cell),JSON.stringify(p.metadata.cell));q.metadata.cell.vectors[0][0]=11;assert.throws(()=>G.path(p,q,{count:3}),/同じ格子/);
 });
+test('initial path smoothing projects the entire 3N gradient and records zero tangential updates',()=>{
+ const a=IO.parseXYZToState('C -1 0 0\nC 1 0 0'),b=IO.parseXYZToState('C 1 0 0\nC -1 0 0');
+ const r=G.path(a,b,{count:7,method:'distance',seed:42}).state;
+ assert.equal(r.metadata.generation.relaxation,'perpendicular');assert.ok(r.metadata.generation.maxTangentialStep<1e-12);
+ const images=[[[0,0,0],[0,0,0]],[[1,2,3],[4,5,6]],[[2,4,6],[8,10,12]]],tau=G.tangent(images,1),force=[[3,-.4,1],[7,.6,-4]],projected=G.perpendicular(force,tau).flat();
+ near(projected.reduce((s,v,i)=>s+v*tau[i],0),0);assert.ok(Math.abs(projected.slice(0,3).reduce((s,v,i)=>s+v*tau[i],0))>.01,'projection must be in 3N space, not per atom');
+ const p=IO.parseXYZToState('H 0 0 0\nH 1 0 0\nTV 8 0 0\nTV 1 8 0\nTV 0 0 8'),q=M.cloneState(p);q.atoms[1].x=2;
+ const periodic=G.path(p,q,{count:5,method:'distance'}).state;assert.ok(periodic.metadata.generation.maxTangentialStep<1e-12);assert.equal(JSON.stringify(periodic.metadata.trajectory[0].metadata.cell),JSON.stringify(p.metadata.cell));
+});

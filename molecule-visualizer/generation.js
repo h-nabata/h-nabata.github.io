@@ -41,6 +41,13 @@
     return {state:series(states,{kind:'random',mode,seed:Number(options.seed)>>>0,rotors:torsions.length}),message:`${states.length}構造を生成しました（回転可能結合 ${torsions.length}本）。`+(states.length<n?' 衝突・重複または時間上限により指定数に達しませんでした。':'')+(mode==='both'&&!torsions.length?' この構造では配向のみ変化します。':'')};
   }
   function sameCell(a,b){return !a&&!b||a&&b&&a.pbc.every((v,i)=>v===b.pbc[i])&&a.vectors.every((v,i)=>v.every((x,j)=>Math.abs(x-b.vectors[i][j])<1e-6));}
+  // One tangent in Cartesian 3N space, not independent per-atom projections.
+  function tangent(images,k){
+    const current=images[k].flat(),previous=images[k-1].flat(),forward=images[k+1].flat().map((v,i)=>v-current[i]),backward=current.map((v,i)=>v-previous[i]);
+    const nf=norm(forward),nb=norm(backward);let t=forward.map((v,i)=>v/Math.max(nf,1e-15)+backward[i]/Math.max(nb,1e-15)),nt=norm(t);
+    if(nt<1e-12){t=nf>nb?forward:backward;nt=norm(t);}return nt<1e-12?null:t.map(v=>v/nt);
+  }
+  function perpendicular(v,t){if(!t)return v.map(p=>p.slice());const flat=v.flat(),d=dot(flat,t);return v.map((p,i)=>p.map((x,j)=>x-d*t[3*i+j]));}
   function path(a,b,options,progress=()=>{}){
     const n=count(options.count,2),method=options.method||'distance';if(!['linear','distance'].includes(method))throw Error('経路生成方法が不正です。');check(a,method==='linear'?2000:300);check(b,method==='linear'?2000:300);
     if(a.metadata.trajectory||b.metadata.trajectory)throw Error('各端点には1構造を入力してください。');
@@ -48,12 +55,12 @@
     if(!sameCell(a.metadata.cell,b.metadata.cell))throw Error('周期系の経路生成には同じ格子ベクトル・周期方向を持つ2構造が必要です。');
     const cell=a.metadata.cell,delta=(x,y)=>cell?P.minimumImage(sub(x,y),cell).vector:sub(x,y),start=a.atoms.map(xyz),end=b.atoms.map(xyz);
     if(options.minimumImage&&cell)for(let i=0;i<end.length;i++)end[i]=add(start[i],delta(end[i],start[i]));
-    const images=Array.from({length:n},(_,k)=>start.map((v,i)=>v.map((x,j)=>x+(end[i][j]-x)*k/(n-1)))),linear=images.map(p=>p.map(v=>v.slice()));let steps=0;
+    const images=Array.from({length:n},(_,k)=>start.map((v,i)=>v.map((x,j)=>x+(end[i][j]-x)*k/(n-1)))),linear=images.map(p=>p.map(v=>v.slice()));let steps=0,maxTangentialStep=0;
     if(method==='distance'&&n>2&&start.some((p,i)=>norm(sub(p,end[i]))>1e-10)){
       const pairs=[];for(let i=0;i<start.length;i++)for(let j=i+1;j<start.length;j++){const d0=norm(delta(start[i],start[j])),d1=norm(delta(end[i],end[j]));if(Math.min(d0,d1)<.05)throw Error('端点に重なった原子があります。端点の座標を修正してください。');pairs.push([i,j,d0,d1]);}
       // Break exact collision symmetry while keeping endpoints untouched.
       const random=rng(options.seed||1),noise=start.map(()=>[random()-.5,random()-.5,random()-.5]);
-      for(let k=1;k<n-1;k++)for(let i=0;i<start.length;i++)images[k][i]=images[k][i].map((v,j)=>v+.04*Math.sin(Math.PI*k/(n-1))*noise[i][j]);
+      for(let k=1;k<n-1;k++){const jitter=perpendicular(noise,tangent(linear,k));for(let i=0;i<start.length;i++)images[k][i]=images[k][i].map((v,j)=>v+.04*Math.sin(Math.PI*k/(n-1))*jitter[i][j]);}
       const evaluate=(p,k,gradient)=>{
         const g=gradient?p.map(()=>[0,0,0]):null;let energy=0;
         for(const [i,j,d0,d1] of pairs){let v=delta(p[i],p[j]),d=norm(v),target=d0+(d1-d0)*k/(n-1),weight=1/Math.max(.5,target)**4;
@@ -65,11 +72,13 @@
         return {energy,g};
       };
       const time=Date.now();for(;steps<250&&Date.now()-time<6000;steps++){
-        let change=0;
+        let change=0;const updates=images.slice();
         for(let k=1;k<n-1;k++){
-          const {energy,g}=evaluate(images[k],k,true),max=Math.max(...g.flat().map(Math.abs));let step=Math.min(.8,.08/Math.max(max,1e-9));
-          for(let trial=0;trial<8;trial++){const next=images[k].map((p,i)=>p.map((v,j)=>v-step*g[i][j]));if(evaluate(next,k,false).energy<energy){images[k]=next;change=Math.max(change,max*step);break;}step*=.5;}
+          const t=tangent(images,k);if(!t)continue;
+          const evaluated=evaluate(images[k],k,true),energy=evaluated.energy,g=perpendicular(evaluated.g,t),max=Math.max(...g.flat().map(Math.abs));let step=Math.min(.8,.08/Math.max(max,1e-9));
+          for(let trial=0;trial<8;trial++){const next=images[k].map((p,i)=>p.map((v,j)=>v-step*g[i][j]));if(evaluate(next,k,false).energy<energy){updates[k]=next;change=Math.max(change,max*step);maxTangentialStep=Math.max(maxTangentialStep,Math.abs(dot(g.flat(),t)*step));break;}step*=.5;}
         }
+        for(let k=1;k<n-1;k++)images[k]=updates[k];
         if(steps%10===0)progress(Math.min(.95,steps/250));if(change<1e-5)break;
       }
     }
@@ -78,8 +87,8 @@
       if(k>0&&k<n-1){next.bonds=[];next.metadata.manualBondIds=[];next.metadata.suppressedBondKeys=[];B.refreshInferredBonds(next);}return next;
     });
     let closest=Infinity;for(const image of images)for(let i=0;i<image.length;i++)for(let j=i+1;j<image.length;j++)closest=Math.min(closest,norm(delta(image[i],image[j])));
-    const info={kind:'path',method,steps,minimumImage:Boolean(options.minimumImage&&cell),closestDistance:closest};
+    const info={kind:'path',method,steps,relaxation:method==='distance'?'perpendicular':'none',maxTangentialStep,minimumImage:Boolean(options.minimumImage&&cell),closestDistance:closest};
     return {state:series(states,info),message:`端点を含む${n}構造を生成しました。`+(method==='distance'?` 距離補間を${steps}ステップ調整しました。`:'')+(closest<.6?` 原子間距離が短い箇所（最短 ${closest.toFixed(3)} Å）があります。必ず確認してください。`:'')+' エネルギー未評価の初期推定経路です。'};
   }
-  MV.Generation={randomStructures,path,rng,rotors};
+  MV.Generation={randomStructures,path,rng,rotors,tangent,perpendicular};
 })(window);

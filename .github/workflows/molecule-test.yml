@@ -15,6 +15,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install local energy bridge dependencies
+        run: python -m pip install -r molecule-visualizer/local-engine/requirements.txt 'tblite>=0.4,<1'
+      - name: Numerical and local service tests
+        env:
+          OMP_NUM_THREADS: '1'
+          OPENBLAS_NUM_THREADS: '1'
+        run: python -m unittest discover -s molecule-visualizer/tests -p 'test_*.py' -v
       - run: node --test molecule-visualizer/tests/*.test.cjs
       - run: npm install --no-save playwright@1.55.0
       - run: npx playwright install --with-deps chromium
@@ -23,6 +33,7 @@ jobs:
           mkdir -p test-artifacts
           python molecule-visualizer/scripts/preview.py > /tmp/preview.log 2>&1 &
           node molecule-visualizer/tests/browser.cjs
+          node molecule-visualizer/tests/engine-browser.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -2,21 +2,22 @@
 layout: default
 title: 分子構造エディタ | Molecule Studio
 ---
-<link rel="stylesheet" href="./molecule-visualizer_style.css?v=13">
-<script defer src="./model.js?v=13"></script>
-<script defer src="./bonding.js?v=13"></script>
-<script defer src="./geometry.js?v=13"></script>
-<script defer src="./io.js?v=13"></script>
-<script defer src="./molfile.js?v=13"></script>
-<script defer src="./periodic.js?v=13"></script>
-<script defer src="./formats.js?v=13"></script>
-<script defer src="./history.js?v=13"></script>
-<script defer src="./renderer3dmol.js?v=13"></script>
-<script defer src="./ui.js?v=13"></script>
-<script defer src="./studio.js?v=13"></script>
-<script defer src="./advanced.js?v=13"></script>
-<script defer src="./generator-ui.js?v=13"></script>
-<script defer src="./molecule-visualizer_main.js?v=13"></script>
+<link rel="stylesheet" href="./molecule-visualizer_style.css?v=14">
+<script defer src="./model.js?v=14"></script>
+<script defer src="./bonding.js?v=14"></script>
+<script defer src="./geometry.js?v=14"></script>
+<script defer src="./io.js?v=14"></script>
+<script defer src="./molfile.js?v=14"></script>
+<script defer src="./periodic.js?v=14"></script>
+<script defer src="./formats.js?v=14"></script>
+<script defer src="./history.js?v=14"></script>
+<script defer src="./renderer3dmol.js?v=14"></script>
+<script defer src="./ui.js?v=14"></script>
+<script defer src="./studio.js?v=14"></script>
+<script defer src="./advanced.js?v=14"></script>
+<script defer src="./generator-ui.js?v=14"></script>
+<script defer src="./engine-ui.js?v=14"></script>
+<script defer src="./molecule-visualizer_main.js?v=14"></script>
 
 <div class="mv-page-buffer" aria-hidden="true"></div>
 <main class="mv-app">
@@ -39,7 +40,7 @@ title: 分子構造エディタ | Molecule Studio
       </div>
       <div class="mv-viewer-shell"><div id="viewer"></div><div class="mv-viewer-bottom"><span id="modeBadge">選択モード</span><span id="gestureHint">左ドラッグ：表示回転 · 右：範囲選択 · Alt＋左/右：原子団移動/回転</span></div></div>
       <div class="mv-view-controls"><label for="styleSelect">表示</label><select id="styleSelect"><option value="stickball">球と棒</option><option value="stick">棒</option><option value="wire">ワイヤー</option><option value="vdw">空間充填（概略）</option></select><button class="mv-btn" id="btnToggleIndex" aria-pressed="false">原子番号</button><button class="mv-btn" id="btnToggleAxes" aria-pressed="false" title="世界座標の原点からX・Y・Z軸を表示（Å）">XYZ座標軸</button><button class="mv-btn" id="btnResetCamera">カメラをリセット</button><button class="mv-btn" id="btnCenterOrigin" title="選択によらず全原子の質量重心を原点へ移動。周期系も原子のみ移動し、格子は維持します。">重心を原点へ</button><button class="mv-btn" id="btnFit">全体を表示</button><button class="mv-btn" id="btnZoomIn" aria-label="拡大">＋</button><button class="mv-btn" id="btnZoomOut" aria-label="縮小">−</button><button class="mv-btn" id="btnViewXY">XY</button><button class="mv-btn" id="btnViewXZ">XZ</button><button class="mv-btn" id="btnViewYZ">YZ</button><button class="mv-btn" id="btnFullScreen">全画面</button><button class="mv-btn" id="btnDataDock">XYZを直接編集</button><button class="mv-btn" id="btnPNG">画像を保存</button></div>
-      <div class="mv-view-controls"><label for="projectionMode">投影</label><select id="projectionMode"><option value="orthographic">平行投影</option><option value="perspective">透視投影</option></select><label for="cameraFov">視野角</label><input id="cameraFov" type="range" min="10" max="90" value="45" step="1" disabled><output id="cameraFovValue" for="cameraFov">45°</output><button class="mv-btn primary" id="btnRelax" title="現在の結合を保ち、距離・角度・近接反発を軽量に緩和。最大500原子、セル固定。">構造を整える</button><button class="mv-btn" id="btnRandomStructures">ランダム配座・配向</button><button class="mv-btn" id="btnReactionPath">反応経路の初期構造</button><button class="mv-btn" id="cancelAdvanced" disabled>処理を中止</button></div>
+      <div class="mv-view-controls"><label for="projectionMode">投影</label><select id="projectionMode"><option value="orthographic">平行投影</option><option value="perspective">透視投影</option></select><label for="cameraFov">視野角</label><input id="cameraFov" type="range" min="10" max="90" value="45" step="1" disabled><output id="cameraFovValue" for="cameraFov">45°</output><button class="mv-btn primary" id="btnRelax" title="現在の結合を保ち、距離・角度・近接反発を軽量に緩和。最大500原子、セル固定。">構造を整える</button><button class="mv-btn" id="btnRandomStructures">ランダム配座・配向</button><button class="mv-btn" id="btnExternalEngine">外部エンジン / 経路緩和</button><button class="mv-btn" id="btnReactionPath">反応経路の初期構造</button><button class="mv-btn" id="cancelAdvanced" disabled>処理を中止</button></div>
       <p class="mv-small">Shift＋左ドラッグ：視点を保ってロール（左右にドラッグ）。視野角が大きいほど遠近感が強くなります。構造緩和は現在の結合次数に基づく概略調整です。</p>
       <div class="mv-trajectory"><span class="mv-eyebrow">FRAMES</span><button class="mv-btn" id="framePrev" aria-label="前のフレーム">‹</button><button class="mv-btn" id="framePlay">▶ 再生</button><input id="frameRange" type="range" min="0" max="0" value="0" aria-label="フレーム"><button class="mv-btn" id="frameNext" aria-label="次のフレーム">›</button><output id="frameLabel">1 / 1</output></div>
       <div class="mv-cellbar"><button class="mv-btn" id="btnCell">周期セル・スーパーセル</button><span id="cellStatus">非周期構造</span><span id="pbcMeasure"></span><span id="fractionalInfo"></span></div>
@@ -271,11 +272,52 @@ H 1.0 0 0
       <div><label for="pathStart">始点</label><textarea id="pathStart" rows="10" spellcheck="false"></textarea><div class="mv-row"><button class="mv-btn" id="pathStartCurrent">現在の構造を使用</button><label class="mv-small">ファイル<input id="pathStartFile" type="file"></label></div></div>
       <div><label for="pathEnd">終点</label><textarea id="pathEnd" rows="10" spellcheck="false"></textarea><div class="mv-row"><button class="mv-btn" id="pathEndCurrent">現在の構造を使用</button><label class="mv-small">ファイル<input id="pathEndFile" type="file"></label></div></div>
     </div>
-    <label for="pathMethod">生成方法</label><select id="pathMethod"><option value="distance">距離補間＋衝突緩和（最大300原子）</option><option value="linear">Cartesian直線補間（最大2000原子）</option></select><label class="mv-check"><input id="pathMinimumImage" type="checkbox">周期系で終点の最小像を使う（終点は周期等価な座標へ移動）</label>
-    <p class="mv-small">既定では入力した端点座標を保持します。周期系は両端点のセルが同一であることが必要です。生成列はエネルギー未評価のinitial guessで、最小エネルギー経路や遷移状態を保証しません。結合の生成・切断を含む経路は原子衝突と原子対応を確認してください。</p>
+    <label for="pathMethod">生成方法</label><select id="pathMethod"><option value="distance">距離補間＋直交方向の衝突緩和（最大300原子）</option><option value="linear">Cartesian直線補間（最大2000原子）</option></select><label class="mv-check"><input id="pathMinimumImage" type="checkbox">周期系で終点の最小像を使う（終点は周期等価な座標へ移動）</label>
+    <p class="mv-small">既定では入力した端点座標を保持します。周期系は両端点のセルが同一であることが必要です。衝突緩和は3N次元の局所接線に直交する方向のみです。生成後は「外部エンジン / 経路緩和」で実際のエネルギー・力を使って調整できます。生成列はエネルギー未評価のinitial guessで、最小エネルギー経路や遷移状態を保証しません。結合の生成・切断を含む経路は原子衝突と原子対応を確認してください。</p>
   </section>
   <p class="mv-small">生成後は描画領域下のFRAMESで順に確認できます。保存・書き出しの「全フレームXYZ」で一括保存できます。未適用の座標編集は先に適用してください。</p>
   <p id="generationMessage" role="status" aria-live="polite"></p>
   <div class="mv-row mv-end"><button class="mv-btn" id="generationCancel" disabled>生成を中止</button><button class="mv-btn" data-close="generationDialog">閉じる</button><button class="mv-btn primary" id="generationRun">生成して表示</button></div>
 </dialog>
+
+<dialog id="engineDialog" class="mv-engine-dialog">
+  <h2>外部エンジン / 経路緩和</h2>
+  <p class="mv-small">計算はこのPCで起動したサービス上で実行します。座標はローカルサービスへ送信されます。接続トークンはこの画面のメモリだけに保持します。</p>
+  <details class="mv-engine-setup"><summary>初回のセットアップ</summary>
+    <p><a href="./local-engine/bridge.py" download>bridge.pyをダウンロード</a>し、Python 3.10以上の環境で次を実行してください。</p>
+    <pre>python -m pip install numpy ase psutil tblite
+python bridge.py --engine tblite --allow-origin https://h-nabata.github.io</pre>
+    <p>g-xTBの場合は、--gxtb --grad対応のxtbをローカルで指定します（tbliteのインストールは不要）。</p>
+    <pre>python bridge.py --engine gxtb --binary /absolute/path/to/xtb --allow-origin https://h-nabata.github.io</pre>
+    <p>起動時に表示されるTokenを下欄に貼り付けます。ブラウザが要求した場合は、このサイトからのローカルネットワーク接続を許可してください。WSLではサービスも計算エンジンと同じWSL環境で起動します。</p>
+    <p><a href="https://github.com/h-nabata/h-nabata.github.io/blob/main/molecule-visualizer/local-engine/README.md" target="_blank" rel="noopener">導入・周期系・計算方式の詳しい説明</a></p>
+  </details>
+  <fieldset id="engineConnection"><legend>ローカルサービスへ接続</legend><div class="mv-grid">
+    <label>接続先URL<input id="engineURL" value="http://127.0.0.1:8766" autocomplete="off" spellcheck="false"></label>
+    <label>接続トークン<input id="engineToken" type="password" autocomplete="off" spellcheck="false"></label>
+  </div><div class="mv-row"><button class="mv-btn" id="engineConnect">接続を確認</button><span id="engineConnected" class="mv-small">未接続</span></div></fieldset>
+  <fieldset id="engineSettings"><legend>計算条件</legend><div class="mv-grid">
+    <label>操作<select id="engineMode"><option value="evaluate">エネルギー・力を評価</option><option value="optimize">単一構造を最適化</option><option value="perpendicular">経路を直交方向のみ緩和</option><option value="neb">NEB（接線方向のばねあり）</option><option value="cineb">CI-NEB（最高点を登らせる）</option></select></label>
+    <label>対象<select id="engineScope"><option value="current">現在の構造</option><option value="all">全フレーム</option></select></label>
+    <label>系全体の電荷<input id="engineCharge" type="number" min="-100" max="100" step="1" value="0"></label>
+    <label>スピン多重度 (2S+1)<input id="engineMultiplicity" type="number" min="1" max="101" step="1" value="1"></label>
+  </div><p id="engineModeHelp" class="mv-small"></p>
+  <div id="engineRelaxSettings" class="mv-grid">
+    <label>最大ステップ数<input id="engineSteps" type="number" min="1" max="1000" step="1" value="150"></label>
+    <label>最大有効力の収束閾値 (eV/Å)<input id="engineFmax" type="number" min="0.00001" max="10" step="0.01" value="0.05"></label>
+    <label>1ステップの最大原子変位 (Å)<input id="engineMove" type="number" min="0.001" max="0.2" step="0.01" value="0.04"></label>
+    <label id="engineSpringLabel">ばね定数 (eV/Å²)<input id="engineSpring" type="number" min="0.001" max="10" step="0.1" value="0.1"></label>
+    <label id="engineClimbLabel">CIを開始するステップ<input id="engineClimb" type="number" min="0" max="500" step="1" value="10"></label>
+  </div><p class="mv-small">最大500原子・20構造。経路は同じ元素順序・固定セルが必要です。周期境界をまたぐ経路は連続したCartesian座標で入力してください。原子ごとの移動固定や可変セルには対応していません。</p></fieldset>
+  <p id="engineMessage" role="status" aria-live="polite"></p>
+  <div class="mv-row"><button class="mv-btn primary" id="engineRun" disabled>計算を実行</button><button class="mv-btn" id="engineCancel" disabled>計算を中止</button></div>
+  <section id="engineResult" hidden><h3>計算結果</h3><p id="engineResultSummary" class="mv-small"></p>
+    <svg id="enginePlot" viewBox="0 0 560 180" role="img" aria-label="構造列の相対エネルギー。数値は次の表を参照してください。"></svg>
+    <div class="mv-table-scroll"><table><thead><tr><th>構造</th><th>E (eV)</th><th>ΔE (eV)</th><th>有効力 (eV/Å)</th><th>CI</th></tr></thead><tbody id="engineEnergyRows"></tbody></table></div>
+    <p class="mv-small">収束判定は選択したモードの有効力に基づきます。直交方向の収束だけでは遷移状態は確定しません。結果は適用するまで描画構造を変更しません。</p>
+    <div class="mv-row"><button class="mv-btn primary" id="engineApply" disabled>結果を構造へ適用</button><button class="mv-btn" id="engineDownload" disabled>エネルギー・力・履歴をJSON保存</button></div>
+  </section>
+  <div class="mv-row mv-end"><button class="mv-btn" id="engineClose" data-close="engineDialog">閉じる</button></div>
+</dialog>
+
 </main>

@@ -47,3 +47,14 @@
 .mv-app #generationSeed { width: 130px; }
 .mv-app #generationMessage { min-height: 1.5em; color: #075c64; }
 @media(max-width:700px) { .mv-app .mv-endpoint-grid { grid-template-columns: 1fr; } }
+
+/* External engine panel */
+.mv-app .mv-engine-dialog{width:min(800px,calc(100vw - 28px))}
+.mv-engine-dialog fieldset{border:1px solid var(--border);border-radius:8px;margin:16px 0;padding:12px}
+.mv-engine-dialog legend{font-weight:650;font-size:13px;padding:0 6px}
+.mv-engine-dialog p{margin:10px 0;overflow-wrap:anywhere}
+.mv-engine-setup{margin:14px 0;background:var(--soft);padding:12px;border-radius:8px}
+.mv-engine-setup pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;padding:10px;background:white;border:1px solid var(--border)}
+#engineMessage{min-height:24px;font-size:13px}
+#enginePlot{width:100%;height:auto;max-height:210px;background:var(--soft);border-radius:8px;margin:12px 0}
+@media(max-width:540px){.mv-engine-dialog .mv-grid{grid-template-columns:1fr}}

@@ -19,7 +19,7 @@
       const state=kind==='path'?MV.Formats.parse($('pathStart').value):MV.Model.createState(MV.Periodic.snapshot(app().getState())),end=kind==='path'?MV.Formats.parse($('pathEnd').value):null;
       const j={fingerprint:fingerprint(app().getState()),formKey:formKey()};job=j;$('generationRun').disabled=true;$('generationCancel').disabled=false;message('構造列を生成しています…');
       try{
-        j.worker=new Worker('./generation-worker.js?v=13');j.timeout=setTimeout(()=>{if(job===j){finish(j);message('生成が120秒を超えました。原子数・構造数を減らしてください。');}},120000);
+        j.worker=new Worker('./generation-worker.js?v=14');j.timeout=setTimeout(()=>{if(job===j){finish(j);message('生成が120秒を超えました。原子数・構造数を減らしてください。');}},120000);
         j.worker.onmessage=e=>{
           if(job!==j)return;
           if(e.data.error){finish(j);message(e.data.error);return;}
