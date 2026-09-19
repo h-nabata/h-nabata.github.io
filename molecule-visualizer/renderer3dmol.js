@@ -131,18 +131,20 @@
     this.orientation=multiplyQuaternion([Math.cos(x/2),Math.sin(x/2),0,0],[Math.cos(y/2),0,Math.sin(y/2),0]);
   };
   Renderer3DMol.prototype.rotate=function(p){return applyQuaternion(this.orientation,p);};
-  Renderer3DMol.prototype.trackballPoint=function(x,y){
-    const rect=this.canvas.getBoundingClientRect(),radius=Math.max(1,Math.min(rect.width,rect.height)*.45);
-    const px=(x-rect.width/2-this.panX)/radius,py=(rect.height/2+this.panY-y)/radius,d=Math.hypot(px,py);
-    return d>1?[px/d,py/d,0]:[px,py,Math.sqrt(Math.max(0,1-d*d))];
-  };
   Renderer3DMol.prototype.rotateTrackball=function(x0,y0,x1,y1){
-    const a=this.trackballPoint(x0,y0),b=this.trackballPoint(x1,y1);
-    let q=[1+a[0]*b[0]+a[1]*b[1]+a[2]*b[2],a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
-    // Antipodal rim points need a well-defined 180-degree rotation about screen Z.
-    if(Math.hypot(...q)<1e-10)q=[0,0,0,1];
-    q=multiplyQuaternion(q,this.orientation);const norm=Math.hypot(...q);
-    this.orientation=q.map(v=>v/norm);
+    // Integrate pointer displacement, not the endpoints on a bounded sphere.
+    // Radial drags continue to tumble even outside the virtual trackball.
+    const rect=this.canvas.getBoundingClientRect(),radius=Math.max(1,Math.min(rect.width,rect.height)*.45);
+    const ax=x0-rect.width/2-this.panX,ay=y0-rect.height/2-this.panY,bx=x1-rect.width/2-this.panX,by=y1-rect.height/2-this.panY;
+    const da=Math.hypot(ax,ay),db=Math.hypot(bx,by),dot=ax*bx+ay*by;
+    const blend=dot<0?0:Math.min(1,Math.min(da,db)/radius)**2;
+    const mid=Math.hypot(ax+bx,ay+by),nx=mid?(ax+bx)/mid:0,ny=mid?(ay+by)/mid:0;
+    const dx=(1-blend)*(x1-x0)+blend*(db-da)*nx,dy=(1-blend)*(y1-y0)+blend*(db-da)*ny;
+    const roll=blend*Math.atan2(ay*bx-ax*by,dot);
+    const v=[dy*.008,dx*.008,roll],angle=Math.hypot(...v);if(angle<1e-14)return;
+    const k=Math.sin(angle/2)/angle;
+    let q=multiplyQuaternion([Math.cos(angle/2),v[0]*k,v[1]*k,v[2]*k],this.orientation);
+    const norm=Math.hypot(...q);this.orientation=q.map(v=>v/norm);
   };
 
   Renderer3DMol.prototype.project = function (atom, center, scale, width, height) {
