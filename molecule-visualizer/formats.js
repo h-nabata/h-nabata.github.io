@@ -71,8 +71,8 @@
         const raw=row._atom_site_type_symbol||row._atom_site_label?.match(/^[A-Za-z]+/)?.[0],e=element(raw),occ=row._atom_site_occupancy==null||['.','?'].includes(row._atom_site_occupancy)?1:number(row._atom_site_occupancy);
         if(occ<0||occ>1)throw Error('CIF占有率は0〜1にしてください。');if(occ===0)continue;if(occ<1)partial=true;
         const pos=['x','y','z'].map(k=>number(row['_atom_site_'+(fractional?'fract_':'cartn_')+k])),f=fractional?pos:c?P.fractional(pos,c):pos;
-        for(const transform of transforms){const v=c?transform(f).map(x=>((x%1)+1)%1):pos,key=e+':'+occ+':'+v.map(x=>c?Math.round(x*1e6)%1000000:Math.round(x*1e6)).join(',');if(seen.has(key))continue;seen.add(key);
-          const cart=c?P.cartesian(v,c):v;atoms.push(atom(e,cart,{xyzExtras:{occupancy:{type:'R',values:[String(occ)]}}}));if(atoms.length>2000)throw Error('対称展開後の原子数が2000を超えます。');
+        for(const transform of transforms){const v=c?transform(f).map(x=>((x%1)+1)%1):pos,key=(['D','T'].includes(raw)?raw:e)+':'+occ+':'+v.map(x=>c?Math.round(x*1e6)%1000000:Math.round(x*1e6)).join(',');if(seen.has(key))continue;seen.add(key);
+          const cart=c?P.cartesian(v,c):v;atoms.push(atom(raw,cart,{xyzExtras:{occupancy:{type:'R',values:[String(occ)]}}}));if(atoms.length>2000)throw Error('対称展開後の原子数が2000を超えます。');
         }
       }
       if(partial)warnings.push('部分占有サイトを全て表示しています。計算前に占有・disorderを整理してください。');
