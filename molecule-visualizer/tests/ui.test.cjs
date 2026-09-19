@@ -89,3 +89,14 @@ test('one held drag keeps turning past 1080 degrees horizontally, vertically and
  }
  assert.equal(JSON.stringify(MV.App.getState().atoms),before);
 });
+test('mass centering moves all cell contents only, supports undo, and camera/axes controls preserve coordinates',()=>{
+ const {MV,nodes}=boot(),app=MV.App,r=app.renderer(),s=MV.IO.parseXYZToState('2\nLattice="8 0 0 1 9 0 2 3 10"\nH 2 3 4\nO 4 5 6\n');s.selectedAtomIds.add(s.atoms[0].id);app.setState(s,false);
+ const cell=JSON.stringify(s.metadata.cell),before=JSON.stringify(s.atoms),distance=MV.Geometry.distance(...s.atoms);nodes.get('btnCenterOrigin').click();const next=app.getState(),c=MV.Geometry.centerOfMass(next.atoms);assert.ok(Math.hypot(c.x,c.y,c.z)<1e-12);assert.ok(Math.abs(MV.Geometry.distance(...next.atoms)-distance)<1e-12);assert.equal(JSON.stringify(next.metadata.cell),cell);assert.notEqual(next.atoms[1].x,4);nodes.get('btnUndo').click();assert.equal(JSON.stringify(app.getState().atoms),before);
+ r.rotateTrackball(400,250,3400,250);r.zoom=4;r.panX=70;r.panY=-30;nodes.get('btnResetCamera').click();assert.equal(r.zoom,1);assert.equal(r.panX,0);assert.equal(r.panY,0);assert.equal(JSON.stringify(app.getState().atoms),before);assert.equal(JSON.stringify(app.getState().metadata.cell),cell);
+ let drawn=0;const original=r.drawAxes;r.drawAxes=function(w){drawn++;original.call(this,w);};nodes.get('btnToggleAxes').click();assert.ok(drawn>0);assert.equal(app.getState().viewSettings.showAxes,true);assert.equal(nodes.get('btnToggleAxes').attrs['aria-pressed'],'true');assert.equal(MV.IO.parseProject(MV.IO.stateToProjectText(app.getState())).viewSettings.showAxes,true);nodes.get('btnToggleAxes').click();const count=drawn;r.draw();assert.equal(drawn,count);
+ const isotope=MV.Geometry.centerOfMass([{element:'C',x:0,y:0,z:0,mol:{props:{MASS:'12'}}},{element:'C',x:25,y:0,z:0,mol:{props:{MASS:'13'}}}]);assert.equal(isotope.x,13);
+});
+test('periodic cell and atoms share unrestricted multi-turn view rotation',()=>{
+ const {MV,canvas,nodes}=boot(),s=MV.IO.parseXYZToState('1\nLattice="4 0 0 1 5 0 2 3 6"\nC 1 2 3\n'),r=MV.App.renderer();MV.App.setState(s,false);nodes.get('btnViewXY').click();const before=MV.IO.stateToProjectText(s),corner=r.cellCorners()[7];
+ canvas.fire('pointerdown',{pointerId:39,button:0,clientX:400,clientY:250});for(let i=1;i<=260;i++){canvas.fire('pointermove',{pointerId:39,clientX:400+10*i,clientY:250});assert.ok(Math.abs(r.rotate({x:0,y:0,z:1}).z-Math.cos(.08*i))<1e-9);}canvas.fire('pointerup',{pointerId:39});assert.equal(MV.IO.stateToProjectText(s),before);assert.notEqual(r.rotate(corner).x,corner.x);
+});

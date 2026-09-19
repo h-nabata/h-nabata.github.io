@@ -43,6 +43,7 @@
     byId("btnAddBond").disabled=selected.length!==2;
     ["btnUpdateBond","btnDeleteBond"].forEach(id=>byId(id).disabled=!state.selectedBondIds.size);
     [["Distance",2],["Angle",3],["Dihedral",4]].forEach(([name,n])=>["Apply","Measure"].forEach(action=>byId("btn"+action+name).disabled=selected.length!==n));
+    byId("btnToggleAxes").setAttribute("aria-pressed",String(Boolean(state.viewSettings.showAxes)));
     byId("styleSelect").value=state.viewSettings.style;byId("btnToggleIndex").setAttribute("aria-pressed",String(state.viewSettings.showIndexLabels));
     const values=selected;
     try{setMeasure(values.length===2?`${Geometry.distance(...values).toFixed(3)} Å`:values.length===3?`${Geometry.angle(...values).toFixed(2)}°`:values.length===4?`${Geometry.dihedral(...values).toFixed(2)}°`:"2 / 3 / 4 原子を順に選択してください");}catch(e){setMeasure(e.message);}
@@ -753,12 +754,7 @@
     if (key === "1" || key === "2" || key === "3") { consumeShortcut(e); setSelectedBondOrder(Number(key)); return; }
     if (key === "r") {
       consumeShortcut(e);
-      renderer.fit();
-      renderer.setViewAngles(-0.45,0.65);
-      renderer.zoom = 1;
-      renderer.panX = 0;
-      renderer.panY = 0;
-      renderer.render();
+      renderer.resetCamera();
       setStatus("表示をリセットしました。");
       return;
     }
@@ -875,6 +871,9 @@
     bind('btnDataDock','click',()=>{byId('tab-atoms').click();byId('dataText').focus();byId('dataText').scrollIntoView?.({block:'center',behavior:'smooth'});});
     bind('btnTranslate','click',()=>{const delta=['translateX','translateY','translateZ'].map(id=>numberInput(id));if(!state.selectedAtomIds.size)return;pushHistory('translate');selectedAtoms().forEach(a=>['x','y','z'].forEach((k,i)=>a[k]+=delta[i]));refreshBondsAndRender(true);setStatus('選択原子を平行移動しました。');});
     bind('btnFit','click',()=>renderer.fit());
+    bind('btnResetCamera','click',()=>{renderer.resetCamera();setStatus('カメラの向き・拡大率・表示位置をリセットしました。');});
+    bind('btnToggleAxes','click',()=>{state.viewSettings.showAxes=!state.viewSettings.showAxes;render(true);setStatus(state.viewSettings.showAxes?'XYZ座標軸を表示しました。':'XYZ座標軸を非表示にしました。');});
+    bind('btnCenterOrigin','click',()=>{try{MV.App.change('center of mass to origin',s=>{const c=Geometry.centerOfMass(s.atoms);s.atoms.forEach(a=>{a.x-=c.x;a.y-=c.y;a.z-=c.z;});},true);setStatus('全原子の質量重心を原点へ移動しました。格子ベクトルは維持されます。「戻す」で復元できます。');}catch(error){report(error);}});
     bind('btnZoomIn','click',()=>{renderer.zoom=Math.min(12,renderer.zoom*1.2);renderer.draw();});
     bind('btnZoomOut','click',()=>{renderer.zoom=Math.max(.1,renderer.zoom/1.2);renderer.draw();});
     [['XY',0,0],['XZ',Math.PI/2,0],['YZ',0,Math.PI/2]].forEach(([name,x,y])=>bind('btnView'+name,'click',()=>{renderer.setViewAngles(x,y);renderer.draw();}));

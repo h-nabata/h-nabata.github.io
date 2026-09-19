@@ -1,9 +1,12 @@
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs');
 (async()=>{
- const browser=await chromium.launch({headless:true}),page=await browser.newPage({viewport:{width:1440,height:1080}}),errors=[];
+ const browser=await chromium.launch({headless:true}),page=await browser.newPage({viewport:{width:1440,height:1440}}),errors=[];
  page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://127.0.0.1:8765/molecule-visualizer/');await page.waitForSelector('canvas');
  assert.match(await page.locator('#structureStats').textContent(),/3 原子/);
+ assert.ok((await page.locator('.mv-app').boundingBox()).y>=81);assert.ok((await page.locator('#structureTitle').boundingBox()).width>=530);assert.equal(await page.locator('.mv-subtitle').count(),0);
+ await page.click('#btnToggleAxes');assert.equal(await page.locator('#btnToggleAxes').getAttribute('aria-pressed'),'true');await page.click('#btnToggleAxes');
+
  assert.equal(await page.locator('#coordX,#coordY,#coordZ').count(),0);
  await page.fill('#dataText','O 2.5 0 0\nH .9572 0 0\nH -.239987 .926627 0');
  await page.click('#dataApply');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[0].x),2.5);
@@ -35,6 +38,10 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  await altDrag('right');assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.renderer().orientation),original.orientation);
  assert.notEqual(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[1].z),original.atoms[1].z);await page.click('#btnUndo');await page.click('#btnClearSel');
  await page.click('#sampleCrystal');assert.match(await page.locator('#cellStatus').textContent(),/周期境界 abc/);
+ const cellBefore=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().metadata.cell));await page.click('#btnCenterOrigin');assert.ok(await page.evaluate(()=>{const c=MoleculeVisualizer.Geometry.centerOfMass(MoleculeVisualizer.App.getState().atoms);return Math.hypot(c.x,c.y,c.z)<1e-10;}));assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().metadata.cell)),cellBefore);await page.click('#btnUndo');
+ await page.click('#btnViewXY');await page.locator('canvas').scrollIntoViewIfNeeded();const cb=await page.locator('canvas').boundingBox(),mx=cb.x+cb.width/2,my=cb.y+cb.height/2;await page.mouse.move(mx,my);await page.mouse.down();let cellTurn=0,lastCell={x:0,y:0,z:1};for(let i=1;i<=260;i++){await page.mouse.move(mx+10*i,my);const v=await page.evaluate(()=>MoleculeVisualizer.App.renderer().rotate({x:0,y:0,z:1}));cellTurn+=Math.acos(Math.max(-1,Math.min(1,lastCell.x*v.x+lastCell.y*v.y+lastCell.z*v.z)));lastCell=v;}await page.mouse.up();assert.ok(cellTurn>6*Math.PI);assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().metadata.cell)),cellBefore);
+ await page.click('#btnZoomIn');await page.click('#btnResetCamera');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.renderer().zoom),1);await page.click('#btnToggleAxes');
+
  await page.click('#btnCell');await page.fill('#repeatCell','2 2 2');await page.click('#cellSuper');assert.match(await page.locator('#structureStats').textContent(),/16 原子/);
  await page.screenshot({path:'test-artifacts/periodic.png',fullPage:true});await page.click('#btnUndo');assert.match(await page.locator('#structureStats').textContent(),/2 原子/);
  await page.evaluate(()=>MoleculeVisualizer.App.loadText('1\nframe 1\nHe 0 0 0\n1\nframe 2\nHe 1 0 0\n'));await page.click('#frameNext');assert.equal(await page.locator('#frameLabel').textContent(),'2 / 2');

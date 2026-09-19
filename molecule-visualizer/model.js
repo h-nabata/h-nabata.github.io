@@ -5,7 +5,8 @@
 
   const DEFAULT_VIEW_SETTINGS = {
     style: "stickball",
-    showIndexLabels: false
+    showIndexLabels: false,
+    showAxes: false
   };
 
   const counters = {

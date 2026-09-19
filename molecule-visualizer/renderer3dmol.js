@@ -174,6 +174,7 @@
     if (atoms.length === 0) {
       this.projectedAtoms = []; this.projectedBonds = [];
       this.drawEmpty(width, height);
+      if(this.state?.viewSettings.showAxes)this.drawAxes(width);
       return;
     }
     const center = this.cameraCenter || this.center();
@@ -210,7 +211,17 @@
       const ctx=this.ctx;ctx.save();ctx.strokeStyle='#087e85';ctx.lineWidth=1.5;ctx.setLineDash([3,4]);ctx.beginPath();selected.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke();ctx.setLineDash([]);
       try{const atoms=selected.map(p=>p.atom),text=atoms.length===2?MV.Geometry.distance(...atoms).toFixed(3)+' Å':atoms.length===3?MV.Geometry.angle(...atoms).toFixed(2)+'°':MV.Geometry.dihedral(...atoms).toFixed(2)+'°';ctx.fillStyle='#075c64';ctx.font='bold 13px sans-serif';ctx.textAlign='left';ctx.fillText(text,16,25);}catch(e){}ctx.restore();
     }
+    if(this.state.viewSettings.showAxes)this.drawAxes(width);
     if (this.selectionBox) this.drawSelectionBox();
+  };
+
+  // A fixed-size world XYZ orientation indicator, separate from lattice a/b/c.
+  Renderer3DMol.prototype.drawAxes=function(width){
+    const ctx=this.ctx,cx=width-65,cy=65,len=32;ctx.save();
+    ctx.fillStyle='rgba(255,255,255,.88)';ctx.fillRect(width-119,10,110,110);
+    const axes=[['X','#c63c3c',{x:1,y:0,z:0}],['Y','#25834c',{x:0,y:1,z:0}],['Z','#3569c8',{x:0,y:0,z:1}]].map(([label,color,v])=>({label,color,p:this.rotate(v)})).sort((a,b)=>a.p.z-b.p.z);
+    for(const {label,color,p} of axes){const x=cx+len*p.x,y=cy-len*p.y;ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(x,y);ctx.stroke();ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill();ctx.font='bold 13px sans-serif';ctx.textAlign='center';ctx.fillText(label,x+8*p.x,y-8*p.y-5);}
+    ctx.fillStyle='#60747c';ctx.font='10px sans-serif';ctx.textAlign='center';ctx.fillText('XYZ',cx,110);ctx.restore();
   };
 
   Renderer3DMol.prototype.drawEmpty = function (width, height) {
@@ -302,6 +313,7 @@
     }
   };
 
+  Renderer3DMol.prototype.resetCamera=function(){this.setViewAngles(-.45,.65);this.fit();};
   Renderer3DMol.prototype.fit = function () {
     this.cameraCenter = this.state?.metadata.cell ? (()=>{const v=MV.Periodic.cartesian([.5,.5,.5],this.state.metadata.cell);return {x:v[0],y:v[1],z:v[2]};})() : this.center(); this.cameraSpan = this.estimateSpan(this.cameraCenter);
     this.zoom = 1; this.panX = 0; this.panY = 0; this.draw();

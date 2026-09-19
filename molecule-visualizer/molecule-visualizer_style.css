@@ -25,3 +25,9 @@
 .mv-app .mv-xyz-panel label{display:block;margin-bottom:6px}
 .mv-app .mv-xyz-panel #xyzEditStatus{min-height:2.5em}
 @media(min-width:1150px){.mv-app .mv-workspace{grid-template-columns:minmax(0,1fr) minmax(420px,38%)}}
+
+/* The site's fixed header is 65px high; leave a 16px gap below it. */
+.mv-page-buffer{height:81px;flex:none}
+.mv-app #viewer,.mv-app #dataText{scroll-margin-top:81px}
+.mv-app .mv-document #structureTitle{width:540px;max-width:100%;flex:0 1 540px}
+@media(max-width:800px){.mv-app .mv-document #structureTitle{width:calc(100% - 55px);max-width:calc(100% - 55px);flex-basis:calc(100% - 55px)}}
