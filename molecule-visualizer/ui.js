@@ -745,7 +745,16 @@
     }
     if (editingText && !inCanvas) return;
     if (key === "v" || key === "s") { consumeShortcut(e); setMode("select"); return; }
-    if (key === "b") { consumeShortcut(e); setMode("bond"); return; }
+    if (key === "b") {
+      consumeShortcut(e);if(e.repeat)return;
+      const ids=[...state.selectedAtomIds];
+      if(ids.length===2){
+        const bond=Model.findBondBetween(state,ids[0],ids[1]);
+        if(bond){pushHistory('toggle bond');Model.setSelectedBonds(state,[bond.id]);Model.removeSelectedBonds(state);render(true);setStatus('選択2原子の結合を切断しました。');}
+        else addBondFromSelection();
+      }else setMode("bond");
+      return;
+    }
     if (key === "m") { consumeShortcut(e); setMode("move"); return; }
     if (inCanvas && key === "e") { consumeShortcut(e); expandSelectionOneBond(); return; }
     if (inCanvas && key === "w") { consumeShortcut(e); selectConnectedMoleculesFromSelection(); return; }

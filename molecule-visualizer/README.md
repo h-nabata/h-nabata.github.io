@@ -70,3 +70,16 @@ V2000質量差の基準質量数: Open Babel 3.1.1 `src/elements.cpp` の最頻�
 
 表示コントロールに「XYZ座標軸」「カメラをリセット」「重心を原点へ」を追加。XYZ軸は画面右上の世界座標方向の表示で、周期格子のa/b/cとは独立しています。表示設定はプロジェクトと自動保存に保持します。カメラリセットは向き・ズーム・パンを初期化し全体を収め、原子座標は変更しません。重心は元素の原子量で重み付けし、同位体指定時は質量数を質量の近似として使用します。周期系では登録原子のみ（TV・描画上の周期像を含まない）の重心を使い、格子ベクトルを維持して原子全体を平行移動します。セルへの折り返しは行わず、Undo可能です。無限周期系そのものの重心を定義する操作ではありません。
 質量データ: https://github.com/openbabel/openbabel/blob/openbabel-3-1-1/src/elementtable.h （Blue Obelisk元素データ）。周期系にも通常の分子と同じ連続回転を適用します。
+
+### Camera and editing additions
+
+- Shift + left drag (horizontal movement) rolls the camera continuously about its viewing direction. Camera target/position, world coordinates and cell vectors stay fixed; Alt group gestures take precedence. Use Z to constrain atom movement.
+- Projection selector offers the existing orthographic mode and perspective with 10–90° vertical FOV. Target-plane scale is preserved while FOV changes camera distance/perspective strength; wheel remains zoom. XYZ axes now start at the actual Cartesian origin, share atom/cell projection and scale, and can move offscreen when the origin is outside the view. Labels X/Y/Z differ from lattice a/b/c. Axes are a visible overlay, not depth-occluded geometry.
+- B with exactly two selected atoms toggles their bond; holding B does not repeat. Otherwise B enters bond mode. Deletion suppression and undo are preserved.
+- Ten complex samples include indene, fluorene, norbornene, adamantane, cubane, anthracene, biphenyl, caffeine, aspirin and 18-crown-6. SMILES are converted with explicit H and UFF by the pinned Open Babel worker on first use, validated against C/H composition and cached for this page session. Loading is cancellable and undoable; concurrent structural edits prevent late results from replacing newer work.
+
+### Lightweight relaxation
+
+`relax.js` adjusts existing coordinates with bond-length springs (covalent radii and bond-order factors), ideal 1–3 distance springs for approximate angles, and soft short-range nonbonded repulsion. It never rebuilds coordinates, adds H or changes bonds/chemical metadata. Current bond orders therefore matter; XYZ inference alone cannot identify double/aromatic bonds. Supported elements: H, B, C, N, O, F, Si, P, S, Cl, Br, I; up to 500 atoms. The worker runs at most 300 iterations with an approximately 1.8-second iteration budget (individual evaluations may extend this); it is cancellable, checks for concurrent structural changes, and applies one undoable update. Periodic structures use minimum-image pairs with fixed cell; self-image interactions and multiple images are omitted.
+
+This is geometric cleanup, not UFF, an energy in physical units, a conformer search, or quantum optimization. It lacks torsional, electrostatic and explicit stereochemical constraints; verify chirality/planarity after substantial edits. Unsupported elements, including metal/ionic crystals, are explicitly rejected. Status displays reduction of the arbitrary-unit geometric objective. Source coordinates, bonds and cell are retained if processing fails or is cancelled.

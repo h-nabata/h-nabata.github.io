@@ -31,3 +31,9 @@
 .mv-app #viewer,.mv-app #dataText{scroll-margin-top:81px}
 .mv-app .mv-document #structureTitle{width:540px;max-width:100%;flex:0 1 540px}
 @media(max-width:800px){.mv-app .mv-document #structureTitle{width:calc(100% - 55px);max-width:calc(100% - 55px);flex-basis:calc(100% - 55px)}}
+
+/* Camera and sample controls remain compact and wrap on narrow screens. */
+.mv-app #cameraFov { width: 130px; min-width: 90px; padding: 0; }
+.mv-app #cameraFovValue { min-width: 3em; font-variant-numeric: tabular-nums; }
+.mv-app .mv-examples { flex-wrap: wrap; }
+.mv-app #complexSample { max-width: 100%; }
