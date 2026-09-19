@@ -27,18 +27,21 @@
     const n=count(options.count),mode=options.mode||'both';if(!['torsion','orientation','both'].includes(mode))throw Error('生成モードが不正です。');check(s,mode==='orientation'?2000:500);
     if(s.metadata.cell&&mode!=='orientation')throw Error('周期系の配座変更は分子を切り出し、セルを解除してから実行してください。周期系の配向生成は格子も一緒に回転します。');
     const random=rng(options.seed),g=graph(s),torsions=mode==='orientation'?[]:rotors(s,g),pairs=mode==='orientation'?[]:clashPairs(s,g),original=s.atoms.map(xyz),states=[],signatures=new Set(),start=Date.now();
-    if(mode==='torsion'&&!torsions.length)throw Error('回転可能な非環状単結合がありません。「配向」または「配座＋配向」を選択してください。');
+    const rings=mode!=='orientation'&&options.rings!==false&&MV.RingConformers?MV.RingConformers.moves(s,g):[],ringLimits=rings.length?MV.RingConformers.constraints(original,g):null,ringAngle=Number(options.ringAngle??30);
+    if(!Number.isFinite(ringAngle)||ringAngle<1||ringAngle>90)throw Error('環の摂動角は1〜90°にしてください。');
+    if(mode==='torsion'&&!torsions.length&&!rings.length)throw Error('変動可能な単結合・環の可動区間がありません。芳香環・小員環・剛直なかご構造は変形対象にならない場合があります。');
     for(let attempt=0;states.length<n&&attempt<n*80&&Date.now()-start<8000;attempt++){
       let p=original.map(v=>v.slice());const angles=[];
       for(const bond of torsions){const axis=sub(p[bond.j],p[bond.i]),d=norm(axis);if(d<1e-8)throw Error('長さ0の結合があり、ねじれ回転できません。');const angle=random()*2*Math.PI;angles.push(Math.round(angle*180/Math.PI/5));for(const i of bond.group)p[i]=add(p[bond.i],rotate(sub(p[i],p[bond.i]),axis.map(v=>v/d),angle));}
+      if(rings.length){const changed=MV.RingConformers.perturb(p,rings,ringLimits,pairs,random,ringAngle);p=changed.positions;if(mode==='torsion'&&!torsions.length&&!changed.accepted)continue;}
       if(pairs.some(([i,j,min])=>norm(sub(p[i],p[j]))<min))continue;
-      const signature=angles.join(',');if(mode==='torsion'&&signatures.has(signature))continue;signatures.add(signature);
+      const signature=angles.join(',')+(rings.length?'|'+MV.RingConformers.signature(p,g):'');if(mode==='torsion'&&signatures.has(signature))continue;signatures.add(signature);
       let rotateCell=null;
       if(mode!=='torsion'){const rotation=randomRotation(random),c=s.metadata.cell?[0,0,0]:center(p);p=p.map(v=>add(c,rotation(sub(v,c))));if(s.metadata.cell)rotateCell=P.cell(s.metadata.cell.vectors.map(rotation),s.metadata.cell.pbc);}
       const next=coordinates(s,p,`${s.metadata.title||'Structure'} · random ${states.length+1}`);if(rotateCell)next.metadata.cell=rotateCell;states.push(next);progress(states.length/n);
     }
     if(!states.length)throw Error('衝突を避けた構造を生成できませんでした。元構造の結合と近接原子を確認してください。');
-    return {state:series(states,{kind:'random',mode,seed:Number(options.seed)>>>0,rotors:torsions.length}),message:`${states.length}構造を生成しました（回転可能結合 ${torsions.length}本）。`+(states.length<n?' 衝突・重複または時間上限により指定数に達しませんでした。':'')+(mode==='both'&&!torsions.length?' この構造では配向のみ変化します。':'')};
+    return {state:series(states,{kind:'random',mode,seed:Number(options.seed)>>>0,rotors:torsions.length,ringMoves:rings.length,ringAngle}),message:`${states.length}構造を生成しました（非環状回転結合 ${torsions.length}本・環の可動区間 ${rings.length}組）。`+(states.length<n?' 衝突・重複または時間上限により指定数に達しませんでした。':'')+(mode==='both'&&!torsions.length&&!rings.length?' この構造では配向のみ変化します。':'')};
   }
   function sameCell(a,b){return !a&&!b||a&&b&&a.pbc.every((v,i)=>v===b.pbc[i])&&a.vectors.every((v,i)=>v.every((x,j)=>Math.abs(x-b.vectors[i][j])<1e-6));}
   // One tangent in Cartesian 3N space, not independent per-atom projections.
@@ -90,5 +93,5 @@
     const info={kind:'path',method,steps,relaxation:method==='distance'?'perpendicular':'none',maxTangentialStep,minimumImage:Boolean(options.minimumImage&&cell),closestDistance:closest};
     return {state:series(states,info),message:`端点を含む${n}構造を生成しました。`+(method==='distance'?` 距離補間を${steps}ステップ調整しました。`:'')+(closest<.6?` 原子間距離が短い箇所（最短 ${closest.toFixed(3)} Å）があります。必ず確認してください。`:'')+' エネルギー未評価の初期推定経路です。'};
   }
-  MV.Generation={randomStructures,path,rng,rotors,tangent,perpendicular};
+  MV.Generation={randomStructures,path,rng,rotors,tangent,perpendicular,graph};
 })(window);

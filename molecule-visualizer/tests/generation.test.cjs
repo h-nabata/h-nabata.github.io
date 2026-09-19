@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
-const ctx={window:{}};vm.createContext(ctx);for(const f of ['model','bonding','geometry','io','molfile','periodic','formats','generation'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
+const ctx={window:{}};vm.createContext(ctx);for(const f of ['model','bonding','geometry','io','molfile','periodic','formats','ring-conformers','generation'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
 const {IO,Model:M,Periodic:P,Generation:G,Formats:F}=ctx.window.MoleculeVisualizer;
 const xyz=s=>s.atoms.map(a=>[a.x,a.y,a.z]),near=(x,y,t=1e-8)=>assert.ok(Math.abs(x-y)<t,`${x} != ${y}`);
 const cif=`data_test

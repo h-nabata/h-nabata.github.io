@@ -58,3 +58,12 @@
 #engineMessage{min-height:24px;font-size:13px}
 #enginePlot{width:100%;height:auto;max-height:210px;background:var(--soft);border-radius:8px;margin:12px 0}
 @media(max-width:540px){.mv-engine-dialog .mv-grid{grid-template-columns:1fr}}
+
+/* Measurements stay tied to atom positions and can be collapsed on small screens. */
+.mv-measurements{padding:10px 14px;border-top:1px solid var(--border);background:#fff}
+.mv-measurements summary{font-size:13px}.mv-measurements summary span{font-weight:400;color:var(--muted);margin-left:10px}
+.mv-measurements p{margin:4px 0;overflow-wrap:anywhere}.mv-measurements .mv-btn,.mv-measurements select{font-size:12px;padding:5px 8px;min-height:32px}
+#measurementValue{font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums;white-space:nowrap}
+.mv-pinned-scroll{max-height:155px;overflow:auto;border:1px solid var(--border);border-radius:6px;margin-top:8px}
+.mv-measurements td:first-child{white-space:normal}.mv-measure-select,.mv-measure-remove{background:none;border:0;color:var(--accent);cursor:pointer;font:inherit;padding:2px;text-align:left}
+.mv-measure-remove{color:#9d4141}.mv-measure-number{font-weight:650}.mv-measurements .mv-num{width:70px;display:block}

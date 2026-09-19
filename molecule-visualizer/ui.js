@@ -103,12 +103,14 @@
   }
 
   function render(preserveCamera) {
+    MV.Measurements?.bind(state);
     renderer.renderState(state, Boolean(preserveCamera));
     saveLocal();
     updateAtomTable();
     updateBondTable();
     syncUI();
     MV.Studio?.sync();
+    MV.MeasurementUI?.sync();
   }
 
   function setState(nextState, preserveCamera) {
@@ -123,6 +125,7 @@
     updateBondTable();
     syncUI();
     MV.Studio?.sync();
+    MV.MeasurementUI?.sync();
   }
 
   function refreshBondsAndRender(preserveCamera) {
@@ -636,6 +639,7 @@
     const value = Geometry.dihedral(atoms[0], atoms[1], atoms[2], atoms[3]);
     byId("targetDihedral").value = value.toFixed(2);
     setMeasure(`dihedral=${value.toFixed(2)} deg`);
+    if(MV.Measurements){MV.Measurements.config(state,true).type="dihedral";render(true);}
   }
 
   function undo() {

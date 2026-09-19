@@ -51,7 +51,7 @@
     const title=comment.replace(/\b(Lattice|pbc)="[^"]*"/gi,'').replace(/\bProperties=\S+/i,'').trim();
     const s=M.createState({atoms,metadata:{title,sourceFormat:'xyz',cell:c}});MV.Bonding.refreshInferredBonds(s);return s;
   }
-  function snapshot(s){const metadata=JSON.parse(JSON.stringify(s.metadata));delete metadata.trajectory;delete metadata.frameIndex;return {atoms:JSON.parse(JSON.stringify(s.atoms)),bonds:JSON.parse(JSON.stringify(s.bonds)),metadata};}
+  function snapshot(s){const metadata=JSON.parse(JSON.stringify(s.metadata));delete metadata.trajectory;delete metadata.frameIndex;delete metadata.measurements;return {atoms:JSON.parse(JSON.stringify(s.atoms)),bonds:JSON.parse(JSON.stringify(s.bonds)),metadata};}
   // Normalize Unicode whitespace without collapsing the XYZ comment line.
   function normalizeXYZInput(text){return String(text).replace(/\r\n|[\r\u0085\u2028\u2029\v\f]/g,'\n').replace(/[\uFEFF\u200B]/g,'').replace(/[^\S\n]/gu,' ');}
   function parseXYZ(text){

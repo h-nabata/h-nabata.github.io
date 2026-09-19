@@ -7,6 +7,7 @@
     global.MoleculeVisualizer.Advanced?.init();
     global.MoleculeVisualizer.GeneratorUI?.init();
     global.MoleculeVisualizer.EngineUI?.init();
+    global.MoleculeVisualizer.MeasurementUI?.init();
   });
 })(window);
 

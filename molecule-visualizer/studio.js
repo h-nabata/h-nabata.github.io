@@ -24,7 +24,10 @@
     const s=state(),frames=s.metadata.trajectory;if(!frames||index<0||index>=frames.length)return;
     // A frame change is navigation. Its current edits are saved in the document.
     frames[s.metadata.frameIndex||0]=P.snapshot(s);
-    const next=M.createState(frames[index]);next.metadata.trajectory=frames;next.metadata.frameIndex=index;next.viewSettings={...s.viewSettings};app().setState(next,true);
+    const next=M.createState(frames[index]);next.metadata.trajectory=frames;next.metadata.frameIndex=index;next.viewSettings={...s.viewSettings};
+    if(s.metadata.measurements)next.metadata.measurements=JSON.parse(JSON.stringify(s.metadata.measurements));
+    const missing=MV.Measurements?MV.Measurements.transferSelection(s,next):0;
+    app().setState(next,true);if(missing)app().setStatus(`このフレームに存在しない選択原子${missing}個を除外しました。`,true);
   }
   function allXYZ(){const s=state(),frames=s.metadata.trajectory;if(!frames)return IO.stateToXYZText(s);return frames.map((f,i)=>IO.stateToXYZText(i===(s.metadata.frameIndex||0)?s:M.createState(f))).join('');}
   function transform(fn){if(!state().selectedAtomIds.size)throw Error('原子を選択してください。');app().change('transform',s=>{const atoms=s.atoms.filter(a=>s.selectedAtomIds.has(a.id));fn(atoms);MV.Bonding.refreshInferredBonds(s);});}

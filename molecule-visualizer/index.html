@@ -2,22 +2,24 @@
 layout: default
 title: 分子構造エディタ | Molecule Studio
 ---
-<link rel="stylesheet" href="./molecule-visualizer_style.css?v=14">
-<script defer src="./model.js?v=14"></script>
-<script defer src="./bonding.js?v=14"></script>
-<script defer src="./geometry.js?v=14"></script>
-<script defer src="./io.js?v=14"></script>
-<script defer src="./molfile.js?v=14"></script>
-<script defer src="./periodic.js?v=14"></script>
-<script defer src="./formats.js?v=14"></script>
-<script defer src="./history.js?v=14"></script>
-<script defer src="./renderer3dmol.js?v=14"></script>
-<script defer src="./ui.js?v=14"></script>
-<script defer src="./studio.js?v=14"></script>
-<script defer src="./advanced.js?v=14"></script>
-<script defer src="./generator-ui.js?v=14"></script>
-<script defer src="./engine-ui.js?v=14"></script>
-<script defer src="./molecule-visualizer_main.js?v=14"></script>
+<link rel="stylesheet" href="./molecule-visualizer_style.css?v=15">
+<script defer src="./model.js?v=15"></script>
+<script defer src="./bonding.js?v=15"></script>
+<script defer src="./geometry.js?v=15"></script>
+<script defer src="./io.js?v=15"></script>
+<script defer src="./molfile.js?v=15"></script>
+<script defer src="./periodic.js?v=15"></script>
+<script defer src="./formats.js?v=15"></script>
+<script defer src="./measurements.js?v=15"></script>
+<script defer src="./history.js?v=15"></script>
+<script defer src="./renderer3dmol.js?v=15"></script>
+<script defer src="./ui.js?v=15"></script>
+<script defer src="./studio.js?v=15"></script>
+<script defer src="./advanced.js?v=15"></script>
+<script defer src="./generator-ui.js?v=15"></script>
+<script defer src="./engine-ui.js?v=15"></script>
+<script defer src="./measurement-ui.js?v=15"></script>
+<script defer src="./molecule-visualizer_main.js?v=15"></script>
 
 <div class="mv-page-buffer" aria-hidden="true"></div>
 <main class="mv-app">
@@ -45,6 +47,15 @@ title: 分子構造エディタ | Molecule Studio
       <div class="mv-trajectory"><span class="mv-eyebrow">FRAMES</span><button class="mv-btn" id="framePrev" aria-label="前のフレーム">‹</button><button class="mv-btn" id="framePlay">▶ 再生</button><input id="frameRange" type="range" min="0" max="0" value="0" aria-label="フレーム"><button class="mv-btn" id="frameNext" aria-label="次のフレーム">›</button><output id="frameLabel">1 / 1</output></div>
       <div class="mv-cellbar"><button class="mv-btn" id="btnCell">周期セル・スーパーセル</button><span id="cellStatus">非周期構造</span><span id="pbcMeasure"></span><span id="fractionalInfo"></span></div>
       <div class="mv-selection-bar"><strong id="selectionSummary">原子をクリックして選択</strong><label class="mv-check"><input id="multiSelect" type="checkbox">複数選択</label><button class="mv-btn" id="btnClearSel">解除</button></div>
+      <details class="mv-measurements" open><summary>計測・固定表示 <span id="measurementCount">固定 0件</span></summary>
+        <div class="mv-row"><label for="measurementType">計測</label><select id="measurementType"><option>2・3・4・6原子を選択</option></select><output id="measurementValue">—</output><button class="mv-btn" id="pinMeasurement" disabled>この計測を固定</button></div>
+        <p id="measurementOrder" class="mv-small"></p><p id="measurementDefinition" class="mv-small"></p>
+        <div class="mv-row"><label class="mv-check"><input id="measurementMinimumImage" type="checkbox">周期最小像で計測</label></div>
+        <div id="measurementConeOptions" hidden><label class="mv-check"><input id="measurementConeVdw" type="checkbox" checked>vdW半径を含める（未選択：原子中心のみ）</label><div class="mv-row"><label>B半径 (Å)<input id="measurementRadius0" class="mv-num" type="number" min="0.01" max="10" step="0.01"></label><label>C半径 (Å)<input id="measurementRadius1" class="mv-num" type="number" min="0.01" max="10" step="0.01"></label><label>D半径 (Å)<input id="measurementRadius2" class="mv-num" type="number" min="0.01" max="10" step="0.01"></label><button class="mv-btn" id="measurementResetRadii">Bondi半径に戻す</button></div></div>
+        <p id="measurementStatus" class="mv-small" role="status"></p>
+        <div class="mv-pinned-scroll" id="pinnedMeasurementTable" hidden><table aria-label="固定した計測値"><thead><tr><th>計測 / 原子番号</th><th>現在値</th><th>操作</th></tr></thead><tbody id="pinnedMeasurements"></tbody></table></div>
+        <div class="mv-row"><button class="mv-btn" id="downloadMeasurements" disabled>全フレームの計測値をCSV保存</button><button class="mv-btn" id="clearMeasurements" disabled>固定表示を全解除</button></div>
+      </details>
       <div class="mv-feedback" id="statusBadge" role="status" aria-live="polite">準備完了</div>
       <p class="mv-footnote">座標は Å。XYZの結合は原子間距離からの推定です。結合次数・配位の妥当性は確認してください。</p>
     </section>
@@ -266,7 +277,7 @@ H 1.0 0 0
 <dialog id="generationDialog" class="mv-generation-dialog">
   <h2>構造列を生成</h2>
   <div class="mv-row"><label for="generationKind">用途</label><select id="generationKind"><option value="random">ランダム配座・配向</option><option value="path">反応経路の初期構造</option></select><label for="generationCount">構造数（最大20）</label><input id="generationCount" type="number" min="1" max="20" value="5" step="1"><label for="generationSeed">乱数シード</label><input id="generationSeed" type="number" min="0" max="4294967295" step="1" value="42"></div>
-  <section id="randomControls"><h3>現在の構造から生成</h3><label for="randomMode">変更する自由度</label><select id="randomMode"><option value="both">配座＋配向</option><option value="torsion">配座（単結合のねじれ）</option><option value="orientation">配向（剛体回転）</option></select><p class="mv-small">非環状の単結合を回転し、強い原子衝突を避けて候補を生成します。環とアミド結合のねじれは変更しません。配座は最大500原子、配向のみは2000原子。周期系は配向のみ対応し、原子と格子を一緒に回転します。エネルギー順の配座探索ではありません。</p></section>
+  <section id="randomControls"><h3>現在の構造から生成</h3><label for="randomMode">変更する自由度</label><select id="randomMode"><option value="both">配座＋配向</option><option value="torsion">配座（鎖・環の単結合のねじれ）</option><option value="orientation">配向（剛体回転）</option></select><div id="randomRingOptions" class="mv-row"><label class="mv-check"><input id="randomRings" type="checkbox" checked>環内の単結合も変動させる</label><label>環の1回の摂動角上限 (°)<input id="randomRingAngle" class="mv-num" type="number" value="30" min="1" max="90" step="1"></label></div><p class="mv-small">非環状の単結合回転に加え、環の2点を軸に一部分を回す連動した変形で環内単結合のねじれも変化させます。結合長・環の閉鎖を保ち、過度な結合角変化・衝突・立体反転を棄却します。芳香族・多重結合・アミドは保護し、小員環や剛直なかご構造は変形できない場合があります。配座は最大500原子、配向のみは2000原子。周期系は配向のみ対応し、原子と格子を一緒に回転します。エネルギー順の配座探索ではありません。</p></section>
   <section id="pathControls" hidden><h3>始点と終点を入力</h3><p class="mv-small">原子数・元素・File-order（ファイル中の原子順序）が一致する2構造を入力してください。同元素の原子同士の対応は自動判定しません。構造数は端点を含みます。</p>
     <div class="mv-endpoint-grid">
       <div><label for="pathStart">始点</label><textarea id="pathStart" rows="10" spellcheck="false"></textarea><div class="mv-row"><button class="mv-btn" id="pathStartCurrent">現在の構造を使用</button><label class="mv-small">ファイル<input id="pathStartFile" type="file"></label></div></div>

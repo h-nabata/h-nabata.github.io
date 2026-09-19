@@ -85,6 +85,7 @@
   Renderer3DMol.prototype.updateSelection = function (state) {
     this.state = state;
     this.draw();
+    MV.MeasurementUI?.sync();
   };
 
   Renderer3DMol.prototype.render = function () {
@@ -222,12 +223,33 @@
       .forEach(pa => this.drawAtom(pa));
 
     const selected=[...this.state.selectedAtomIds].map(id=>atomById.get(id)).filter(Boolean);
-    if(selected.length>=2&&selected.length<=4){
+    if(MV.Measurements)this.drawMeasurements(center,scale,width,height);
+    else if(selected.length>=2&&selected.length<=4){
       const ctx=this.ctx;ctx.save();ctx.strokeStyle='#087e85';ctx.lineWidth=1.5;ctx.setLineDash([3,4]);ctx.beginPath();selected.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke();ctx.setLineDash([]);
       try{const atoms=selected.map(p=>p.atom),text=atoms.length===2?MV.Geometry.distance(...atoms).toFixed(3)+' Å':atoms.length===3?MV.Geometry.angle(...atoms).toFixed(2)+'°':MV.Geometry.dihedral(...atoms).toFixed(2)+'°';ctx.fillStyle='#075c64';ctx.font='bold 13px sans-serif';ctx.textAlign='left';ctx.fillText(text,16,25);}catch(e){}ctx.restore();
     }
     if(this.state.viewSettings.showAxes)this.drawAxes(center,scale,width,height);
     if (this.selectionBox) this.drawSelectionBox();
+  };
+
+  Renderer3DMol.prototype.drawMeasurements=function(center,scale,width,height){
+    const ctx=this.ctx,palette=['#087e85','#b45420','#6a46a3','#2766a1','#a53f68','#477334'],placed=[];
+    this.measurementAnnotations=[];
+    const project=p=>this.project(p,center,scale,width,height);
+    for(const [index,entry] of MV.Measurements.visible(this.state).entries()){
+      const {item,result,pinned}=entry;if(!result.ok)continue;
+      const color=pinned?palette[index%palette.length]:'#075c64',anchor=project(result.anchor);if(!anchor.visible)continue;
+      ctx.save();ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=pinned?1.7:1.2;
+      for(const polygon of result.polygons){const ps=polygon.map(project);if(ps.some(p=>!p.visible))continue;ctx.globalAlpha=.08;ctx.beginPath();ps.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.fill();ctx.globalAlpha=.5;ctx.stroke();ctx.globalAlpha=1;}
+      ctx.setLineDash([4,3]);for(const segment of result.segments){const [a,b]=segment.map(project);if(!a.visible||!b.visible)continue;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}ctx.setLineDash([]);
+      const text=(pinned?item.id+' · ':'')+result.value.toFixed(result.unit==='Å'?4:3)+' '+result.unit;
+      ctx.font='bold 12px sans-serif';ctx.textAlign='left';const w=ctx.measureText(text).width+12,h=23;
+      let x=Math.max(4,Math.min(width-w-4,anchor.x+9)),y=Math.max(4,Math.min(height-h-32,anchor.y-28));
+      for(let attempt=0;attempt<20&&placed.some(r=>x<r.x+r.w+3&&x+w>r.x-3&&y<r.y+r.h+3&&y+h>r.y-3);attempt++){y+=h+3;if(y>height-h-30){y=4;x=Math.max(4,x-w-8);}}
+      ctx.globalAlpha=.92;ctx.fillStyle='#ffffff';ctx.fillRect(x,y,w,h);ctx.globalAlpha=1;ctx.strokeStyle=color;ctx.strokeRect(x,y,w,h);ctx.fillStyle=color;ctx.fillText(text,x+6,y+16);
+      if(Math.hypot(x+w/2-anchor.x,y+h/2-anchor.y)>40){ctx.globalAlpha=.5;ctx.beginPath();ctx.moveTo(anchor.x,anchor.y);ctx.lineTo(x+w/2,y+h/2);ctx.stroke();}
+      ctx.restore();placed.push({x,y,w,h});this.measurementAnnotations.push({id:item.id,value:result.value,anchor:{x:anchor.x,y:anchor.y},label:{x,y},pinned});
+    }
   };
 
   // World-space axes share the same projection and origin as atoms and cell.
@@ -493,4 +515,3 @@
 
   MV.Renderer3DMol = Renderer3DMol;
 })(window);
-
