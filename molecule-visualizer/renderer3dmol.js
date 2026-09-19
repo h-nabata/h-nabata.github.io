@@ -187,7 +187,7 @@
     this.currentScale = scale;
     // Maintain scale at the target plane while changing perspective strength.
     const fov=Math.max(10,Math.min(90,Number(this.state.viewSettings.fov)||45));
-    this.cameraDistance=Math.max(4.2,span*1.15)/(2*Math.tan(fov*Math.PI/360));
+    this.cameraDistance=height/Math.max(1,Math.min(width,height))*Math.max(4.2,span*1.15)/(2*Math.tan(fov*Math.PI/360));
     const atoms = this.state.atoms || [];
     if (atoms.length === 0) {
       this.projectedAtoms = []; this.projectedBonds = [];

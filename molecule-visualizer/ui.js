@@ -84,7 +84,7 @@
     if (renderer && typeof renderer.setInteractionMode === "function") renderer.setInteractionMode(mode);
     const btn = byId("btnToggleMove");
     if (btn) btn.textContent = `移動モード: ${moveMode ? "ON" : "OFF"}`;
-    setStatus(({select:"クリックで選択。ドラッグで回転します。",move:"原子をドラッグして移動。ShiftでZ方向へ移動します。",bond:"原子を2つ順にクリックして結合します。",box:"ドラッグした範囲の原子を選択します。"})[mode]);
+    setStatus(({select:"クリックで選択。ドラッグで回転します。",move:"原子をドラッグして移動。ZキーでZ方向への移動を拘束できます。",bond:"原子を2つ順にクリックして結合します。",box:"ドラッグした範囲の原子を選択します。"})[mode]);
   }
 
   function atomLabel(atom) {
