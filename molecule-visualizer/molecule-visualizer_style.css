@@ -37,3 +37,13 @@
 .mv-app #cameraFovValue { min-width: 3em; font-variant-numeric: tabular-nums; }
 .mv-app .mv-examples { flex-wrap: wrap; }
 .mv-app #complexSample { max-width: 100%; }
+
+.mv-app .mv-generation-dialog { width: min(1000px, 94vw); max-height: 90vh; overflow: auto; }
+.mv-app .mv-endpoint-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.mv-app .mv-endpoint-grid > div { min-width: 0; }
+.mv-app .mv-endpoint-grid textarea { width: 100%; font-family: monospace; }
+.mv-app .mv-endpoint-grid input[type=file] { max-width: 100%; }
+.mv-app #generationCount { width: 80px; }
+.mv-app #generationSeed { width: 130px; }
+.mv-app #generationMessage { min-height: 1.5em; color: #075c64; }
+@media(max-width:700px) { .mv-app .mv-endpoint-grid { grid-template-columns: 1fr; } }

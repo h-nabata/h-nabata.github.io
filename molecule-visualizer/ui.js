@@ -58,8 +58,12 @@
   }
   function applyXYZEditor(){
     if(xyzDirty&&IO.stateToXYZText(state)!==xyzBase)throw Error('構造が変更されています。編集内容を控え、「現在の構造を再表示」で更新してください。');
-    const input=IO.normalizeXYZInput(byId('dataText').value),isMol=/V[23]000/.test(input),parsed=isMol?IO.parseMolToState(input):IO.parseXYZToState(input);
-    if(parsed.metadata.trajectory)throw Error('ここでは現在の1フレームを編集してください。複数フレームは「ファイルを開く」から読み込めます。');
+    const input=byId('dataText').value,parsed=IO.parseAuto(input,byId('inputFormat').value||'auto'),isMol=['mol','sdf'].includes(parsed.metadata.sourceFormat);
+    if(parsed.metadata.trajectory||parsed.metadata.sourceFormat!=='xyz'){
+      pushHistory('structure import');xyzDirty=false;parsed.viewSettings={...state.viewSettings};
+      byId('coordinateFormat').value=isMol&&!parsed.metadata.cell?'mol3000':'xyz';byId('inputFormat').value='auto';
+      setState(parsed,false);setStatus(`${parsed.atoms.length}原子 / ${parsed.metadata.trajectory?.length||1}構造を読み込みました。`+(parsed.metadata.importWarnings||[]).join(' '));return;
+    }
     const next=Model.cloneState(state),same=next.atoms.length===parsed.atoms.length&&next.atoms.every((a,i)=>a.element===parsed.atoms[i].element);
     if(isMol){next.atoms=parsed.atoms;next.bonds=parsed.bonds;next.metadata={...next.metadata,...parsed.metadata,cell:null};next.selectedAtomIds.clear();next.selectedBondIds.clear();next.metadata.suppressedBondKeys=[];byId('coordinateFormat').value='mol3000';}
     else if(same)next.atoms.forEach((a,i)=>{const b=parsed.atoms[i];Object.assign(a,{x:b.x,y:b.y,z:b.z});if(Object.keys(b.xyzExtras||{}).length)a.xyzExtras=b.xyzExtras;});
@@ -67,7 +71,7 @@
     if(/^\s*\d+\s*\n/.test(input))next.metadata.title=parsed.metadata.title;
     if(parsed.metadata.cell){if(next.metadata.cell&&!/\bLattice=/.test(input))parsed.metadata.cell.pbc=next.metadata.cell.pbc.slice();next.metadata.cell=parsed.metadata.cell;}
     if(!isMol)Bonding.refreshInferredBonds(next);
-    pushHistory('structure text');xyzDirty=false;setState(next,true);setStatus('座標・構造データを適用しました。「戻す」で復元できます。');
+    pushHistory('structure text');xyzDirty=false;byId('inputFormat').value='auto';setState(next,true);setStatus('座標・構造データを適用しました。「戻す」で復元できます。');
   }
   function setMeasure(msg) { const el = byId("measureBadge"); if (el) el.textContent = msg; }
   function pushHistory(label) { history.push(label, state); }
@@ -129,7 +133,7 @@
   function loadText(text) {
     const nextState=IO.parseAuto(text);
     pushHistory("load");nextState.viewSettings=Object.assign({},state.viewSettings,nextState.viewSettings);
-    setState(nextState,false);setStatus(`${state.atoms.length} 原子を読み込みました。`);
+    setState(nextState,false);setStatus(`${state.atoms.length} 原子 / ${state.metadata.trajectory?.length||1}構造を読み込みました。`+(state.metadata.importWarnings||[]).join(" "));
     byId("importError").textContent="";byId("importDialog").close();
   }
   function loadFromTextarea(){loadText(byId("xyz_input").value);}
@@ -840,6 +844,8 @@
     document.querySelectorAll('[data-close]').forEach(el=>el.addEventListener('click',()=>byId(el.dataset.close).close()));
     bind('toolBox','click',()=>setMode('box'));
     bind('btnOpen','click',()=>byId('fileInput').click());
+    bind('btnDataFile','click',()=>byId('dataFile').click());
+    bind('dataFile','change',async e=>{try{const f=e.target.files[0];if(!f)return;if(f.size>10*1024*1024)throw Error('ファイルは10MB以下にしてください。');byId('dataText').value=await f.text();xyzDirty=true;byId('inputFormat').value='auto';syncXYZEditor();setStatus('ファイルを編集欄に読み込みました。「構造へ適用」で読み取ります。');}finally{e.target.value='';}});
     bind('btnPaste','click',()=>{byId('importError').textContent='';byId('importDialog').showModal();byId('xyz_input').focus();});
     bind('btnHelp','click',()=>byId('helpDialog').showModal());
     bind('btnExport','click',()=>{byId('exportText').value=IO.stateToXYZText(state);byId('exportMessage').textContent='';byId('exportDialog').showModal();});

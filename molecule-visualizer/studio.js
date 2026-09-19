@@ -75,6 +75,7 @@
     bind('cellSuper',()=>{app().change('supercell',s=>P.supercell(s,readNumbers('repeatCell',3)),true);$('cellDialog').close();});
     bind('savePOSCAR',()=>download(P.toPOSCAR(state()),'POSCAR'));
     bind('allFrames',()=>download(allXYZ(),'trajectory.xyz'));
+    bind('allFramesSDF',()=>{const s=state(),frames=s.metadata.trajectory||[P.snapshot(s)];download(frames.map((f,i)=>IO.stateToSDFText(i===(s.metadata.frameIndex||0)?s:M.createState(f))).join(''),'structures.sdf');});
     bind('framePrev',()=>{stop();frame((state().metadata.frameIndex||0)-1);});bind('frameNext',()=>{stop();frame((state().metadata.frameIndex||0)+1);});
     $('frameRange').addEventListener('input',()=>{stop();frame(Number($('frameRange').value));});
     bind('framePlay',()=>{if(timer)return stop();$('framePlay').textContent='Ⅱ 停止';timer=setInterval(()=>{const frames=state().metadata.trajectory;if(!frames)return stop();frame(((state().metadata.frameIndex||0)+1)%frames.length);},500);});
