@@ -147,18 +147,29 @@
     const norm=Math.hypot(...q);this.orientation=q.map(v=>v/norm);
   };
 
+  Renderer3DMol.prototype.rollCamera = function(angle){
+    const q=multiplyQuaternion([Math.cos(angle/2),0,0,Math.sin(angle/2)],this.orientation);
+    const n=Math.hypot(...q);this.orientation=q.map(v=>v/n);
+  };
+  Renderer3DMol.prototype.perspectiveFactor = function(z){
+    if(this.state?.viewSettings.projection!=="perspective")return 1;
+    return this.cameraDistance/Math.max(this.cameraDistance*.02,this.cameraDistance-z);
+  };
+
   Renderer3DMol.prototype.project = function (atom, center, scale, width, height) {
     const rotated = this.rotate({
       x: atom.x - center.x,
       y: atom.y - center.y,
       z: atom.z - center.z
     });
+    const factor=this.perspectiveFactor(rotated.z);
     return {
       atom,
-      x: width / 2 + this.panX + rotated.x * scale,
-      y: height / 2 + this.panY - rotated.y * scale,
+      visible:this.state?.viewSettings.projection!=="perspective" || rotated.z<this.cameraDistance*.98,
+      x: width / 2 + this.panX + rotated.x * scale * factor,
+      y: height / 2 + this.panY - rotated.y * scale * factor,
       z: rotated.z,
-      radius: this.atomRadius(atom.element, scale)
+      radius: this.atomRadius(atom.element, scale * factor)
     };
   };
 
@@ -170,18 +181,21 @@
     this.ctx.fillStyle = "#f9fbfc";
     this.ctx.fillRect(0, 0, width, height);
 
-    const atoms = this.state.atoms || [];
-    if (atoms.length === 0) {
-      this.projectedAtoms = []; this.projectedBonds = [];
-      this.drawEmpty(width, height);
-      if(this.state?.viewSettings.showAxes)this.drawAxes(width);
-      return;
-    }
     const center = this.cameraCenter || this.center();
     const span = this.cameraSpan || this.estimateSpan(center);
     const scale = Math.min(width, height) / Math.max(4.2, span * 1.15) * this.zoom;
     this.currentScale = scale;
-    this.projectedAtoms = atoms.map((atom,index) => Object.assign(this.project(atom, center, scale, width, height), {index:index+1}));
+    // Maintain scale at the target plane while changing perspective strength.
+    const fov=Math.max(10,Math.min(90,Number(this.state.viewSettings.fov)||45));
+    this.cameraDistance=height/Math.max(1,Math.min(width,height))*Math.max(4.2,span*1.15)/(2*Math.tan(fov*Math.PI/360));
+    const atoms = this.state.atoms || [];
+    if (atoms.length === 0) {
+      this.projectedAtoms = []; this.projectedBonds = [];
+      this.drawEmpty(width, height);
+      if(this.state?.viewSettings.showAxes)this.drawAxes(center,scale,width,height);
+      return;
+    }
+    this.projectedAtoms = atoms.map((atom,index) => Object.assign(this.project(atom, center, scale, width, height), {index:index+1})).filter(p=>p.visible);
     const atomById = new Map(this.projectedAtoms.map(pa => [pa.atom.id, pa]));
 
     this.projectedBonds = (this.state.bonds || []).flatMap(bond => {
@@ -194,6 +208,7 @@
       const translate=(atom,sign)=>this.project({x:atom.x+sign*offset[0],y:atom.y+sign*offset[1],z:atom.z+sign*offset[2]},center,scale,width,height);
       return [{bond,a,b:translate(b.atom,1)},{bond,a:translate(a.atom,-1),b}];
     });
+    this.projectedBonds=this.projectedBonds.filter(p=>p.a.visible&&p.b.visible);
     if (this.state.metadata.cell) this.drawCell(center,scale,width,height);
 
     if (this.state.viewSettings.style !== "vdw") this.projectedBonds
@@ -211,17 +226,24 @@
       const ctx=this.ctx;ctx.save();ctx.strokeStyle='#087e85';ctx.lineWidth=1.5;ctx.setLineDash([3,4]);ctx.beginPath();selected.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke();ctx.setLineDash([]);
       try{const atoms=selected.map(p=>p.atom),text=atoms.length===2?MV.Geometry.distance(...atoms).toFixed(3)+' Å':atoms.length===3?MV.Geometry.angle(...atoms).toFixed(2)+'°':MV.Geometry.dihedral(...atoms).toFixed(2)+'°';ctx.fillStyle='#075c64';ctx.font='bold 13px sans-serif';ctx.textAlign='left';ctx.fillText(text,16,25);}catch(e){}ctx.restore();
     }
-    if(this.state.viewSettings.showAxes)this.drawAxes(width);
+    if(this.state.viewSettings.showAxes)this.drawAxes(center,scale,width,height);
     if (this.selectionBox) this.drawSelectionBox();
   };
 
-  // A fixed-size world XYZ orientation indicator, separate from lattice a/b/c.
-  Renderer3DMol.prototype.drawAxes=function(width){
-    const ctx=this.ctx,cx=width-65,cy=65,len=32;ctx.save();
-    ctx.fillStyle='rgba(255,255,255,.88)';ctx.fillRect(width-119,10,110,110);
-    const axes=[['X','#c63c3c',{x:1,y:0,z:0}],['Y','#25834c',{x:0,y:1,z:0}],['Z','#3569c8',{x:0,y:0,z:1}]].map(([label,color,v])=>({label,color,p:this.rotate(v)})).sort((a,b)=>a.p.z-b.p.z);
-    for(const {label,color,p} of axes){const x=cx+len*p.x,y=cy-len*p.y;ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(x,y);ctx.stroke();ctx.beginPath();ctx.arc(x,y,3,0,Math.PI*2);ctx.fill();ctx.font='bold 13px sans-serif';ctx.textAlign='center';ctx.fillText(label,x+8*p.x,y-8*p.y-5);}
-    ctx.fillStyle='#60747c';ctx.font='10px sans-serif';ctx.textAlign='center';ctx.fillText('XYZ',cx,110);ctx.restore();
+  // World-space axes share the same projection and origin as atoms and cell.
+  Renderer3DMol.prototype.drawAxes=function(center,scale,width,height){
+    const ctx=this.ctx,origin=this.project({x:0,y:0,z:0},center,scale,width,height);
+    const len=Math.max(1,Math.min(5,(this.cameraSpan||4)*.25));
+    this.projectedAxes={origin,length:len,endpoints:[]};
+    if(!origin.visible)return;
+    ctx.save();ctx.lineWidth=2;ctx.font='bold 13px sans-serif';ctx.textAlign='left';
+    for(const [label,color,v] of [['X','#c63c3c',[len,0,0]],['Y','#25834c',[0,len,0]],['Z','#3569c8',[0,0,len]]]){
+      const p=this.project({x:v[0],y:v[1],z:v[2]},center,scale,width,height);this.projectedAxes.endpoints.push(p);
+      if(!p.visible)continue;
+      ctx.strokeStyle=color;ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(origin.x,origin.y);ctx.lineTo(p.x,p.y);ctx.stroke();
+      const angle=Math.atan2(p.y-origin.y,p.x-origin.x);ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(p.x-8*Math.cos(angle-.4),p.y-8*Math.sin(angle-.4));ctx.lineTo(p.x-8*Math.cos(angle+.4),p.y-8*Math.sin(angle+.4));ctx.closePath();ctx.fill();ctx.fillText(label,p.x+6,p.y-6);
+    }
+    ctx.fillStyle='#60747c';ctx.fillText('O',origin.x+5,origin.y+14);ctx.restore();
   };
 
   Renderer3DMol.prototype.drawEmpty = function (width, height) {
@@ -248,8 +270,8 @@
   };
   Renderer3DMol.prototype.drawCell = function(center,scale,width,height){
     const corners=this.cellCorners().map(p=>this.project(p,center,scale,width,height)),ctx=this.ctx;ctx.save();ctx.lineWidth=1;ctx.strokeStyle='#8babb8';ctx.setLineDash([5,3]);
-    corners.forEach((p,i)=>{[1,2,4].forEach(bit=>{if(i&bit)return;const q=corners[i|bit];ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();});});
-    ctx.setLineDash([]);['a','b','c'].forEach((label,i)=>{const p=corners[0],q=corners[1<<i];ctx.strokeStyle=['#d35c59','#48a775','#527bce'][i];ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();ctx.fillStyle=ctx.strokeStyle;ctx.font='bold 13px sans-serif';ctx.fillText(label,q.x+5,q.y-5);});ctx.restore();
+    corners.forEach((p,i)=>{[1,2,4].forEach(bit=>{if(i&bit)return;const q=corners[i|bit];if(!p.visible||!q.visible)return;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();});});
+    ctx.setLineDash([]);['a','b','c'].forEach((label,i)=>{const p=corners[0],q=corners[1<<i];if(!p.visible||!q.visible)return;ctx.strokeStyle=['#d35c59','#48a775','#527bce'][i];ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(q.x,q.y);ctx.stroke();ctx.fillStyle=ctx.strokeStyle;ctx.font='bold 13px sans-serif';ctx.fillText(label,q.x+5,q.y-5);});ctx.restore();
   };
 
   Renderer3DMol.prototype.drawBond = function (item) {
@@ -336,7 +358,7 @@
       if(touches.size===2){if(self.pointer?.historyStarted) self.onDragEnd?.(e);self.pointer=null;self.selectionBox=null;gesture=pinch();return;}
       if(touches.size>2)return;
       const atom=self.pickAtom(p.x,p.y),bond=atom?null:self.pickBond(p.x,p.y);
-      let action=e.button===1?"pan":e.altKey?(e.button===2?"groupRotate":"groupMove"):e.button===2||self.mode==="box"?"box":self.mode==="move"&&atom?"move":"rotate";
+      let action=e.button===1?"pan":e.altKey?(e.button===2?"groupRotate":"groupMove"):e.button===0&&e.shiftKey?"roll":e.button===2||self.mode==="box"?"box":self.mode==="move"&&atom?"move":"rotate";
       self.pointer={button:e.button,id:e.pointerId,x:e.clientX,y:e.clientY,lastX:e.clientX,lastY:e.clientY,moved:false,atomId:atom?.id,bondId:bond?.id,groupSeed:atom?.id||bond?.atom1,action,historyStarted:false};
       if(action==="box")self.selectionBox={x1:p.x,y1:p.y,x2:p.x,y2:p.y};
       e.preventDefault();
@@ -356,7 +378,8 @@
       else if(ptr.action==="move"){
         if(!ptr.historyStarted){self.onAtomDragStart?.(ptr.atomId,e);ptr.historyStarted=true;}
         self.onAtomsDrag?.(ptr.atomId,self.screenDeltaToWorld(dx,dy,e.shiftKey),e);
-      }else if(ptr.action==="rotate") {self.rotateTrackball(p.x-dx,p.y-dy,p.x,p.y);}
+      }else if(ptr.action==="roll"){self.rollCamera(dx*.008);}
+      else if(ptr.action==="rotate") {self.rotateTrackball(p.x-dx,p.y-dy,p.x,p.y);}
       self.draw();
     });
     const finish=function(e){
@@ -370,7 +393,7 @@
           else if(ptr.button===2&&ptr.atomId)self.onAtomContextSelect?.(ptr.atomId,e);
         }
       }
-      else if(!ptr.moved&&["rotate","move"].includes(ptr.action)&&e.type!=="pointercancel") {if(ptr.atomId)self.onAtomClick?.(ptr.atomId,e,self);else if(ptr.bondId)self.onBondClick?.(ptr.bondId,e,self);else self.onBlankClick?.(e);}
+      else if(!ptr.moved&&["rotate","move","roll"].includes(ptr.action)&&e.type!=="pointercancel") {if(ptr.atomId)self.onAtomClick?.(ptr.atomId,e,self);else if(ptr.bondId)self.onBondClick?.(ptr.bondId,e,self);else self.onBlankClick?.(e);}
       self.draw();
     };
     this.canvas.addEventListener("pointerup",finish);this.canvas.addEventListener("pointercancel",finish);this.canvas.addEventListener("lostpointercapture",finish);
@@ -385,7 +408,11 @@
   };
 
   Renderer3DMol.prototype.screenDeltaToWorld = function (dx, dy, zMode) {
-    const scale=this.currentScale||80,sy=-dy/scale;
+    const ids=this.state?.selectedAtomIds,atoms=this.state?.atoms||[],selected=atoms.filter(a=>ids?.has(a.id));
+    const group=selected.length?selected:atoms.filter(a=>a.id===this.pointer?.groupSeed||a.id===this.pointer?.atomId);
+    const center=this.cameraCenter||this.center();
+    const depth=group.length?group.reduce((sum,a)=>sum+this.rotate({x:a.x-center.x,y:a.y-center.y,z:a.z-center.z}).z,0)/group.length:0;
+    const scale=(this.currentScale||80)*this.perspectiveFactor(depth),sy=-dy/scale;
     if(zMode)return {x:0,y:0,z:sy};
     const [x,y,z]=this.viewVectorToWorld([dx/scale,sy,0]);return {x,y,z};
   };

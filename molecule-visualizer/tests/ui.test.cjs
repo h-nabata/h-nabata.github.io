@@ -100,3 +100,19 @@ test('periodic cell and atoms share unrestricted multi-turn view rotation',()=>{
  const {MV,canvas,nodes}=boot(),s=MV.IO.parseXYZToState('1\nLattice="4 0 0 1 5 0 2 3 6"\nC 1 2 3\n'),r=MV.App.renderer();MV.App.setState(s,false);nodes.get('btnViewXY').click();const before=MV.IO.stateToProjectText(s),corner=r.cellCorners()[7];
  canvas.fire('pointerdown',{pointerId:39,button:0,clientX:400,clientY:250});for(let i=1;i<=260;i++){canvas.fire('pointermove',{pointerId:39,clientX:400+10*i,clientY:250});assert.ok(Math.abs(r.rotate({x:0,y:0,z:1}).z-Math.cos(.08*i))<1e-9);}canvas.fire('pointerup',{pointerId:39});assert.equal(MV.IO.stateToProjectText(s),before);assert.notEqual(r.rotate(corner).x,corner.x);
 });
+test('Shift-left rolls at a fixed view direction; perspective and world-origin axes share projection',()=>{
+ const {MV,canvas,nodes}=boot(),r=MV.App.renderer(),s=MV.App.getState(),coords=JSON.stringify(s.atoms);
+ const direction=r.viewVectorToWorld([0,0,1]),center=JSON.stringify(r.cameraCenter),q=[...r.orientation];
+ canvas.fire('pointerdown',{pointerId:25,button:0,shiftKey:true,clientX:400,clientY:250});canvas.fire('pointermove',{pointerId:25,clientX:600,clientY:250});canvas.fire('pointerup',{pointerId:25});
+ assert.notDeepEqual(r.orientation,q);r.viewVectorToWorld([0,0,1]).forEach((v,i)=>assert.ok(Math.abs(v-direction[i])<1e-10));assert.equal(JSON.stringify(r.cameraCenter),center);assert.equal(JSON.stringify(s.atoms),coords);
+ s.viewSettings.projection='perspective';s.viewSettings.fov=70;s.viewSettings.showAxes=true;r.renderState(s,true);
+ const origin=r.project({x:0,y:0,z:0},r.cameraCenter,r.currentScale,800,500);assert.equal(r.projectedAxes.origin.x,origin.x);assert.equal(r.projectedAxes.origin.y,origin.y);
+ assert.ok(r.perspectiveFactor(1)>r.perspectiveFactor(-1));const factor=r.perspectiveFactor(1);s.viewSettings.fov=10;r.draw();assert.ok(r.perspectiveFactor(1)<factor);
+ assert.ok(r.projectedAtoms.every(p=>[p.x,p.y,p.radius].every(Number.isFinite)));assert.equal(JSON.stringify(s.atoms),coords);
+});
+test('B toggles exactly the selected pair, survives inference, ignores repeat, and supports undo',()=>{
+ const {MV,canvas,nodes}=boot(),app=MV.App,s=app.getState();s.selectedAtomIds=new Set(s.atoms.slice(0,2).map(a=>a.id));app.setState(s,true);canvas.focus();
+ const count=s.bonds.length;canvas.fire('keydown',{key:'b'});assert.equal(app.getState().bonds.length,count-1);
+ MV.Bonding.refreshInferredBonds(app.getState());assert.equal(app.getState().bonds.length,count-1);canvas.fire('keydown',{key:'b',repeat:true});assert.equal(app.getState().bonds.length,count-1);
+ canvas.fire('keydown',{key:'b'});assert.equal(app.getState().bonds.length,count);nodes.get('btnUndo').click();assert.equal(app.getState().bonds.length,count-1);nodes.get('btnUndo').click();assert.equal(app.getState().bonds.length,count);
+});

@@ -84,7 +84,7 @@
     if (renderer && typeof renderer.setInteractionMode === "function") renderer.setInteractionMode(mode);
     const btn = byId("btnToggleMove");
     if (btn) btn.textContent = `移動モード: ${moveMode ? "ON" : "OFF"}`;
-    setStatus(({select:"クリックで選択。ドラッグで回転します。",move:"原子をドラッグして移動。ShiftでZ方向へ移動します。",bond:"原子を2つ順にクリックして結合します。",box:"ドラッグした範囲の原子を選択します。"})[mode]);
+    setStatus(({select:"クリックで選択。ドラッグで回転します。",move:"原子をドラッグして移動。ZキーでZ方向への移動を拘束できます。",bond:"原子を2つ順にクリックして結合します。",box:"ドラッグした範囲の原子を選択します。"})[mode]);
   }
 
   function atomLabel(atom) {
@@ -745,7 +745,16 @@
     }
     if (editingText && !inCanvas) return;
     if (key === "v" || key === "s") { consumeShortcut(e); setMode("select"); return; }
-    if (key === "b") { consumeShortcut(e); setMode("bond"); return; }
+    if (key === "b") {
+      consumeShortcut(e);if(e.repeat)return;
+      const ids=[...state.selectedAtomIds];
+      if(ids.length===2){
+        const bond=Model.findBondBetween(state,ids[0],ids[1]);
+        if(bond){pushHistory('toggle bond');Model.setSelectedBonds(state,[bond.id]);Model.removeSelectedBonds(state);render(true);setStatus('選択2原子の結合を切断しました。');}
+        else addBondFromSelection();
+      }else setMode("bond");
+      return;
+    }
     if (key === "m") { consumeShortcut(e); setMode("move"); return; }
     if (inCanvas && key === "e") { consumeShortcut(e); expandSelectionOneBond(); return; }
     if (inCanvas && key === "w") { consumeShortcut(e); selectConnectedMoleculesFromSelection(); return; }
