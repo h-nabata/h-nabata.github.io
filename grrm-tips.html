@@ -1,0 +1,899 @@
+---
+layout: default
+title: GRRM Tips（利用上の注意点など）
+extra_head: |
+  <link rel="stylesheet" href="/assets/grrm-tips.css?v=1">
+---
+<main class="grrm-tips" id="grrm-top">
+<header class="grrm-intro">
+<p class="grrm-breadcrumb"><a href="/toc.html">目次</a> / 計算化学</p>
+<h1>GRRM Tips</h1>
+<p>GRRMプログラムの利用上の注意点など</p>
+<p class="grrm-source"><a href="https://sites.google.com/view/nabatas-page/top/grrm-tips%E5%88%A9%E7%94%A8%E4%B8%8A%E3%81%AE%E6%B3%A8%E6%84%8F%E7%82%B9%E3%81%AA%E3%81%A9">Google Sites版</a>から移植</p>
+</header>
+<nav class="grrm-toc" aria-label="ページ内目次" id="grrm-toc"><h2>目次</h2>
+<details><summary>【よくあるエラー事例】</summary><ul>
+<li><a href="#h.e0up7phqgxiu">このセクションの先頭へ</a></li>
+<li><a href="#h.tv0e8hld79nd">.com内に要求メモリ量/コア数の指定が無い（★☆☆）</a></li>
+<li><a href="#h.pf580b3xglwc">電子状態計算に必要なメモリ量が不足している（あるいは、指定されている値が過大でメモリを確保できない）（★☆☆）</a></li>
+<li><a href="#h.3pwl4t4j65ql">.com内の要求コア数と計算ノードに投入したシェルスクリプト内の要求コア数が異なる（★☆☆）</a></li>
+<li><a href="#h.jj2p8uyobbdx">.com内に不正な文字コードの改行コードが含まれている（★★☆）</a></li>
+<li><a href="#h.tg9r37mb55fa">%infile=xxx で指定した JOB名 xxx のファイルが無い/コピーされていない（★☆☆）</a></li>
+<li><a href="#h.79y0dy8p14ni">MO GUESS=xxx_MO.rrm などで指定した MO のファイルが無い/コピーされていない（★☆☆）</a></li>
+<li><a href="#h.mg5a0ccc4oaf">Gaussian以外のソフトウェアを用いる際に、電子状態計算ソフトウェア用のインプットや擬ポテンシャルなどが無い/コピーされていない（★☆☆）</a></li>
+<li><a href="#h.4c7e1sj04bvb">電荷とスピン多重度の組み合わせが不正である（Gaussianの場合はGauJOB.logで確認可能）（★☆☆）</a></li>
+<li><a href="#h.1lu5o1swih28">基底関数や汎関数、計算に用いる理論や手法の名前が不正である（Gaussianの場合はGauJOB.logで確認可能）（★☆☆）</a></li>
+<li><a href="#h.wre9pq6qzm7z">基底関数が割り当てられていない or 基底関数の適用範囲外の（高周期な）元素が含まれている（Gaussianの場合はGauJOB.logで確認可能）（★☆☆）</a></li>
+<li><a href="#h.wmzqenofacx9">ECP基底を割り当てる場合に、未指定 or 余計な元素がある（Gaussianの場合はGauJOB.logで確認可能）（★☆☆）</a></li>
+<li><a href="#h.w0qydhlspcqq">MC-AFIRやSC-AFIRで「Add Interaction」のセクションが無い、またはENDで閉じられていない（★☆☆）</a></li>
+<li><a href="#h.kxpxp1c12tec">MC-AFIRやSC-AFIRで「gamma」に負の値が指定されている（★☆☆）</a></li>
+<li><a href="#h.8kx7sxr1xypb">MC-AFIRやSC-AFIRでFragm.やTarget原子などの番号に系の総原子数を超えた値が指定されている（★☆☆）</a></li>
+<li><a href="#h.syzvfjontif9">LUPの.com内の元素の順序がinfileした構造のものと異なる（★☆☆）</a></li>
+<li><a href="#h.k5ttc79vekpw">LUPなどでinfileしている構造ファイル（.logなど）の座標が不正（変な改行や空行がある、改行されていない、何故か原子が増えているor減っているなど）（★★☆）</a></li>
+<li><a href="#h.um9pd81z8smg">DS-AFIRでReactantとProductの原子の数や順序が異なる（★☆☆）</a></li>
+<li><a href="#h.g8i55rpd24fp">&quot;ganma&quot; などの英単語のスペルミス（★☆☆）</a></li>
+<li><a href="#h.yqcehfjv4ucr">Add Interactionセクションにgammaの指定が無い（★☆☆）</a></li>
+<li><a href="#h.55697zkrj54t">複数のFragmに同じ原子が指定されている</a></li>
+<li><a href="#h.4viai3w1xpeu">Add Interactionセクションにフラグメントpairの指定が無い（★☆☆）</a></li>
+<li><a href="#h.x2qa6qqw6hxr">値を指定すべきオプションに値が指定されていない、もしくは値の数が不足している（★☆☆）</a></li>
+</ul></details>
+<details><summary>【ハマるエラー事例】</summary><ul>
+<li><a href="#h.qnybqn6nxic1">このセクションの先頭へ</a></li>
+<li><a href="#h.kijpfkz83q4z">LUP計算、ReSTRUCT計算などでinfileに失敗する（「No structure to be refined...」と出力される）場合（★★☆）</a></li>
+<li><a href="#h.ipcy7k31i9i6">LUP計算、ReSTRUCT計算などでinfileに失敗する（「... not match any of the node structures ...」と出力される）場合（？？？）</a></li>
+<li><a href="#h.zc0unpqv51y">LUP時に「The LUP program cannot read this InFile...」になってしまう場合（★★☆）</a></li>
+<li><a href="#h.jgf208yecceb">EQ_list.log に出力される構造の対称性の記述「SYMMETRY = 」の直後は半角4文字分の文字列が必要（★★★）</a></li>
+<li><a href="#h.m0t0lkz2cjrr">message_ERRORが無いにもかかわらず、GRRMが何の動作もせずにJOBが終了する（★★☆）</a></li>
+<li><a href="#h.wvnta2pww9f">JOB名/path名が長すぎると変数として格納できずエラーになることがある（★★☆）</a></li>
+<li><a href="#h.dc3rxt2pou65">SC-AFIRなどの探索が瞬時に終了する場合（★★☆）</a></li>
+<li><a href="#h.o936vdmpgfjm">Gaussian以外の電子状態計算ソフトウェアを利用する場合の注意（★☆☆）</a></li>
+<li><a href="#h.ig6ijdnul9xp">SIESTAのSCF計算が収束しない（★☆☆）</a></li>
+</ul></details>
+<details><summary>【エラーではないが知らないとハマる（かもしれない）事例】</summary><ul>
+<li><a href="#h.mgjf23xkzt2">このセクションの先頭へ</a></li>
+<li><a href="#h.cb4hi5rzwymc">GRRMプログラムのインプット(.com)内のオプションは上から順に読まれるため、上の方に書かれたオプションの効果が下の方に書かれたオプションの効果によって打ち消される場合がある</a></li>
+<li><a href="#h.1a8idr15bes6">message_ERRORとmessage_LinkERRORの違い</a></li>
+<li><a href="#h.i0htlaa3lxhq">計算のエラーではないmessage_ERRORについて</a></li>
+<li><a href="#h.gbrarxqjfjy">SC-AFIR法による探索が一向に終わらない</a></li>
+<li><a href="#h.q0rus2dasgek">計算時間が異様に長い or 停留点付近でエネルギー/構造が振動して収束に時間が掛かる場合</a></li>
+<li><a href="#h.ccxdd6sdy2u2">多数のコア数を割り当てても計算が速くならない</a></li>
+<li><a href="#h.s7h03747lngq">RCMC計算の計算レベルは何でもよい</a></li>
+<li><a href="#h.6hf7k9jqkku3">RCMCの計算結果は MINPath.rrm や sim.log に出力されているものを参照するようにする</a></li>
+<li><a href="#h.kk6zcrrcj3oq">GRRMにおけるLUP計算の.com内に記載すべき座標は、元素の順番がinfileするJOBと合っていれば何でもよい</a></li>
+<li><a href="#h.xy49ob1velbd">LUP計算やDS-AFIR計算はプロセスを並列しても速くならない</a></li>
+<li><a href="#h.f9o5ilaqtka8">LUPOUTt.logに出力されるLUP経路とPTn.logに出力されるパス</a></li>
+<li><a href="#h.9kz3at6d0xo5">LUPで得られるパスが「同じEQを繋ぐパス」になってしまう</a></li>
+<li><a href="#h.k1ha1hulbadz">DC構造か否かはIRC計算により判定している</a></li>
+<li><a href="#h.2eojgudtim51">SC-AFIR法による探索で得られるPTの CONNECTION が ?? になる場合</a></li>
+<li><a href="#h.bfyqjzkygiq">MC-AFIRでEQが1個も出てこない場合</a></li>
+<li><a href="#h.syh6xlj6tiz0">MC-AFIRや人工力を課したMINなどで「Could not find a reasonable initial minimum....」になってしまう場合</a></li>
+<li><a href="#h.mw89pqj8jgpo">γの値が大きすぎるとどうなるか</a></li>
+<li><a href="#h.vz665jyou2j2">JOBを中断するには xxx_message_STOP.rrm を作成すればよい</a></li>
+<li><a href="#h.iypui4fd2h2d">【要注意】FREQ計算のオプションにNOFCを付けると1点計算のレベルが &quot;force&quot; になる【Gaussian】</a></li>
+<li><a href="#h.ynjqt3od1u8">MaxOPTITR=0 とすればMINの # ITR. が0でJOBが終了する</a></li>
+<li><a href="#h.gpfpvn4o6k0">MaxLUPITRには2種類の整数値を指定する必要がある</a></li>
+<li><a href="#h.xewgmknng55x">【GRRM20】FREQ計算（GRRMを介した1点計算）単体でギブズエネルギーを求める際は TS 、 Minimum の別によって固有値の取り扱いを変えるのが望ましい</a></li>
+<li><a href="#h.g5ibddjp9nis">GRRM内部のヘシアンの作り方はオプションの組み合わせによって異なる</a></li>
+<li><a href="#h.rj0e1dcpd7tf">GRRM内部の単位系は基本的に原子単位系（atomic units）である</a></li>
+<li><a href="#h.wo561d6o534h">ModelF(Lower)を用いている際に反応経路のエネルギープロファイルのピークが鋭い場合</a></li>
+<li><a href="#h.e47gi4i1ubnu">デフォルトの原子とexternal atomsの原子との間には人工力は掛けられない</a></li>
+<li><a href="#h.nv1svsxumq3n">xxx_EQn_iPATH.rrm の中にglobalと出力されている原子ペアでは行けるところまで人工力を掛け続ける</a></li>
+<li><a href="#h.vczmv8hwecsh">全く同じinputで行った探索であっても結果は完全には一致しない</a></li>
+</ul></details>
+<details><summary>【その他】</summary><ul>
+<li><a href="#h.ek7wao30xfbv">このセクションの先頭へ</a></li>
+<li><a href="#h.hcr6f5ujl2i3">・FREQ計算で得られるThermochemistryの値について</a></li>
+<li><a href="#h.3wh4i5y14sfr">・人工力の掛け方とGammaの値について（AddUniversalForceなど）</a></li>
+<li><a href="#h.ed6we5vysxrz">・反応経路の名称について</a></li>
+<li><a href="#h.im53v7wt7r2j">・LUP法について</a></li>
+<li><a href="#h.j9vk4ipgqog8">・RePATHについて</a></li>
+<li><a href="#h.wih1osllv4hy">・DS-AFIR法について</a></li>
+<li><a href="#h.189g23ggjtke">・RCMC法で取り扱われる「超状態」について</a></li>
+<li><a href="#h.hja9x7ukqc8h">・RCMCのオプション</a></li>
+<li><a href="#h.3yhlexmgis38">・反応経路ネットワークの可視化</a></li>
+<li><a href="#h.mphkbfawgdpu">・既存の探索結果を読み込んでさらに探索を行う場合</a></li>
+<li><a href="#h.exm44527g94k">・活性化障壁をできるだけ早く見積もりたい場合</a></li>
+<li><a href="#h.elp18qy0s9qp">・FrozenAtomsの拘束を解いてinfileするオプション「ReadCommonGeometry」</a></li>
+<li><a href="#h.984z2ym2cwyk">・ポテンシャル面の交差探索について</a></li>
+<li><a href="#h.r1lr9osty2d0">・ModelFについて（Opt=Xでない場合）</a></li>
+<li><a href="#h.3no9eqofb3mp">・SC-AFIRによる探索の設定に関する考察</a></li>
+<li><a href="#h.75mvm6om8avs">・Issues on input chemical compositions in GRRM calculations</a></li>
+</ul></details>
+<details><summary>【その他のメモ】</summary><ul>
+<li><a href="#h.nthkr0n9a8pe">このセクションの先頭へ</a></li>
+<li><a href="#h.oakce3ccot9h">・《応急処置》分子研（IMS；自然科学研究機構 岡崎共通研究施設 計算科学研究センター）の計算機でGRRMとSIESTA(ver 4.1.5)を接続する際のセットアップ作業</a></li>
+<li><a href="#h.5l66xsn3hzqo">・分子研の計算機における並列計算投入用シェルスクリプトについて</a></li>
+<li><a href="#h.pypjdqvft3tw">・GRRMのインプットファイル（.com）にコメントを残す</a></li>
+<li><a href="#h.850hr713f6oj">・GRRMに関する数式のLaTeXコマンド</a></li>
+<li><a href="#h.cdddkfij211h">・GRRMに関する論文について</a></li>
+<li><a href="#h.4zubr992ddh3">・GRRMのJob typeとナンバー</a></li>
+</ul></details>
+</nav>
+<article>
+<p><strong>【注意・免責】</strong><br/>記載されている内容はあくまでも参考程度にご覧下さい。掲載されている情報を利用したことに起因するいかなる損害についても、筆者は一切の責任を負いかねますので予めご了承下さい。また、個別の事例に関する相談や問い合わせは受け付けておりません。AFIR Webのメンバー向け掲示板のログ等をご参照下さい。</p>
+<h2 id="h.e0up7phqgxiu">【よくあるエラー事例】</h2>
+<p>参考までに、エラー原因の発見難度（★が多いほどスタックしやすい）を独断で付けておいた。</p>
+<h3 id="h.tv0e8hld79nd">.com内に要求メモリ量/コア数の指定が無い（★☆☆）</h3>
+<h3 id="h.pf580b3xglwc">電子状態計算に必要なメモリ量が不足している（あるいは、指定されている値が過大でメモリを確保できない）（★☆☆）</h3>
+<ul><li><p>Gaussian の場合はlogにメモリエラーが出力されるので確認すること。<br/>（参考：<a href="https://www.hpc.co.jp/chem/software/gaussian/help/eff/"><u>計算に必要なメモリ量の見積もり</u></a> - Gaussian 日本語マニュアル (HPC SYSTEMS Inc.)）</p>
+</li><li><p>時々、"Problem detected with inexpensive integrals" などのGaussianプログラムのエラーで終了することがある。この場合は積分のグリッド数が不足している可能性があるので、int=fine または int=ultrafine キーワードを指定して再計算する。あるいは、初期構造を少し調整して再度計算すれば回避できることがある。</p>
+</li></ul>
+<h3 id="h.3pwl4t4j65ql">.com内の要求コア数と計算ノードに投入したシェルスクリプト内の要求コア数が異なる（★☆☆）</h3>
+<ul><li><p>（見た目上は流れているように見えることもあるので注意）</p>
+</li></ul>
+<h3 id="h.jj2p8uyobbdx">.com内に不正な文字コードの改行コードが含まれている（★★☆）</h3>
+<h3 id="h.tg9r37mb55fa">%infile=xxx で指定した JOB名 xxx のファイルが無い/コピーされていない（★☆☆）</h3>
+<h3 id="h.79y0dy8p14ni">MO GUESS=xxx_MO.rrm などで指定した MO のファイルが無い/コピーされていない（★☆☆）</h3>
+<ul><li><p>MOファイルが無い場合はGuessを読み込まず、スクラッチからMOが作成されるので多くの場合エラーにはならない。</p>
+</li></ul>
+<h3 id="h.mg5a0ccc4oaf">Gaussian以外のソフトウェアを用いる際に、電子状態計算ソフトウェア用のインプットや擬ポテンシャルなどが無い/コピーされていない（★☆☆）</h3>
+<ul><li><p>電子状態計算ソフトウェア用のインプット内でエラーが発生している場合は各種.outを確認する。Workディレクトリが削除されて確認できない場合はコピーを取っておくなどして対応する。あるいは、JOB投入コマンドのオプションでエラーログの出力ファイルを指定しておく（例えばbsubコマンドでは -o で標準出力、-e で標準エラー出力の出力先を指定できる）。</p>
+</li></ul>
+<h3 id="h.4c7e1sj04bvb">電荷とスピン多重度の組み合わせが不正である（Gaussianの場合はGauJOB.logで確認可能）（★☆☆）</h3>
+<h3 id="h.1lu5o1swih28">基底関数や汎関数、計算に用いる理論や手法の名前が不正である（Gaussianの場合はGauJOB.logで確認可能）（★☆☆）</h3>
+<h3 id="h.wre9pq6qzm7z">基底関数が割り当てられていない or 基底関数の適用範囲外の（高周期な）元素が含まれている（Gaussianの場合はGauJOB.logで確認可能）（★☆☆）</h3>
+<h3 id="h.wmzqenofacx9">ECP基底を割り当てる場合に、未指定 or 余計な元素がある（Gaussianの場合はGauJOB.logで確認可能）（★☆☆）</h3>
+<h3 id="h.w0qydhlspcqq">MC-AFIRやSC-AFIRで「Add Interaction」のセクションが無い、またはENDで閉じられていない（★☆☆）</h3>
+<h3 id="h.kxpxp1c12tec">MC-AFIRやSC-AFIRで「gamma」に負の値が指定されている（★☆☆）</h3>
+<ul><li><p>gammaには0以上の値を指定する必要がある。計算する意味はほぼ無いが、ゼロ値は一応指定可能ではある。<br/>※余りにも巨大な数値を指定するとヘシアンなどの数値が発散してしまうが、（化学的に無意味ではあるが）gamma = 100000 くらいであれば動作は可能。</p>
+</li></ul>
+<h3 id="h.8kx7sxr1xypb">MC-AFIRやSC-AFIRでFragm.やTarget原子などの番号に系の総原子数を超えた値が指定されている（★☆☆）</h3>
+<ul><li><p>これは UniversalForceTarget や DecDCTarget、Priority Path などでも発生しうるミスなので注意。<br/>※なお Fragm. は.com内で指定したものすべてを使う必要は無い（例えば、Fragm.1～5まで指定しているのに Fragm.4 には力を掛けない、というインプットも可能）。</p>
+</li></ul>
+<h3 id="h.syzvfjontif9">LUPの.com内の元素の順序がinfileした構造のものと異なる（★☆☆）</h3>
+<h3 id="h.k5ttc79vekpw">LUPなどでinfileしている構造ファイル（.logなど）の座標が不正（変な改行や空行がある、改行されていない、何故か原子が増えているor減っているなど）（★★☆）</h3>
+<ul><li><p>GRRMが構造の座標を読めていない場合は「nan」と表示されるのである程度原因は探りやすい。なお、各NODEの座標は空行など元素名でない文字列で区切っておけばよい。infileしたlogファイルの構造が部分的におかしくなっている場合は、LUP計算が途中のNODEでエラーになって終了するので、ここから原因を突き止める。</p>
+</li></ul>
+<h3 id="h.um9pd81z8smg">DS-AFIRでReactantとProductの原子の数や順序が異なる（★☆☆）</h3>
+<ul><li><p>元素名が同じでも立体配置などが異なっていると滅茶苦茶なパスが得られてしまう。</p>
+</li></ul>
+<h3 id="h.g8i55rpd24fp">"ganma" などの英単語のスペルミス（★☆☆）</h3>
+<ul><li><p>PARAM.rrm というファイルにGRRMがインプットから読み取ったオプションが記載される。JOBを計算機に投げた後はこのファイルの中身を確認し、正しくオプションのフラグが立っているかを確かめるように心掛けること（これを怠ると計算資源と時間の無駄が増えてしまう）。</p>
+</li></ul>
+<h3 id="h.yqcehfjv4ucr">Add Interactionセクションにgammaの指定が無い（★☆☆）</h3>
+<ul><li><p>Targetは特に指定しなければ系の全原子がTargetになる。</p>
+</li></ul>
+<h3 id="h.55697zkrj54t"><del>複数のFragmに同じ原子が指定されている</del></h3>
+<ul><li><p><strong>複数のFragmentに重複する原子があっても動作する。（2021/12/01に開発者版で確認）</strong></p>
+</li></ul>
+<h3 id="h.4viai3w1xpeu">Add Interactionセクションにフラグメントpairの指定が無い（★☆☆）</h3>
+<ul><li><p>人工力を課すMIN計算では、<strong>フラグメントの指定</strong>、<strong>力</strong><strong>を</strong><strong>掛け</strong><strong>るフラグメントpairの指定</strong>、<strong>ガンマの値の指定</strong>、の３つをセットにしてAdd Interactionセクションに記入する。</p>
+</li></ul>
+<h3 id="h.x2qa6qqw6hxr">値を指定すべきオプションに値が指定されていない、もしくは値の数が不足している（★☆☆）</h3>
+<h2 id="h.qnybqn6nxic1">【ハマるエラー事例】</h2>
+<p>まず、計算を流す時はエラーメッセージが残るようにしておこう。GRRMのエラーメッセージは単に「エラーが発生したことを知らせる」ものであって、「どこでエラーが発生しているか」までは分からないことが多い。例えば、bsubコマンドでシェルスクリプトを計算ノードに投入している場合、-oオプションで標準出力を、-eオプションで標準エラー出力を書き出すファイルを指定することができる。これを利用してJOBのエラーメッセージを残すようにしておけば問題解決のヒントが得られることがある。参考までに、エラー原因の発見難度（★が多いほどスタックしやすい）を独断で付けておいた。</p>
+<h3 id="h.kijpfkz83q4z"><strong>LUP計算、ReSTRUCT計算などでinfileに失敗する（「No structure to be refined...」と出力される）場合（★★☆）</strong></h3>
+<ul><li><p>基本的には、infileすべきデータのコピー忘れ/できていない場合や、ファイルなどのパスの指定が間違っていることが原因。しかし<strong>infileすべきデータがワーキングディレクトリにコピーされているにもかかわらず発生する</strong>ことがある。こちらの場合は<strong><u>改行コードが不正であること</u></strong>が理由だと考えられる。vimで.com、もしくはエラーで返ってきたPARAM.rrmの中を覗き、謎の改行コードが行末に入っていないかを確認すること。例えば、メモ帳で.comを作成してそのまま保存すると文字コードの関係で不正な改行コードが含まれてしまうことがある。<br/>※大抵は必要なファイルが存在していないという可能性が高い。RePATH計算では基本的に全てのSCやRePATHの計算結果をコピーしてinfileするのが好ましい。</p>
+</li></ul>
+<h3 id="h.ipcy7k31i9i6"><strong>LUP計算、ReSTRUCT計算などでinfileに失敗する（「... </strong><strong>not match any of the node structures </strong><strong>...」と出力される）場合（</strong><strong>？</strong><strong>？？）</strong></h3>
+<ul><li><p>以下のようなエラーメッセージで異常終了することがある。インプットが間違っているもしくは必要なファイルがコピーされていないなどの原因が考えられるが、そうでない場合にもなぜか遭遇することがある。原因不明。(2023/11/30)</p>
+</li></ul>
+<pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext">error...
+The input structure in the com file does not match any of the node structures along the initial path!
+...exit from system...</code></pre>
+<h3 id="h.zc0unpqv51y"><strong>LUP時に「The LUP program cannot read this InFile...」になってしまう場合（★★☆）</strong></h3>
+<ul><li><p>infileしたデータの<strong><u>原子の数や順番が.comと異なっている</u></strong>ことなどが主な原因。</p>
+</li><li><p>しかし正しい形式にもかかわらず時々発生することがある。その場合は上記同様に<strong><u>不正な改行コードが含まれていることが理由</u></strong>だと考えられる。</p>
+</li></ul>
+<h3 id="h.jgf208yecceb"><strong>EQ_list.log に出力される構造の対称性の記述「SYMMETRY = 」の直後は半角4文字分の文字列が</strong><strong>必要</strong><strong>（★★★）</strong></h3>
+<ul><li><p>例えば「# Geometry of EQ 0, SYMMETRY = C1」と出力されている場合、「C1」の直後には<strong><u>半角空白が2文字分存在</u></strong>する（対称性の記号が最大4文字であるため）。<br/>特に、自分でアレンジしたEQ_listをGRRMに読み込ませるなどの場合はフォーマットに要注意。</p>
+</li></ul>
+<h3 id="h.m0t0lkz2cjrr"><strong>message_ERRORが無いにもかかわらず、GRRMが何の動作もせずにJOBが終了する（★★☆）</strong></h3>
+<ul><li><p>まず、以下の理由が考えられる。</p>
+</li></ul>
+<ol><li><p><strong>入力ファイルの中に不正な改行コードが含まれているとき</strong></p>
+</li><li><p><strong>.comの中身がGRRMのフォーマットに従っていないとき</strong></p>
+</li><li><p><strong>特にSC-AFIR法の場合、ターゲット原子の番号が系中の原子数を上回っているとき</strong></p>
+</li></ol>
+<ul><li><p>時々、ERRORメッセージが無いのにJOBが終わって返ってくることがある。おかしいと思ってPARAM.rrmを確認しても.comファイルは読めている様子で、.logにはクレジット以外何も出力されていない。JOBの種類によっては微妙に再現性が無いので、場合によっては原因特定までにかなり時間が掛かるタイプのエラーである。<br/>このような状況に陥る最もよくある原因は、<strong><u>入力ファイルの改行コードが不正であること</u></strong>である。特に、<strong><u>何らかのプログラムを使ってインプットを作成している場合</u></strong>や、<strong><u>ローカル環境で（特にExcelや自作プログラムなどで）作成したインプットをアップロードして使用した場合</u></strong>に起こることがある。<br/>試しに <code>nkf -g [ファイル名]</code> として改行コードを確認してみて <code>ASCII (CR)</code> などと出てきたらビンゴ。<strong><u>Linuxの場合、使用可能な改行コードはLFのみ</u></strong>なので、CRの改行コード <code>\r</code> は削除する必要がある。例えば、<code>tr -d '\r' &lt; sample1.com &gt; sample2.com</code> とすると、sample1.com のCR改行を削除したテキストが sample2.com に出力されるので、このようにして改行コードをLFにしなければならない（実際、nkf -g で再度確かめると確かに ASCII (LF) となっている）。なお、このとき横着して <code>tr -d '\r' &lt; sample1.com &gt; sample1.com</code> のように<strong><u>リダイレクトに</u></strong><strong><u>同じファイル名を指定してしまうと元ファイルの中身が消える</u></strong>ので注意。.comなどのインプットだけでなく、infileするファイルの改行コードもよく確認しておこう（LUP計算やRePATH計算、RCMC計算の際に時々遭遇するので）。</p>
+</li><li><p>もう一つの可能性は.comの中身がGRRMのフォーマットに従っていない場合である。例えば "Options" が抜けていたりスペルが間違っていたりするとmessage_ERRORも無いのにJOBが終了している、という状態になる。よく確認して頂きたい。</p>
+</li><li><p>特にSC-AFIR法の場合では、ターゲット原子の番号として系中の原子数を超える値が指定されていないかを再度よく確認すること。ターゲット原子に限らずその他のオプションでも、原子の番号が不正に指定されていると予期せぬエラーでGRRMが異常終了することがあるので注意。</p>
+</li></ul>
+<h3 id="h.wvnta2pww9f"><strong>JOB名/path名が長すぎると変数</strong><strong>として</strong><strong>格納できずエラーになることがある（★★☆）</strong></h3>
+<ul><li><p>使用する電子状態計算ソフトウェアによって確保する文字列の長さが異なる。特に、General interfaceを用いない場合は<strong>プログラム内部で用意している文字列のバッファが異なる場合がある</strong>ので注意が必要。（2023年現在では、そのようなエラーは体感的にかなり減ったように感じます）</p>
+</li></ul>
+<h3 id="h.dc3rxt2pou65"><strong>SC-AFIRなどの探索が瞬時に終了する場合（★★☆）</strong></h3>
+<ul><li><p>複数の理由が考えられる。</p>
+</li></ul>
+<ol><li><p><strong>電子状態計算が異常終了した場合</strong></p>
+</li><li><p><strong>初期構造のEQが「Not to be applied」になった場合</strong></p>
+</li><li><p><strong>初期構造のEQに人工力を掛けて得られる構造が解離判定されている（DCとみなされている）場合</strong></p>
+</li><li><p><strong>原子の番号が不正に指定されている（系中の原子数を超過している）</strong><strong>場合</strong></p>
+</li></ol>
+<p>1. の場合はEQ0_MO.rrmが生成していないことから見当が付けられる。<br/>2. の場合はEQ0_MO.rrmが生成しており、EQ_test.rrmが生成するので中を確認すればよい（Not to be applied になっている）。<br/>3. の場合はEQ0_MO.rrmが生成しており、生成したEQ_test.rrmがTo be appliedとなっていれば大抵はこれが原因。2分子反応の探索だとデフォルトのDownDC=8が小さいことがあるので、DownDC=15程度（12程度で良いこともある）に増やして再度JOBを投げる。EQ0が「Not to be applied」になっている場合でも、DownDC の閾値に引っ掛かり、初期構造がそもそも解離判定されてしまっていることがある。GRRM20以降のバージョンであればUniversalForceの利用も検討されたい。<br/>4. の場合も考えられるので、 .com の中身をよく確認すること。</p>
+<ul><li><p>EQ0が「To be applied」になっているにもかかわらず探索が終了する場合は、EQ0周辺の経路の活性化障壁が高いと考えられる。対処法としては、Gammaの値を大きくする、速度論ナビゲーションの閾値(TimescaleやSiml_temperature)を大きくする、･･･などがある。</p>
+</li></ul>
+<h3 id="h.o936vdmpgfjm"><strong>Gaussian以外の電子状態計算ソフトウェアを利用する場合の注意（★☆☆）</strong></h3>
+<ul><li><p>pwSCF（Quantum ESPRESSO）やTURBOMOLE、SIESTAなどを利用する場合は、GRRMの.com内で「%link=xxx」という様式で指定する。このとき、<strong>SIESTAの場合はバージョンの如何に関わらず「%link=siesta-3.1」と指定しなければならない</strong>（2022年10月現在）。この注意点については<a href="https://afir.sci.hokudai.ac.jp/documents/manual/47"><u>公式マニュアル</u></a>にも記載があるので参考にして頂きたい。<br/>それ以外の電子状態計算ソフトウェア（またはポテンシャル面を提供する任意の自作プログラム）をGRRMにリンクする場合は、GRRMの<a href="https://afir.sci.hokudai.ac.jp/documents/tutorial/88"><u>General Interface機能</u></a>を通じて座標、エネルギー、グラジエント（必要に応じてヘシアンも）などの値を外部ソフトとやり取りする必要がある。</p>
+</li></ul>
+<h3 id="h.ig6ijdnul9xp"><strong>SIESTAのSCF計算が収束しない（★☆☆）</strong></h3>
+<ul><li><p>SIESTAはデフォルト設定では、SCFサイクルの上限回までに収束の閾値を満たさない場合、エラーを出力する。<strong><u>SIESTAの計算結果をGRRMに渡すためには.inp内で「SCF.MustConverge」のフラグを「.false.」にしておかなければならない</u></strong>（デフォルト（「SCF.MustConverge」のフラグをを立てていない場合も該当）では「.true.」になっている）。<br/>以下にSIESTAインプット用の<a href="https://siesta-project.org/SIESTA_MATERIAL/Docs/Tutorials/max-2017-bsc/Talks/RR-Convergence_issues.pdf"><u>Program Options</u></a>を示す。詳細については<a href="https://departments.icmab.es/leem/SIESTA_MATERIAL/Docs/Manuals/siesta-4.1-b4.pdf"><u>公式マニュアル</u></a>を参考にして頂きたい。</p>
+</li><li><p>SCFサイクルの上限回･･･   「MaxSCFIterations」default; 1000</p>
+</li><li><p>density matricesの収束判定･･･  「SCF.DM.Tolerance」default; 1.d-4</p>
+</li><li><p>Hamiltonian matrixの収束判定･･･ 「SCF.H.Tolerance」default; 1.d-3 eV</p>
+</li><li><p>次のSCF cycleに混ぜるDM･･･  「SCF.Mixer.Weight」default; 0.25</p>
+</li><li><p>pulay mixingの頻度･･･    「SCF.Mixer.History」default; 2</p>
+</li></ul>
+<p>.outの様子を監視しながら、なるべくSCFが収束するようにこれらの値を調節する。酸化物などの材料ではFermi-Dirac occupation function（FD）を主に用いる。Methfessel and Paxton occupation function（MP）を使うと特に金属材料のSCF計算の収束が速い。「ElectronicTemperature」（スミアリング温度）はFDでは実温度、MPでは高い温度（一般に数千以上の温度）を指定する。（参考： J. Kresse and J. Furthmüller, <em>Comp. Mat. Sci.</em> <strong>6</strong>, 15 (1996)）</p>
+<h2 id="h.mgjf23xkzt2">【エラーではないが知らないとハマる（かもしれない）事例】</h2>
+<h3 id="h.cb4hi5rzwymc"><strong>GRRMプログラムのインプット(.com)内のオプションは上から順に読まれるため、上の方に書かれたオプションの効果が下の方に書かれたオプションの効果によって打ち消される場合がある</strong></h3>
+<ul><li><p>例えば、以下のように <code>NOFC</code> (ヘシアン計算を省略するオプション) を下の方に書いてしまうと <code>EigenCheck</code> (停留点で振動数解析を行うオプション) が発動しなくなる。</p>
+</li></ul>
+<pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext">【良くない例】
+Options
+GauProc=4
+GauMem=200
+EigenCheck
+NOFC
+･･･（省略）</code></pre>
+<ul><li><ul><li><p>SADDLE計算の場合、以下のようにSkipIRCがEigenCheckの後に来ると振動数解析が実行されないので注意（仕様です）。</p>
+</li></ul>
+</li></ul>
+<pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext">【良くない例】
+Options
+GauProc=4
+GauMem=200
+NoFC
+EigenCheck
+SkipIRC
+･･･（省略）</code></pre>
+<ul><li><p>あるオプションが.com内に複数記載されている場合は、基本的には最後の行 or セクションの条件や数値が採用される（ただ、そもそも.com内に同じオプションを複数行記載するのは動作保証外）。</p>
+</li><li><p>オプションがGRRMに認識されているかどうかは（長期間流し続けることが予想されるJOBでは特に） [JOBNAME]_PARAM.rrm の中身を確認しておくべきである。 [JOBNAME]_PARAM.rrm には「GRRMに読み込まれたオプション」が書き出されるので、計算開始後によく確認する習慣をつけておく。なお、ここに書き出されているオプションは「実際に機能するオプション」ではないことに注意。表題のようなGRRMの仕様を知らなければ自力で修正できない可能性があるので、オプションの順番や競合の有無については事前に検討しておくこと。</p>
+</li></ul>
+<h3 id="h.1a8idr15bes6"><strong>message_ERRORとmessage_LinkERRORの違い</strong></h3>
+<ul><li><p>大まかには、ERRORはGRRM側のエラーで、LinkERRORは電子状態計算ソフトウェア側のエラーである。message_ERRORの場合は、必要なファイルが生成orコピーされておらず、GRRMが該当するファイルを開こうとして失敗し、segmentation faultになっている場合が多い。LinkERRORの場合は電子状態計算ソフトウェアのログを見ればよいが、計算の設定が間違っていたり必要なファイルが無かったりしたときに発生することが多い。</p>
+</li><li><p>GRRMはどこでエラーを生じたかを詳しく教えてくれないので、エラーを解消するには投入用のシェルスクリプトをよく読み、必要なファイルが欠けていないか丁寧に確認するしかない。</p>
+</li></ul>
+<h3 id="h.i0htlaa3lxhq"><strong>計算のエラーではない</strong><strong>message_ERRORについて</strong></h3>
+<ul><li><p>SC-AFIR法による探索において「AFIR法を適用するPATHが存在しない」というメッセージで終了している場合がある。message_ERROR.rrmが残っていても、これは異常終了ではないことがある。</p>
+</li><li><p>GRRMの、並列数に対して探索対象の経路が多すぎる場合、子プロセスは探索すべき経路が無いとしてSleepする。このとき仕様上はmessage_ERROR.rrmが吐き出されるが、特に計算のエラーという訳ではない。</p>
+</li><li><p>要求メモリ容量が大きいとマシンによってはメモリ不足で落ちる場合がある。このときに子プロセスが一時的に出力していたmessage_ERROR.rrmが</p>
+</li></ul>
+<h3 id="h.gbrarxqjfjy"><strong>SC-AFIR法による探索が一向に終わらない</strong></h3>
+<ul><li><p>これには、計算対象の系そのものに由来する場合と、探索条件の設定に由来する場合が考えられる。</p>
+</li><li><p>まず、バルク(3次元の結晶など)の場合は対称性の低さにより、大量のEQや経路が得られることがある。組成が複雑になればなるほどEQの数は膨大になるので、同一判定の閾値(<code>MatchDecScale</code> など)をある程度緩めに設定するなどして対処する。結晶構造の取得が主目的である場合は <code>EQOnly</code> をオプションに加えてAFIR経路の最適化を省くと時間短縮になる。</p>
+</li><li><p>スラブ(2次元の表面など)の場合は活性サイトの周期性の問題で、等価な環境の吸着構造であっても結合相手の原子が異なれば異なるEQとして判定されてしまい、EQの数が膨大となる。これを防ぐためには、特定の活性サイト(表面の中心など)に反応基質を集めるような弱いバイアスをエネルギーポテンシャルに加えて探索するという方法が考えられる。<code>UniversalForceTarget</code> で凝集させるバイアスを課す原子を指定できる。</p>
+</li><li><p>あるいは計算対象の系の性質以前に、そもそもSC-AFIR法の探索に課している終了条件が緩すぎる（もしくは一切の終了条件が課されていない）ケースも考えられる。</p>
+</li><li><p>GRRM20以降に実装された「速度論ナビゲーション」を利用する場合は、特段の事情が無い限り実際の実験時間や現象のタイムスケールに相当する長さ<strong><u>の数倍</u></strong>程度の時間を <code>timescale</code> の値に指定しておく。例えば、1時間（3600秒）で完了する反応であれば <code>timescale=10000</code> などとする。<code>timescale=3600</code> でも良いが、ギリギリの条件を狙いすぎると探索が不十分になる可能性が出てくるので注意。</p>
+</li><li><p><code>Siml_temperature</code> では3種類のシミュレーション温度（実数値）が指定できるが、このうちで交通量(traffic volume)が最大となる場合の結果がOn-the-Flyの速度論ナビゲーションに反映される。つまり、3種類のシミュレーション温度として大きな値が一つでも指定されていれば、高い反応障壁を乗り越えて探索が次々に進んでしまうことが有り得る。EQ_list.logやPT_list.log、TS_list.logを見て、ボトルネックとなるパスの障壁が高すぎないか、あるいはその先のEQのポピュレーションや交通量（traffic volume）がゼロになっているか、などを確認する（もし十分に探索が行われているにも拘らず目的物の構造が得られていないのであれば、①実際にそのような化学種は生成しない、②不足している条件がある、③計算レベルの問題、などが考えられる）。</p>
+</li><li><p>探索を効率的に進めるという観点で言えば、<strong>初期構造を何にすべきか</strong>、という点にも注意したい。<br/>例として分子Aと分子Bが結合して分子A-Bが生成する反応を考えてみる。このとき、素直に考えれば、分子Aと分子Bをそれぞれ最適化した構造を合わせた構造をインプットにするのが普通に思われる。ところで、AとBが解離している領域と、分子A-Bとして結合している領域では、前者の方が<strong>コンフォメーションの数</strong>が圧倒的に多い。つまり、分子Aと分子Bの間で化学結合の組み換えが起こる素過程よりも、分子Aと分子Bの配向が変化するだけの<strong>コンフォメーション変化の素過程の方が多い</strong>ので、（何の工夫もしなければ）分子Aと分子Bのコンフォメーション変化が優先的に探索されることになる（こうした結合組み換えを伴わない素過程は化学的にtrivialである場合が多い）。<br/>分子Aと分子Bが解離した状態を初期構造にする「合体方向の探索」よりも、分子AとBが結合したA-Bの状態を初期構造にする「分解方向の探索」の方が、化学結合の組み換えというレアイベントの探索という点では効率的である。</p>
+</li><li><p>ただし、上記の方法は生成物が事前に分かっていないと上手くいかないので、反応経路が全く見当も付かないのであれば大人しくGRRMに任せるのが良い。</p>
+</li><li><p>最も堅実な反応経路探索は、SC-AFIR法において「NoBondRearrange」を使う探索である。NoBondRearrangeは「結合が組み替わったEQから先は探索しない」というオプションである。この探索は以下の手順で行う。<br/><strong>①検討している反応物を初期構造としてNoBondRearrangeを付けて一通り探索</strong><strong><br/></strong><strong>②得られたEQのうち、中間体として重要そうなものを初期構造にして再度NoBondRearrangeを付けて一通り探索</strong><strong><br/></strong><strong>③以上の探索を繰り返す（必要に応じて生成物領域や中間体領域からの探索も並行して進める）</strong><br/>コンフォメーション変化ばかりの反応経路ネットワークが複数個得られるが、どこかのタイミングでこれらの反応経路ネットワークが接続する。コンフォメーション変化の追跡を並列計算する、というイメージである。<br/>この手順による探索を、システマティックに、かつ化学的に合理的な方法で自動化したのが、GRRM20で実装されたRCMC法による速度論ナビゲーションである。</p>
+</li></ul>
+<h3 id="h.q0rus2dasgek"><strong>計算時間が異様に長い or 停留点付近でエネルギー/構造が振動して収束に時間が掛かる場合</strong></h3>
+<ul><li><p>電子状態計算の設定に問題が無いにも関わらずこのような事態に陥っている場合は、<strong>構造最適化の収束条件を緩める</strong>ことも考えた方が良い。<strong>GRRMによる最適化計算の終了条件はかなり厳しい</strong>ため、計算レベルによっては <code>Opt=Loose</code> （または <code>Opt=VeryLoose</code>）でも十分な収束具合で停留点に落とせる場合がある。<code>Opt=Loose</code> 付きでFREQした結果であってもデフォルト設定でFREQした結果と遜色ない精度になることが多い（但し、念のため2種類の閾値で比較・確認しておくべきではある）。</p>
+</li><li><p>個人的な体験として、SIESTAプログラムで表面反応の解析を行う際、Saddle計算においてTS付近でエネルギーが振動（延々とITR数が増え続け、挙句の果てに最適化に失敗）するという挙動に度々遭遇したが、これは <code>Opt=Loose</code> にしておくことで劇的に改善された。<code>Maximum number of iteration was exceeded</code> となって計算が終わってしまう問題に悩まされている場合は、収束条件を緩めるという選択肢も考えに入れるべきである。</p>
+</li></ul>
+<h3 id="h.ccxdd6sdy2u2"><strong>多数のコア数を割り当てても計算が速くならない</strong></h3>
+<ul><li><p>電子状態計算ソフトウェアの計算速度を上げようとして大量に並列しても（系の原子数/全電子数にも依るが）<u>大抵は数コアで頭打ち</u>となる。<strong>寧ろパフォーマンスの劣化を招く可能性すらある</strong>。<br/>特に反応経路探索の場合は、<u>電子状態計算よりもGRRMによる探索のプロセス数（並列数）を増やした方が効率的な場合が多い</u>。<br/>ただし、AFIR法が適用されるパスの本数がプロセス数に比べて少ない場合は、その分だけ計算資源･時間のロスになってしまうので注意が必要。</p>
+</li><li><p>一般に計算科学において、並列化しても効率化できないプロセスが律速となる現象は「<strong>アムダールの法則</strong>」としてよく知られている。また、ノード間並列の場合はホスト間通信がボトルネックとなる場合があり、（計算のセッティングにも依るが）割り当てた計算資源に対して探索を線形に効率化できるとは限らない。</p>
+</li><li><p>過剰なメモリの割り当ても同様に、パフォーマンスを系統的に改善する訳ではない。<br/>参考：<a href="https://nusit.nus.edu.sg/services/hpc-newsletter/running-gaussian-09-jobs-more-efficiently/"><u>RUNNING GAUSSIAN 09 JOBS MORE EFFICIENTLY</u></a> （<strong>メモリやプロセッサ数を過剰に割り当てても計算性能が線形に向上する訳ではない</strong>、というお話）</p>
+</li><li><p>EQの数が増えてくると構造の同一判定に時間が掛かるようになる。数千～数万以上のEQを収集するような大規模な探索では、コア数を増やすよりもGRRMのプロセス数（並列数）を増やす方が効率的である。</p>
+</li></ul>
+<h3 id="h.s7h03747lngq"><strong>RCMC計算の計算レベルは何でもよい</strong></h3>
+<ul><li><p>RCMC法は既存のエネルギーのデータしか使わないため、新たに電子状態計算を行う必要はない。そのため、.comのルートセクションに記載する計算レベルは形式上指定しているだけであって、例えば <code># RCMC/HF/6-31G</code> などと適当に指定すればよい（実際に HF/6-31G レベルの電子状態計算が行われる訳ではない）。</p>
+</li><li><p>デフォルトでは Normal Mode Eigenvalues を用いて自由エネルギーベースでRCMC法が適用される。<del>NOFCを付けた場合は電子エネルギーが利用される</del><strong>（未確認）</strong>。</p>
+</li><li><p>EQ_listを自作して構造と電子エネルギーだけを読み込ませているなどの場合（Normal Mode Eigenvaluesの値が信用できない場合）は <code>SIML_VibEntropyOFF</code> のフラグを立てる。これにより振動のエントロピーが無視されたRCMC法が適用され、Normal Mode Eigenvaluesは使われなくなる。</p>
+</li></ul>
+<h3 id="h.6hf7k9jqkku3"><strong>RCMCの計算結果は MINPath.rrm や sim.log に出力されているものを参照するようにする</strong></h3>
+<ul><li><p>CytoScape用のファイル（拡張子は .cys）も同時に出力されるが、この内容が他のファイルに出力されている縮約結果と異なる（EQ/PT/TSやSSのナンバリングが異なる）場合がある。不都合がある場合は必要に応じて自分で作り直す。</p>
+</li></ul>
+<h3 id="h.kk6zcrrcj3oq"><strong>GRRMにおけるLUP計算の.com内に記載すべき座標は、元素の順番がinfileするJOBと合っていれば何でもよい</strong></h3>
+<ul><li><p>ただし<code><u>FrozenAtoms</u></code><u>が存在する場合は正しい順序で座標を記載しなければならない</u>ので注意。</p>
+</li></ul>
+<h3 id="h.xy49ob1velbd"><strong>LUP計算やDS-AFIR計算はプロセスを並列しても速くならない</strong></h3>
+<ul><li><p>1本の反応経路に対してGRRMがパスの両端から計算するなどということは無いので、DS-AFIR計算などを2並列で行うのはただ単に計算資源を圧迫するだけで無意味。</p>
+</li><li><p>RePATH計算やAFIR法を用いた探索では複数の反応経路を同時並行で探索/緩和することが可能なので基本的には並列すべきである。</p>
+</li></ul>
+<h3 id="h.f9o5ilaqtka8"><strong>LUPOUTt.logに出力されるLUP経路とPTn.logに出力されるパス</strong></h3>
+<ul><li><p>LUP計算において、最終的なLUPパスはxxx_LUPOUTt.logに出力される。LUP計算はLUP経路上の各点で１点計算して得られるのMO引き継ぐので電子状態は連続的であり、xxx_LUPOUTt.logに出力される構造の変化は基本的に連続的である。しかし、xxx_PTn.logではそうならない（構造が途中で乱れる）場合がある。これはLUPPathを切り分けた各STEPで端点をOPTしていることが原因と思われる。</p>
+</li><li><p>障壁を見積もる際の目安としてPTのエネルギー変化を利用する場合は注意が必要。</p>
+</li></ul>
+<h3 id="h.9kz3at6d0xo5"><strong>LUPで得られるパスが「同じEQを繋ぐパス」になってしまう</strong></h3>
+<ul><li><p>Opt=Looseなどで粗いTS最適化をしている場合はTS付近のPESが平坦になっている場合がある。このようなときにIRCを実行すると、TS付近まで行って初期構造にそのまま帰ってくる、というタイプのパス（PT）が得られることがある。</p>
+</li><li><p>これを回避するには、①Opt=Looseを削除する、②DownInitSize = n を大きくする、などの方法がある。②の場合、具体的には30~50くらいの値にしてみると良い。虚振動がうまく得られていない場合は①の方針が適する。</p>
+</li></ul>
+<h3 id="h.k1ha1hulbadz"><strong>DC構造か否かはIRC計算により判定している</strong></h3>
+<ul><li><p><code>SC=FindUDC</code> を付けたSC-AFIR計算ではDCの構造が収集されるが、この過程でIRC計算を行ってEQに戻るかどうか（解離に至るまでに遷移状態が無いこと）を確かめている。この際にmeta-IRC経路を計算しているため、計算コストはやや大きくなることに留意すること。</p>
+</li><li><p>DCを収集しない場合でも、DCに至る可能性があるパスの情報は保存されている。このとき、該当するPTやTSの CONNECTION は ?? となるが、これはRePATH計算などによりDCか否かを後で調べることができる。つまり、探索の段階で初めからDCかどうかを決定していくようなSC-AFIR計算は、丁寧ではあるがパフォーマンス的に不利である。</p>
+</li></ul>
+<h3 id="h.2eojgudtim51"><strong>SC-AFIR法による探索で得られるPTの CONNECTION が ?? になる場合</strong></h3>
+<ul><li><p>以下の場合があり得る。<br/>① パスの端点のMINが収束しなかった；電子状態計算がコケた（エネルギーが振動してMinimumに落ちなかった）など<br/>② パスの端点をMINするとDCになった</p>
+</li><li><p>なお、[JOB名]_PT<em>n</em>.log の中身に構造変化とエネルギーが書き出されているので、ここを確認して重要なPTかどうかを判断すべき。</p>
+</li></ul>
+<h3 id="h.bfyqjzkygiq"><strong>MC-AFIRでEQが1個も出てこない場合</strong></h3>
+<ul><li><p>以下の理由が考えられる。<br/>① <code>DownDC</code>の値が小さい（<code>NRUN</code> でランダムな構造を生成している場合はRandDCの値にも注意）<br/>② <code>gamma</code>の値が小さい（<code>MC=ReactivePathOnly</code> を付けている場合は活性化障壁が高いorシャープなパスではMinimumまで到達できない場合がある）</p>
+</li><li><p>上記の「SC-AFIRなどの探索が瞬時に終了する場合」の項も参照されたい。</p>
+</li></ul>
+<h3 id="h.syh6xlj6tiz0"><strong>MC-AFIRや人工力を課したMINなどで「Could not find a reasonable initial minimum....」になってしまう場合</strong></h3>
+<ul><li><p><code>DownDC</code>の値が小さいと、系によっては最適化後の構造（"initial minimum"）がDC判定されてしまうことがある。</p>
+</li><li><p>また、<code>BOND CONDITION</code>を利用している場合、最適化後の構造によっては<code>BOND CONDITION</code>の条件に不適合となり「Could not find a reasonable initial minimum....」になってしまうことがある。<code>BOND CONDITION</code>で弾かれたminimum構造はEQとしては得られない。</p>
+</li></ul>
+<h3 id="h.mw89pqj8jgpo"><strong>γの値が大きすぎるとどうなるか</strong></h3>
+<ul><li><p>力を掛けたMIN計算やSC-AFIR法による探索において、gammaの値を大きくすればするほど、現実的なタイムスケールでは越えられないような高障壁の反応経路まで探索される。また一般に、反応障壁に対してgammaの値が大きすぎると、得られるAFIR経路が真の反応経路（主にIRC経路）から大きく逸脱してしまい、結果としてLUP計算のiteration数が増えて計算コストが増大してしまうことがある。悪いケースだと、規定回数のLUP計算を実行してもPT（Path Top）のエネルギーが十分には下がらず、LUP経路のエネルギーを過大評価してしまう。<br/>反応経路探索においては、必ずしも反応障壁の高さギリギリを攻めるような精密なインプットが要求される訳ではないが、デタラメな力の掛け方をすると計算コストが無暗に増えてしまうので注意しなければならない。<br/>※もっと極端に gamma = 100000 などを指定するとどうなるか、気になる方は実際に計算してみるとよい。このような場合、フラグメント間に強烈なバイアスポテンシャル（人工力）を課すことになるため、指定したフラグメントのみ猛烈な勢いで核が運動して周囲の原子団の運動が全く追随しない、という状態になる。結果的には化学的な意味の乏しいAFIR経路（核衝突 or DC）が得られる。</p>
+</li></ul>
+<h3 id="h.vz665jyou2j2"><strong>JOBを中断するには xxx_message_STOP.rrm を作成すればよい</strong></h3>
+<ul><li><p>[JOB名]_message_STOP.rrm というファイルをワーキングディレクトリ内に作成すれば、すべての子プロセスについて message_STOP.rrm が生成されてGRRMのJOBを一時停止することができる。</p>
+</li><li><p>このとき誤って [JOB名]_message_<strong>END</strong>.rrm というファイルを作成してしまうと、<strong>計算終了の処理が施されてJOBを再投入できなくなる</strong>ので注意。</p>
+</li></ul>
+<h3 id="h.iypui4fd2h2d"><strong>【要注意】FREQ計算のオプションにNOFCを付けると1点計算のレベルが "force" になる</strong><strong>【Gaussian】</strong></h3>
+<ul><li><p>Gaussianによる電子状態計算とGRRMを接続する場合、FREQ計算のための1点計算ではGaussian用のインプット（GauJOB.com）に <code>freq=noraman</code> のフラグが立てられるようになっている。しかし、GRRMのオプションに <code>NOFC</code> が含まれているとGauJOB.comのルートセクションに <code>force</code> のフラグが立てられてしまい、振動数計算が正しく行われない。<code>NOFC</code>付きのFREQ計算により求められる自由エネルギーは正しいヘシアンを使っていないため、他のJOBで求めた自由エネルギーと比較した場合に齟齬が生じる。系全体の原子の収支は合っているのに自由エネルギーの収支だけが何故か合わないという場合には、この事例を疑うべきである。</p>
+</li><li><p><strong>MIN計算後のFREQ計算の.comには </strong><code><strong>NOFC</strong></code><strong> を残さない</strong>ようによく注意しておきたい。</p>
+</li></ul>
+<h3 id="h.ynjqt3od1u8"><strong>MaxOPTITR=0 とすればMINの # ITR. が0でJOBが終了する</strong></h3>
+<ul><li><p>ある構造の電子エネルギーをGRRMを介して求めるときの手軽な方法。電子エネルギーを求めるだけであれば <code>NOFC</code> をオプションに付けておく。 <code>NOFC</code> が無いと freq=noraman のフラグが立つため計算時間が掛かる。</p>
+</li></ul>
+<h3 id="h.gpfpvn4o6k0"><strong>MaxLUPITRには2種類の整数値を指定する必要がある</strong></h3>
+<ul><li><p>例えば、<code>MaxLUPITR = 5 15</code> とすると、FirstStageでは最大15回、SecondStageでは最大5回のイタレーションでLUP法による最適化が実行される。</p>
+</li></ul>
+<h3 id="h.xewgmknng55x"><strong>【GRRM20】FREQ計算（GRRMを介した1点計算）単体でギブズエネルギーを求める際は TS 、 Minimum の別によって固有値の取り扱いを変えるのが望ましい</strong></h3>
+<ul><li><p>Saddle計算のデフォルト設定では <code>NNegativeEigenvalue = 1</code> としてTS（遷移状態）における最低振動数のモードを除いた振動数で自由エネルギーが計算されるが、ただ単に1点計算する場合は、計算対象の構造をGRRMが TS か Minimum かを判断することは無い（2022/03/23時点）。したがって、TS構造の場合は <code>NNegativeEigenvalue = 1</code> 、Minimum構造の場合は <code>NNegativeEigenvalue = 0</code> をOptionsに加える必要がある。</p>
+</li></ul>
+<h3 id="h.g5ibddjp9nis"><strong>GRRM内部のヘシアンの作り方はオプションの組み合わせによって異なる</strong></h3>
+<ul><li><p>ヘシアン（ヘッセ行列）はグラジエント（勾配）の1階微分、エネルギーの2階微分に相当する値で、通常は行列として計算に用いられる。探索や粗いRePATH計算の段階ではヘシアンはあまり重要ではない。というのも、2次の行列であるヘシアンは導出の計算量が大きいため、パスの有無を調べるだけ、大まかな障壁を調べるだけ、といった初期段階の反応経路スクリーニングにおいては無駄なコストになってしまうからである。そこで、近似ヘシアンを用いてマジメに計算しないようにすることが多い（特に、原子数の多い系や周期境界条件を課している場合は <code>NOFC</code> などを用いて計算量を削減するのが効率的である）。</p>
+</li><li><p>ただし、遷移状態からのIRCに沿った最急降下経路の追跡では、近似ヘシアンを使っているとPES上（ポテンシャルエネルギー面上）の誤った方向に降下していってしまうケースに時々遭遇する。このような場合には <code>EigenCheck</code>（停留点における振動数計算を行うオプション）を用いることで正確な虚の振動方向を計算するのが良い。<code>EigenCheck</code>を付けた場合と付けない場合ではヘシアンの値が異なっていることも確認できる。なお、停留点における正確なヘシアンを求めておくとその後に得られる近似ヘシアンの精度が上がるという利点もある（近似ヘシアンの導出の際に、それ以前に得られている(近似)ヘシアンを混ぜ込むため）。</p>
+</li><li><p>因みに、よく知られているようにヘシアンは常に対称行列となるので、GRRMの.logには下三角行列の成分のみが羅列されている。</p>
+</li></ul>
+<h3 id="h.rj0e1dcpd7tf"><strong>GRRM内部の単位系は基本的に原子単位系（atomic units）である</strong></h3>
+<ul><li><p>General Interface などでグラジエント等を入力・操作する際には原子単位に変換する必要がある。AFIR-Webなどのマニュアルには全く記載がないため注意。</p>
+</li></ul>
+<h3 id="h.wo561d6o534h"><strong>ModelF(Lower)を用いている際に反応経路のエネルギープロファイルのピークが鋭い場合</strong></h3>
+<ul><li><p>LUPのステップ幅を細かくするよりも、ModelFのパラメータ<em>β</em>を大きくとってポテンシャル面を滑らかにする方が効果的である。</p>
+</li></ul>
+<h3 id="h.e47gi4i1ubnu"><strong>デフォルトの原子とexternal atomsの原子との間には人工力は掛けられない</strong></h3>
+<ul><li><p>力を掛けたい場合は、external atomsの原子をデフォルトの原子と同じ部分に書く。必要に応じてFrozenAtomsにして固定する。</p>
+</li></ul>
+<h3 id="h.nv1svsxumq3n"><strong>xxx_EQ</strong><strong><em>n</em></strong><strong>_iPATH.rrm の中にglobalと出力されている原子ペアでは行けるところまで人工力を掛け続ける</strong></h3>
+<ul><li><p>例えば 1 4 global と出力されている場合、原子1と原子4にglobalモードで引力が課される。通常の plus ではApp EQが見つかった時点でAFIR関数の最適化が終わる。</p>
+</li></ul>
+<h3 id="h.vczmv8hwecsh"><strong>全く同じinputで行った探索</strong><strong>であっても</strong><strong>結果は</strong><strong>完全</strong><strong>には一致しない</strong></h3>
+<ul><li><p>GRRMプログラム内部では乱数を用いて探索を進めている関係で、全く同じinputであっても一般に探索結果は異なる。特に、計算対象の探索空間が広く、十分に探索できないセッティングになってしまっている場合に顕著。</p>
+</li><li><p>全く同じinputであっても、RCMC法による速度論ナビゲーションのパラメータによっては不完全な反応経路ネットワークが得られてしまうことがある。このような場合、速度論的に最も有利な経路として得られる経路が「真に最も有利な経路」（the best path）ではない可能性がある（より低エネルギーの中間体や素過程を見逃しているため）。SC-AFIR法による反応経路自動探索は「網羅的」に進められるが、探索終了条件の閾値によっては、探索すべき空間を十分に網羅できていない可能性がある。これは<strong><u>AFIR法という手法の問題というよりは計算条件の恣意性に起因する問題</u></strong>と言える。これを防ぐには、複数の条件を振って探索を試してみると良いが、現実的な問題として計算コストが膨大になるという懸念がある。反応経路の見逃しを防ぐための安全策として、実験的な条件が既に分かっているのであれば、実験条件より反応時間を少し延ばす、シミュレーション温度を少し上げる、などとして計算レベルによる誤差を補えるようなパラメータで探索することが望ましい。</p>
+</li><li><p>計算結果が実験事実を再現しない理由としては、<strong>①探索不足</strong>、<strong>②反応物の数や種類が不十分</strong>（inputに指定する反応物の組成に不備がある）、<strong>③計算レベルの不足</strong>、<strong>④実験結果が実は誤っている</strong>、などが挙げられる。①の場合は探索を継続すれば良いが、②の場合はそもそも探索しても目的物が得られないため、計算対象の組成を変えて探索を行う必要がある。例えば、溶媒分子による遷移状態の安定化が寄与している反応であれば、溶媒分子を露わに考慮しなければ望みの経路が得られることは無い。③の場合は計算レベルを上げれば良いが、計算コストとの兼ね合いもあるため、合理的な妥協点を探る必要がある。④の場合は稀であるが、そもそも実験結果が誤っている、もしくは報告に漏れている要素が存在する、測定結果が虚偽である、といったケースも考えられる。計算化学者が実験チームと協働する場合は、計算を始める前にまず実際の反応条件を詳しく確認・共有すべきである。</p>
+</li><li><p>ただし、化学現象を解析するにあたって、ある反応温度･反応時間で速度論的に到達可能な「完全な反応経路ネットワーク」が<strong><u>必ずしも要求される訳ではない</u></strong>のもまた事実である（副反応などに興味が無く、実験結果を説明可能な反応経路が偶然でも良いので得られていればOK、というスタンスの場合）。計算資源や時間と相談しながら上手くGRRMを使って下さい。</p>
+</li></ul>
+<h2 id="h.ek7wao30xfbv">【その他】</h2>
+<h3 id="h.hcr6f5ujl2i3"><strong>・FREQ計算で得られるThermochemistryの値</strong><strong>について</strong></h3>
+<ul><li><ul><li><p>例えば、ホルムアルデヒド（formaldehyde）のFREQ計算（MP2/6-31G）で得られるThermochemistryの値は以下のようになる。単位は Hartree である。</p>
+</li></ul>
+</li></ul>
+<pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext">Thermochemistry at  298.150 K,    1.000 Atm
+E(el)          =  -114.028691241420
+ZPVE           =     0.026886845139
+Enthalpie(0K)  =  -114.001804396281
+E(tr)          =     0.001416284860
+E(rot)         =     0.001416284860
+E(vib)         =     0.026922793795
+H-E(el)        =     0.030699553420
+Enthalpie      =  -113.997991688000
+S(el)          =     0.000000000000
+S(tr)          =     0.000057577109
+S(rot)         =     0.000025730302 (Symmetry number = 2)
+S(vib)         =     0.000000139497
+G-E(el)        =     0.005819857897
+Free Energy    =  -114.022871383523</code></pre>
+<ul><li><p><code>Enthalpie(0K)</code> の値は「E(el) + ZPVE」（= 電子エネルギー + ゼロ点(振動)エネルギー）</p>
+</li><li><p><code>Enthalpie</code> の値は「E(el) + E(tr) + E(rot) + E(vib) + <em>k * T</em>」（= 電子エネルギー + 並進エネルギー + 回転エネルギー + 振動エネルギー + <em>kT</em>；ここで<em>k</em>はボルツマン定数 1.3806488E-23 (J/K) * 2.29371044869059970E+17 (Hartree/J) ≒ 3.1668085<del>78532125</del>E-6 (Hartree/K)、<em>T</em>は温度(K)）</p>
+</li><li><p><code>Free Energy</code> の値は「Enthalpie - <em>T</em> * (S(el) + S(tr) + S(rot) + S(vib))」（= 全エンタルピー - <em>T</em> * (電子エントロピー + 並進エントロピー + 回転エントロピー + 振動エントロピー)；ここで<em>T</em>は温度(K)）</p>
+</li><li><p><code>H-E(el)</code> の値は「E(tr) + E(rot) + E(vib) + <em>k * T</em>」（ここで<em>k</em>はボルツマン定数(Hartree/K)、<em>T</em>は温度(K)）</p>
+</li><li><p><code>G-E(el)</code> の値は「H-E(el) - <em>T</em> * (S(el) + S(tr) + S(rot) + S(vib))」（ここで<em>T</em>は温度(K)）</p>
+</li><li><p>これらの熱力学的諸量は自由エネルギーを求めるために利用される。温度<em>T</em>は（調和振動子近似が破綻しない範囲で）任意に変えられるので、目的の温度を用いて自由エネルギーを計算することができる。なお、ルートセクションで <code>Freq=Anharmonic</code> を指定すれば非調和振動数計算が実行される。</p>
+</li><li><p>よく用いられる自由エネルギーの計算法として、ある程度の計算レベル①で最適化した構造に対して、より高い計算レベル②で1点計算して自由エネルギーを求めるという方法がある。このとき、<strong><u>②の計算レベルで得られる電子エネルギーの値のみ差し替えて利用する</u></strong>。一般に計算レベル①で最適化した構造は計算レベル②におけるポテンシャル面上の停留点ではないため、<strong>振動数を計算しても意味の無い値しか得られない</strong>。</p>
+</li><li><p>上述したが、Gaussianプログラムの場合、GRRMのFREQ計算のオプションに <code>NOFC</code> を付けると1点計算のレベルが "force" になるので要注意。</p>
+</li><li><p>【参考】<a href="https://gaussian.com/thermo/"><u>Thermochemistry in Gaussian</u></a>、<a href="https://www2.itc.nagoya-u.ac.jp/pub/pdf/pdf/vol06_03/282_296kouza.pdf"><u>分子軌道法計算プログラム Gaussian 03　―その 6 ―</u></a></p>
+</li></ul>
+<h3 id="h.3wh4i5y14sfr"><strong>・人工力の掛け方と</strong><strong>Gammaの値について（AddUniversalForceなど）</strong></h3>
+<ul><li><ul><li><p>基本的には「Add Interaction ～ END」のセクション内で、gamma、Fragment原子団（マニュアルMINやMC-AFIRの場合）、target原子（MC-AFIRやSC-AFIRの場合）、人工力を加える原子（フラグメント）ペアなど、を指定する。</p>
+</li><li><p><strong>gammaは一般に、想定される活性化障壁（barrier）の高さに対応する</strong>。例えば、活性化エネルギーが 100 kJ/mol の反応経路を求めるには gamma = 100 （もしくはそれよりも少し大きな値）と指定すればよい。SC-AFIR法による探索の場合、gamma = 100 と指定すれば活性化エネルギーが 100 kJ/mol 程度の反応経路が網羅的に収集される。</p>
+</li><li><p>結合組み換えを伴わないような<strong>コンフォメーション探索の場合は gamma = </strong><strong>数十～50 程度</strong>、通常の（標準状態での）<strong>有機反応など反応経路探索では</strong><strong> gamma = </strong><strong>20</strong><strong>0 程度</strong>、<strong>r</strong><strong>igidな系（結晶構造など）の探索では gamma = </strong><strong>1000 </strong><strong>程度</strong>で探索することが多い。これらの値は大まかに結合解離エネルギーと対応している。</p>
+</li><li><p>基本的に、gamma = 1000 より大きな値を指定してSC-AFIR計算をすることは無い（全探索などの場合を除く）。1000 kJ/mol というエネルギーは強力な三重結合ですら一気に切断してしまう大きさである（C≡C ～ 839 kJ/mol、C≡N ～ 891 kJ/mol、C≡O ～ 1072 kJ/mol）。計算上このような経路が得られたとしても日常的に接するような現実世界ではまず起こることがないため、解析する意味はほぼ無い。</p>
+</li><li><p>SC-AFIR法による探索中において原子ペア間にminusの人工力（斥力）が加えられて欲しくないときは、「SC = NegativeOFF」というオプションを用いて負のgamma値を除外することができる。分子間の衝突だけを見たい場合などに便利。</p>
+</li><li><p><strong><u>系全体</u></strong><strong>に一定の人工力を掛けたい場合</strong>は「Add Interaction ～ END」のセクション<strong><u>外</u></strong>で「AddUniversalForce = <em>xxx</em>」というオプションを用いる。例えば「AddUniversalForce = 100」とすると、系全体の原子に 100/<em>N</em> kJ/mol の人工力（引力）が課される（ここで<em>N</em>は系全体の原子数）。UniversalForceを課す範囲を限定したい場合は「UniversalForceTarget = <em>x, y, z, ...</em>」のように原子順の番号を指定する。</p>
+</li><li><p>最新版のGRRM（開発者版）では<strong>複数のフラグメント別に</strong> AddUniversalForce を指定可能。以下のように InterOnly とすればフラグメント① [<em>x,y,z,...</em>] とフラグメント② [<em>a,b,c,...</em>] の内部でそれぞれ別々に <em>xxx</em>/<em>N'</em> kJ/mol の人工力が課される。</p>
+</li></ul>
+</li></ul>
+<pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext">AddUniversalForce(InterOnly) = xxx
+UniversalForceTarget = x,y,z,..               ←フラグメント①
+UniversalForceTarget = a,b,c,...             ←フラグメント②</code></pre>
+<ul><li><ul><li><p>AddUniversalForce には負の値も指定可能（斥力が課される）。</p>
+</li><li><p>AddUniversalForce を加えることは「ポテンシャル面を歪ませる操作」に対応する。デフォルトでは、AddUniversalForce 付きの探索ではその歪んだポテンシャル面のエネルギー値が用いられるが、このエネルギーを用いて速度論ナビゲーションを適用しても正しい結果とならない。そのため、AddUniversalForce 付きのSC-AFIRによる探索においては「ReadBareEnergy」というオプションを用いる。ReadBareEnergyのフラグを立てると UniversalForce によって歪む前の「裸のポテンシャル」での "Bare Energy" を使って速度論ナビゲーションが実行される。探索中に得られる構造は UniversalForce の存在のために真のEQやTSとは異なるが、歪んだポテンシャル面のエネルギー値を用いるよりも遥かに良い速度論ナビゲーションの結果を与える。</p>
+</li><li><p>2点の初期構造から反応経路を求めることができる2点間法の「<strong>DS-AFIR法</strong>」ではガンマの値を指定する必要がない。DS-AFIR法については下の項目を参照のこと。</p>
+</li></ul>
+</li></ul>
+<h3 id="h.ed6we5vysxrz"><strong>・反応経路の名称について</strong></h3>
+<ul><li><ul><li><p>AFIR法による探索では「<strong>AFIR経路</strong>」、「<strong>LUP経路</strong>」、「<strong>IRC経路</strong>」という主に3種類の経路が登場する。</p>
+</li><li><p>「<strong>AFIR経路</strong>」は、人工力を課したMIN計算によって得られる経路を指す。AFIR法では、改変したPES上で最急降下経路（右図の赤色の経路）を得ることによって、オリジナルのPES上において障壁を超える経路（右図の緑色の経路）を取得する。このときの構造変化の系列（右図の緑色の経路）を「AFIR経路」と呼んでいる。</p>
+</li><li><p>「<strong>LUP経路</strong>」は、AFIR経路をLUP（locally-updated-plane）法によってエネルギー的に緩和して得られる経路である。LUP計算による反応経路の緩和は、通常複数回にわたって行われる。AFIR経路を1回でもLUP法で緩和すれば、得られる経路はすべて「LUP経路」と呼称される。実用的には、ある一定の閾値以上にエネルギーが緩和しなくなった場合に「LUP計算が収束した」と見なされる（粗いLUP計算しかしていなければ近似的遷移状態のエネルギーは不正確となる）。</p>
+</li><li><p>「<strong>IRC経路</strong>」は、固有反応座標（Intrinsic Reaction Coordinate, IRC）に沿って遷移状態からPES上を降下した際に得られる経路である。（GaussianプログラムなどでもIRC経路を求めることは可能）</p>
+</li><li><p>励起状態などを扱う系では「<strong>meta-IRC経路</strong>」という種類の経路が登場する。これは、停留点（グラジエントがゼロであるような構造）ではない点（構造）を初期構造としたときの最急降下経路として得られる経路である。<br/>例えば、ある分子が光吸収によってS<sub>0</sub>状態（基底状態）のフランクコンドン領域からS<sub>1</sub>状態に励起すると、超高速緩和してS<sub>1</sub>状態のPES上の平衡構造（S<sub>1</sub>-MIN）に到達する。このS<sub>1</sub>-MINの付近に遷移確率の高いポテンシャル面の交差点が存在しなければ、蛍光発光を伴ってS<sub>1</sub>-MINの構造からS<sub>0</sub>状態に失活する（輻射過程）。失活後、この分子はS<sub>1</sub>-MINの構造からS<sub>0</sub>状態のPES上を下ることになるが、このような場合に計算されるのが「meta-IRC経路」（非停留点からの最急降下経路）である。</p>
+</li></ul>
+</li></ul>
+<figure><img alt="AFIR経路・LUP経路・IRC経路とポテンシャルエネルギー曲面の模式図" decoding="async" loading="lazy" src="/assets/grrm-tips/reaction-paths.png"/></figure>
+<h3 id="h.im53v7wt7r2j"><strong>・</strong><strong>LUP法</strong><strong>について</strong></h3>
+<ul><li><ul><li><p>LUP（locally updated planes）法は経路最適化法の一種であり、<strong>初期推測の反応経路を基にしてエネルギーを緩和させた経路を求める</strong>。GRRMで利用する場合は %infile=xxx としてジョブ名xxxのファイル群を読み込ませる必要がある。なお、GRRMに実装されているLUP法は完全にオリジナルのアルゴリズムと同一というわけではなく、一部で独自のチューニングが施されている。</p>
+</li><li><p>読み込ませるファイルは xxx.log だけでもよい。このとき、 xxx.log に記載する<strong><u>構造の列は "</u></strong><strong><u># NODE </u></strong><strong><em><u>n</u></em></strong><strong><u>"（</u></strong><strong><em><u>n</u></em></strong><strong><u>は整数値なら何でもよい</u></strong><strong><u>）という見出しに続いてxyz形式の3次元座標が書いてあればよい</u></strong>。構造の列は少なくとも2構造以上必要である（逆に、点列の上限は（常識的な範囲内では）無い）。</p>
+</li><li><p>.logファイルさえあればよいので、AFIR法によらず<strong>分子モデリングソフトなどで手作りした "なんちゃって反応経路" を読み込ませてLUP経路やTSを得ることも可能</strong>（反応経路が全く明らかである場合、LUP法はSTQN法（QST 法）に類する多点間内挿補完法としても有用である）。</p>
+</li><li><p>LUP計算において、特に何も指定しなければ（デフォルト設定）<strong>①粗いLUPSizeでLUP（エネルギーをガンガン下げる）</strong>、<strong>②細かいLUPSizeでLUP（得られているエネルギープロファイルを滑らかにする）</strong>、の計2セットが実行される（①も②もLUPのITRは10回程度）。急ぎで結果を出さなければならない場合、LUPSize = 10 10 として粗いLUP計算のみで済ませることも多いが、正確なエネルギーの議論のためには②の細かいLUP計算まで実行しなければならないことも多い（②の細かいLUPにより最高点のエネルギーが 50 kJ/mol 程度下がることもある）。</p>
+</li><li><p>LUP計算のオプションとしては以下のようなものがある。</p>
+<ul><li><p><del>SkipLUPInitialStage　→　</del><strong><del>①のLUP（InitialStage）を省略して②のLUP（SecondaryStage）のみ実行</del></strong><strong><del><br/></del></strong><del>（LUPSize = 5 10がデフォルトだが、例えば LUPSize = 10 10 として SkipLUPInitialStage を付けると①の粗いLUP計算だけが実行される）</del><del><br/></del><del>※LUPSizeは小さい値にするほど刻み幅が細かくなる。</del><del><br/></del><strong>※この方法は非推奨。</strong></p>
+</li><li><p>DontLUPOptimization　→　<strong>読み込んだ経路上の各点でのエネルギーと勾配だけを計算する</strong><br/>（エネルギーを緩和させる座標更新を行わず、高い計算レベルで経路のエネルギーを再計算する場合などに利用する）</p>
+</li><li><p>GetConvergedLUPTOP　→　<strong>LUP経路のエネルギー最高点をSADDLE計算により真のTSに収束するまで最適化する</strong><br/>（粗いLUP計算と組み合わせて使われることが多い；計算コストは大きい）</p>
+</li></ul>
+</li></ul>
+</li></ul>
+<h3 id="h.j9vk4ipgqog8"><strong>・</strong><strong>RePATH</strong><strong>について</strong></h3>
+<ul><li><ul><li><p>LUP（locally updated planes）計算を反応経路ネットワーク全体に対して実施するJOBtype。</p>
+</li><li><p>TSの最適化まではしなくても良い場合は EQOnly と KeepLUPPath を付けて流すと良い。</p>
+</li><li><p>RePATHの対象となるパスを指定するオプションとしては以下のようなものがある。重要なパスだけを最適化したいといった場合に便利。</p>
+<ul><li><p>TS-Selection = <em>i</em>,<em>j</em>-<em>k</em>　→　TS<em>i</em>, TS<em>j</em> ~ TS<em>k</em> をLUPする。それ以外のTSは計算対象にならない。</p>
+</li><li><p>PT-Selection = <em>i</em>,<em>j</em>-<em>k</em>　→　PT<em>i</em>, PT<em>j</em> ~ PT<em>k</em> をLUPする。それ以外のPTは計算対象にならない。</p>
+</li></ul>
+</li></ul>
+</li></ul>
+<h3 id="h.wih1osllv4hy"><strong>・DS-AFIR法について</strong></h3>
+<ul><li><ul><li><p><strong>DS-AFIR法</strong>は「2点間法」の一種であり、AFIR関数を用いて<strong><u>2点の初期構造からそれらを繋ぐ反応経路を求める</u></strong>ことができる。この際、計算者はインプットにおいてガンマの値を指定する必要がない。DS-AFIR法のアルゴリズムでは、<strong>両端の構造を（ポテンシャル超曲面内で）互いに近づける人工力</strong>と<strong>反応経路を緩和して最低エネルギー経路（MEP）に近づける人工力</strong>という2種類の人工力をGRRMプログラムが自動的に適用しながらAFIR経路を求めていく。そのため、計算者自身はgammaの値を指定する必要が無い。（参考：<a href="https://doi.org/10.1002/jcc.25106"><u>https://doi.org/10.1002/jcc.25106</u></a> or <a href="http://doi.org/10.1002/wcms.1538"><u>http://doi.org/10.1002/wcms.1538</u></a> （<strong><em>Open Access</em></strong>））</p>
+</li><li><p>JOB名 <em>xxx </em>のDS-AFIR計算の中間ファイルとして <code><em>xxx</em></code><code>_DAFHP1.rrm</code>、<code><em>xxx</em></code><code>_DAFHP2.rrm</code> という2種類のファイルが生成する。これらには両端からRIDGE-POINTを探していく過程が出力されており、計算中に中身を覗くと実際にエネルギーの低い方から交互に座標が更新されていく様子が観察できる。これはDS-AFIR法のアルゴリズムに従った挙動である。</p>
+</li><li><p>また、このアルゴリズムから、<strong>DS-AFIR法は「ポテンシャル超曲面内で最短となる反応経路」を求める手法</strong>であることも理解できる。つまり、DS-AFIR法は必ずしもエネルギー的に（速度論的に）有利な経路を与える訳ではない（より遠回りだが反応障壁の低い経路が存在するかもしれない、という意味）。あまりにも「離れた」2点の初期構造をインプットにしてしまうと理想的でない経路が得られてしまう場合があるので注意が必要だが、簡便に遷移状態を見つけたいとき（1段階程度の短い反応経路のTSを決めたいとき）などに便利な手法である。</p>
+</li><li><p>DS-AFIR法は<strong>光励起状態の超高速失活経路の追跡においても有効</strong>である。特に、<strong>①垂直励起した点</strong>（フランク＝コンドン領域）から<strong>②ポテンシャル交差点</strong>に至る経路の途中に障壁が存在する場合、①と②の点をDS-AFIR計算の入力構造とすることで、この2点を繋ぐようま緩和経路を途中の遷移状態を含めて追跡することができる。<br/>※①と②の2点間に障壁が存在しない場合は、②の交差点の構造を初期構造として交差前後の2状態についてmeta-IRC計算を行い、失活経路を得る。</p>
+</li></ul>
+</li></ul>
+<h3 id="h.189g23ggjtke"><strong>・RCMC法</strong><strong>で取り扱われる「超状態」について</strong></h3>
+<ul><li><ul><li><ul><li><p>化合物には様々な異性体が存在するが、それらの間で相互変換するものもあれば、しないものもある。全原子が解離した極限的な状態を考えれば、原理的には全ての異性体は相互変換可能であるが、（クーロン爆発でも起こさない限り）現実的にそのようなことは起きえない。これは、各異性体間に<strong>活性化障壁</strong>が存在するからであり、その障壁の高さは異性体の種類や相互変換の様式によってまちまちである。</p>
+</li><li><p>ある1つの組成（例えば C<sub>3</sub>H<sub>8</sub> といったもの）に注目したとき、化合物の相互変換はその障壁の高さに応じて大きく2つのレベルに分類できる。<br/><strong>障壁①：C-C単結合のような、自由回転できる結合の回転によるコンフォメーション変化（</strong><strong>→ </strong><strong>配座異性体）</strong><strong><br/></strong><strong>障壁②：新たな化学結合の生成や切断を伴う化学変化</strong><strong>（</strong><strong>→ 構造異性体</strong><strong>）</strong></p>
+</li><li><p>ここで、①と②の相互変換ではどちらの方が障壁が低いかを考えると、①の方が圧倒的に低い。それはつまり、①の相互変換は②に比べて非常に短い時間（<strong>タイムスケール</strong>）で起こるということを意味する。例えばエタン分子C<sub>2</sub>H<sub>6</sub>の回転障壁は 12 kJ/mol 程度であることが知られている。室温における反応速度定数に直すと、これは 5.1×10<sup>10</sup> 程度と非常に大きく、毎秒数百万回もの回転が起きている計算になる。<br/>一方で、②の相互変換様式は一般に活性化障壁が高い。例えば、<a href="https://pubchem.ncbi.nlm.nih.gov/compound/12994"><u>(2Z)-2-Butenedinitrile</u></a> と <a href="http://www.chemspider.com/Chemical-Structure.8544.html"><u>Cyclopentene</u></a> のDiels-Alder反応の活性化エネルギーの実験値は 88.7 kJ/mol であり(S. Tang, J. Shi, Q. Guo, <em>Org. Biomol. Chem.</em> <strong>2012</strong>, 10, 2673–2682.による)、室温における反応速度定数は 2.3×10<sup>-3</sup> 程度となる。これは大体、1時間弱程度で反応が完了するタイムスケールに相当する（不可逆反応と仮定した場合）。<br/>※②の相互変換にも幾つかのレベルはあるが、ここでは現実的な実験条件で起こり得る反応を考えればよい。（例えば、アラニンのS体とR体を分子内で無理やり相互変換させるには莫大なエネルギーが必要になる；平面中間体を経由する（障壁が 300 kJ/mol 程度の）分子内異性化経路が存在するが、速度論的には分解する方が速い）</p>
+</li></ul>
+</li></ul>
+</li></ul>
+<p>このように、異性体間の相互変換と一口に言っても、<strong>そのタイムスケールのオーダーには大きな隔たりがある</strong>。</p>
+<ul><li><ul><li><ul><li><p>ある1つの組成に注目したとき、相互変換の素過程を一つひとつ繋ぎ合わせていくと「<strong>化学反応経路ネットワーク</strong>」が得られる。イメージとしては「<strong>沢山の盆地が存在する土地</strong>」のようなものである。盆地がEQ（平衡構造）に、各盆地を繋ぐ峠がTS（遷移状態）に相当する。このイメージで言うと、障壁①の相互変換は<strong>いつでも手軽に越えられる峠</strong>に相当し、障壁②の相互変換は<strong>標高が高くて越えるのに一苦労する峠</strong>に相当する。</p>
+</li><li><p>現実世界の市町村や国の境界は峠と峰によって定められていることが多い。これは化学の世界でもよく似ており、乱雑に運動する粒子の多くが、ある一定の時間と温度の条件下で越えられる峠（＝遷移状態）は自ずと決まってくる。こうした高い峠で囲まれている領域は「（あるタイムスケール内で）<strong>速度論的に到達可能な領域</strong>」などと表現される。反応経路ネットワークの全体は、このような幾つかの領域によって分割することができる。この領域のことを総称して、我々は「<strong>超状態</strong>」と呼んでいる。</p>
+</li><li><p>超状態は<strong>反応時間</strong>と<strong>反応温度</strong>、<strong>初期ポピュレーション</strong>をパラメータとして定義される。「初期ポピュレーションを割り振る」というのは「出発構造をどのEQにするか」に相当し、まず初めに反応経路ネットワークのどのEQ（盆地）に全粒子を割り振るのか、というイメージである。これらのパラメータによって「速度論的に到達可能な領域」が定まる。</p>
+</li><li><p>もう少し分かりやすい（しかし不正確な）例で喩えてみる。出発地点となる盆地にどんどん水を溜めていく、という状況を想像してみて欲しい。この水位は反応時間と反応温度が大きくなるほど増えていくものとする。ある一定の「反応時間」と「反応温度」に達すると水位は峠の高さを超え、その先の盆地に水が流れ込む。このように、反応時間を長くしていくと各超状態が次々と接続されていく。この操作を、全EQに初期ポピュレーションを分配した場合がRCMC法の「縮約」に相当する。<br/>※実際のRCMC法による縮約は、縮約対象の全EQのボルツマン分布を反応速度定数で重み付けして隣接する各EQに分配して超状態にする操作を行っている。上述の水が溜まっていくイメージは、数値的には全く正確ではないことに注意。</p>
+</li></ul>
+</li></ul>
+</li></ul>
+<h3 id="h.hja9x7ukqc8h"><strong>・RCMCのオプション</strong></h3>
+<p><strong>反応経路探索においてRCMC法による速度論ナビゲーションを適用する</strong></p>
+<ul><li><ul><li><ul><li><p>「TimeScale = <em>xxx</em>」：例えば <em>xxx </em>の部分を <code>1d-3</code> とすると 10<sup>-3</sup> 秒までの範囲で到達しうる構造のみに反応経路探索が制限される。（0.001秒以内の時間で到達可能なネットワークが「<strong>縮約</strong>」される）</p>
+</li><li><p>「Siml_temperature = <em>xxx yyy zzz</em>」：RCMC法のシミュレーション温度として3種類の値を指定できる（1個や2個でも良い）。縮約時には最大値が利用される。</p>
+</li><li><p>「Refine = HardSelection」：RePATHやReStruct、ReEnergyにおいて、初期ポピュレーションが与えられたEQから指定された Timescale の範囲内で到達可能なEQと、それらのEQを繋ぐ経路（TSとPT）のみが最適化される。；副反応の経路は追わないので、反応経路ネットワークの限定された範囲について議論したい場合にのみ有効。</p>
+</li><li><p>「TimeScaleLowLim = <em>xxx</em>」："PTKinSelect = <em>x</em>" と "TrafficVolCheck"、"Refine = HardSelection" を同時に使う場合に "PTKinSelect" の方の Timescale を指定する。</p>
+</li><li><p>「PTKinSelect = <em>x</em>」は「PTOnly」+「BottleneckOnly = <em>x</em>」の組み合わせと同じ。</p>
+</li><li><p>インプット例（SC-AFIRの探索でRCMC法によるOn-the-fly速度論シミュレーションを用いる場合の一例）</p>
+</li></ul>
+</li></ul>
+</li></ul>
+<pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext"># SC-AFIR/B3LYP/6-31G
+
+
+0 1
+C    -0.095991665990     -0.805920219678     -1.909605178596
+C     1.003042582222      0.007791291679     -1.162100889303
+C     0.054683679530     -1.815448255552      0.414734148105
+C    -0.671790672469     -1.925880237105     -0.972941136035
+H    -0.891854411127     -0.132592282669     -2.246101515377
+H     0.335331933023     -1.284696563208     -2.797262382989
+C     1.579744825132     -2.068588797031      0.188069891075
+H     2.084655140290     -2.028382746599      1.159450088938
+H     1.713566709445     -3.071315815606     -0.222791688765
+C     0.393623953298      0.547757893549      0.118764128484
+H     0.385994343773      1.610653441103      0.341265889646
+C    -0.109898022312     -0.398237424783      0.929485860235
+H    -0.574516982573     -0.196215925027      1.889560359180
+H     1.386499666732      0.804627363119     -1.807109576007
+H    -0.367877013576     -2.564591361828      1.088216420802
+C     2.146400520222     -0.985909265091     -0.776567556415
+H     2.540375003024     -1.448643202530     -1.690084899123
+H     2.969369577404     -0.433495751899     -0.309933564380
+O    -0.320111152018     -3.257151628977     -1.478464255539
+H    -0.784041061920     -3.408538122396     -2.327643337095
+C    -2.174477070469     -1.802018882940     -0.812466552033
+H    -2.527717163892     -0.793285080928     -0.606292622778
+C    -3.043485864513     -2.815962038250     -0.888912248276
+H    -2.713180551817     -3.835214972715     -1.064965684600
+H    -4.109965866621     -2.661398079359     -0.759368811169
+Options
+GauMem=200
+GauProc=2
+NOFC
+EQOnly
+KeepSCPath
+TrafficVolCheck                      ← 「交通量」を追跡する
+TimeScale= 3600                      ← 実験の反応時間より少し長い時間を指定する
+SIML_tLargest= 330               ← ターゲット原子数の10～30倍程度の値を指定する
+SIML_pLatest= 330
+Siml_temperature= 500.0 600.0 700.0    ← 実験の反応温度より少し高い温度まで指定する（3種類のシミュレーション温度を指定できる）
+Rtemperature= 10000.0
+Add Interaction
+target=1-4,7,10,12,16,19,21,23
+Gamma=300
+END</code></pre>
+<ul><li><ul><li><ul><li><p>速度論シミュレーションのオプションの一覧と詳細な仕様については<a href="https://afir.sci.hokudai.ac.jp/documents/tutorial/91"><u>公式HP</u></a>を参照して下さい。</p>
+</li></ul>
+</li></ul>
+</li></ul>
+<p><strong>得られている探索結果を読み込んでRCMC法によるポピュレーション解析を行う</strong></p>
+<ul><li><ul><li><ul><li><p><strong>RCMCに最低限必要なファイル（infile時にGRRMプログラムが要求するファイル）</strong></p>
+<ul><li><p>[JOBNAME]_DC_list.log</p>
+</li><li><p>[JOBNAME]_EQ_list.log</p>
+</li><li><p>[JOBNAME]_PT_list.log</p>
+</li><li><p>[JOBNAME]_TS_list.log</p>
+</li><li><p>なお、この4つのlist.logは必要最低限のファイルであり、<strong>基本的には全データ</strong><strong>（子プロセスの中間ファイルとMO以外は無くて良い）</strong><strong>を揃えた上でRCMCのJOBを実行してinfileさせるべき</strong>である。RCMCを行う場合はEQのクラスタリング結果（SC3_EQ_cl.rrm, SC3_EQ_pcl.rrm, SC3_EQ_pin.rrmなど）も読み込む必要があるので、大量に並列している or ランダムに生成した初期構造から探索している、といった場合においては[SIML_InitEQs = i,j,k-l]のオプションは使用しない方が良い（<strong><u>全データが無ければシミュレーション結果の再現性</u></strong><strong><u>が</u></strong><strong><u>保証できない場合がある</u></strong>）。</p>
+</li></ul>
+</li><li><p>「TimeScale = <em>xxx</em>」：例えば <em>xxx </em>の部分を <code>1</code><code>e</code><code>-3</code> とすると、指定した温度条件下で 10<sup>-3</sup> 秒以内に到達しうるEQのみにポピュレーションが分布する。SIML_InitEQs で初期ポピュレーションを指定していなければ、初期ポピュレーションが全EQに対して均等に分配される。</p>
+</li><li><p>初期ポピュレーションは「SIML_InitEQs = <em>i, j, k-l</em>」で分配できる。例えばRCMCによるEQのポピュレーション解析で「SIML_InitEQs = 0-9」とすると、EQ0～EQ9の10個のEQに均等に初期ポピュレーションが分配される。</p>
+</li><li><p>Optionsにおいて、例えば「MinimumPath = 1-7」とすると、EQ 1 と EQ 7 を繋ぐような一連の反応経路（PTおよびTS）のうち、速度論的に最も有利なもの（エネルギーの損失が最小となる経路）を選び出してくる。この出力結果は MINPATH.rrm に書き出される。Siml_temperatureとして3つの値を指定できるが、そのうち最も温度の高い場合の結果が書き出される。これらのシミュレーション温度に対応するように、低い方から MINPATH.rrm_0, MINPATH.rrm_1, MINPATH.rrm_2 にRCMC法による抽出結果が書き出されている。<br/><strong>※TimeScaleが短い場合、Siml_temperatureが低い場合、そもそもpathが繋がっていない場合などでは、MINPATH.rrm に一切PT/TSが書き出されないことがある。</strong></p>
+</li><li><p>TimeScale、Siml_temperatureに対応する条件下における各EQのボルツマン分布は EQ_popl.rrm に書き出される。</p>
+</li><li><p>インプット例（"test_SC"という名前のSC-AFIRのJOBを読み込んでRCMC法による速度論シミュレーションを行う例）<br/><strong>【</strong><strong>2つのEQ間を結ぶ経路のうち、速度論的に最も有利な経路を取得するJOB</strong><strong>】</strong></p>
+</li></ul>
+</li></ul>
+</li></ul>
+<pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext">%infile=test_SC    ← 読み込ませる反応経路ネットワークを指定（指定できるのは1つのネットワークのみ）
+# RCMC/B3LYP/6-31G   ← 形式的に指定しているだけであり、このレベルの計算が行われる訳ではない
+
+
+0 1
+C    -0.095991665990     -0.805920219678     -1.909605178596
+C     1.003042582222      0.007791291679     -1.162100889303
+C     0.054683679530     -1.815448255552      0.414734148105
+C    -0.671790672469     -1.925880237105     -0.972941136035
+H    -0.891854411127     -0.132592282669     -2.246101515377
+H     0.335331933023     -1.284696563208     -2.797262382989
+C     1.579744825132     -2.068588797031      0.188069891075
+H     2.084655140290     -2.028382746599      1.159450088938
+H     1.713566709445     -3.071315815606     -0.222791688765
+C     0.393623953298      0.547757893549      0.118764128484
+H     0.385994343773      1.610653441103      0.341265889646
+C    -0.109898022312     -0.398237424783      0.929485860235
+H    -0.574516982573     -0.196215925027      1.889560359180
+H     1.386499666732      0.804627363119     -1.807109576007
+H    -0.367877013576     -2.564591361828      1.088216420802
+C     2.146400520222     -0.985909265091     -0.776567556415
+H     2.540375003024     -1.448643202530     -1.690084899123
+H     2.969369577404     -0.433495751899     -0.309933564380
+O    -0.320111152018     -3.257151628977     -1.478464255539
+H    -0.784041061920     -3.408538122396     -2.327643337095
+C    -2.174477070469     -1.802018882940     -0.812466552033
+H    -2.527717163892     -0.793285080928     -0.606292622778
+C    -3.043485864513     -2.815962038250     -0.888912248276
+H    -2.713180551817     -3.835214972715     -1.064965684600
+H    -4.109965866621     -2.661398079359     -0.759368811169
+Options
+GauMem=200
+GauProc=1
+TimeScale= 3600.0   ← シミュレーションする反応時間の上限を指定（指数表記でもよい）
+Siml_temperature= 500.0 600.0 700.0 ← シミュレーションする反応温度を指定（1個以上3個以下の実数値を指定できる）
+MinimumPath = 1-7   ← EQ1とEQ7を結ぶ経路のうち速度論的に最も有利なものを、指定したTimeScale、Siml_temperatureの条件下で抽出する</code></pre>
+<p><strong>【</strong><strong>ある</strong><strong>EQ</strong><strong>に初期ポピュレーションを割り振り</strong><strong>、</strong><strong>0.01秒以内におけるポピュレーション（生成量の分布）の時間発展を調べる</strong><strong>JOB】</strong></p>
+<pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext">%infile=test_SC
+# RCMC/B3LYP/6-31G
+
+
+0 1
+O    -0.451057223038      0.916629960219     -0.086115521794
+C     0.319243855935     -0.242111107388     -0.312380033473
+H     1.738559015783     -0.162055801517      1.157489204955
+H    -0.164138797231     -1.131253174548      0.134081105958
+N     1.677430332645     -0.204927494061      0.142408921831
+H     0.318352930375     -0.379059111051     -1.403803646935
+H     2.161865832431      0.608945233710     -0.230443078321
+H    -0.609505539254      0.996099588526      0.859317714152
+Options
+GauMem=200
+GauProc=1
+TimeScale=1e-2
+Siml_temperature=500.0 600.0 700.0
+TrafficVolCheck
+SIML_InitEQs = 0-4,6,9   ← 初期ポピュレーションを割り振るEQを指定</code></pre>
+<ul><li><ul><li><ul><li><p>速度論シミュレーションのオプションの一覧と詳細な仕様については<a href="https://afir.sci.hokudai.ac.jp/documents/tutorial/91"><u>公式HP</u></a>を参照して下さい。</p>
+</li><li><p>JOBTypeをRePATHにしても速度論シミュレーションが実行できる。</p>
+</li></ul>
+</li></ul>
+</li></ul>
+<pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext">%infile=test_Si2H2
+# RePATH/PM7 ← RePATHのJOBTypeでRCMCのシミュレーションを行う場合はRCMCOnlyをオプションに付ける
+
+
+0 1
+Si   -0.403409716729      1.099356361220     -0.473940196414
+Si    0.114779774398      2.895842622141      0.422099460813
+H    -0.131162100728      0.705804358822     -1.881784045944
+H    -0.157679342213      3.288319017051      1.830215007973
+Options
+GauMem=200
+GauProc=1
+RCMCOnly
+TimeScale=1e0
+Siml_temperature=300.0 500.0
+TrafficVolCheck
+Siml_initEQs = 0
+SIML_VibEntropyOFF ← （Option）自由エネルギーを用いたRCMCシミュレーションにおいて振動エントロピーの効果を除去する（基準振動モードの固有値が低精度の場合などに用いる）</code></pre>
+<ul><li><ul><li><p>SCによる探索結果をinfileしてRePATHすると、電子状態計算のエラーなどの影響でパスが切れる（EQ間のCONNECTIONが失われる）ことが時々ある。一般に、RCMC法により反応経路ネットワークを縮約していくと、最終的には一つの超状態に縮約される。しかし、ネットワーク内に孤立したEQが存在する場合、RCMC法を用いても一つの超状態に縮約されることは無い。このような経路は、再計算するか、（障壁が非常に高いなどの理由で）重要でなければ削除してしまって良い。<br/>※CONNECTIONが切れたEQを検出するには、例えば Timescale = 10e10、SIML_Temperature = 10000 などの極端な条件でRCMCを適用し、それでもなお一つのSSにまとまっていないものを取ってくれば良い。（因みに、「<strong>10000 K &amp; </strong><strong>10</strong><strong><sup>10</sup></strong><strong> </strong><strong>s</strong>」で越えられるbarrierはおよそ <strong>5000 kJ/mol</strong> なので、これだけ極端な条件にしても縮約しないのであればパスが（電子状態計算の失敗などで）失われたと考えられる）</p>
+</li><li><p><strong>時定数（＝反応物の濃度が初期値の 1/e になるのにかかる時間）</strong><strong>が1時間（＝3600秒）に相当するときの活性化障壁と温度の関係</strong><br/>100.0 K  30.39 kJ/mol<br/>200.0 K  61.94 kJ/mol<br/>300.0 K  93.92 kJ/mol<br/>400.0 K  126.18 kJ/mol<br/>500.0 K  158.65 kJ/mol<br/>600.0 K  191.29 kJ/mol<br/>700.0 K  224.07 kJ/mol<br/>800.0 K  256.97 kJ/mol<br/>900.0 K  289.97 kJ/mol<br/>1000.0 K  323.07 kJ/mol<br/>速度論ナビゲーションのパラメータセットを決める際の参考にしてください。（値は遷移状態理論に基づく；虚振動数による補正はせず、透過係数を 1 と仮定）</p>
+</li><li><p>NOFCを付けたSC探索の結果をinfileしてRCMCシミュレーションをする場合：</p>
+<ul><li><p>【NOFCのみを付けた場合】と【NOFCとSIML_VibEntropyOFFを付けた場合】の結果は同じ</p>
+</li><li><p>【EigenCheckのみを付けた場合】と【NOFC、EigenCheckの順でNOFCを付けた場合】の結果は同じ</p>
+</li></ul>
+</li></ul>
+</li></ul>
+<br/><figure><img alt="反応時間・反応温度と活性化障壁の関係を示す曲面" decoding="async" loading="lazy" src="/assets/grrm-tips/reaction-timescale.png"/></figure>
+<ul><li><ul><li><p>反応時間の対数をx軸に、反応温度をy軸、活性化障壁の高さをz軸にとり、ちょうど 100.0 * (1 - 1/e) (%) ≒ 63.212... (%) だけ反応物が消費されるときの活性化エネルギー（逆反応を無視）をプロットすると左図のような曲面になる。</p>
+</li><li><p>上記の「時定数が1時間に相当するときの活性化障壁と温度の関係」は左図の赤線に相当している。</p>
+</li></ul>
+</li></ul>
+<h3 id="h.3yhlexmgis38"><strong>・</strong><strong>反応経路ネットワークの可視化</strong></h3>
+<ul><li><ul><li><p><strong>CytoScape、Gephiなどのグラフ作成ソフト、Network</strong><strong>X</strong><strong>や</strong><strong>igraphなどのグラフ作成モジュールを利用する</strong><strong>。</strong></p>
+</li><li><p>GRRMはRCMCのJOBの出力ファイルとして xxx_EDGE.cysdat および xxx_NODE.cysdat を生成する。これらはCytoScape用の入力ファイルとして利用できる。<br/>まず、xxx_NODE.cysdat の中身をExcelファイルにコピーし、同じファイルの別のシートに xxx_EDGE.cysdat の中身をコピーする。このExcelファイルをCytoScapeに読み込ませて反応経路ネットワークを可視化する。（Make an excel file, with one sheet for the edges (TS), and one for the nodes (EQ), then import them, first the edges as a network, then the nodes as a table, it works.）<br/>Smaller Ea をバネ定数として "Edge-wieghted spring embedded layout" を適用すると円形にレイアウトされたmapが自動的に生成する。EQ数が1000～程度のネットワークでないと明瞭な円形にはならない場合があるが、これはあくまで可視化手法の問題であって探索が足りないといった問題があるわけではない。</p>
+</li><li><p>xxx_EDGE.cysdatファイルではGRRMがPT/TSをCONNECTION順にソートしてしまうので、後からパスの番号で照合するといった作業が困難になる。必要に応じて自作のプログラムを作成するのがよい。</p>
+</li></ul>
+</li></ul>
+<h3 id="h.mphkbfawgdpu"><strong>・既存の探索結果を読み込んでさらに探索を行う場合</strong></h3>
+<ul><li><ul><li><p>系が大きい場合や、探索が意図しないタイミングで終了してしまった場合などに、.comファイルのルートセクションより上側に「%infile = xxx」と書いておくと、JOB名 xxx の探索結果を読み込んでSC-AFIR法による探索を継続させることができる。このとき xxx.log や xxx_EQ_list.log などのoutputファイルは同じ計算ディレクトリ内に置いておく必要がある。</p>
+</li><li><p>infileしたEQリストの中の特定のEQの周辺だけ探索したいことがある。そのような方法は主に以下の2通りがある。<br/>①「EQ-Selection = <em>n, m, k-l</em>」でAFIR法を適用するEQを探索したいものに限定する<br/>②「SIML_InitEQs = <em>i, j, k-l</em>」で速度論ナビゲーション用の初期ポピュレーションを探索したいEQ周辺に振る<br/><em>n, m, k-l </em>にはinfileするJOBのEQの番号を指定する。読み込みたいJOBが複数存在する場合は、JOBを一つずつGRRMを使って1つのJOBにまとめるか、手動で1つのJOBにまとめる必要がある。実際には複数のJOBを一度にinfileすることも可能だが、過去のEQ, PT, TSの番号の情報は保持されない。</p>
+</li><li><p>①の場合は、指定した番号のEQのみが To be applied になり、AFIR法による探索が適用される（EQ_test.rrmを確認すると良い）。②はもう少しsystematicな方法で、指定したEQにのみ初期ポピュレーションが分配されるため、超状態内で探索が重複する不都合を軽減できる。これらのオプションは実際に使用してみて使用感を確かめるのが良い。</p>
+</li></ul>
+</li></ul>
+<h3 id="h.exm44527g94k"><strong>・</strong><strong>活性化障壁をできるだけ早く見積もりたい場合</strong></h3>
+<ul><li><ul><li><p>半経験的手法</p>
+</li><li><p><strong>xTBレベル（などの半経験的手法）で計算した経路を DontLUPOptimization を付けてDFTレベルでLUP計算する：</strong><br/>この場合はxTBレベルのLUP経路上の各点についてDFTレベルの1点計算が実行され、最もエネルギーの高い点でDFTレベルのSADDLE計算が行われる。</p>
+</li></ul>
+</li></ul>
+<h3 id="h.elp18qy0s9qp"><strong>・FrozenAtomsの拘束を解いてinfileするオプション「ReadCommonGeometry」</strong></h3>
+<ul><li><ul><li><p>一般にGRRMによる表面反応解析について、探索の段階では計算コスト削減のために2～3層からなる比較的薄いSlabモデルを用いて計算することが多い。また、やたらとEQ数が膨れ上がるのを防止するために表面原子をFrozenAtomsセクションに入れて対称性を維持することがある。こうした制約下の反応経路探索によって得られた経路は、薄いSlabモデルを用いていることや、表面原子の構造の揺らぎが考慮できていないことにより、電子状態（エネルギーやスピン状態）や構造が現実の系から外れている場合がある。そのため、より化学的に正確な描像を議論するには、より厚い表面モデルで、かつ触媒表面の構造の揺らぎまで考慮することが望ましい。</p>
+</li><li><p>そこで以下のような手順で、厚い表面モデルで主要なパスを再計算する。</p>
+<ul><li><p>比較的粗い探索で得られた経路から、反応物と生成物を繋ぐような速度論的に有利なパスを抜き出す。</p>
+</li><li><p>このパス上の各点（構造）について、「ReadCommonGeometry」セクションを利用してさらに層を追加してLUP／RePATH計算を行う。<br/>例えばxxx_PT<em>n</em>.logをinfileする場合の.comの書き方は以下の通り（この例ではSIESTAをlinkしている）。「ReadCommonGeometry」セクションはOptions以下に記載する必要があるので注意する。</p>
+</li></ul>
+</li></ul>
+</li></ul>
+<pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext">%link=siesta-3.1
+%infile=xxx_PTn.log
+# LUP
+
+
+0 1
+（ここに基質分子と拘束を解く表面原子の座標を記載する）①
+FrozenAtoms
+（ここに新たに追加するFrozen Atoms（必要に応じてTVも）の座標を記載する）②
+Options
+ReadCommonGeometry
+（ここにxxx_PTn.logに記載されていない、新しく追加した原子の座標を記載する；②に記載したFrozen Atomsの原子は含まない）③
+END
+...（以下のオプションは任意なので省略）...</code></pre>
+<ul><li><p>xxx_PT<em>n</em>.logは "xxx" というJOB名のSC計算による探索で得られたPTのログである。PT<em>n</em>.logやTS<em>n</em>.logをそのままinfileすれば良い。①と②のセクションに記載された原子が系全体となる。③にはxxx_PT<em>n</em>.logに明示されていない原子の座標を記載する。これに合わせて電子状態計算ソフトウェア側のインプットも書き換えておくこと（この例ではSIESTAを使っているので、.inp内に記載しているSpecies数や擬ポテンシャルの割り当てなどを書き換えることも忘れずに）。</p>
+</li><li><p>上手くいっていれば xxx_CommonGeom.rrm という中間ファイルが生成される。この中に③の部分の座標が書き出されている。</p>
+</li></ul>
+<h3 id="h.984z2ym2cwyk"><strong>・</strong><strong>ポテンシャル面の交差探索</strong><strong>について</strong></h3>
+<ul><li><p>MESXは異なるスピンまたは空間対称性を有する2つの断熱性ポテンシャルエネルギー曲面が成す交線上における極小点であり、MECIは同じスピンと空間対称性を有する2つの断熱性ポテンシャルエネルギー曲面が成す円錐状の交点として与えられる極小点である。GRRMプログラムでは，状態Xのエネルギー<em>E</em><em>x</em>および状態Yのエネルギー<em>E</em><em>y</em>により構成される以下のペナルティ関数<em>F</em>(<strong>Q</strong>)を用い、<em>F</em>(<strong>Q</strong>)上で構造最適化を行うことで2状態間のポテンシャルエネルギー曲面上の交差点を探索することができる。</p>
+</li></ul>
+<p><em>F</em>(<strong>Q</strong>) = 1/2 * (<em>E</em><em>x</em>(<strong>Q</strong>) + <em>E</em><em>y</em>(<strong>Q</strong>)) + (<em>E</em><em>x</em>(<strong>Q</strong>) − <em>E</em><em>y</em>(<strong>Q</strong>))^2 * 1 / <em>α</em></p>
+<p>ここで<em>α</em>は<em>F</em>(<strong>Q</strong>)を最小化する操作に利用される定数であり、エネルギー差が閾値を下回るまで漸減されていく。<em>α</em>のデフォルトの初期値は 30 kJ/mol である。</p>
+<p>（上式のLaTeXコマンド）</p>
+<pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext">\begin{equation}
+F(\mathbf{Q})=\frac{1}{2}\left(E^{\mathrm{X}}(\mathbf{Q})+E^{\mathrm{Y}}(\mathbf{Q})\right)+\frac{\left(E^{\mathrm{X}}(\mathbf{Q})-E^{\mathrm{Y}}(\mathbf{Q})\right)^{2}}{\alpha}
+\end{equation}</code></pre>
+<ul><li><p>GRRMについては「OptX=...」というオプションを用いる（T1/S1などのMESXの探索では「OptX=(Seam)」、S1/S2などのMECIの探索では「OptX=(Conical)」を適用する）。また、どの電子状態を解くのかを指定するために「Second Input」セクションを追加する必要がある。以下のインプットによる計算ではホルムアルデヒド分子の一重項状態と三重項状態の最近接の交差Seamが探索される。励起状態計算のセッティング（<code>TD(50-50, root=1, Nstate=10)</code> など）はGaussianプログラムのインプットと同じ様式でGRRMの.com内のルートセクションに記載すること。</p>
+</li></ul>
+<pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext"> # MIN/UB3LYP/6-31+G**
+  
+ 0 1
+ C          0.000000000000         -0.000000000000         -0.530465924142
+ O         -0.000000000000          0.000000000000          0.685412425504
+ H          0.000000000000          0.942437931730         -1.129067750681
+ H         -0.000000000000         -0.942437931730         -1.129067750681
+ Options
+ GauProc=4
+ GauMem=200
+ OptX=(Seam)
+ Second Input
+ UB3LYP/6-31+G**
+ 0 3
+ END
+ MaxStepSize = 0.1
+ Stable=Opt</code></pre>
+<ul><li><p>ポテンシャル面の交差点はMIN計算の結果として得られるが、MIN計算は単にとにかくポテンシャル関数の極小値を見つける数学的な処理に過ぎないので、（化学的な意味で）垂直励起後に辿り着くMinimumとは限らない。より正確に光励起後の超高速緩和経路を求めるには<strong>交差点からのIRC計算</strong>と<strong>Minimumからの交差探索MIN計算（Opt=X）</strong>を逐次的に行うことが好ましい。なお、交差点からのIRC計算は非停留点を出発点とするものなので「Meta-IRC」オプションを付けて行う。（参考：<a href="https://onlinelibrary.wiley.com/doi/10.1002/jcc.25106#:~:text=at%20wileyonlinelibrary.com%5D-,Search%20for%20MESX/MECI%20Geometries,-In%20GRRM17%2C%20structures"><u>Search for MESX/MECI Geometries</u></a>）</p>
+</li><li><p>交差探索MIN計算では、初期構造の近傍に位置する交差点を一つ見つけることができる。しかし一般に、この交差点がエネルギー的に有利/不利な交差点であるかどうかは分からない。そこでSC-AFIR法による探索を「ポテンシャル面の交差点探索」に応用することができる。GRRMの.comにAdd Interactionセクションを追加して適宜SC探索用のオプションを追加すれば、ポテンシャル面の交差点探索が可能となる（ただしこの計算は【交差点の探索】であって【励起ポテンシャル面上でのコンフォメーション探索】ではないことに注意）。次に、SC探索により求められた目ぼしい交差点に対して、Minimumと交差点の構造を端点とするDS-AFIR計算を実行して正確なbarrierを求め、速度論的に到達可能な交差点かどうかを調べる。このようにして複数の交差点を次々と探索していくことができる。</p>
+</li></ul>
+<h3 id="h.r1lr9osty2d0"><strong>・</strong><strong>ModelF</strong><strong>について（Opt=Xでない場合）</strong></h3>
+<ul><li><p>文献 <a href="https://www.hindawi.com/journals/apc/2012/268124/"><u>https://www.hindawi.com/journals/apc/2012/268124/</u></a> によると、Avoiding Model Function (AMF) の表式は図の通り。ModelF(Smooth)を使用した場合は upper、ModelF(Smooth,Lower) を使用した場合は lower のPES上で探索・最適化が行われる。</p>
+</li></ul>
+<p>ここで<em>α</em>は非断熱（Diabatic）カップリングの大きさに関連する定数で、<em>α</em>のデフォルト値は 30 kJ/mol である。</p>
+<figure><img alt="Avoiding Model Function（AMF）の数式とパラメータ" decoding="async" loading="lazy" src="/assets/grrm-tips/model-function.png"/></figure>
+<ul><li><p>カップリングしている2状態の下側のポテンシャル面上で最適化・探索したい場合は ModelF(Smooth, Lower) のオプションを利用する。この際、エネルギーは ModelF (Second Input : First Input) の順番でlogに表示される。スピン二乗値は常にSecond Inputのものが表示されるので注意。</p>
+</li></ul>
+<h3 id="h.3no9eqofb3mp"><strong>・</strong><strong>SC-AFIRによる探索の設定に関する考察</strong></h3>
+<ul><li><p>SC-AFIR法を用いた反応経路探索のセッティングに関しては、経験的にこうすれば上手く探索できるといったものはあれど、確立された最適な指標があるとは言い難い。ここではホルムアルデヒドとアンモニアの反応を例に考えてみる。</p>
+</li><li><p>以下は「網羅的」と言って差し支えないレベルの反応経路探索のインプット例である。（※より網羅性を極めたい場合はSC-AFIR2などのJOBTypeを指定すればよいが、計算コストが激増してしまう）</p>
+</li></ul>
+<p>（例）特に何の工夫もない機械的な反応経路探索のインプット；電子状態計算ソフトウェアは Gaussian 16 を使用；CNH5O_SCAFIR.com</p>
+<pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext"># SC-AFIR/wB97XD/def2SVP
+
+
+0 1
+O         -1.387706449882          0.457710449716         -0.000152791229
+C         -0.799277342210         -0.587346468200         -0.000053857794
+H         -0.505806753819         -1.115755497088         -0.938138497178
+H         -0.528590206390         -1.127926725615          0.937971866055
+N          1.875936611222          0.071774791425          0.001242991043
+H          2.534394440611         -0.118094309179         -0.752821033309
+H          2.415477595949          0.060987226287          0.865598903294
+H          1.560371343943          1.032761998638         -0.126815608580
+Options
+GauMem=200
+GauProc=4
+DownDC=12
+EQOnly
+KeepLUPPaths
+Rtemperature= 10000.0
+Add Interaction
+target=1-8
+gamma=400
+END</code></pre>
+<p>このインプットを用い、4コア×10並列で計算を実施したところ、<strong>1053868点で電子状態計算が行われ、そのうち35957点でヘシアンの計算が行われた。要した計算時間は 532936.0 秒（6日と少し）で、115個のEQ、4013本の経路（PT）が得られた</strong>。探索の最中、得られたAFIR経路に対してはLUP計算（AFIR経路のエネルギー緩和）を行っているが、EQOnlyを付けているのでTSまでの最適化（+その後のIRC計算）は省いている。</p>
+<p>得られた115個のEQは結合様式別に以下の14種類の異性体に分類された。探索において得られたEQの順にラベリングしている。横の文字列はSMILES表記。</p>
+<p><strong>1</strong><strong> </strong><strong>C=O.N</strong><strong> </strong><strong> </strong><strong> </strong><strong>← 初期構造（ホルムアルデヒド + アンモニア</strong><strong>；最安定EQから </strong><strong>56.2</strong><strong> kJ/mol 程度不安定）</strong><strong><br/></strong><strong>2</strong><strong> </strong><strong>[CH]O.N</strong><strong><br/></strong><strong>3</strong><strong> </strong><strong>NCO</strong><strong> </strong><strong> </strong><strong> </strong><strong>← </strong><strong>主生成物</strong><strong>（</strong><strong>メタノールアミン；最安定EQが属するstate</strong><strong>）</strong><strong><br/></strong><strong>4</strong><strong> </strong><strong>[NH3][CH]O</strong><strong><br/></strong><strong>5</strong><strong> </strong><strong>NC=O.[H][H]</strong><strong> </strong><strong>← </strong><strong>副</strong><strong>生成物①（</strong><strong>ホルムアミド + H</strong><strong><sub>2</sub></strong><strong>；最安定EQから 27.2 kJ/mol 程度不安定；enol体も含む）</strong><strong><br/></strong><strong>6</strong><strong> </strong><strong>C=N.O</strong><strong> </strong><strong> </strong><strong> </strong><strong>← 副生成物</strong><strong>②</strong><strong>（</strong><strong>メタンイミン</strong><strong> + H</strong><strong><sub>2</sub></strong><strong>O</strong><strong>；最安定EQから </strong><strong>62.7</strong><strong> kJ/mol 程度</strong><strong>不安定</strong><strong>）</strong><strong><br/></strong><strong>7</strong><strong> </strong><strong>OC=N.[H][H]</strong><strong><br/></strong><strong>8</strong><strong> </strong><strong>OC=N.[H][H]</strong><strong><br/></strong><strong>9</strong><strong> </strong><strong>[CH]N.O</strong><strong><br/></strong><strong>10</strong><strong> </strong><strong>[C]=N.O.[H][H]</strong><strong><br/></strong><strong>11</strong><strong> </strong><strong>C#N.O.[H][H]</strong><strong><br/></strong><strong>12</strong><strong> </strong><strong>[C]=O.N.[H][H]</strong><strong> </strong><strong>← 副生成物③（</strong><strong>CO + N</strong><strong>H</strong><strong><sub>3</sub></strong><strong> + H</strong><strong><sub>2</sub></strong><strong>O</strong><strong>；最安定EQから 113.1 kJ/mol 程度不安定）</strong><strong><br/></strong><strong>13</strong><strong> </strong><strong>N[C]O.[H][H]</strong><strong><br/></strong><strong>14</strong><strong> </strong><strong>N=C=O.[H][H].[H][H]</strong></p>
+<p>全く終了条件を課していない割には、ある程度の計算コストで探索が完了しており、かつ、広い範囲を十分に探索できたと言える。<br/>※探索結果はGitHubで公開している　→　<a href="https://github.com/h-nabata/GRRM/tree/main/CNH5O"><u>https://github.com/h-nabata/GRRM/tree/main/CNH5O</u></a></p>
+<ul><li><p>上の方で述べた通り、探索に用いる人工力の他に恒常的にPESを改変する AddUniversalForce を併用すると、多成分反応の経路探索が効率化されることが知られている。正の UniversalForce はDC（解離チャネル）を人工力によって塞いでしまうことに相当しており、探索が効率化できることは直感的にも理解しやすい。</p>
+</li></ul>
+<p>（例）基質を凝集させる人工力（UniversalForce）を課したPES上での探索；電子状態計算ソフトウェアは Gaussian 16 を使用；CNH5O_uSCAFIR.com</p>
+<pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext"># SC-AFIR/wB97XD/def2SVP
+
+
+0 1
+O         -1.387706449882          0.457710449716         -0.000152791229
+C         -0.799277342210         -0.587346468200         -0.000053857794
+H         -0.505806753819         -1.115755497088         -0.938138497178
+H         -0.528590206390         -1.127926725615          0.937971866055
+N          1.875936611222          0.071774791425          0.001242991043
+H          2.534394440611         -0.118094309179         -0.752821033309
+H          2.415477595949          0.060987226287          0.865598903294
+H          1.560371343943          1.032761998638         -0.126815608580
+Options
+GauMem=200
+GauProc=4
+DownDC=12
+EQOnly
+KeepLUPPaths
+Rtemperature= 10000.0
+Add Interaction
+target=1-8
+gamma=400
+END
+AddUniversalForce=100
+UniversalForceTarget=1-8
+ReadBareEnergy</code></pre>
+<p>4コア×10並列で計算を実施したところ、<strong>xxx</strong><strong>点で電子状態計算が行われ、そのうち</strong><strong>xxx</strong><strong>点でヘシアンの計算が行われた。要した計算時間は </strong><strong>xxx</strong><strong>秒（</strong><strong>xxx</strong><strong>）で、</strong><strong>xxx</strong><strong>個のEQ、</strong><strong>xxx</strong><strong>本の経路（PT）が得られた</strong>。探索の最中、得られたAFIR経路に対してはLUP計算（AFIR経路のエネルギー緩和）を行っているが、EQOnlyを付けているのでTSまでの最適化（+その後のIRC計算）は省いている。ただしこのLUP計算は「基質を凝集させる人工力を課したPES」上で行われていることに注意（ReadBareEnergyは近似EQにおける真のエネルギーのみ参照するOption）。</p>
+<p>この探索で得られた18個のEQを先ほど同様に結合様式別に分類すると以下のようになった。</p>
+<p><strong>％％％　計算中　</strong><strong>％％％</strong></p>
+<p>先ほどのJOBに比べて劇的に計算時間が短縮されているにもかかわらず、反応経路ネットワークのうち主生成物や主要な副生成物のEQ、及びそれらに至る経路が得られていることが分かる。この計算結果は改変されたPES上のものなので、真のエネルギーを得るにはUniversalForceを除いてRePATH計算ないしはLUP計算を行う必要がある。ただ、化学的に重要な反応経路を素早く特定する分には、こちらのインプットの方が優秀である。</p>
+<ul><li><p>上の方で述べた通り、探索に用いる人工力の他に恒常的にPESを改変する AddUniversalForce を併用すると、多成分反応の経路探索が効率化されることが知られている。正の UniversalForce はDC（解離チャ</p>
+</li></ul>
+<p>（例）RCMC法による速度論シミュレーションを併用したPES上での探索；電子状態計算ソフトウェアは Gaussian 16 を使用；CNH5O_simSCAFIR.com</p>
+<pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext"># SC-AFIR/wB97XD/def2SVP
+
+
+0 1
+O         -1.387706449882          0.457710449716         -0.000152791229
+C         -0.799277342210         -0.587346468200         -0.000053857794
+H         -0.505806753819         -1.115755497088         -0.938138497178
+H         -0.528590206390         -1.127926725615          0.937971866055
+N          1.875936611222          0.071774791425          0.001242991043
+H          2.534394440611         -0.118094309179         -0.752821033309
+H          2.415477595949          0.060987226287          0.865598903294
+H          1.560371343943          1.032761998638         -0.126815608580
+Options
+GauMem=200
+GauProc=4
+DownDC=12
+EQOnly
+KeepLUPPaths
+TrafficVolCheck
+TimeScale= 3600
+SIML_tLargest= 240
+SIML_pLatest= 240
+Siml_temperature= 300.0 400.0 500.0
+Rtemperature= 10000.0
+Add Interaction
+target=1-8
+gamma=500
+END
+AddUniversalForce=100
+UniversalForceTarget=1-8
+ReadBareEnergy</code></pre>
+<p>4コア×10並列で計算を実施したところ、<strong>62936</strong><strong>点で電子状態計算が行われ、そのうち</strong><strong>2989</strong><strong>点でヘシアンの計算が行われた。要した計算時間は </strong><strong>36187.0 </strong><strong>秒（</strong><strong>10時間</strong><strong>）で、</strong><strong>18</strong><strong>個のEQ、</strong><strong>279</strong><strong>本の経路（PT）が得られた</strong>。探索の最中、得られたAFIR経路に対してはLUP計算（AFIR経路のエネルギー緩和）を行っているが、EQOnlyを付けているのでTSまでの最適化（+その後のIRC計算）は省いている。ただしこのLUP計算は「基質を凝集させる人工力を課したPES」上で行われていることに注意（ReadBareEnergyは近似EQにおける真のエネルギーのみ参照するOption）。</p>
+<p>※このインプットでは速度論ナビゲーションを併用している（解離チャネル以外の領域ではPESが大幅には変化していないと仮定している）。SIML_tLargestとSIML_pLatestにはターゲット原子の30倍の値を指定している。ここでKeepLUPPathsを付けているのは、AFIR経路をしっかり緩和することで速度論ナビゲーションが正常に機能することを期待したためである。KeepLUPPathsではなくKeepSCPathsを指定するとLUP計算を実行しないため計算時間は短縮されるが、真の障壁よりエネルギーの高いPTを使ってRCMCシミュレーションが実行されることになり、必要以上に探索領域がカットされる恐れがある。</p>
+<p>この探索で得られた18個のEQを先ほど同様に結合様式別に分類すると以下のようになった。</p>
+<p><strong>1</strong><strong> </strong><strong>C=O.N</strong><strong> </strong><strong> </strong><strong> </strong><strong>← 初期構造（ホルムアルデヒド + アンモニア</strong><strong>）</strong><strong><br/></strong><strong>2</strong><strong> </strong><strong>[CH]O.N</strong><strong><br/></strong><strong>3</strong><strong> </strong><strong>NCO</strong><strong> </strong><strong> </strong><strong> </strong><strong>← 主生成物（メタノールアミン）</strong><strong><br/></strong><strong>4</strong><strong> </strong><strong>C=N.O</strong><strong> </strong><strong> </strong><strong> </strong><strong>← 副生成物②（メタンイミン + H</strong><strong><sub>2</sub></strong><strong>O</strong><strong>）</strong><strong><br/></strong><strong>5</strong><strong> </strong><strong>[C]=O.N.[H][H]</strong><strong> </strong><strong>← 副生成物③（CO + NH</strong><strong><sub>3</sub></strong><strong> + H</strong><strong><sub>2</sub></strong><strong>O）</strong><strong><br/></strong><strong>6</strong><strong> </strong><strong>[CH2][NH].O</strong><strong><br/></strong><strong>7</strong><strong> </strong><strong>NC=O.[H][H]</strong><strong> </strong><strong>← 副生成物①（ホルムアミド + H</strong><strong><sub>2</sub></strong><strong>）</strong></p>
+<p>先ほどのJOBに比べて劇的に計算時間が短縮されているにもかかわらず、反応経路ネットワークのうち主生成物や主要な副生成物のEQ、及びそれらに至る経路が得られていることが分かる。この計算結果は改変されたPES上のものなので、真のエネルギーを得るにはUniversalForceを除いてRePATH計算ないしはLUP計算を行う必要がある。ただ、化学的に重要な反応経路を素早く特定する分には、こちらのインプットの方が優秀である。</p>
+<p>なお、UniversalForceを除去したRePATH計算を4コア×10並列で実施したところ、<strong>41088</strong><strong>点で電子状態計算が行われ、そのうち</strong><strong>2623</strong><strong>点でヘシアンの計算が行われた。要した計算時間は </strong><strong>24747.0 </strong><strong>秒（</strong><strong>7</strong><strong>時間弱）で、</strong><strong>22</strong><strong>個のEQ、</strong><strong>265</strong><strong>本の経路（PT）が得られた</strong>。EQ数がSCの結果より増えているのは凝集させる人工力が除かれたことで取り得る分子の配向にバリエーションが生じたためで、新しい結合様式の異性体が得られた訳ではない。SC-AFIRによる探索と合わせても総計算時間は1日未満で済んでおり、しかも主要な反応経路はしっかり得られている。このように2分子以上の反応経路探索ではUniversalForceを課すことで計算コストを大きく低減することができる。</p>
+<h3 id="h.75mvm6om8avs"><strong>・</strong><strong>Issues </strong><strong>on input</strong><strong> chemical compositions in GRRM calculations</strong></h3>
+<ul><li><p>Consider, for example, the case of the <a href="https://en.wikipedia.org/wiki/Oxy-Cope_rearrangement"><u>Oxy-Cope rearrangement</u></a>. The driving force of this reaction is the formation of a carbonyl by spontaneous keto-enol tautomerism. Since the final product is obtained by keto-enol tautomerism, the activation barrier would be higher than it actually is if calculated with only one molecule.</p>
+</li><li><p><a href="https://pubchem.ncbi.nlm.nih.gov/compound/134875291"><u>(1S,2S,4S)-2-ethenylbicyclo[2.2.2]oct-5-en-2-ol</u></a> is thermally converted to a bicyclic compound with a carbonyl group [<a href="https://pubs.acs.org/doi/pdf/10.1021/ja01076a066"><u>ref.</u></a>]. Other adulterants are also observed. The reaction pathway search was performed for this system by the SC-AFIR method by using DFT level calculations. B3LYP/6-31G level was used for reaction pathway search. Search navigation by the RCMC method was used to cut off kinetically unreachable regions in the reaction pathway network.</p>
+</li></ul>
+<figure><img alt="Oxy-Cope転位を含む系の反応経路ネットワーク" decoding="async" loading="lazy" src="/assets/grrm-tips/oxy-cope.png"/></figure>
+<ul><li><p>In this obtained network, the rate-determinig step is the keto-enol tautomerism step. Its activation barrier is around 320 kJ/mol. It is so high that it takes as long as one month for only 1% of the reactants to be converted to product even if heated at 500 °C!</p>
+</li><li><p>In general, intermolecular proton transfer in the keto-enol tautomerism is more feasible than intramolecular one. The search for monomers by SC-AFIR successfully yielded thermochemically stable products, but did not provide a kinetically accessible pathway to the products. If dimers are not taken into account, chemically incorrect reaction pathways may be followed to reach the target product.</p>
+</li><li><p>Althogh the SC-AFIR method is a general-purpose way for exploring chemical reaction pathways, the obtained reaction path network may be inaccurate if an appropriate composition and reaction conditions are not input. So, you need to carefully check the input conditions, especially when applying the SC-AFIR method to an unknown system.</p>
+</li></ul>
+<h2 id="h.nthkr0n9a8pe">【その他のメモ】</h2>
+<h3 id="h.oakce3ccot9h"><strong>・</strong><strong>《応急処置》分子研（IMS；自然科学研究機構 岡崎共通研究施設 計算科学研究センター）の計算機でGRRMとSIESTA(ver 4.1.5)を接続する際のセットアップ作業</strong></h3>
+<ul><li><ul><li><p>IMSの計算機でSIESTAを利用する際は、.bash_profileに</p>
+</li></ul>
+</li></ul>
+<pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext">LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/lustre/system/apl/lx/siesta415/exts/lib</code></pre>
+<p>の行を追加する（<code>export LD_LIBRARY_PATH</code>も忘れずに；必要に応じてsourceしてprintenvコマンドで確かめる）</p>
+<ul><li><ul><li><p>SIESTA内の並列計算において "Bad DM normalization" というエラーが発生して計算が異常終了することがある（この問題は旧バージョンのSIESTAでも発生する）。これはIntel Parallel Studioのバージョン依存の不具合だと考えられる。<br/><del>moduleとして intel_parallelstudio/2018update4 がデフォルトで読み込まれている場合、一度moduleをpurgeして</del><del><br/></del><code><del>module load intel_parallelstudio/2017update8</del></code><del><br/></del><del>で 2017update8 を読み込む。</del>（参考：「<a href="https://ccportal.ims.ac.jp/node/2857"><u>module による環境設定</u></a>」- 自然科学研究機構 岡崎共通研究施設 計算科学研究センター）<br/>結局はソフトウェアのコンパイル時の設定（計算に使用しているmpi周りのライブラリ）の問題のようなので、個人のユーザーの環境（module）をいじったところでSIESTA内の並列計算で用いられるコンパイラなどは変更できない。<br/>解決策としては、①SIESTAの並列数を減らす、②SIESTAを並列せずserialで流す（1コアで計算する）、③ユーザー自身が自分のHomeでSIESTAをビルドする、④DM規格化の閾値を緩める、などがある。GRRM側の並列数が稼げる場合や、複数のJOBを同時並行できる場合は、①や②で対応可能（ただし系によっては1点計算の時間が膨大になってしまう）。③はユーザー自身でセッティングできるため確実だが時間が掛かりやや面倒ではある。④について、「SCF.DM.Normalization.Tolerance」の値を調整する（大きくする）ことでDM規格化の閾値を緩めることができる。しかしこれは根本的な解決にはならない上に計算精度にも影響するのでできれば避けたい。 </p>
+</li><li><p>（＠分子研）pwSCFで電子状態計算を行う場合のメモ（自分用）<br/>分子研の計算機でpwSCFを利用する場合は intel_parallelstudio のバージョンに注意する。デフォルトでは intel_parallelstudio/2018update4 がロードされるが、バグの関係でpwSCFが落ちてしまう。そこで以下のようにして 2020update2 を読み込む必要がある。 <br/><strong>①「module purge」でモジュールの読み込みを全解除</strong><strong><br/></strong><strong>②「module load intel_parallelstudio/2020update2」で intel_parallelstudio/2020update2 を読み込む</strong><br/>その後は通常通り<br/>なお、「module list」で読み込み済みのモジュール一覧を取得、「module avail」で読み込み可能なモジュール一覧を取得することができる。</p>
+</li><li><p>pwSCFを使う場合は [JOB名].com、[JOB名].in、[JOB名].sh の他に、<strong>[JOB名].com0、[JOB名].in_COPY、[JOB名]mod.rrm</strong>（[JOB名].1dr は有れば）も用意する。</p>
+</li><li><p>（pwSCFで）ESM-RISMを使って電場を課す場合は [JOBNAME].in の &amp;system セクションにて</p>
+</li></ul>
+</li></ul>
+<pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext">lfcpopt = .TRUE.
+fcp_mu = -0.36325
+assume_isolaed='esm'
+esm_bc='bc2'</code></pre>
+<p>などと指定し、 fcp_mu の値を与える必要がある。これはフェルミ準位（単位はRy.）に電位差に相当する値をRy.単位で加えた値を指定する（つまり、1度電位差ゼロの条件で電極のみで1点計算しておく必要がある）。例えば、ある金属表面のフェルミ準位が -0.40000 Ry. のとき、+0.5 V（vs 参照電極）を印加する場合は 0.5/13.60569 = 0.036749 (Ry.) を加えて <code>fcp_mu = -0.36325</code> と指定する。</p>
+<p>※また、このとき、[JOBNAME].in の中に <strong>&amp;ions のセクションを形式的に追加する必要がある</strong>ので注意。内容としては</p>
+<pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext">&amp;ions
+/</code></pre>
+<p>などと書いておけばよい。これが無いとpwSCF内部で予期せぬエラーが発生する。</p>
+<h3 id="h.5l66xsn3hzqo"><strong>・</strong><strong>分子研の計算機における並列計算投入用シェルスクリプトについて</strong></h3>
+<ul><li><ul><li><p>例えば、4 core × 10 並列のJOBを投入するにはサブミット用の tcsh に以下のように書く。</p>
+</li></ul>
+</li></ul>
+<pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext">#!/bin/tcsh -f#PBS -l select=1:ncpus=40:mpiprocs=4:ompthreads=10:jobtype=small#PBS -l walltime=144:0:0
+set pnum=10
+set JOBTIME=140
+set GRRM=/lustre/home/users/${USER}/GRRM
+set WORK=/work/users/${USER}/${input}.$$
+
+
+...（以下略）...cp     ${GRRM}/GRRMp    ${WORK} 
+cp     ${GRRM}/GRRM.out ${WORK} 
+
+
+cd     ${WORK}
+./GRRMp ${input} -p${pnum} -h${JOBTIME}</code></pre>
+<ul><li><ul><li><p>大きめの計算でなければ jobtype=core で流すのが良い。</p>
+</li></ul>
+</li></ul>
+<h3 id="h.pypjdqvft3tw"><strong>・GRRMのインプットファイル（.com）</strong><strong>に</strong><strong>コメントを残す</strong></h3>
+<ul><li><ul><li><p>.comファイルにコメントを残すには、行頭が "%" で始まる行をファイルの先頭に入れれば良い。行数制限は確認できていない（恐らく上限は無い？）。</p>
+</li><li><p>但し "%infile=" や "%link=" の後ろは読み込んでしまうので、もし該当しそうな場合は注意。NGワードの存在は未確認。</p>
+</li></ul>
+</li></ul>
+<h3 id="h.850hr713f6oj"><strong>・GRRM</strong><strong>に関する数式のLaTeXコマンド</strong></h3>
+<ul><li><ul><li><p><a href="https://qiita.com/h-nabata/private/1090c6dd41bbefa2f17b"><u>（理論研用）TeXコマンド集</u></a> - Qiitaで限定公開しています。</p>
+</li></ul>
+</li></ul>
+<h3 id="h.cdddkfij211h"><strong>・GRRM</strong><strong>に関する</strong><strong>論文について</strong></h3>
+<ul><li><ul><li><p>【誤植？】<a href="https://onlinelibrary.wiley.com/doi/10.1002/jcc.25106#:~:text=The%20case%20with%20%CE%B3%E2%80%89%3D%E2%80%89153%20kJ/mol%20assumes%20a%20reaction%20condition%20T%E2%80%89%3D%E2%80%89130%C2%B0C%20and%20t%E2%80%89%3D%E2%80%8910%20days%20%28tactual%E2%80%89%3D%E2%80%891%20day%29%20in%20eq.%204."><u>γ = 153 kJ/mol の部分</u></a>について、T = 130°C and t = 10 days の条件で計算してみると 145.57 kJ/mol となる。一方で、T = 150°C and t = 10 days の条件だと 152.96 kJ/mol となるので、本文の 130°Cは誤りで、本当は「T = 150°C and t = 10 days」が正しいのではないか？</p>
+</li></ul>
+</li></ul>
+<h3 id="h.4zubr992ddh3"><strong>・GRRM</strong><strong>のJob typeとナンバー</strong></h3>
+<ol><li><p>FREQ</p>
+</li><li><p>MIN</p>
+</li><li><p>SADDLE</p>
+</li><li><p>IRC</p>
+</li><li><p>2PSHS</p>
+</li><li><p>SCW</p>
+</li><li><p>ADDF</p>
+</li><li><p>ReStruct</p>
+</li><li><p>ReEnergy</p>
+</li><li><p>---</p>
+</li><li><p>---</p>
+</li><li><p>MC-AFIR</p>
+</li><li><p>LUP</p>
+</li><li><p>RePath</p>
+</li><li><p>---</p>
+</li><li><p>SC-AFIR</p>
+</li><li><p>DS-AFIR</p>
+</li><li><p>---</p>
+</li><li><p>RCMC</p>
+</li></ol>
+<p>※"ADDF" はかつて "GRRM" という名称のJob typeだった。</p>
+<p>なお、反応経路探索手法としての「GRRM法」という手法や名称は現在公式には存在せず、使用は推奨されない。2023年現在、GRRMプログラムに実装されている反応経路探索手法には「ADDF法」と「AFIR法」の2つがある。これらを駆使して未知の化学反応を研究する方法論を 「Global Reaction Route Mapping strategy」、「GRRM戦略」などと呼ぶ。（参考文献：<a href="https://doi.org/10.1039/C3CP44063J"><u>https://doi.org/10.1039/C3CP44063J</u></a> ）</p>
+
+</article>
+<p class="grrm-back"><a href="#grrm-top">ページの先頭へ戻る</a> · <a href="/toc.html">サイト目次</a></p>
+</main>

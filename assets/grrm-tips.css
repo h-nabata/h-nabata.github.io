@@ -1,0 +1,52 @@
+/* GRRM Tips only. Change these variables to adjust the page theme. */
+.grrm-tips {
+  --accent: #245d72;
+  --border: #d8e2e7;
+  --code-bg: #f3f6f8;
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+  color: #26343d;
+  font: 16px/1.85 system-ui, -apple-system, "Segoe UI", "Noto Sans JP", sans-serif;
+  overflow-wrap: anywhere;
+}
+.grrm-tips h1 { margin: .3rem 0; color: var(--accent); font-size: 2.4rem; line-height: 1.3; }
+.grrm-tips h2 { margin: 3rem 0 1.2rem; padding: .5rem 0 .5rem .85rem; border-left: 4px solid var(--accent); font-size: 1.4rem; line-height: 1.6; }
+.grrm-tips h3 { margin: 2.2rem 0 .8rem; font-size: 1.15rem; line-height: 1.65; }
+.grrm-tips [id] { scroll-margin-top: 90px; }
+.grrm-tips p { margin: .85rem 0; }
+.grrm-tips a { color: #176481; text-decoration: underline; text-underline-offset: .2em; }
+.grrm-tips a:hover { color: #103e50; }
+.grrm-tips :focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.grrm-tips ul, .grrm-tips ol { padding-left: 1.5rem; }
+.grrm-tips li { margin: .65rem 0; }
+.grrm-tips .grrm-breadcrumb, .grrm-tips .grrm-source { font-size: .875rem; color: #566b75; }
+.grrm-tips .grrm-intro { margin-bottom: 2rem; }
+.grrm-tips .grrm-toc { padding: 1rem 1.25rem; background: #f8fafb; border: 1px solid var(--border); border-radius: 8px; }
+.grrm-tips .grrm-toc h2 { margin: 0 0 .7rem; padding: 0; border: 0; font-size: 1.15rem; }
+.grrm-tips .grrm-toc details + details { border-top: 1px solid var(--border); }
+.grrm-tips .grrm-toc summary { padding: .65rem 0; cursor: pointer; font-weight: 650; color: var(--accent); }
+.grrm-tips .grrm-toc li { font-size: .9rem; }
+.grrm-tips pre { max-width: 100%; margin: 1.1rem 0 1.5rem; padding: 1rem; border: 1px solid var(--border); border-radius: 6px; background: var(--code-bg); overflow-x: auto; white-space: pre; overflow-wrap: normal; word-break: normal; tab-size: 4; line-height: 1.6; }
+.grrm-tips code { display: inline; padding: .1em .3em; border-radius: 3px; background: var(--code-bg); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .9em; }
+.grrm-tips pre code { display: block; padding: 0; background: transparent; color: inherit; font-size: 14px; white-space: inherit; overflow-wrap: normal; word-break: normal; }
+.grrm-tips figure { margin: 1.5rem 0 2rem; }
+.grrm-tips img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+.grrm-tips sup, .grrm-tips sub { font-size: .75em; line-height: 0; }
+.grrm-tips .grrm-back { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+@media (max-width: 600px) {
+  .grrm-tips { padding: 24px 16px 40px; }
+  .grrm-tips h1 { font-size: 2rem; }
+  .grrm-tips h2 { font-size: 1.2rem; }
+  .grrm-tips h3 { font-size: 1.05rem; }
+  .grrm-tips pre { padding: .8rem; }
+  .grrm-tips .grrm-toc { padding: .8rem 1rem; }
+}
+@media print {
+  .header, .grrm-toc, .grrm-back { display: none; }
+  .grrm-tips { max-width: none; padding: 0; font-size: 11pt; }
+  .grrm-tips pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .grrm-tips h2, .grrm-tips h3 { break-after: avoid; }
+  .grrm-tips figure { break-inside: avoid; }
+}
