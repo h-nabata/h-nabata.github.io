@@ -666,12 +666,13 @@ END
 <h3 id="h.984z2ym2cwyk"><strong>・</strong><strong>ポテンシャル面の交差探索</strong><strong>について</strong></h3>
 <ul><li><p>MESXは異なるスピンまたは空間対称性を有する2つの断熱性ポテンシャルエネルギー曲面が成す交線上における極小点であり、MECIは同じスピンと空間対称性を有する2つの断熱性ポテンシャルエネルギー曲面が成す円錐状の交点として与えられる極小点である。GRRMプログラムでは，状態Xのエネルギー<em>E</em><em>x</em>および状態Yのエネルギー<em>E</em><em>y</em>により構成される以下のペナルティ関数<em>F</em>(<strong>Q</strong>)を用い、<em>F</em>(<strong>Q</strong>)上で構造最適化を行うことで2状態間のポテンシャルエネルギー曲面上の交差点を探索することができる。</p>
 </li></ul>
-<p><em>F</em>(<strong>Q</strong>) = 1/2 * (<em>E</em><em>x</em>(<strong>Q</strong>) + <em>E</em><em>y</em>(<strong>Q</strong>)) + (<em>E</em><em>x</em>(<strong>Q</strong>) − <em>E</em><em>y</em>(<strong>Q</strong>))^2 * 1 / <em>α</em></p>
-<p>ここで<em>α</em>は<em>F</em>(<strong>Q</strong>)を最小化する操作に利用される定数であり、エネルギー差が閾値を下回るまで漸減されていく。<em>α</em>のデフォルトの初期値は 30 kJ/mol である。</p>
-<p>（上式のLaTeXコマンド）</p>
-<pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext">\begin{equation}
-F(\mathbf{Q})=\frac{1}{2}\left(E^{\mathrm{X}}(\mathbf{Q})+E^{\mathrm{Y}}(\mathbf{Q})\right)+\frac{\left(E^{\mathrm{X}}(\mathbf{Q})-E^{\mathrm{Y}}(\mathbf{Q})\right)^{2}}{\alpha}
-\end{equation}</code></pre>
+<p>状態Xと状態Yのエネルギーをそれぞれ $E^{\mathrm{X}}(\mathbf{Q})$、$E^{\mathrm{Y}}(\mathbf{Q})$ とすると、最適化に用いるペナルティ関数は次式で表される。</p>
+<div class="grrm-equation" role="math" aria-label="状態Xと状態Yのエネルギー差に基づくペナルティ関数">
+\[
+F(\mathbf{Q}) = \frac{1}{2}\left(E^{\mathrm{X}}(\mathbf{Q})+E^{\mathrm{Y}}(\mathbf{Q})\right)+\frac{\left(E^{\mathrm{X}}(\mathbf{Q})-E^{\mathrm{Y}}(\mathbf{Q})\right)^2}{\alpha}
+\]
+</div>
+<p>ここで $\alpha$ は $F(\mathbf{Q})$ を最小化する際に用いる定数であり、エネルギー差が閾値を下回るまで漸減される。デフォルトの初期値は 30 kJ/mol である。</p>
 <ul><li><p>GRRMについては「OptX=...」というオプションを用いる（T1/S1などのMESXの探索では「OptX=(Seam)」、S1/S2などのMECIの探索では「OptX=(Conical)」を適用する）。また、どの電子状態を解くのかを指定するために「Second Input」セクションを追加する必要がある。以下のインプットによる計算ではホルムアルデヒド分子の一重項状態と三重項状態の最近接の交差Seamが探索される。励起状態計算のセッティング（<code>TD(50-50, root=1, Nstate=10)</code> など）はGaussianプログラムのインプットと同じ様式でGRRMの.com内のルートセクションに記載すること。</p>
 </li></ul>
 <pre aria-label="入力例・出力ログ" tabindex="0"><code class="language-plaintext"> # MIN/UB3LYP/6-31+G**
@@ -698,7 +699,16 @@ F(\mathbf{Q})=\frac{1}{2}\left(E^{\mathrm{X}}(\mathbf{Q})+E^{\mathrm{Y}}(\mathbf
 <ul><li><p>文献 <a href="https://www.hindawi.com/journals/apc/2012/268124/"><u>https://www.hindawi.com/journals/apc/2012/268124/</u></a> によると、Avoiding Model Function (AMF) の表式は図の通り。ModelF(Smooth)を使用した場合は upper、ModelF(Smooth,Lower) を使用した場合は lower のPES上で探索・最適化が行われる。</p>
 </li></ul>
 <p>ここで<em>α</em>は非断熱（Diabatic）カップリングの大きさに関連する定数で、<em>α</em>のデフォルト値は 30 kJ/mol である。</p>
-<figure><img alt="Avoiding Model Function（AMF）の数式とパラメータ" decoding="async" loading="lazy" src="/assets/grrm-tips/model-function.png"/></figure>
+<figure class="grrm-equation" role="math" aria-label="Avoiding Model Functionとカップリング関数の数式">
+\[
+\begin{aligned}
+F^{\mathrm{AMF}}(\mathbf{Q}) &= \frac{1}{2}\left(E^{\mathrm{State\,1}}(\mathbf{Q})+E^{\mathrm{State\,2}}(\mathbf{Q})\right) \\
+&\quad + \frac{1}{2}\sqrt{\left(E^{\mathrm{State\,1}}(\mathbf{Q})-E^{\mathrm{State\,2}}(\mathbf{Q})\right)^2+4U(\mathbf{Q})^2}, \\
+U(\mathbf{Q}) &= \frac{\alpha}{2}\exp\left[-\left(\frac{E^{\mathrm{State\,1}}(\mathbf{Q})-E^{\mathrm{State\,2}}(\mathbf{Q})}{\alpha}\right)^2\right].
+\end{aligned}
+\]
+<figcaption>Avoiding Model Function（AMF）と状態間カップリング $U(\mathbf{Q})$ の表式</figcaption>
+</figure>
 <ul><li><p>カップリングしている2状態の下側のポテンシャル面上で最適化・探索したい場合は ModelF(Smooth, Lower) のオプションを利用する。この際、エネルギーは ModelF (Second Input : First Input) の順番でlogに表示される。スピン二乗値は常にSecond Inputのものが表示されるので注意。</p>
 </li></ul>
 <h3 id="h.3no9eqofb3mp"><strong>・</strong><strong>SC-AFIRによる探索の設定に関する考察</strong></h3>
