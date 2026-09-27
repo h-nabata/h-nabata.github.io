@@ -32,6 +32,8 @@
 .grrm-tips code { display: inline; padding: .1em .3em; border-radius: 3px; background: var(--code-bg); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .9em; }
 .grrm-tips pre code { display: block; padding: 0; background: transparent; color: inherit; font-size: 14px; white-space: inherit; overflow-wrap: normal; word-break: normal; }
 .grrm-tips figure { margin: 1.5rem 0 2rem; }
+.grrm-tips .grrm-equation { max-width: 100%; overflow-x: auto; text-align: center; }
+.grrm-tips .grrm-equation figcaption { margin-top: .6rem; color: var(--muted); font-size: .95rem; }
 .grrm-tips img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
 .grrm-tips sup, .grrm-tips sub { font-size: .75em; line-height: 0; }
 .grrm-tips .grrm-back { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); }
