@@ -1,0 +1,58 @@
+---
+layout: default
+title: GRRM反応経路ネットワーク表示
+exclude_from_search: true
+extra_head: |
+  <link rel="stylesheet" href="{{ "/assets/grrm-tools.css" | relative_url }}">
+---
+<div class="top-wrapper">
+  <div class="container">
+    <h1>反応経路ネットワーク</h1>
+    <p>GRRM の RCMC 出力をブラウザーで可視化</p>
+  </div>
+</div>
+<main class="grrm-tool network-tool" id="reaction-network">
+  <nav class="tool-breadcrumb" aria-label="パンくずリスト"><a href="{{ "/toc.html" | relative_url }}">目次</a> / <a href="{{ "/grrm-tips.html" | relative_url }}">GRRM Tips</a> / 反応経路ネットワーク</nav>
+  <h2>NODE / EDGE データを読み込む</h2>
+  <p>GRRM が RCMC 計算で出力する <code>*_NODE.cysdat</code> と <code>*_EDGE.cysdat</code> を選択してください。データはこの端末内で処理します。表形式を読み取り、列の対応を確認してからネットワークを描画します。</p>
+  <div class="network-file-grid">
+    <label class="network-file"><span>ノード（EQ）: *_NODE.cysdat</span><input id="network-node-file" type="file" accept=".cysdat,.txt,.tsv,.csv,text/plain"></label>
+    <label class="network-file"><span>エッジ（TS / PT）: *_EDGE.cysdat</span><input id="network-edge-file" type="file" accept=".cysdat,.txt,.tsv,.csv,text/plain"></label>
+  </div>
+  <details class="network-paste">
+    <summary>テキストを貼り付ける</summary>
+    <label for="network-node-text">NODEデータ</label><textarea id="network-node-text" rows="5" spellcheck="false"></textarea>
+    <label for="network-edge-text">EDGEデータ</label><textarea id="network-edge-text" rows="5" spellcheck="false"></textarea>
+  </details>
+  <div id="network-mapping" class="network-mapping" hidden>
+    <p>列の対応を確認してください。ヘッダーを自動判定できない場合は、列番号を選びます。</p>
+    <div class="network-mapping-grid">
+      <label>ノードID <select id="network-node-id-col"></select></label>
+      <label>ノード表示名（任意） <select id="network-node-label-col"></select></label>
+      <label>エッジ始点 <select id="network-edge-source-col"></select></label>
+      <label>エッジ終点 <select id="network-edge-target-col"></select></label>
+      <label>活性化障壁 Ea（任意） <select id="network-edge-ea-col"></select></label>
+    </div>
+    <div class="tool-actions"><button type="button" class="tool-button primary" id="network-draw">ネットワークを表示</button></div>
+  </div>
+  <p id="network-status" role="status" aria-live="polite"></p>
+  <section id="network-view" hidden>
+    <div class="network-toolbar">
+      <label>表示するEa上限 <input id="network-ea-filter" type="range" min="0" max="100" value="100" disabled><output id="network-ea-value">すべて</output></label>
+      <button type="button" class="tool-button" id="network-fit">全体表示</button>
+      <button type="button" class="tool-button" id="network-save-svg">SVGを保存</button>
+    </div>
+    <div class="network-canvas-wrap"><svg id="network-svg" role="img" aria-label="GRRM反応経路ネットワーク"></svg></div>
+    <p class="tool-hint">ノードにカーソルを合わせるとEQ名、エッジに合わせると対応するEaを表示します。レイアウトは連結関係を見渡すための簡易配置です。</p>
+    <div id="network-stats" class="network-stats"></div>
+  </section>
+  <details class="tool-notes">
+    <summary>入力形式と注意点</summary>
+    <ul>
+      <li>GRRM Tips に記載のとおり、NODE / EDGEデータはCytoScape用の表として出力されます。本ページはタブ・カンマ・空白区切りの表を読み込みます。</li>
+      <li>ファイルの書式やGRRMのバージョンによって列名が異なる場合は、列の対応を手動で選択してください。始点・終点列を特定できない場合、描画前に正しい列を指定する必要があります。</li>
+      <li>グラフは可視化用の簡易レイアウトで、速度論シミュレーションやネットワークの化学的解釈を行うものではありません。エッジの値を使ったフィルターは、入力にEa列がある場合のみ利用できます。</li>
+    </ul>
+  </details>
+</main>
+<script defer src="{{ "/assets/reaction-network.js" | relative_url }}"></script>
