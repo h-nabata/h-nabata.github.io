@@ -56,7 +56,7 @@
     if (ends.length > starts.length && starts.length > 0) {
       add(issues,"info","END の数を確認してください","END が Add Interaction の数より多く見つかりました。別のセクション用 END であれば問題ありません。");
     }
-    if (isAfir && starts.length) {
+    if (starts.length) {
       for (const m of starts) {
         const lineNo = all.slice(0,m.index).split("\n").length;
         const tail = clean.slice(lineNo).join("\n").split(/^\s*end\s*$/im)[0] || "";
