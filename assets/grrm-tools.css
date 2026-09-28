@@ -7,11 +7,12 @@
   font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans JP", sans-serif;
   font-size: 16px;
   line-height: 1.75;
+  overflow-wrap: anywhere;
 }
 .grrm-tool h2 { margin: 1.8rem 0 .8rem; padding-left: .75rem; border-left: 4px solid #245d72; font-size: 1.35rem; }
 .grrm-tool h3 { margin: 1.3rem 0 .5rem; }
 .grrm-tool p { margin: .85rem 0; }
-.grrm-tool code { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; background: #f2f5f7; padding: .1rem .25rem; border-radius: 3px; }
+.grrm-tool code { display: inline; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; background: #f2f5f7; padding: .1rem .25rem; border-radius: 3px; }
 .tool-breadcrumb { color: #64737b; font-size: .9rem; }
 .tool-breadcrumb a { color: #176481; text-decoration: underline; text-underline-offset: .15em; }
 .tool-label, .network-paste label { display: block; margin: 1rem 0 .35rem; font-weight: 700; }
@@ -57,13 +58,13 @@
 .check-line { color: #53646d; font: .88em ui-monospace, SFMono-Regular, Consolas, monospace; }
 .network-file-grid, .network-mapping-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: .8rem; }
 .network-file { display: grid; gap: .5rem; padding: 1rem; border: 1px solid #d3dfe4; border-radius: 6px; background: #f8fafb; font-weight: 700; }
-.network-file input { font-weight: 400; }
+.network-file input { width: 100%; min-width: 0; font-weight: 400; }
 .network-paste { margin: 1rem 0; padding: .75rem 1rem; border: 1px solid #d7e0e4; border-radius: 6px; }
 .network-mapping { margin: 1.2rem 0; padding: 1rem; border: 1px solid #c9d8de; border-radius: 6px; background: #f6fafb; }
 .network-mapping-grid label { display: grid; gap: .25rem; font-weight: 650; }
 .network-mapping select { width: 100%; min-width: 0; padding: .45rem; font: inherit; }
 .network-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; margin: 1rem 0; }
-.network-toolbar label { display: flex; flex: 1 1 340px; align-items: center; gap: .6rem; }
+.network-toolbar label { display: flex; flex: 1 1 340px; min-width: 0; align-items: center; gap: .6rem; }
 .network-toolbar input[type="range"] { flex: 1; min-width: 120px; }
 .network-canvas-wrap { height: min(72vh, 760px); min-height: 380px; overflow: hidden; border: 1px solid #cdd9de; border-radius: 8px; background: #fbfdfe; }
 #network-svg { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
