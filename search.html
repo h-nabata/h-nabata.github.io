@@ -1,0 +1,22 @@
+---
+layout: default
+title: サイト内検索
+exclude_from_search: true
+extra_head: |
+  <link rel="stylesheet" href="{{ "/assets/search.css" | relative_url }}">
+---
+<main class="site-search" data-search-index="{{ "/search-index.json" | relative_url }}">
+  <nav aria-label="パンくずリスト"><a href="{{ "/index.html" | relative_url }}">トップページ</a> / 検索</nav>
+  <h1>サイト内検索</h1>
+  <p>サイト内のページを横断して検索します。複数の語を空白で区切ると、すべてを含むページを表示します。</p>
+  <form id="site-search-form" role="search">
+    <label for="site-search-query">検索語</label>
+    <div class="site-search-controls">
+      <input id="site-search-query" name="q" type="search" autocomplete="off" autofocus>
+      <button type="submit">検索</button>
+    </div>
+  </form>
+  <p id="site-search-status" role="status" aria-live="polite">検索索引を読み込んでいます…</p>
+  <ol id="site-search-results" class="site-search-results"></ol>
+</main>
+<script defer src="{{ "/assets/search.js" | relative_url }}"></script>
