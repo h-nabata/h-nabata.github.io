@@ -34,7 +34,7 @@
     const rows=lines.map(x=>({cells:splitRow(x.line,delimiter),line:x.index}));
     const width=Math.max(...rows.map(r=>r.cells.length));
     rows.forEach(r=>{while(r.cells.length<width)r.cells.push("");});
-    const headerWord=/^\\s*(?:id|eq(?:_?id)?|node(?:_?id)?|number|index|source|src|from|target|dst|to|edge|ts|pt|ea|barrier|energy|name|label|connection|activation)(?:\\s|[_-]|$)/i;
+    const headerWord=/^\s*(?:id|eq(?:_?id)?|node(?:_?id)?|number|index|source|src|from|target|dst|to|edge|ts|pt|ea|barrier|energy|name|label|connection|activation)(?:\s|[_-]|$)/i;
     const firstData=rows[0].cells;
     const header=firstData.some(x=>headerWord.test(x));
     const names=header?firstData.map((x,i)=>x.trim()||"列 "+(i+1)):Array.from({length:width},(_,i)=>"列 "+(i+1));
