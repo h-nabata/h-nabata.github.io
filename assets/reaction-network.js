@@ -27,7 +27,7 @@
   }
   function parseTable(text) {
     const lines=text.replace(/^\uFEFF/,"").replace(/\r\n?/g,"\n").split("\n")
-      .map((line,index)=>({line,index:index+1})).filter(x=>x.line.trim()&&!/^\s*[#;]/.test(x.line));
+      .map((line,index)=>({line,index:index+1})).filter((x,i)=>x.line.trim()&&(!/^\s*[#;]/.test(x.line)||(i===0&&/\b(?:id|node|eq|source|target|from|to)\b/i.test(x.line))));
     if(!lines.length) return null;
     const first=lines[0].line;
     const delimiter=first.includes("\t")?"\t":first.includes(",")?",":"whitespace";
