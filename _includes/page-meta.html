@@ -1,0 +1,15 @@
+{% if page.last_updated or page.verification_environment or page.verification_scope %}
+<aside class="page-meta" aria-label="ページ更新・確認情報">
+  <dl>
+    {% if page.last_updated %}
+    <div><dt>内容更新日</dt><dd>{{ page.last_updated | escape }}</dd></div>
+    {% endif %}
+    {% if page.verification_environment %}
+    <div><dt>確認環境</dt><dd>{{ page.verification_environment | escape }}</dd></div>
+    {% endif %}
+    {% if page.verification_scope %}
+    <div class="page-meta-note"><dt>確認範囲</dt><dd>{{ page.verification_scope | escape }}</dd></div>
+    {% endif %}
+  </dl>
+</aside>
+{% endif %}
