@@ -9,6 +9,9 @@
 </head>
 <body>
   {% include header.html %}
+  {% if page.last_updated or page.verification_environment or page.verification_scope %}
+    {% include page-meta.html %}
+  {% endif %}
   {{ content }}
 </body>
 </html>
