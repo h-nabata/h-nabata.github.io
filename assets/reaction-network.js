@@ -125,14 +125,51 @@
     drawGraph();
   }
   function makeLayout(nodeList) {
-    const n=nodeList.length, pos=new Map();
-    const cx=600,cy=400;
+    const n=nodeList.length, pos=new Map(), cx=600,cy=400;
     if(n===1){pos.set(nodeList[0].id,{x:cx,y:cy});return pos;}
-    const radius=n<8?Math.min(240,70+n*22):Math.min(355,175+Math.log(n)*22);
-    nodeList.forEach((node,i)=>{
+    if(n>250){
+      const radius=Math.min(355,175+Math.log(n)*22);
+      nodeList.forEach((node,i)=>{
+        const angle=-Math.PI/2+2*Math.PI*i/n;
+        pos.set(node.id,{x:cx+radius*Math.cos(angle),y:cy+radius*.88*Math.sin(angle)});
+      });
+      return pos;
+    }
+    const initialRadius=Math.min(340,90+Math.sqrt(n)*28);
+    const points=nodeList.map((node,i)=>{
       const angle=-Math.PI/2+2*Math.PI*i/n;
-      pos.set(node.id,{x:cx+radius*Math.cos(angle),y:cy+radius*.88*Math.sin(angle)});
+      return {id:node.id,x:cx+initialRadius*Math.cos(angle),y:cy+initialRadius*.85*Math.sin(angle),fx:0,fy:0};
     });
+    const index=new Map(points.map((p,i)=>[p.id,i]));
+    const k=Math.sqrt(420000/n);
+    const withEa=graph.edges.map(e=>e.ea).filter(Number.isFinite);
+    const minEa=withEa.length?Math.min(...withEa):0,maxEa=withEa.length?Math.max(...withEa):0;
+    for(let step=0;step<90;step++){
+      for(const p of points){p.fx=0;p.fy=0;}
+      for(let i=0;i<n;i++)for(let j=i+1;j<n;j++){
+        const a=points[i],b=points[j],dx=a.x-b.x,dy=a.y-b.y;
+        const d=Math.max(1,Math.hypot(dx,dy)),f=(k*k)/d;
+        const fx=dx/d*f,fy=dy/d*f;
+        a.fx+=fx;a.fy+=fy;b.fx-=fx;b.fy-=fy;
+      }
+      for(const edge of graph.edges){
+        const ia=index.get(edge.a),ib=index.get(edge.b);
+        if(ia===undefined||ib===undefined||ia===ib)continue;
+        const a=points[ia],b=points[ib],dx=b.x-a.x,dy=b.y-a.y;
+        const d=Math.max(1,Math.hypot(dx,dy));
+        const weight=Number.isFinite(edge.ea)&&maxEa>minEa?1+(maxEa-edge.ea)/(maxEa-minEa):1;
+        const f=(d*d/k)*weight*.7,fx=dx/d*f,fy=dy/d*f;
+        a.fx+=fx;a.fy+=fy;b.fx-=fx;b.fy-=fy;
+      }
+      const temperature=55*(1-step/90);
+      for(const p of points){
+        p.fx+=(cx-p.x)*.006;p.fy+=(cy-p.y)*.006;
+        const force=Math.max(1,Math.hypot(p.fx,p.fy)),move=Math.min(temperature,force);
+        p.x+=p.fx/force*move;p.y+=p.fy/force*move;
+        p.x=Math.max(45,Math.min(1155,p.x));p.y=Math.max(45,Math.min(755,p.y));
+      }
+    }
+    points.forEach(p=>pos.set(p.id,{x:p.x,y:p.y}));
     return pos;
   }
   function elt(name,attrs={}) {
