@@ -1,0 +1,38 @@
+---
+layout: default
+title: GRRM入力チェック
+exclude_from_search: true
+extra_head: |
+  <link rel="stylesheet" href="{{ "/assets/grrm-tools.css" | relative_url }}">
+---
+<div class="top-wrapper">
+  <div class="container">
+    <h1>GRRM入力チェック</h1>
+    <p>入力ファイルを送信せず、このブラウザー内で確認します</p>
+  </div>
+</div>
+<main class="grrm-tool" id="grrm-check">
+  <nav class="tool-breadcrumb" aria-label="パンくずリスト"><a href="{{ "/toc.html" | relative_url }}">目次</a> / <a href="{{ "/grrm-tips.html" | relative_url }}">GRRM Tips</a> / 入力チェック</nav>
+  <h2>入力ファイルを確認</h2>
+  <p>Gaussian形式を含む GRRM の .com / .inp テキストを対象に、よくある記述ミスを静的に確認します。計算プログラムの文法全体や、電子状態計算の収束・化学的妥当性を保証するものではありません。</p>
+  <label class="tool-label" for="grrm-input-file">ファイルを選択（.com / .inp / .txt）</label>
+  <input id="grrm-input-file" type="file" accept=".com,.inp,.txt,.gjf,text/plain">
+  <label class="tool-label" for="grrm-input-text">または入力テキストを貼り付け</label>
+  <textarea id="grrm-input-text" rows="18" spellcheck="false" placeholder="%chk=job.chk&#10;%nprocshared=8&#10;#p b3lyp/6-31g(d) opt=calcall&#10;&#10;title&#10;&#10;0 1&#10;C  0.0  0.0  0.0"></textarea>
+  <div class="tool-actions">
+    <button type="button" class="tool-button primary" id="grrm-check-run">チェックする</button>
+    <button type="button" class="tool-button" id="grrm-check-clear">クリア</button>
+  </div>
+  <p id="grrm-check-status" role="status" aria-live="polite"></p>
+  <section id="grrm-check-results" aria-label="チェック結果" hidden></section>
+  <details class="tool-notes">
+    <summary>チェック内容と制限</summary>
+    <ul>
+      <li>MC-AFIR / SC-AFIRのAdd Interactionブロック、END、gammaの欠落・負値、よくある綴り間違いを確認します。</li>
+      <li>座標と電荷・スピン多重度を読み取れた場合、原子数と原子番号の範囲、電子数と多重度の偶奇の整合性を確認します。</li>
+      <li>GRRMの全バージョン・全オプションを網羅するパーサーではありません。警告は実行エラーを断定せず、入力と使用バージョンのマニュアルで確認してください。</li>
+      <li>入力テキストはサーバーへ送信せず、ページを開いた端末内だけで処理します。</li>
+    </ul>
+  </details>
+</main>
+<script defer src="{{ "/assets/grrm-input-check.js" | relative_url }}"></script>
