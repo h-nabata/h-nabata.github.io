@@ -36,7 +36,7 @@
     rows.forEach(r=>{while(r.cells.length<width)r.cells.push("");});
     const headerWord=/^\s*(?:id|eq(?:_?id)?|node(?:_?id)?|number|index|source|src|from|target|dst|to|edge|ts|pt|ea|barrier|energy|name|label|connection|activation)(?:\s|[_-]|$)/i;
     const firstData=rows[0].cells;
-    const header=firstData.some(x=>headerWord.test(x));
+    const header=firstData.some(x=>headerWord.test(x.replace(/^\s*#\s*/,"")));
     const names=header?firstData.map((x,i)=>x.trim()||"列 "+(i+1)):Array.from({length:width},(_,i)=>"列 "+(i+1));
     const data=header?rows.slice(1):rows;
     return {names,data:data.filter(r=>r.cells.some(x=>x!== "")),delimiter,header};
