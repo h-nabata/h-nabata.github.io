@@ -1,7 +1,8 @@
 .site-search {
-  width: min(100% - 2rem, 900px);
-  margin: 2rem auto 4rem;
-  padding: 1.5rem;
+  width: min(100%, 900px);
+  margin: 2rem auto 0;
+  padding: 0 clamp(16px, 3vw, 32px) 4rem;
+  overflow-wrap: anywhere;
   color: #26343d;
   font: 16px/1.7 system-ui, -apple-system, "Segoe UI", "Noto Sans JP", sans-serif;
 }
@@ -34,7 +35,7 @@
 .site-search-results h2 { margin: 0; font-size: 1.1rem; line-height: 1.5; }
 .site-search-results p { margin: .5rem 0 0; overflow-wrap: anywhere; }
 @media (max-width: 520px) {
-  .site-search { padding: 1rem .25rem; }
+  .site-search { margin-top: 1.5rem; padding: 0 16px 2.5rem; }
   .site-search-controls { flex-direction: column; }
   .site-search button { align-self: flex-start; }
 }
