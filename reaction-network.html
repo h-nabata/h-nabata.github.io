@@ -1,17 +1,17 @@
 ---
 layout: default
-title: GRRM反応経路ネットワーク表示
+title: 反応経路ネットワーク表示機能
 extra_head: |
   <link rel="stylesheet" href="{{ "/assets/grrm-tools.css" | relative_url }}?v=1">
 ---
 <div class="top-wrapper">
   <div class="container">
-    <h1>反応経路ネットワーク</h1>
+    <h1>反応経路ネットワーク表示機能</h1>
     <p>GRRM の RCMC 出力をブラウザーで可視化</p>
   </div>
 </div>
 <main class="grrm-tool network-tool" id="reaction-network">
-  <nav class="tool-breadcrumb" aria-label="パンくずリスト"><a href="{{ "/toc.html" | relative_url }}">目次</a> / <a href="{{ "/grrm-tips.html" | relative_url }}">GRRM Tips</a> / 反応経路ネットワーク</nav>
+  <nav class="tool-breadcrumb" aria-label="パンくずリスト"><a href="{{ "/toc.html" | relative_url }}">目次</a> / <a href="{{ "/grrm-tips.html" | relative_url }}">GRRM Tips</a> / 反応経路ネットワーク表示機能</nav>
   <h2>NODE / EDGE データを読み込む</h2>
   <p>GRRM が RCMC 計算で出力する <code>*_NODE.cysdat</code> と <code>*_EDGE.cysdat</code> を選択してください。データはこの端末内で処理します。表形式を読み取り、列の対応を確認してからネットワークを描画します。</p>
   <div class="network-file-grid">
