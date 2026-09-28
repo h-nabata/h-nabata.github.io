@@ -74,7 +74,9 @@
         add(issues,"warning","gamma の値を読み取れません","値の指定漏れや書式を確認してください。",g.i+1);
       }
     }
-    if (!/\b(?:#|sc[-_ ]?afir|mc[-_ ]?afir|ad(df|df|df)|lup|repath|mesx|meci)\b/i.test(all)) {
+    const hasRoute=clean.some(line=>/^\s*#\s*\S/.test(line));
+    const hasJob=/\b(?:sc[-_ ]?afir|mc[-_ ]?afir|addf|lup|repath|rcmc|mesx|meci)\b/i.test(all);
+    if (!hasRoute && !hasJob) {
       add(issues,"info","計算タイプを特定できません","GRRMジョブタイプの自動判定は限定的です。入力全体を目視でも確認してください。");
     }
 
