@@ -1,0 +1,25 @@
+.page-meta {
+  width: min(100% - 2rem, 1080px);
+  margin: 1rem auto;
+  padding: .85rem 1rem;
+  border: 1px solid #d8e2e7;
+  border-left: 4px solid #245d72;
+  border-radius: 6px;
+  background: #f8fafb;
+  color: #26343d;
+  font: 14px/1.6 system-ui, -apple-system, "Segoe UI", "Noto Sans JP", sans-serif;
+}
+.page-meta dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: .35rem 1rem;
+  margin: 0;
+}
+.page-meta dl > div { display: contents; }
+.page-meta dt { font-weight: 700; }
+.page-meta dd { margin: 0; }
+.page-meta-note dt, .page-meta-note dd { padding-top: .25rem; }
+@media (max-width: 600px) {
+  .page-meta dl { grid-template-columns: 1fr; gap: .1rem; }
+  .page-meta dt:not(:first-child) { margin-top: .4rem; }
+}
