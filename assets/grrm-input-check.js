@@ -95,12 +95,20 @@
       const refs=[];
       for (let i=0;i<clean.length;i++) {
         const line=clean[i];
-        if (/\b(?:fragm\.?|target|universalforcetarget|decdctarget|priority\s+path)\b/i.test(line)) {
-          for (const range of line.matchAll(/\b(\d+)\s*[-–]\s*(\d+)\b/g)) {
-            const a=Number(range[1]),b=Number(range[2]);
-            if (a>0&&b>=a&&b-a<10000) for(let k=a;k<=b;k++) refs.push({n:k,line:i+1});
+        let valueText="";
+        const fragment=line.match(/\bfragm\.?\s*\d+\s*(?:=|:)\s*(.*)$/i);
+        const target=line.match(/\b(?:target|universalforcetarget|decdctarget|priority\s+path)\b\s*(?:=|:)\s*(.*)$/i);
+        if(fragment) valueText=fragment[1];
+        else if(target) valueText=target[1];
+        if(!valueText) continue;
+        const ranges=[...valueText.matchAll(/\b(\d+)\s*[-–]\s*(\d+)\b/g)];
+        if(ranges.length){
+          for(const range of ranges){
+            const first=Number(range[1]),last=Number(range[2]);
+            if(first>0&&last>=first&&last-first<10000)for(let k=first;k<=last;k++)refs.push({n:k,line:i+1});
           }
-          for (const n of line.matchAll(/\b\d+\b/g)) refs.push({n:Number(n[0]),line:i+1});
+        }else{
+          for(const n of valueText.matchAll(/\b\d+\b/g))refs.push({n:Number(n[0]),line:i+1});
         }
       }
       const invalid=refs.find(x=>x.n>geom.atoms.length);
