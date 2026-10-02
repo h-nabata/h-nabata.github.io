@@ -12,6 +12,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     toc.append(ul);
     if (!ul.children.length) toc.parentElement.hidden=true;
+    // Qiita keeps fenced math in code frames and inserts BR into display math.
+    if (window.katex) article.querySelectorAll('.code-frame[data-lang="math"]').forEach(frame=>{
+      const source=frame.querySelector('code')?.textContent;
+      if(source){const output=document.createElement('div');output.className='mirror-display-math';window.katex.render(source,output,{displayMode:true,throwOnError:false});frame.replaceWith(output);}
+    });
+    article.querySelectorAll('p').forEach(p=>{
+      if(p.textContent.trim().startsWith('$$') && p.textContent.trim().endsWith('$$') && [...p.children].every(el=>el.tagName==='BR')) p.querySelectorAll('br').forEach(br=>br.replaceWith(document.createTextNode('\n')));
+    });
     if (typeof window.renderMathInElement==='function') window.renderMathInElement(article,{delimiters:[{left:'$$',right:'$$',display:true},{left:'\\[',right:'\\]',display:true},{left:'\\(',right:'\\)',display:false},{left:'$',right:'$',display:false}],throwOnError:false});
     if (article.querySelector('.mermaid')) {
       try { const {default:mermaid}=await import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs');mermaid.initialize({startOnLoad:false,securityLevel:'strict',theme:'default'});await mermaid.run({nodes:article.querySelectorAll('.mermaid')}); } catch(e) { console.warn('Mermaid diagram source is preserved.',e); }
