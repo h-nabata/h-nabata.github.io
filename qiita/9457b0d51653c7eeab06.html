@@ -1,0 +1,306 @@
+---
+layout: "qiita-mirror"
+title: "オフライン環境のユーザーローカルにgcc-14.3.0を導入する"
+qiita_id: "9457b0d51653c7eeab06"
+qiita_url: "https://qiita.com/h-nabata/items/9457b0d51653c7eeab06"
+qiita_created: "2025-06-01T04:17:05+09:00"
+qiita_updated: "2025-06-02T20:39:24+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "計算環境・Linux"
+mirror_tags: ["Linux", "GCC", "コンパイラ", "コンパイル", "オフライン環境"]
+permalink: "/qiita/9457b0d51653c7eeab06.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="1:1-1:104">gccはC言語、C++言語、Fortran言語などの複数言語のコンパイラ群の総称である。</p>
+<blockquote data-sourcepos="3:1-3:126">
+<p data-sourcepos="3:3-3:126">もともとは「GNU C Compiler」の略だったが、今は「GNU Compiler Collection」の意味で使われている。</p>
+</blockquote>
+<p data-sourcepos="5:1-5:481">Red Hat Enterprise Linux などの長期サポートを意図した保守的なシステムでは、組み込みで利用できる gcc のバージョンは古い場合が多く、Pythonなどのパッケージ（特にC拡張を含むもの）を導入する際にgccが古すぎてコンパイルに失敗することがある。そのような場合、組み込みのgccとは別に、ユーザーローカルにバージョンの新しいgccをビルドする必要がある。</p>
+<hr data-sourcepos="7:1-8:0">
+<p data-sourcepos="9:1-9:131">ここでは<strong>gcc-4.8.5の環境で、ユーザーローカルにオフラインでgcc-14.3.0を入れる手順</strong>をまとめる。</p>
+<blockquote data-sourcepos="11:1-12:43">
+<p data-sourcepos="11:3-12:43">2025年6月時点における最新のリリースはgcc-14.3.0である。<br>
+Cf. <a href="https://gcc.gnu.org/pub/gcc/releases/" class="autolink" rel="nofollow noopener" target="_blank">https://gcc.gnu.org/pub/gcc/releases/</a></p>
+</blockquote>
+<p data-sourcepos="14:1-14:117">大まかな手順は以下の通り。所要時間（待ち時間）が長いため、計画的に実施したい。</p>
+<ol data-sourcepos="16:1-19:0">
+<li data-sourcepos="16:1-16:68">
+<strong>依存ライブラリのインストール</strong>（1時間程度）</li>
+<li data-sourcepos="17:1-17:72">
+<strong>中間バージョンのgccのインストール</strong>（1～4時間）</li>
+<li data-sourcepos="18:1-19:0">
+<strong>目的のバージョンのgccのインストール</strong>（1～4時間）</li>
+</ol>
+<p data-sourcepos="20:1-20:232">gcc-4.8.5を使って一気にgcc-14.3.0を導入しようとすると、バージョンがかけ離れているためコンパイルに失敗することがある。そこで、中間バージョンを経由する必要がある。</p>
+<p data-sourcepos="22:1-22:163">また、gccのコンパイルには依存ライブラリ（GMP、MPFR、MPC）が別途必要となるため、初めにインストールする必要がある。</p>
+<hr data-sourcepos="24:1-25:0">
+<details><summary>【参考】ライブラリ不足時のエラー</summary>
+<div class="code-frame" data-lang="sh" data-sourcepos="28:1-38:3">
+<div class="code-lang"><span class="bold">gcc-6.5.0の場合</span></div>
+<div class="highlight"><pre><code>configure: error: Building GCC requires GMP 4.2+, MPFR 2.4.0+ and MPC 0.8.0+.
+Try the <span class="nt">--with-gmp</span>, <span class="nt">--with-mpfr</span> and/or <span class="nt">--with-mpc</span> options to specify
+their locations.  Source code <span class="k">for </span>these libraries can be found at
+their respective hosting sites as well as at
+ftp://gcc.gnu.org/pub/gcc/infrastructure/.  See also
+http://gcc.gnu.org/install/prerequisites.html <span class="k">for </span>additional info.  If
+you obtained GMP, MPFR and/or MPC from a vendor distribution package,
+make sure that you have installed both the libraries and the header
+files.  They may be located <span class="k">in </span>separate packages.
+</code></pre></div>
+</div>
+</details>
+<hr data-sourcepos="42:1-43:0">
+<h1 data-sourcepos="44:1-44:47">
+<span id="依存ライブラリのインストール" class="fragment"></span><a href="#%E4%BE%9D%E5%AD%98%E3%83%A9%E3%82%A4%E3%83%96%E3%83%A9%E3%83%AA%E3%81%AE%E3%82%A4%E3%83%B3%E3%82%B9%E3%83%88%E3%83%BC%E3%83%AB"><i class="fa fa-link"></i></a>①依存ライブラリのインストール</h1>
+<p data-sourcepos="46:1-46:89">MPFRはGMPに依存しており、MPCはGMPとMPFRの両方に依存しているため、</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="47:1-49:3"><div class="highlight"><pre><code>GMP → MPFR → MPC
+</code></pre></div></div>
+<p data-sourcepos="50:1-50:36">の順でインストールする。</p>
+<blockquote data-sourcepos="52:1-56:26">
+<p data-sourcepos="52:3-52:68">ライブラリが不足していると <code>./configure</code> の時点で</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="53:3-55:5"><div class="highlight"><pre><code>configure: error: MPFR version <span class="o">&gt;=</span> 4.1.0 required
+</code></pre></div></div>
+<p data-sourcepos="56:3-56:26">などと怒られる。</p>
+</blockquote>
+<p data-sourcepos="58:1-58:136">ソースコードは以下のページからダウンロードできる。以下の3つが必要最低限のライブラリである。</p>
+<p data-sourcepos="60:1-60:43"><a href="https://gcc.gnu.org/pub/gcc/infrastructure/" class="mirror-link-card">https://gcc.gnu.org/pub/gcc/infrastructure/</a>
+</p>
+<ul data-sourcepos="62:1-65:0">
+<li data-sourcepos="62:1-62:19">gmp-6.2.1.tar.bz2</li>
+<li data-sourcepos="63:1-63:20">mpfr-4.1.0.tar.bz2</li>
+<li data-sourcepos="64:1-65:0">mpc-1.2.1.tar.gz</li>
+</ul>
+<blockquote data-sourcepos="66:1-68:33">
+<p data-sourcepos="66:3-68:33">オンライン環境であれば<br>
+<code>wget https://gcc.gnu.org/pub/gcc/infrastructure/gmp-6.2.1.tar.bz2</code><br>
+などとして取得できる。</p>
+</blockquote>
+<p data-sourcepos="70:1-70:231">ここではさらに以下のものも追加でダウンロードしておく。これらは必ずしも要る訳ではないが、islに関してはgccの性能を上げることができるので、ついでに入れておく。</p>
+<ul data-sourcepos="72:1-76:0">
+<li data-sourcepos="72:1-72:21">gettext-0.22.tar.gz</li>
+<li data-sourcepos="73:1-73:18">isl-0.24.tar.bz2</li>
+<li data-sourcepos="74:1-74:18">mpich-3.2.tar.gz</li>
+<li data-sourcepos="75:1-76:0">opencoarrays-1.9.0.tar.gz</li>
+</ul>
+<hr data-sourcepos="77:1-78:0">
+<details><summary>【参考】依存パッケージについて</summary>
+<p data-sourcepos="81:1-81:54">最低限必要なライブラリは以下の通り。</p>
+<ul data-sourcepos="82:1-88:0">
+<li data-sourcepos="82:1-83:36">GMP（GNU Multiple Precision arithmetic library）：<br>
+多倍長整数演算ライブラリ</li>
+<li data-sourcepos="84:1-85:45">MPFR（Multiple Precision Floating-Point Reliable Library）：<br>
+多倍長浮動小数点演算ライブラリ</li>
+<li data-sourcepos="86:1-88:0">MPC（Multiple Precision Complex Library）：<br>
+多倍長複素数演算ライブラリ</li>
+</ul>
+<p data-sourcepos="89:1-89:51">今回は追加で以下のものも利用する。</p>
+<ul data-sourcepos="90:1-98:0">
+<li data-sourcepos="90:1-91:79">MPICH：<br>
+並列計算用の標準的なMPI（Message Passing Interface）ライブラリ</li>
+<li data-sourcepos="92:1-93:102">opencoarrays：<br>
+FortranのCo-array機能（分散メモリ並列化）を利用可能にするためのライブラリ</li>
+<li data-sourcepos="94:1-95:111">isl (integer set library)：<br>
+GCCなどのループ最適化で使われる、多面体モデルに基づく整数集合操作ライブラリ</li>
+<li data-sourcepos="96:1-98:0">gettext：<br>
+ソフトウェアの多言語対応（国際化/i18n）を実現するための文字列翻訳ライブラリ</li>
+</ul>
+</details>
+<hr data-sourcepos="101:1-102:0">
+<p data-sourcepos="103:1-104:108">取得したすべてのソースコードを目的のサーバーにアップロードする。<br>
+ここでは<code>$HOME/tmp/</code>にソースコードを置き、<code>$HOME/usr/local/</code>に展開することにする。</p>
+<blockquote data-sourcepos="106:1-106:191">
+<p data-sourcepos="106:3-106:191">ソースコードのアップロード先およびインストール先は任意だが、今後のことを考えれば多少は手間でも系統的に整理できていた方がよい。</p>
+</blockquote>
+<p data-sourcepos="108:1-108:122"><code>make</code>は必要に応じて並列して効率化を図る。例えば、4並列の場合は<code>make -j4</code>とすればよい。</p>
+<blockquote data-sourcepos="110:1-110:464">
+<p data-sourcepos="110:3-110:464">さらに作業を加速したい場合、ビルドツリーの依存関係が存在しなければ、バックグラウンド処理にするなどしてパッケージを独立にインストールしてもよい。あるいは、複数のsshセッションを立ち上げて並行してインストールするのでもよい。（同じライブラリでない限り、基本的にはファイル名の衝突などは起こらないようになっている）</p>
+</blockquote>
+<div class="code-frame" data-lang="sh" data-sourcepos="112:1-173:3">
+<div class="code-lang"><span class="bold">インストールのための一連のコマンド</span></div>
+<div class="highlight"><pre><code><span class="c"># ソースコードをアップロードしたディレクトリへ移動</span>
+<span class="nb">cd</span> <span class="nv">$HOME</span>/tmp/
+
+<span class="c"># gmpを最初にインストールする</span>
+<span class="nb">tar </span>xf gmp-6.2.1.tar.bz2
+<span class="nb">cd </span>gmp-6.2.1
+./configure <span class="nt">--prefix</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/usr/local/"</span>
+make
+make <span class="nb">install
+cd</span> ..
+
+<span class="c"># この段階で .bashrc などに以下の行を追加して $HOME/usr/local/ にパスを通しておく</span>
+<span class="c"># export PATH=$HOME/usr/local/bin:$PATH</span>
+<span class="c"># export CPATH=$HOME/usr/local/include:$CPATH</span>
+<span class="c"># export LD_LIBRARY_PATH=$HOME/usr/local/lib:$HOME/usr/local/lib64:$LD_LIBRARY_PATH</span>
+
+<span class="c"># gmpの後にインストールする</span>
+<span class="nb">tar </span>xf mpfr-4.1.0.tar.bz2
+<span class="nb">cd </span>mpfr-4.1.0
+./configure <span class="nt">--prefix</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/usr/local/"</span> <span class="nt">--with-gmp</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/usr/local/"</span>
+make
+make <span class="nb">install
+cd</span> ..
+
+<span class="c"># gmpとmpfrの後にインストールする</span>
+<span class="nb">tar </span>xf mpc-1.2.1.tar.gz
+<span class="nb">cd </span>mpc-1.2.1
+./configure <span class="nt">--prefix</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/usr/local/"</span> <span class="nt">--with-gmp</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/usr/local/"</span> <span class="nt">--with-mpfr</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/usr/local/"</span>
+make
+make <span class="nb">install</span>
+
+<span class="c">### これ以降のライブラリはオプション</span>
+
+<span class="c"># mpichは gfortran/gcc が優先される状態でインストールする</span>
+<span class="c"># このときFortran用MPIラッパーもインストールするフラグを立てておく</span>
+<span class="nb">tar </span>xf mpich-3.2.tar.gz
+<span class="nb">cd </span>mpich-3.2
+./configure <span class="nt">--prefix</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/usr/local/"</span> <span class="nv">CC</span><span class="o">=</span>gcc <span class="nv">CXX</span><span class="o">=</span>g++ <span class="nv">FC</span><span class="o">=</span>gfortran <span class="nv">F77</span><span class="o">=</span>gfortran
+make
+make <span class="nb">install</span>
+
+<span class="c"># gmpの後にインストールする</span>
+<span class="nb">tar </span>xf isl-0.24.tar.bz2
+<span class="nb">cd </span>isl-0.24
+./configure <span class="nt">--prefix</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/usr/local/"</span>
+make
+make <span class="nb">install
+
+tar </span>xf gettext-0.22.tar.gz
+<span class="nb">cd </span>gettext-0.22
+./configure <span class="nt">--prefix</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/usr/local/"</span>
+make
+make <span class="nb">install</span>
+
+<span class="c"># mpichの後にインストールする (gcc-5.1以降が必須なので中間バージョンへのアップグレード後に実施する)</span>
+<span class="nb">tar </span>xf opencoarrays-1.9.0.tar.gz
+<span class="nb">cd </span>opencoarrays-1.9.0
+./configure <span class="nt">--prefix</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/usr/local/"</span> <span class="nv">CC</span><span class="o">=</span>gcc <span class="nv">CXX</span><span class="o">=</span>g++ <span class="nv">FC</span><span class="o">=</span>gfortran <span class="nv">F77</span><span class="o">=</span>gfortran
+make
+make <span class="nb">install</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="175:1-175:180">
+<p data-sourcepos="175:3-175:180">gettextライブラリに加えてさらにlibiconvライブラリをインストールしても良いが、glibcのiconv互換機能で十分なのでここでは省略する。</p>
+</blockquote>
+<blockquote data-sourcepos="177:1-198:5">
+<p data-sourcepos="177:3-177:170">依存ライブラリを<code>$HOME/usr/local/</code>配下の個別ディレクトリにインストールした場合は、例えば以下のようにパスを通しておく。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="178:3-198:5"><div class="highlight"><pre><code># GMP
+export LD_LIBRARY_PATH="$HOME/usr/local/gmp-6.2.1/lib:$LD_LIBRARY_PATH"
+export CPATH="$HOME/usr/local/gmp-6.2.1/include:$CPATH"
+export LIBRARY_PATH="$HOME/usr/local/gmp-6.2.1/lib:$LIBRARY_PATH"
+
+# MPFR
+export LD_LIBRARY_PATH="$HOME/usr/local/mpfr-4.2.1/lib:$LD_LIBRARY_PATH"
+export CPATH="$HOME/usr/local/mpfr-4.2.1/include:$CPATH"
+export LIBRARY_PATH="$HOME/usr/local/mpfr-4.2.1/lib:$LIBRARY_PATH"
+
+# MPC
+export LD_LIBRARY_PATH="$HOME/usr/local/mpc-1.3.1/lib:$LD_LIBRARY_PATH"
+export CPATH="$HOME/usr/local/mpc-1.3.1/include:$CPATH"
+export LIBRARY_PATH="$HOME/usr/local/mpc-1.3.1/lib:$LIBRARY_PATH"
+
+# ISL
+export LD_LIBRARY_PATH="$HOME/usr/local/isl-0.24/lib:$LD_LIBRARY_PATH"
+export CPATH="$HOME/usr/local/isl-0.24/include:$CPATH"
+export LIBRARY_PATH="$HOME/usr/local/isl-0.24/lib:$LIBRARY_PATH"
+</code></pre></div></div>
+</blockquote>
+<h1 data-sourcepos="200:1-200:53">
+<span id="中間バージョンのgccのインストール" class="fragment"></span><a href="#%E4%B8%AD%E9%96%93%E3%83%90%E3%83%BC%E3%82%B8%E3%83%A7%E3%83%B3%E3%81%AEgcc%E3%81%AE%E3%82%A4%E3%83%B3%E3%82%B9%E3%83%88%E3%83%BC%E3%83%AB"><i class="fa fa-link"></i></a>②中間バージョンのgccのインストール</h1>
+<p data-sourcepos="202:1-202:228">ここではgcc-6.5.0を導入する。システム組み込みのgcc（ここではgcc-4.8.5）でコンパイルできるのであればバージョンは任意。ソースコードは以下のページから取得できる。</p>
+<p data-sourcepos="204:1-204:37"><a href="https://gcc.gnu.org/pub/gcc/releases/" class="mirror-link-card">https://gcc.gnu.org/pub/gcc/releases/</a>
+</p>
+<p data-sourcepos="206:1-206:134">新旧バージョンが混在することを避けるため、インストール先は <code>$HOME/usr/local/gcc-6.5.0</code> としている。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="208:1-219:3">
+<div class="code-lang"><span class="bold">インストール</span></div>
+<div class="highlight"><pre><code><span class="nb">tar </span>xf gcc-6.5.0.tar.gz
+<span class="nb">cd </span>gcc-6.5.0
+
+./configure <span class="nt">--prefix</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/usr/local/gcc-6.5.0"</span> <span class="nt">--enable-languages</span><span class="o">=</span>c,c++,fortran <span class="se">\</span>
+  <span class="nt">--with-gmp</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/usr/local"</span> <span class="nt">--with-mpfr</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/usr/local"</span> <span class="se">\</span>
+  <span class="nt">--with-mpc</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/usr/local"</span> <span class="nt">--with-isl</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/usr/local"</span> <span class="se">\</span>
+  <span class="nt">--disable-multilib</span>
+
+make           <span class="c"># -j オプションを用いて並列するのが望ましい</span>
+make <span class="nb">install</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="221:1-221:205"><code>make</code>だけで1時間以上を要するので、実行するタイミングは吟味しておきたい。先ほど同様、<code>make</code>は他のユーザーに影響しない範囲で並列するのがよい。</p>
+<blockquote data-sourcepos="223:1-225:335">
+<p data-sourcepos="223:3-223:99">参考までに、筆者の環境では<code>make -j4</code>に121分、<code>make install</code>に5分を要した。</p>
+<blockquote data-sourcepos="224:3-225:335">
+<p data-sourcepos="224:5-225:335">やむを得ない理由により時間不足で差し迫った状況なのであれば、<code>./configure</code> に <code>--disable-bootstrap</code> を付けてブートストラップモード（コンパイルされた自分自身を用いた再ビルドによる一貫性チェック）を無効にしてもよい。<br>
+デフォルトではブートストラップモードが有効となっており、3回目のビルドで得られたgcc（stage3）が最終的な出力となる。正確を期す方法ではあるものの一貫性チェックを行う手間があるため、ビルド時間は非ブートストラップ時の2～3倍となる。</p>
+</blockquote>
+</blockquote>
+<p data-sourcepos="227:1-227:180">導入先（ここでは<code>$HOME/usr/local/gcc-6.5.0</code>）にパスが通っている場合、<code>gcc --version</code>とすれば新しいgccが導入出来ていることが確認できる。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="229:1-236:3">
+<div class="code-lang"><span class="bold">gccのバージョン確認</span></div>
+<div class="highlight"><pre><code><span class="nv">$ </span>gcc <span class="nt">--version</span>
+gcc <span class="o">(</span>GCC<span class="o">)</span> 6.5.0
+Copyright <span class="o">(</span>C<span class="o">)</span> 2017 Free Software Foundation, Inc.
+This is free software<span class="p">;</span> see the <span class="nb">source </span><span class="k">for </span>copying conditions.  There is NO
+warranty<span class="p">;</span> not even <span class="k">for </span>MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+</code></pre></div>
+</div>
+<p data-sourcepos="238:1-238:75">中間バージョンのgcc導入後は環境変数を更新しておく。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="240:1-245:3">
+<div class="code-lang"><span class="bold">環境変数の設定</span></div>
+<div class="highlight"><pre><code><span class="nb">export </span><span class="nv">CC</span><span class="o">=</span><span class="nv">$HOME</span>/usr/local/gcc-6.5.0/bin/gcc
+<span class="nb">export </span><span class="nv">CXX</span><span class="o">=</span><span class="nv">$HOME</span>/usr/local/gcc-6.5.0/bin/g++
+<span class="nb">export </span><span class="nv">FC</span><span class="o">=</span><span class="nv">$HOME</span>/usr/local/gcc-6.5.0/bin/gfortran
+<span class="nb">export </span><span class="nv">F77</span><span class="o">=</span><span class="nv">$HOME</span>/usr/local/gcc-6.5.0/bin/gfortran
+</code></pre></div>
+</div>
+<h1 data-sourcepos="247:1-247:56">
+<span id="目的のバージョンのgccのインストール" class="fragment"></span><a href="#%E7%9B%AE%E7%9A%84%E3%81%AE%E3%83%90%E3%83%BC%E3%82%B8%E3%83%A7%E3%83%B3%E3%81%AEgcc%E3%81%AE%E3%82%A4%E3%83%B3%E3%82%B9%E3%83%88%E3%83%BC%E3%83%AB"><i class="fa fa-link"></i></a>③目的のバージョンのgccのインストール</h1>
+<p data-sourcepos="249:1-249:136">最後にgcc-14.3.0を導入する。手順は前段と同じ。ソースコードは先ほどと同じページから取得できる。</p>
+<p data-sourcepos="251:1-251:37"><a href="https://gcc.gnu.org/pub/gcc/releases/" class="mirror-link-card">https://gcc.gnu.org/pub/gcc/releases/</a>
+</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="253:1-264:3">
+<div class="code-lang"><span class="bold">インストール</span></div>
+<div class="highlight"><pre><code><span class="nb">tar </span>xf gcc-14.3.0.tar.gz
+<span class="nb">cd </span>gcc-14.3.0
+
+./configure <span class="nt">--prefix</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/usr/local/gcc-14.3.0"</span> <span class="nt">--enable-languages</span><span class="o">=</span>c,c++,fortran <span class="se">\</span>
+  <span class="nt">--with-gmp</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/usr/local"</span> <span class="nt">--with-mpfr</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/usr/local"</span> <span class="se">\</span>
+  <span class="nt">--with-mpc</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/usr/local"</span> <span class="nt">--with-isl</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/usr/local"</span> <span class="se">\</span>
+  <span class="nt">--disable-multilib</span>
+
+make           <span class="c"># -j オプションを用いて並列するのが望ましい</span>
+make <span class="nb">install</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="266:1-266:99">
+<p data-sourcepos="266:3-266:99">参考までに、筆者の環境では<code>make -j4</code>に181分、<code>make install</code>に5分を要した。</p>
+</blockquote>
+<p data-sourcepos="268:1-268:213">最後に、展開先の <code>$HOME/usr/local/gcc-14.3.0</code> にパスを通しておく。中間バージョンのgcc導入後は環境変数を更新し、中間バージョンのgccのパスは必ず上書きする。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="270:1-278:3">
+<div class="code-lang"><span class="bold">環境変数の再設定</span></div>
+<div class="highlight"><pre><code><span class="nb">export </span><span class="nv">PATH</span><span class="o">=</span><span class="nv">$HOME</span>/usr/local/gcc-14.3.0/bin:<span class="nv">$PATH</span>
+<span class="nb">export </span><span class="nv">CPATH</span><span class="o">=</span><span class="nv">$HOME</span>/usr/local/gcc-14.3.0/include:<span class="nv">$CPATH</span>
+<span class="nb">export </span><span class="nv">LD_LIBRARY_PATH</span><span class="o">=</span><span class="nv">$HOME</span>/usr/local/gcc-14.3.0/lib:<span class="nv">$HOME</span>/usr/local/gcc-14.3.0/lib64:<span class="nv">$LD_LIBRARY_PATH</span>
+<span class="nb">export </span><span class="nv">CC</span><span class="o">=</span><span class="nv">$HOME</span>/usr/local/gcc-14.3.0/bin/gcc
+<span class="nb">export </span><span class="nv">CXX</span><span class="o">=</span><span class="nv">$HOME</span>/usr/local/gcc-14.3.0/bin/g++
+<span class="nb">export </span><span class="nv">FC</span><span class="o">=</span><span class="nv">$HOME</span>/usr/local/gcc-14.3.0/bin/gfortran
+<span class="nb">export </span><span class="nv">F77</span><span class="o">=</span><span class="nv">$HOME</span>/usr/local/gcc-14.3.0/bin/gfortran
+</code></pre></div>
+</div>
+<p data-sourcepos="280:1-280:69">上手く更新されていれば以下の出力が確認できる。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="282:1-288:3">
+<div class="code-lang"><span class="bold">gccのバージョン確認</span></div>
+<div class="highlight"><pre><code><span class="nv">$ </span>gcc <span class="nt">--version</span>
+gcc <span class="o">(</span>GCC<span class="o">)</span> 14.3.0
+Copyright <span class="o">(</span>C<span class="o">)</span> 2024 Free Software Foundation, Inc.
+This is free software<span class="p">;</span> see the <span class="nb">source </span><span class="k">for </span>copying conditions.  There is NO
+warranty<span class="p">;</span> not even <span class="k">for </span>MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+</code></pre></div>
+</div>
+<p data-sourcepos="290:1-290:124">以上の手順により、オフライン環境のユーザーローカルにgcc-14.3.0を導入することができる。</p>
+
+</div>
+
+
+{% endraw %}

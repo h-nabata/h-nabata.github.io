@@ -1,0 +1,52 @@
+---
+layout: "qiita-mirror"
+title: "scikit-learn導入時にOSErrorが出たときのメモ"
+qiita_id: "0c07792d4ef6f69b4e18"
+qiita_url: "https://qiita.com/h-nabata/items/0c07792d4ef6f69b4e18"
+qiita_created: "2021-06-05T22:56:57+09:00"
+qiita_updated: "2021-06-05T22:56:57+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "プログラミング・可視化"
+mirror_tags: ["Python", "scikit-learn", "OSError"]
+permalink: "/qiita/0c07792d4ef6f69b4e18.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="1:1-1:152">ちょっとした回帰の実装をしてみようと思い、scikit-learnをpipでローカル環境(Windows10)に導入することにしました。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="3:1-5:3"><div class="highlight"><pre><code>C:\Users\[ユーザー名]&gt;pip install scikit-learn
+</code></pre></div></div>
+<p data-sourcepos="7:1-7:21">しかしエラー。</p>
+<div class="code-frame" data-lang="" data-sourcepos="9:1-11:3">
+<div class="code-lang"><span class="bold">scikit-learnインストール時のエラーメッセージ</span></div>
+<div class="highlight"><pre><code>ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory:
+</code></pre></div>
+</div>
+<p data-sourcepos="13:1-14:171">エラーの原因はインストール先のパスが長すぎることらしいです。<br>
+Windows10ではデフォルトでパス名の文字数が260文字までに制限されているので、以下の投稿を参考に文字数制限を解除しました。</p>
+<p data-sourcepos="16:1-16:52"><a href="https://qiita.com/y-shoji/items/19def45edf582646f584" class="mirror-link-card">https://qiita.com/y-shoji/items/19def45edf582646f584</a>
+</p>
+<p data-sourcepos="18:1-18:42">やったことは以下の通りです。</p>
+<ol data-sourcepos="20:1-24:0">
+<li data-sourcepos="20:1-20:73">スタートメニューから [グループポリシーの編集] へ</li>
+<li data-sourcepos="21:1-21:113">[コンピューターの構成] &gt; [管理用テンプレート] &gt; [システム] &gt; [ファイルシステム]</li>
+<li data-sourcepos="22:1-22:69">[Win32 の長いパスを有効にする] をダブルクリック</li>
+<li data-sourcepos="23:1-24:0">[有効] のラジオボタンをonにして、画面下部の [OK] をクリック</li>
+</ol>
+<p data-sourcepos="25:1-25:102">以上でパス名の文字数制限を撤廃できます。もう一度インストールすると…</p>
+<div class="code-frame" data-lang="" data-sourcepos="27:1-35:3">
+<div class="code-lang"><span class="bold">scikit-learnのインストール成功</span></div>
+<div class="highlight"><pre><code>C:\Users\[ユーザー名]&gt;pip install scikit-learn
+Collecting scikit-learn
+  Downloading scikit_learn-0.24.2-cp37-cp37m-win_amd64.whl (6.8 MB)
+     |████████████████████████████████| 6.8 MB 3.3 MB/s
+・・・（中略）・・・
+Installing collected packages: scikit-learn
+Successfully installed scikit-learn-0.24.2
+</code></pre></div>
+</div>
+<p data-sourcepos="37:1-37:60">無事に導入できました。めでたしめでたし。</p>
+
+</div>
+
+
+{% endraw %}

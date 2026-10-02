@@ -1,0 +1,192 @@
+---
+layout: "qiita-mirror"
+title: "seabornを使うのを諦めた人のメモ"
+qiita_id: "3719ecab1dc804e30606"
+qiita_url: "https://qiita.com/h-nabata/items/3719ecab1dc804e30606"
+qiita_created: "2021-06-06T02:11:13+09:00"
+qiita_updated: "2021-06-06T14:12:23+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "プログラミング・可視化"
+mirror_tags: ["Python", "seaborn", "ImportError"]
+permalink: "/qiita/3719ecab1dc804e30606.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<h1 data-sourcepos="1:1-1:23">
+<span id="現時点での結論" class="fragment"></span><a href="#%E7%8F%BE%E6%99%82%E7%82%B9%E3%81%A7%E3%81%AE%E7%B5%90%E8%AB%96"><i class="fa fa-link"></i></a>現時点での結論</h1>
+<h5 data-sourcepos="2:1-2:112">
+<span id="pytorchやanaconda環境を使っていない人がseabornを使えるようにするのは面倒っぽい" class="fragment"></span><a href="#pytorch%E3%82%84anaconda%E7%92%B0%E5%A2%83%E3%82%92%E4%BD%BF%E3%81%A3%E3%81%A6%E3%81%84%E3%81%AA%E3%81%84%E4%BA%BA%E3%81%8Cseaborn%E3%82%92%E4%BD%BF%E3%81%88%E3%82%8B%E3%82%88%E3%81%86%E3%81%AB%E3%81%99%E3%82%8B%E3%81%AE%E3%81%AF%E9%9D%A2%E5%80%92%E3%81%A3%E3%81%BD%E3%81%84"><i class="fa fa-link"></i></a>PyTorchやAnaconda環境を使っていない人がseabornを使えるようにするのは面倒っぽい</h5>
+<h1 data-sourcepos="4:1-4:14">
+<span id="環境など" class="fragment"></span><a href="#%E7%92%B0%E5%A2%83%E3%81%AA%E3%81%A9"><i class="fa fa-link"></i></a>環境など</h1>
+<p data-sourcepos="5:1-5:93">Windows10；Python 3.7.9；パッケージはPyPIを経由して導入（condaではない）</p>
+<h1 data-sourcepos="8:1-8:36">
+<span id="seaborn使用時にエラー発生" class="fragment"></span><a href="#seaborn%E4%BD%BF%E7%94%A8%E6%99%82%E3%81%AB%E3%82%A8%E3%83%A9%E3%83%BC%E7%99%BA%E7%94%9F"><i class="fa fa-link"></i></a>seaborn使用時にエラー発生</h1>
+<p data-sourcepos="10:1-10:170">seabornをインストールし、いざ使おうと思ったら以下のエラーメッセージに遭遇。seabornのインポートに失敗しているようです。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="12:1-31:3">
+<div class="code-lang"><span class="bold">エラーメッセージ</span></div>
+<div class="highlight"><pre><code><span class="nc">Traceback </span><span class="p">(</span><span class="n">most</span> <span class="n">recent</span> <span class="n">call</span> <span class="n">last</span><span class="p">):</span>
+  <span class="n">File</span> <span class="sh">"</span><span class="s">C:\Users\[ユーザー名]\Desktop\python\seaborn_example1.py</span><span class="sh">"</span><span class="p">,</span> <span class="n">line</span> <span class="mi">3</span><span class="p">,</span> <span class="ow">in</span> <span class="o">&lt;</span><span class="n">module</span><span class="o">&gt;</span>
+    <span class="kn">import</span> <span class="n">seaborn</span> <span class="k">as</span> <span class="n">sns</span>
+  <span class="n">File</span> <span class="sh">"</span><span class="s">C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\seaborn\__init__.py</span><span class="sh">"</span><span class="p">,</span> <span class="n">line</span> <span class="mi">2</span><span class="p">,</span> <span class="ow">in</span> <span class="o">&lt;</span><span class="n">module</span><span class="o">&gt;</span>
+    <span class="kn">from</span> <span class="n">.rcmod</span> <span class="kn">import</span> <span class="o">*</span>  <span class="c1"># noqa: F401,F403
+</span>  <span class="n">File</span> <span class="sh">"</span><span class="s">C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\seaborn</span><span class="se">\r</span><span class="s">cmod.py</span><span class="sh">"</span><span class="p">,</span> <span class="n">line</span> <span class="mi">7</span><span class="p">,</span> <span class="ow">in</span> <span class="o">&lt;</span><span class="n">module</span><span class="o">&gt;</span>
+    <span class="kn">from</span> <span class="n">.</span> <span class="kn">import</span> <span class="n">palettes</span>
+  <span class="n">File</span> <span class="sh">"</span><span class="s">C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\seaborn\palettes.py</span><span class="sh">"</span><span class="p">,</span> <span class="n">line</span> <span class="mi">9</span><span class="p">,</span> <span class="ow">in</span> <span class="o">&lt;</span><span class="n">module</span><span class="o">&gt;</span>
+    <span class="kn">from</span> <span class="n">.utils</span> <span class="kn">import</span> <span class="n">desaturate</span><span class="p">,</span> <span class="n">get_color_cycle</span>
+  <span class="n">File</span> <span class="sh">"</span><span class="s">C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\seaborn\utils.py</span><span class="sh">"</span><span class="p">,</span> <span class="n">line</span> <span class="mi">10</span><span class="p">,</span> <span class="ow">in</span> <span class="o">&lt;</span><span class="n">module</span><span class="o">&gt;</span>
+    <span class="kn">from</span> <span class="n">scipy</span> <span class="kn">import</span> <span class="n">stats</span>
+  <span class="n">File</span> <span class="sh">"</span><span class="s">C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\scipy\__init__.py</span><span class="sh">"</span><span class="p">,</span> <span class="n">line</span> <span class="mi">130</span><span class="p">,</span> <span class="ow">in</span> <span class="o">&lt;</span><span class="n">module</span><span class="o">&gt;</span>
+    <span class="kn">from</span> <span class="n">.</span> <span class="kn">import</span> <span class="n">_distributor_init</span>
+  <span class="n">File</span> <span class="sh">"</span><span class="s">C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\scipy\_distributor_init.py</span><span class="sh">"</span><span class="p">,</span> <span class="n">line</span> <span class="mi">61</span><span class="p">,</span> <span class="ow">in</span> <span class="o">&lt;</span><span class="n">module</span><span class="o">&gt;</span>
+    <span class="nc">WinDLL</span><span class="p">(</span><span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="nf">abspath</span><span class="p">(</span><span class="n">filename</span><span class="p">))</span>
+  <span class="n">File</span> <span class="sh">"</span><span class="s">C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.7_3.7.2544.0_x64__qbz5n2kfra8p0\lib\ctypes\__init__.py</span><span class="sh">"</span><span class="p">,</span> <span class="n">line</span> <span class="mi">364</span><span class="p">,</span> <span class="ow">in</span> <span class="n">__init__</span>
+    <span class="n">self</span><span class="p">.</span><span class="n">_handle</span> <span class="o">=</span> <span class="nf">_dlopen</span><span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">_name</span><span class="p">,</span> <span class="n">mode</span><span class="p">)</span>
+<span class="nb">OSError</span><span class="p">:</span> <span class="p">[</span><span class="n">WinError</span> <span class="mi">126</span><span class="p">]</span> <span class="n">指定されたモジュールが見つかりません</span><span class="err">。</span>
+</code></pre></div>
+</div>
+<h1 data-sourcepos="34:1-34:50">
+<span id="対処モジュールのバージョン更新" class="fragment"></span><a href="#%E5%AF%BE%E5%87%A6%E3%83%A2%E3%82%B8%E3%83%A5%E3%83%BC%E3%83%AB%E3%81%AE%E3%83%90%E3%83%BC%E3%82%B8%E3%83%A7%E3%83%B3%E6%9B%B4%E6%96%B0"><i class="fa fa-link"></i></a>対処①モジュールのバージョン更新</h1>
+<p data-sourcepos="36:1-36:186">後から入れたseabornと他のモジュールとのバージョン不整合が原因か？と考えて、numpy、scipy、pandas、matplotlibのバージョンを更新しました。</p>
+<div class="code-frame" data-lang="" data-sourcepos="38:1-42:3">
+<div class="code-lang"><span class="bold">アップグレード@コマンドプロンプト</span></div>
+<div class="highlight"><pre><code>pip install --upgrade numpy
+pip install --upgrade scipy
+pip install --upgrade matplotlib
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="" data-sourcepos="44:1-50:3">
+<div class="code-lang"><span class="bold">バージョン変更</span></div>
+<div class="highlight"><pre><code>seaborn     0.11.1
+numpy       1.18.0  --&gt;  1.20.3
+scipy       1.4.1   --&gt;  1.6.3
+pandas      0.25.3  --&gt;  1.2.4
+matplotlib  3.1.2   --&gt;  3.4.2
+</code></pre></div>
+</div>
+<h3 data-sourcepos="51:1-51:43">
+<span id="結果-エラー解決せず-" class="fragment"></span><a href="#%E7%B5%90%E6%9E%9C-%E3%82%A8%E3%83%A9%E3%83%BC%E8%A7%A3%E6%B1%BA%E3%81%9B%E3%81%9A-"><i class="fa fa-link"></i></a>結果 ：　エラー解決せず 😓</h3>
+<p data-sourcepos="53:1-53:171">後から調べてみるとseabornのMETADATA（Metadata-Version: 2.1）には以下のようにあり、どうやらバージョンの問題ではなかったらしい。</p>
+<div class="code-frame" data-lang="" data-sourcepos="55:1-61:3">
+<div class="code-lang"><span class="bold">METADATA(抜粋)</span></div>
+<div class="highlight"><pre><code>Requires-Python: &gt;=3.6
+Requires-Dist: numpy (&gt;=1.15)
+Requires-Dist: scipy (&gt;=1.0)
+Requires-Dist: pandas (&gt;=0.23)
+Requires-Dist: matplotlib (&gt;=2.2)
+</code></pre></div>
+</div>
+<h1 data-sourcepos="64:1-64:32">
+<span id="対処環境変数の確認" class="fragment"></span><a href="#%E5%AF%BE%E5%87%A6%E7%92%B0%E5%A2%83%E5%A4%89%E6%95%B0%E3%81%AE%E7%A2%BA%E8%AA%8D"><i class="fa fa-link"></i></a>対処②環境変数の確認</h1>
+<p data-sourcepos="66:1-66:134">システム環境変数が間違っているor正しく通っていない可能性があるのでは？と思って以下を実行。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="68:1-73:3">
+<div class="code-lang"><span class="bold">Pathの確認</span></div>
+<div class="highlight"><pre><code><span class="kn">import</span> <span class="n">sys</span>
+
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">sys</span><span class="p">.</span><span class="n">path</span><span class="p">:</span>
+    <span class="nf">print</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="" data-sourcepos="75:1-83:3">
+<div class="code-lang"><span class="bold">Pathの出力結果</span></div>
+<div class="highlight"><pre><code>C:\Users\[ユーザー名]\Desktop\python
+C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.7_3.7.2544.0_x64__qbz5n2kfra8p0\python37.zip
+C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.7_3.7.2544.0_x64__qbz5n2kfra8p0\DLLs
+C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.7_3.7.2544.0_x64__qbz5n2kfra8p0\lib
+C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.7_3.7.2544.0_x64__qbz5n2kfra8p0
+C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages
+C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.7_3.7.2544.0_x64__qbz5n2kfra8p0\lib\site-packages
+</code></pre></div>
+</div>
+<p data-sourcepos="84:1-84:260">seabornの場所は　<code>C:\Users\●●●\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\seaborn</code>　なので、下から2番目のパスで正しく指定できているようです。</p>
+<p data-sourcepos="86:1-86:353">ではPythonではなくWindows側の問題なのでは？と思い至り、「システム環境変数の編集」→「環境変数」→「システム環境変数」の「Path」を確認してみたところ、ちゃんと設定されていました。他のモジュールはちゃんと動くので当たり前と言えば当たり前ですが。</p>
+<h3 data-sourcepos="87:1-87:43">
+<span id="結果-エラー解決せず--1" class="fragment"></span><a href="#%E7%B5%90%E6%9E%9C-%E3%82%A8%E3%83%A9%E3%83%BC%E8%A7%A3%E6%B1%BA%E3%81%9B%E3%81%9A--1"><i class="fa fa-link"></i></a>結果 ：　エラー解決せず 😥</h3>
+<h1 data-sourcepos="90:1-90:50">
+<span id="対処scipyとseabornの再インストール" class="fragment"></span><a href="#%E5%AF%BE%E5%87%A6scipy%E3%81%A8seaborn%E3%81%AE%E5%86%8D%E3%82%A4%E3%83%B3%E3%82%B9%E3%83%88%E3%83%BC%E3%83%AB"><i class="fa fa-link"></i></a>対処③scipyとseabornの再インストール</h1>
+<p data-sourcepos="92:1-92:75">stackoverflowでScipyの互換性の問題が指摘されていました。</p>
+<p data-sourcepos="94:1-94:65"><a href="https://stackoverflow.com/questions/51037949/seaborn-import-error" class="mirror-link-card">https://stackoverflow.com/questions/51037949/seaborn-import-error</a>
+</p>
+<p data-sourcepos="96:1-96:117"><a href="https://stackoverflow.com/questions/46306266/error-import-seaborn-while-running-the-program-from-ufuncs-import-import" class="mirror-link-card">https://stackoverflow.com/questions/46306266/error-import-seaborn-while-running-the-program-from-ufuncs-import-import</a>
+</p>
+<p data-sourcepos="98:1-98:67"><a href="https://stackoverflow.com/questions/31596125/python-dll-load-failed" class="mirror-link-card">https://stackoverflow.com/questions/31596125/python-dll-load-failed</a>
+</p>
+<p data-sourcepos="100:1-100:180">そこで <code>pip uninstall scipy</code> と <code>pip uninstall seaborn</code> でscipyとseabornをアンインストールしてから、もう一度インストールすることにしました。</p>
+<h3 data-sourcepos="102:1-102:43">
+<span id="結果-エラー解決せず--2" class="fragment"></span><a href="#%E7%B5%90%E6%9E%9C-%E3%82%A8%E3%83%A9%E3%83%BC%E8%A7%A3%E6%B1%BA%E3%81%9B%E3%81%9A--2"><i class="fa fa-link"></i></a>結果 ：　エラー解決せず 😖</h3>
+<blockquote data-sourcepos="104:1-104:46">
+<p data-sourcepos="104:2-104:46">モジュール間の問題ではない…？</p>
+</blockquote>
+<h1 data-sourcepos="108:1-108:52">
+<span id="対処したことscipyのダウングレード" class="fragment"></span><a href="#%E5%AF%BE%E5%87%A6%E3%81%97%E3%81%9F%E3%81%93%E3%81%A8scipy%E3%81%AE%E3%83%80%E3%82%A6%E3%83%B3%E3%82%B0%E3%83%AC%E3%83%BC%E3%83%89"><i class="fa fa-link"></i></a>対処したこと④scipyのダウングレード</h1>
+<p data-sourcepos="110:1-110:175">scipyのバージョンを元の1.4.1にダウングレードしたところ、エラーメッセージがちょっと改善（？）しました。しかし使用できず。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="112:1-131:3">
+<div class="code-lang"><span class="bold">エラーメッセージ</span></div>
+<div class="highlight"><pre><code><span class="nc">Traceback </span><span class="p">(</span><span class="n">most</span> <span class="n">recent</span> <span class="n">call</span> <span class="n">last</span><span class="p">):</span>
+  <span class="n">File</span> <span class="sh">"</span><span class="s">C:\Users\[ユーザー名]\Desktop\python_lesson\seaborn_example1.py</span><span class="sh">"</span><span class="p">,</span> <span class="n">line</span> <span class="mi">4</span><span class="p">,</span> <span class="ow">in</span> <span class="o">&lt;</span><span class="n">module</span><span class="o">&gt;</span>
+    <span class="kn">import</span> <span class="n">seaborn</span> <span class="k">as</span> <span class="n">sns</span>
+  <span class="n">File</span> <span class="sh">"</span><span class="s">C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\seaborn\__init__.py</span><span class="sh">"</span><span class="p">,</span> <span class="n">line</span> <span class="mi">6</span><span class="p">,</span> <span class="ow">in</span> <span class="o">&lt;</span><span class="n">module</span><span class="o">&gt;</span>
+    <span class="kn">from</span> <span class="n">.rcmod</span> <span class="kn">import</span> <span class="o">*</span>
+  <span class="n">File</span> <span class="sh">"</span><span class="s">C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\seaborn</span><span class="se">\r</span><span class="s">cmod.py</span><span class="sh">"</span><span class="p">,</span> <span class="n">line</span> <span class="mi">6</span><span class="p">,</span> <span class="ow">in</span> <span class="o">&lt;</span><span class="n">module</span><span class="o">&gt;</span>
+    <span class="kn">from</span> <span class="n">.</span> <span class="kn">import</span> <span class="n">palettes</span><span class="p">,</span> <span class="n">_orig_rc_params</span>
+  <span class="n">File</span> <span class="sh">"</span><span class="s">C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\seaborn\palettes.py</span><span class="sh">"</span><span class="p">,</span> <span class="n">line</span> <span class="mi">12</span><span class="p">,</span> <span class="ow">in</span> <span class="o">&lt;</span><span class="n">module</span><span class="o">&gt;</span>
+    <span class="kn">from</span> <span class="n">.utils</span> <span class="kn">import</span> <span class="n">desaturate</span><span class="p">,</span> <span class="n">set_hls_values</span><span class="p">,</span> <span class="n">get_color_cycle</span>
+  <span class="n">File</span> <span class="sh">"</span><span class="s">C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\seaborn\utils.py</span><span class="sh">"</span><span class="p">,</span> <span class="n">line</span> <span class="mi">7</span><span class="p">,</span> <span class="ow">in</span> <span class="o">&lt;</span><span class="n">module</span><span class="o">&gt;</span>
+    <span class="kn">from</span> <span class="n">scipy</span> <span class="kn">import</span> <span class="n">stats</span>
+  <span class="n">File</span> <span class="sh">"</span><span class="s">C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\scipy\stats\__init__.py</span><span class="sh">"</span><span class="p">,</span> <span class="n">line</span> <span class="mi">384</span><span class="p">,</span> <span class="ow">in</span> <span class="o">&lt;</span><span class="n">module</span><span class="o">&gt;</span>
+    <span class="kn">from</span> <span class="n">.stats</span> <span class="kn">import</span> <span class="o">*</span>
+  <span class="n">File</span> <span class="sh">"</span><span class="s">C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\scipy\stats\stats.py</span><span class="sh">"</span><span class="p">,</span> <span class="n">line</span> <span class="mi">179</span><span class="p">,</span> <span class="ow">in</span> <span class="o">&lt;</span><span class="n">module</span><span class="o">&gt;</span>
+    <span class="kn">from</span> <span class="n">scipy.spatial.distance</span> <span class="kn">import</span> <span class="n">cdist</span>
+  <span class="n">File</span> <span class="sh">"</span><span class="s">C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\scipy\spatial\__init__.py</span><span class="sh">"</span><span class="p">,</span> <span class="n">line</span> <span class="mi">99</span><span class="p">,</span> <span class="ow">in</span> <span class="o">&lt;</span><span class="n">module</span><span class="o">&gt;</span>
+    <span class="kn">from</span> <span class="n">.qhull</span> <span class="kn">import</span> <span class="o">*</span>
+<span class="nb">ImportError</span><span class="p">:</span> <span class="n">DLL</span> <span class="n">load</span> <span class="n">failed</span><span class="p">:</span> <span class="n">指定されたモジュールが見つかりません</span><span class="err">。</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="133:1-133:338">以下のteratailのスレッドで、最後の　<code>ImportError: DLL load failed</code>　は「MKL関連のライブラリがない」ことに原因があるとの指摘を見つけました。<sup id="fnref1"><a href="#fn1" title="MKLとはIntel®社の提供している数値演算ライブラリ「Math Kernel Library」の略。 ↩
+">1</a></sup></p>
+<p data-sourcepos="135:1-135:36"><a href="https://teratail.com/questions/93662" class="mirror-link-card">https://teratail.com/questions/93662</a>
+</p>
+<blockquote data-sourcepos="137:1-137:314">
+<p data-sourcepos="137:2-137:314">ひょっとして、と思ってscikit-learnを導入しましたが相変わらずエラーのままでした<sup id="fnref2"><a href="#fn2" title="pipでscikit-learnをインストールしてもMKLは付いてきません。ただ、お陰様でscikit-learnは使えるようになりました。 ↩
+">2</a></sup></p>
+</blockquote>
+<h3 data-sourcepos="139:1-139:43">
+<span id="結果-エラー解決せず--3" class="fragment"></span><a href="#%E7%B5%90%E6%9E%9C-%E3%82%A8%E3%83%A9%E3%83%BC%E8%A7%A3%E6%B1%BA%E3%81%9B%E3%81%9A--3"><i class="fa fa-link"></i></a>結果 ：　エラー解決せず 😫</h3>
+<h1 data-sourcepos="142:1-142:38">
+<span id="結局mklが無いことが原因" class="fragment"></span><a href="#%E7%B5%90%E5%B1%80mkl%E3%81%8C%E7%84%A1%E3%81%84%E3%81%93%E3%81%A8%E3%81%8C%E5%8E%9F%E5%9B%A0"><i class="fa fa-link"></i></a>結局MKLが無いことが原因？</h1>
+<p data-sourcepos="144:1-144:117">Pytorch環境でstuckした方の記事です。こちらで発生していた問題は解決できたようです。</p>
+<p data-sourcepos="146:1-146:53"><a href="https://qiita.com/kunishou/items/b1789c446770c8c97613" class="mirror-link-card">https://qiita.com/kunishou/items/b1789c446770c8c97613</a>
+</p>
+<p data-sourcepos="148:1-148:264">PyTorchには元々MKLが梱包されていて、環境構築時に導入されるので不自由なく使えるようです。同様にAnaconda環境でも初めからMKLが入っているため、環境構築と同時にMKLが存在することになります。</p>
+<blockquote data-sourcepos="150:1-152:136">
+<p data-sourcepos="150:2-152:136">Anaconda環境でのMKLのパフォーマンスについては以下の記事が参考になるかと思います。<br>
+「<a href="https://tech.morikatron.ai/entry/2020/03/27/100000" rel="nofollow noopener" target="_blank"><strong>Anaconda の NumPy が高速みたいなので試してみた</strong></a>」<br>
+「<a href="https://qiita.com/sugulu_Ogawa_ISID/items/43efed6d8ccece677159" id="reference-34353a13f01426652865"><strong>conda Numpyのようにscikit-learnも高速化する方法</strong></a>」</p>
+</blockquote>
+<p data-sourcepos="154:1-154:532">結局、色々調べてみたところ、Pythonの環境がAnacondaではなくpipを使って構築されていてMKLが導入されていないことが、seabornを手軽に使えない原因のようでした（本当？）。私の勘違いならそれまでですが、seabornをインポートする過程でscipyの何かを動かそうとしたらMKLが無いため失敗した、というイメージでしょうか？（seabornがそんなに特殊なことをしているようには見えないのですが･･･）</p>
+<p data-sourcepos="156:1-156:207">MKLはインテル社のページからダウンロードできますが、以下のページによると、.whlファイルからnumpyと一緒にMKLをまとめてインストールできるようです。</p>
+<p data-sourcepos="158:1-158:85"><a href="https://stackoverflow.com/questions/37267399/importerror-cannot-import-name-numpy-mkl" class="mirror-link-card">https://stackoverflow.com/questions/37267399/importerror-cannot-import-name-numpy-mkl</a>
+</p>
+<p data-sourcepos="160:1-160:682">しかしここにきて最早私の食指が動かず、これ以上足掻くのは不毛な気がして結局seabornを使うのは諦めてしまいました。面倒くさいとか時間が無いとか理由は色々ありますが、一番大きな理由は、他にseabornを使える環境<sup id="fnref3"><a href="#fn3" title="この別の環境というのはAnacondaで構築した環境です。 ↩
+">3</a></sup>が別にあるので、自分のノートPCで頑張って使えるようにする必要性を感じなくなってきたためです。仮にMKLを正しくインストールできたとしても別の問題が発生するような気もしますし･･･。</p>
+<p data-sourcepos="162:1-162:275"><code>PyTorchをインストールすれば良いのでは？</code> という指摘は尤もですが、今後PyTorchを使う予定は無く、たかが１モジュールのためにわざわざこのパソコンに入れなくても良いかなという気持ちが勝りました。</p>
+<hr>
+<p data-sourcepos="166:1-166:384">･･･というわけで自分と似たような境遇にある人は、悪戦苦闘を始める前にこの記事に巡り合えると無駄な骨折りは多少軽減できるのではないかと思います。この辺りの事情に詳しい方は、ここに迷い込んだ方々にとって有益な情報をコメントして頂けますと大変有難いです･･･。</p>
+<div class="footnotes">
+<hr>
+<ol>
+<li id="fn1">
+<p>MKLとはIntel®社の提供している数値演算ライブラリ「Math Kernel Library」の略。 <a href="#fnref1">↩</a></p>
+</li>
+<li id="fn2">
+<p>pipでscikit-learnをインストールしてもMKLは付いてきません。ただ、お陰様でscikit-learnは使えるようになりました。 <a href="#fnref2">↩</a></p>
+</li>
+<li id="fn3">
+<p>この別の環境というのはAnacondaで構築した環境です。 <a href="#fnref3">↩</a></p>
+</li>
+</ol>
+</div>
+
+</div>
+
+
+{% endraw %}

@@ -1,0 +1,26 @@
+PillowライブラリのImageモジュールにより，png，jpeg，gifなどの画像をeps形式に変換することができます．
+Pillowをインストールしているのであれば，怪しいフリーソフトをダウンロードする必要はありません．
+
+```py:img2eps.py
+import os
+from PIL import Image
+
+image_path = 'C:/Users/' + os.getlogin() + '/Downloads/'
+image_file = ['ABC.png', 'DEF.jpg', 'GHI.gif']
+
+for i in range(len(image_file)):
+    im = Image.open(image_path + image_file[i])
+    # print(im.mode)
+    fig = im.convert('RGB')
+    fig.save(image_path + image_file[i].split('.', 1)[0] + '.eps', lossless = True)
+```
+
+ダウンロードフォルダ内にある 'ABC.png', 'DEF.jpg', 'GHI.gif' という3つの画像をすべてeps形式に変換して保存します．
+Imageモジュールが読めるのであれば，その他の拡張子でも応用可能です．適宜改変してご利用ください．
+
+>個人的にTeX文書を書く機会があったので，作成しました．
+
+---
+### 【参考】
+- [**Python Pillow Convert PNG to EPS: A Completed Guide**  –  Pillow Tutorial](https://www.tutorialexample.com/python-pillow-convert-png-to-eps-a-completed-guide-pillow-tutorial/)
+- [**Image Module**  –  Pillow (PIL Fork) 9.2.0 documentation](https://pillow.readthedocs.io/en/stable/reference/Image.html)

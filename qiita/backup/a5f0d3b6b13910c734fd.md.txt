@@ -1,0 +1,401 @@
+手元に、
+
+- Windows 11 + WSL2 のデスクトップPC × 2台
+- Raspberry Pi × 1台
+
+があり、これら3台を同一LAN内で相互にSSH接続できるよう設定した際のメモです。
+
+WSL2の`mirrored networking`周辺で少しハマったため、その切り分けと、うまく動かなかったPCでは`NAT + portproxy`で回避した手順もまとめます。
+
+# 構成
+
+PCは3台とも同じルーターに接続しています。
+
+```:構成
+                Router
+             192.168.11.1
+                  |
+        +---------+---------+
+        |         |         |
+   Desktop A  Desktop B  Raspberry Pi
+  192.168.11.2 .11.4      .11.10
+       |          |
+      WSL        WSL
+```
+
+まず、 `ipconfig` およびPi側の `ip -4 addr` から、3台とも `192.168.11.0/24` に存在することを確認しました。
+
+> Pi側では既にSSHを有効化していた。未設定の場合は sudo systemctl enable --now ssh などで有効化する。
+
+# 最初の状態：Windows機へのpingだけ通らない
+
+最初はアクセス可能なのが
+
+```text
+Desktop A → Pi    OK
+Desktop B → Pi    OK
+
+Pi → Desktop A    NG
+Pi → Desktop B    NG
+A → B             NG
+B → A             NG
+```
+
+という状態でした。この原因はWindows Firewallで、Windows側のネットワークプロファイルを確認すると、
+
+```powershell
+Get-NetConnectionProfile
+```
+
+で、
+
+```text
+NetworkCategory : Public
+```
+
+となっていました。管理者権限でPowerShellを起動して、
+
+```powershell
+Set-NetConnectionProfile `
+  -InterfaceAlias "イーサネット" `
+  -NetworkCategory Private
+```
+
+と変更します。
+
+> 通常権限のPowerShellから実行すると、
+> ```text
+> Unable to set the NetworkCategory...
+> ```
+> と拒否されるので注意。
+
+さらにLAN内からのICMP Echoを許可しました。
+
+```powershell
+New-NetFirewallRule `
+  -DisplayName "LAN ICMPv4 Echo" `
+  -Direction Inbound `
+  -Action Allow `
+  -Protocol ICMPv4 `
+  -IcmpType 8 `
+  -RemoteAddress 192.168.11.0/24 `
+  -Profile Private
+```
+
+これで3台間のpingが確認できるようになります。
+
+# WSL側にSSH Serverを立てる
+
+Windows自身にOpenSSH Serverを立てる必要はありません。
+
+今回の目的はWindowsではなくWSLへログインすることなので、各WSL内に`sshd`を起動します。
+
+```bash
+sudo apt update
+sudo apt install openssh-server
+
+sudo systemctl enable --now ssh
+```
+
+```bash:SSH状態確認
+$ systemctl status ssh
+● ssh.service - OpenBSD Secure Shell server
+     Loaded: loaded (/usr/lib/systemd/system/ssh.service; enabled; preset: enabled)
+     Active: active (running) since Sun 2026-09-20 22:06:18 JST; 1h 26min ago
+TriggeredBy: ● ssh.socket
+       Docs: man:sshd(8)
+             man:sshd_config(5)
+    Process: 167 ExecStartPre=/usr/sbin/sshd -t (code=exited, status=0/SUCCESS)
+   Main PID: 187 (sshd)
+      Tasks: 1 (limit: 57805)
+     Memory: 2.6M ()
+        CPU: 44ms
+     CGroup: /system.slice/ssh.service
+             └─187 "sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups"
+```
+
+```bash:listen状態の確認
+$ ss -ltnp | grep ':22'
+LISTEN 0      4096          0.0.0.0:22         0.0.0.0:*
+LISTEN 0      4096             [::]:22            [::]:*
+```
+
+
+```bash:パスワード認証の確認
+$ sudo sshd -T | grep passwordauthentication
+passwordauthentication yes
+```
+
+ここまで正常なら、Linux側のSSH Server自体は動作しています。
+
+# WSL2をmirrored networkingにする
+
+WSL2は標準ではNATネットワークを使用するため、LAN内から直接WSLへ入るには少し準備が必要。Windows側の `C:\Users\<ユーザー名>\.wslconfig` を以下のようにしました。
+
+```ini
+[wsl2]
+networkingMode=mirrored
+firewall=true
+```
+
+変更後、
+
+```powershell
+wsl --shutdown
+```
+
+してWSLを再起動します。その後、ネットワークの設定を確認。
+
+```bash:確認
+wslinfo --networking-mode
+```
+
+> ここがうまく設定できていないと
+> 
+> ```text
+> nat
+> ```
+> と出てLAN側からWSLへ直接アクセスできない。
+
+最終的に、
+
+```text
+mirrored
+```
+
+になっていればOK。
+
+# Hyper-V FirewallでSSHを許可する
+
+mirrored networkingではHyper-V Firewallも関係するため、管理者PowerShellからLAN内の22番ポートを許可しました。
+
+```powershell
+New-NetFirewallHyperVRule `
+  -Name "WSL-SSH-LAN" `
+  -DisplayName "WSL SSH from LAN" `
+  -Direction Inbound `
+  -VMCreatorId '{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}' `
+  -Protocol TCP `
+  -LocalPorts 22 `
+  -RemoteAddresses 192.168.11.0/24
+```
+
+> すでに同名のルールがある場合、
+> 
+> ```text
+> 既に存在するファイルを作成することはできません。
+> ```
+> 
+> と表示されます。その場合は、
+> 
+> ```powershell
+> Get-NetFirewallHyperVRule -Name "WSL-SSH-LAN"
+> ```
+> 
+> で既存ルールを確認すれば十分です。
+
+:::note warn
+
+### TCP転送経路に関する問題
+
+Desktop Aでは正常に接続できた一方、Desktop BではLAN側からWSLのTCPポートへ接続できませんでした。
+
+確認結果は以下の通りです。
+
+```bash
+# LAN側からDesktop BのSSHポートへ接続
+nc -vz -w 3 192.168.11.4 22
+→ timeout
+
+# Desktop BのWSL内部からsshdへ接続
+nc -vz 127.0.0.1 22
+→ succeeded
+
+# Windows側からWSLのlocalhostへ接続
+Test-NetConnection 127.0.0.1 -Port 22
+→ TcpTestSucceeded : False
+
+# SSH固有の問題か確認するため別ポートでも試験
+python3 -m http.server 22222 --bind 0.0.0.0
+Test-NetConnection 192.168.11.4 -Port 22222
+→ failed
+```
+
+WSL内部では`sshd`へ正常に接続できる一方、Windows側やLAN側からはSSH以外のポートも含めて接続できませんでした。
+
+このことから、問題は`sshd`やTCP/22固有のものではなく、Desktop BにおけるWSL2の`mirrored networking`経由のTCP転送経路にある可能性があります。（根本的な解決には至らず）
+
+:::
+
+
+# Desktop BはNAT + portproxyで回避
+
+上述のようにDesktop Bでは`mirrored networking`経由のTCP接続が正常に動作しなかったため、従来の`NAT + portproxy`方式へ切り替えました。
+
+まずWSLをNATモードに戻します。
+
+```ini
+[wsl2]
+networkingMode=nat
+```
+
+設定後、
+
+```powershell
+wsl --shutdown
+```
+
+でWSLを再起動し、WSL側のIPアドレスを確認します。
+
+```powershell
+wsl hostname -I
+```
+
+例えばWSL側IPが`172.27.208.184`なら、Windows側で次のようにポート転送を設定します。
+
+```powershell
+netsh interface portproxy add v4tov4 `
+  listenaddress=0.0.0.0 `
+  listenport=2222 `
+  connectaddress=172.27.208.184 `
+  connectport=22
+```
+
+さらに、LAN内からのTCP/2222をWindows Firewallで許可します。
+
+```powershell
+New-NetFirewallRule `
+  -DisplayName "WSL SSH portproxy" `
+  -Direction Inbound `
+  -Action Allow `
+  -Protocol TCP `
+  -LocalPort 2222 `
+  -RemoteAddress 192.168.11.0/24 `
+  -Profile Private
+```
+
+これでDesktop BのWSLには、
+
+```bash
+ssh -p 2222 <WSLユーザー名>@192.168.11.4
+```
+
+で接続できます。
+
+実際にDesktop A、Raspberry Piの両方から接続できることを確認しました。
+
+# 最終構成
+
+最終的には次のようになりました。
+
+```text
+                         Router
+                      192.168.11.1
+                           |
+            +--------------+--------------+
+            |              |              |
+       Desktop A       Desktop B      Raspberry Pi
+      192.168.11.2    192.168.11.4   192.168.11.10
+            |              |              |
+           WSL            WSL            sshd
+      mirrored SSH    NAT + portproxy
+          :22             :2222
+```
+
+Desktop Aへは通常どおり、
+
+```bash
+ssh user@192.168.11.2
+```
+
+Desktop Bへは、
+
+```bash
+ssh -p 2222 user@192.168.11.4
+```
+
+とアクセスします。
+
+> ネットワークの設定方式がPC間で異なっていても、実用上は特に問題ありません。
+
+# SSH configを書いておく
+
+毎回IPやポート番号を書くのは面倒なので、
+
+```text
+~/.ssh/config
+```
+
+に例えば、
+
+```text
+Host pc-a
+    HostName 192.168.11.2
+    User userA
+
+Host pc-b
+    HostName 192.168.11.4
+    User userB
+    Port 2222
+
+Host rpi
+    HostName 192.168.11.10
+    User hogehoge
+```
+
+と書いておけば、
+
+```bash
+ssh pc-a
+ssh pc-b
+ssh rpi
+```
+
+だけで相互に接続できます。
+
+
+:::note warn
+
+### アドレスの設定（DHCP予約）
+
+本記事では説明を簡単にするためIPアドレスを直接指定していますが、ルーターのDHCP設定によってはDesktop A/BやRaspberry Piの`192.168.11.x`が変化する可能性があります。常用する場合は、ルーター側のDHCP予約機能で各端末のIPアドレスを固定しておくと安全です。
+
+また、NATモードのWSL側IP（`172.x.x.x`）もWSL再起動時などに変わる場合があるため、`portproxy`を利用する場合は転送先IPの更新が必要になることがあります。
+
+:::
+
+# まとめ
+
+今回は、Windows 11 + WSL2 のPC 2台とRaspberry Piを同一LAN内で相互にSSH接続できるよう設定しました。
+
+Desktop Aでは`mirrored networking`で問題なく接続できましたが、Desktop BではTCP転送経路に問題があり、`NAT + portproxy`へ切り替えることで回避しました。
+
+今回の要点は、
+
+- `wslinfo --networking-mode`で実際のWSLネットワークモードを確認する
+- `sshd`自体が正常か、LAN側からのTCP接続だけが失敗しているのかを切り分ける
+- `mirrored networking`で問題が出る場合は`NAT + portproxy`に切り替える
+
+という3点です。
+
+## 補足：外部ネットワークから接続する場合
+
+今回はLAN内接続までを確認しました。
+
+外部からアクセスする場合、集合住宅の無料回線では二重NATやCGNATになっていることもあるため、SSHポートを直接公開するより、Tailscale等を利用する方法が考えられます。
+
+未検証ですが、例えばRaspberry Piを常時稼働させ、
+
+```text
+外出先PC
+   |
+Tailscale
+   |
+Raspberry Pi
+   |
+LAN
+   +-- Desktop A
+   +-- Desktop B
+```
+
+のようにPiを踏み台にする構成の方が扱いやすそうです。

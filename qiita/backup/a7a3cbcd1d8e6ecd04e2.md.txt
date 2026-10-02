@@ -1,0 +1,108 @@
+本稿では化学構造式エディタ「ChemDraw」上で描画された複数の構造式を一括でxyzデータに変換する方法の例を紹介します。
+
+```py:動作環境
+Python 3.9
+rdkit 2024.03.3（2024年現在最新の2024系が望ましい）
+```
+
+* * *
+
+ここでは、複数の分子の構造式を含むChemDrawファイルが存在する前提で、
+
+1. 　ChemDrawからsdf形式のファイルを出力
+2. 　sdfファイルをPythonスクリプトで処理
+（[**RDKit**](https://www.rdkit.org/docs/)を利用して sdf > smiles > xyz に変換）
+
+という順序で、各分子のxyz形式の三次元座標データを取得します。
+
+sdfファイルに出力された時点で分子の3次元骨格は得られるのですが、結合長や結合角が正確ではない上に、水素原子を補完する必要があります。これらの点を自動で解決するスクリプトを作成するのが今回の目的です。
+
+
+# ChemDrawからsdf形式のファイルを出力
+
+描画されている構造式は例えば以下のようなものです。
+
+![cyclo.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/59b821b5-ea59-62da-7b9c-2c283c94f161.png)
+
+> ここでは3～6員環のアルケンを例として説明しますが、より複雑な構造の分子やヘテロ原子を含むような分子でも同様に処理できます。
+
+このcdxmlファイルをsdf形式のファイルとして保存します。ファイル名は適当で良いですが、ここでは `cyclo.sdf` としておきます。出力されるsdfファイルには先ほどの全ての分子の情報が含まれています。
+
+![cyclo_demo.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/535bef4e-affa-e81b-6387-f0171b0fd309.png)
+
+> ChemDrawの標準ファイルはcdxml形式です。これは「"C"hem"D"rawの"xml"形式のファイル」という意味の拡張子です。
+> また、sdfという名称は"Structure-Data File"の頭文字から取られています。
+
+
+# sdfファイルからxyz形式に変換する
+
+以下のようなPythonスクリプトでsdfファイルからxyz形式に変換します。[**RDKit**](https://www.rdkit.org/docs/)という情報化学に特化したライブラリを使用するので、インストールしておきましょう。
+
+```py:sdf2xyz.py
+from rdkit import Chem
+from rdkit.Chem import AllChem
+from rdkit.Chem.rdmolfiles import MolToXYZBlock
+
+# ファイルパスの設定（任意）
+filepath = 'C:/Users/hogehoge/Documents/'
+inputfile = 'cyclo.sdf'
+outputfile = 'cyclo.txt'
+suppl = Chem.SDMolSupplier(filepath + inputfile)  # Molオブジェクトのリストを作成
+smiles_list = []
+
+# SDFファイルから分子を読み込み、XYZ形式に変換
+with open(filepath + outputfile, encoding='utf-8', mode='w') as f:
+    for i, mol in enumerate(suppl):
+        if mol is not None:
+            # 3D構造の生成および最適化
+            mol = Chem.AddHs(mol)  # 水素原子を補完
+            AllChem.EmbedMolecule(mol, AllChem.ETKDG()) #分子の3D構造を生成
+            AllChem.UFFOptimizeMolecule(mol)  # 構造最適化（任意）
+
+            # XYZ形式の文字列を取得
+            mol_xyz = MolToXYZBlock(mol)
+
+            # XYZファイルに保存
+            xyzfilename = filepath + f'mol_{i}.xyz'
+            with open(xyzfilename, 'w') as xyzfile:
+                xyzfile.write(mol_xyz)
+            
+            # ログファイルにSMILESとファイル名を記録（任意）
+            tmp_smiles = Chem.MolToSmiles(mol)
+            f.write(f'Molecule {i+1}: {tmp_smiles} -> XYZ file saved as {xyzfilename}\n')
+            print(f'Molecule {i+1}: {tmp_smiles} -> XYZ file saved as {xyzfilename}')
+```
+
+
+生成した3次元構造は `mol_0.xyz` ～ `mol_3.xyz` の各ファイルに出力されます。ファイル名は適宜変更してください。xyz形式なので、一つのファイルに連続的に出力しても良いでしょう。
+
+生成された構造を並べると以下のようになります。最安定のコンフォマーではありませんが、概ね妥当な初期構造を与えていることが分かります。
+
+![cyclos.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/253f54e8-e710-79d3-f329-3f71c1cc83c2.png)
+
+以上の手順で、ChemDrawの構造式から各分子のxyz座標を一括で取得することが可能です。これにより、分子が複雑でモデリングソフトで初期構造を作成するのが面倒な場合、ChemDrawで描いた構造式をもとに（ある程度まともな）立体構造を生成する、という選択肢が増えます。
+
+# 補足説明①
+
+`AllChem.EmbedMolecule(mol, AllChem.ETKDG())` の部分では、結合手が満たされていない原子のうち、順番の若い順から水素原子が付加されていきます。
+
+3次元構造の生成はETKDGメソッドの他にも、以下のような方法があります。
+
+| 方法	| 内容 |
+| ---- | ---- |
+| ディスタンス・ジオメトリー（DG）法 |	2018.03までのデフォルト |
+| AllChem.KDG	| useBasicKnowledge=True |
+| AllChem.ETDG	| useExpTorsionAnglePrefs=True |
+| AllChem.ETKDG	| useBasicKnowledge=True<br>useExpTorsionAnglePrefs=True<br>（2018.09以降のデフォルト） |
+| AllChem.ETKDGv2	| パラメータが改良されたETKDGメソッド |
+| AllChem.ETKDGv3	| 大環状化合物で精度が向上したETKDGメソッド（2020.03以降で利用可） |
+> 参考 -> https://www.rdkit.org/docs/source/rdkit.Chem.rdDistGeom.html
+
+特殊な分子でもない限りETKDGメソッドで事足りると思いますが、生成された構造が怪しい時は`ETKDGv3`などを試してみても良いでしょう。
+
+
+# 補足説明②
+
+`AllChem.UFFOptimizeMolecule(mol)` の部分ではMM力場（universal force field）で簡単に構造最適化をしていますが、立体的に込み入った大きな分子でない限り必要という訳ではありません。ETKDGメソッドだけでも十分妥当な初期構造が得られています。
+
+むしろ、UFFは簡素な力場であり精度が低いため、`UFFOptimizeMolecule` を使うとシクロブタンでは4つの炭素原子が同一平面上に存在してしまうなど、分子によっては不正確な構造が得られるケースがあることに注意しましょう。

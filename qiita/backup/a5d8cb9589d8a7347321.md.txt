@@ -1,0 +1,66 @@
+以前、RDkitという化学系ライブラリを使用するためにPython3.7系の仮想環境を作成しました（RDkitがPython3.8以上に対応していないため）。このような仮想環境下でAtomエディタから直接スクリプトを実行する方法を調べたのでメモしておきます。
+
+```:利用環境
+Python: 3.8.8 (Anaconda3で導入)
+(RDkit用の仮想環境のPythonは 3.7.11)
+OS: Windows 10
+エディタ: Atom ("script" パッケージ導入済み)
+```
+
+※ここでは既にRDkit用の仮想環境が準備できているものとします。仮想環境を構築する方法については過去のエントリを参考にして下さい。
+
+https://qiita.com/h-nabata/items/c1d16471bda6735a5d8a
+
+# 手順
+
+### ①　Anacondaパッケージに同梱されている「Anaconda Prompt」を起動
+### ②　Anaconda Promptで`activate [仮想環境名]`を実行して仮想環境を起動
+
+>環境一覧を取得したいときは`conda info -e`で表示できます。
+>```
+># conda environments:
+>#
+>base                  *  C:\Users\[ユーザー名]\anaconda3
+>rdkitenv                 C:\Users\[ユーザー名]\anaconda3\envs\rdkitenv
+>```
+> ここでは仮想環境を `rdkitenv` という名前にしてあります。
+
+### ③　Anaconda Promptで`atom`を実行してAtomエディタを起動
+
+> コマンドプロンプトで起動してもOKです。
+
+### ④　スクリプトを実行
+
+> Atomに "script" パッケージを導入済みであれば「Ctrl + Shift + B」で実行できます。
+
+問題が無ければ以下のプログラムが動くはずです。
+
+```py:sample.py
+from rdkit import Chem
+import sys
+
+print(sys.version_info)
+# sys.version_info(major=3, minor=7, micro=11, releaselevel='final', serial=0)
+
+# 周期表の取得（インスタンス化）
+pt = Chem.rdchem.GetPeriodicTable()
+
+# 1 ~ 9 番目までの元素記号を表示
+for i in range(1,10):
+    print(Chem.PeriodicTable.GetElementSymbol(pt, i))
+# H
+# He
+# Li
+# Be
+# B
+# C
+# N
+# O
+# F
+```
+
+私のRDkit用の仮想環境 `rdkitenv` のPythonのバージョンは3.7.11なので、意図した環境で実行できていることが分かります。
+
+# 後記
+
+以上のことは単純に「仮想環境からAtomを起動することで仮想環境のバージョンのPythonが使われる」という理解で良いかと思います。私が知らないだけで実は常識だったのかは分かりませんが、参考になる日本語の記事を上手く見つけられなかったので個人的にまとめてみた次第です。

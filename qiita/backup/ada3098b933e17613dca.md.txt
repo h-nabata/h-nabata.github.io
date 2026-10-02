@@ -1,0 +1,86 @@
+遷移状態理論の範囲において、反応速度定数はアイリングの式（H. EYRING, *J. Chem. Phys.* **1935**, 3, 107–115.）に基づいて温度$T$と活性化エネルギー$\Delta G^{\ddagger}$の関数として与えられます。
+
+```math
+k=\varGamma \dfrac{k_{\mathrm{B}}T}{h} \, \exp \left(-{\dfrac{\Delta G^{\ddagger}}{RT}}\right)
+```
+
+> 【補足】
+> 透過係数 $\varGamma$ は簡単のために$1$とすることが多いですが、トンネル効果を簡便に取り入れる方法として、遷移状態における虚振動 $\omega$ (cm-1) を用いて$$\varGamma = 1 + \dfrac{1}{24}\left(\dfrac{100hc|\omega|}{k_{\mathrm{B}}T}\right)^2$$と見積もる「Wignerの補正」（E. Wigner, *Phys. Rev.* **1932**, 40, 749–759.）が知られています。式を見て分かる通り、トンネル効果は反応速度定数を増加する作用をもちます。
+
+以上をまとめると、次のようなコードで反応速度定数が計算できます。ここではPythonのスクリプトを示します。
+
+```py:barrier2rate.py
+import math
+
+# input parameters
+temperature = 300.0                 # 273.15+25  # K
+activation_barrier = 80.0           # kJ / mol
+frequency = 800.0                   # cm-1 : imaginary frequency
+ratio = 99.9                        # reactant consumption
+
+# constants
+GAS_CONSTANT = 8.3144621            # J / K / mol
+PLANCK_CONSTANT = 6.62606957e-34    # J * s
+BOLTZMANN_CONSTANT = 1.3806488e-23  # J / K
+SPEED_OF_LIGHT = 2.99792458e8       # m / s
+
+# Eyring's equation (H. EYRING, J. Chem. Phys., 1935, 3, 107–115.)
+E = math.exp(- activation_barrier * 1000.0 / (GAS_CONSTANT * temperature))
+Z = (BOLTZMANN_CONSTANT * temperature / PLANCK_CONSTANT)
+k = Z * E
+
+# Wigner's tunneling correction (E. Wigner, Phys. Rev., 1932, 40, 749–759.)
+# 100.0 is the scaling factor to convert cm-1 into m-1
+wigner_factor = (PLANCK_CONSTANT * abs(frequency) * 100.0 * SPEED_OF_LIGHT / (BOLTZMANN_CONSTANT * temperature))
+# the transmission coefficient
+kappa = 1 + 1/24 * wigner_factor ** 2
+Z_corr = kappa * Z
+k_corr = Z_corr * E
+
+print("反応温度 =", '{:>5.1f}'.format(temperature), "(K) / 反応障壁 =", '{:>5.1f}'.format(activation_barrier), "(kJ/mol) / 虚振動数 =", '{:>6.1f}'.format(frequency), "(cm-1)")
+print("Wigner補正項 κ = {:e}".format(kappa))
+print("反応速度定数 : {:e}".format(k))
+print("      補正後 : {:e}".format(k_corr))
+print("時定数       : {:e}".format(1/k), "/ sec.")
+print("      補正後 : {:e}".format(1/k_corr), "/ sec.")
+
+print("反応物が "+str(ratio)+" % 消費されるまでの時間（補正前）")
+print('{:>18.10f}'.format((math.log(100/(100-ratio))/k)/3600), "/ hour")       # / hour
+print('{:>18.10f}'.format((math.log(100/(100-ratio))/k)/60), "/ min.")         # / min.
+print('{:>18.10f}'.format(math.log(100/(100-ratio))/k), "/ sec.")              # / sec.
+print("反応物が "+str(ratio)+" % 消費されるまでの時間（補正後）")
+print('{:>18.10f}'.format((math.log(100/(100-ratio))/k_corr)/3600), "/ hour")  # / hour
+print('{:>18.10f}'.format((math.log(100/(100-ratio))/k_corr)/60), "/ min.")    # / min.
+print('{:>18.10f}'.format(math.log(100/(100-ratio))/k_corr), "/ sec.")         # / sec.
+```
+
+```sh:出力
+反応温度 = 300.0 (K) / 反応障壁 =  80.0 (kJ/mol) / 虚振動数 =  800.0 (cm-1)
+Wigner補正項 κ = 1.613357e+00
+反応速度定数 : 7.361770e-02
+      補正後 : 1.187716e-01
+時定数       : 1.358369e+01 / sec.
+      補正後 : 8.419520e+00 / sec.
+反応物が 99.9 % 消費されるまでの時間（補正前）
+      0.0260646677 / hour
+      1.5638800644 / min.
+     93.8328038628 / sec.
+反応物が 99.9 % 消費されるまでの時間（補正後）
+      0.0161555510 / hour
+      0.9693330585 / min.
+     58.1599835119 / sec.
+```
+
+これより、80.0 kJ/mol の活性化エネルギーをもつ反応が 99.9 % 進行するまでには、1分半程度の時間を要することが分かります。また、トンネル効果を考慮すると、虚振動数の大きさが 800.0 cm-1 の場合、1分程度で反応が 99.9 % 進行することも分かります。
+
+> 【補足】
+> 「時定数」は反応物が $1-\dfrac{1}{e} \approx 63.212$ % だけ消費される（＝反応物が $\dfrac{100}{e}$ % に減じる）までに要する時間なので、 `ratio = 100 - 100 * 1/math.exp(1)` などと書き換えれば求められます。
+> 類似した概念に「半減期」がありますが、これは反応物が 50 % に減じるまでに要する時間を指しています。
+
+* * *
+
+先日連投した記事中で用いている反応速度定数は上記のコードによって求めています。速度論シミュレーションに関心のある方は併せてご覧ください。
+
+https://qiita.com/h-nabata/items/3e9c79fa462fb7716d71
+
+https://qiita.com/h-nabata/items/3ffdabb45cb08eaab2f0

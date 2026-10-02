@@ -1,0 +1,355 @@
+---
+layout: "qiita-mirror"
+title: "【LLM】MCPを「役所での住所変更」で簡単に理解する"
+qiita_id: "77e54041bf7cc0086248"
+qiita_url: "https://qiita.com/h-nabata/items/77e54041bf7cc0086248"
+qiita_created: "2026-05-20T03:05:27+09:00"
+qiita_updated: "2026-05-20T21:32:20+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "LLM・生成AI"
+mirror_tags: ["AI", "MCP", "生成AI", "LLM", "AIエージェント"]
+permalink: "/qiita/77e54041bf7cc0086248.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<h1 data-sourcepos="1:1-1:14">
+<span id="はじめに" class="fragment"></span><a href="#%E3%81%AF%E3%81%98%E3%82%81%E3%81%AB"><i class="fa fa-link"></i></a>はじめに</h1>
+<p data-sourcepos="3:1-3:128">LLMを使ったAIエージェントの文脈で、近年 <strong>MCP</strong> という用語を見かけることが多くなりました。</p>
+<p data-sourcepos="5:1-5:502">MCPとは、<strong>Model Context Protocol</strong> の略です。簡単に言えば、<strong>LLMが外部のツールやデータベース、アプリケーションと安全かつ標準化された形でやり取りするための仕組み</strong>です。これはAnthropicが2024年11月25日に正式発表した規格で、翌年3月には競合であるOpenAIでもMCPの規格を採用することを<a href="https://x.com/sama/status/1904957253456941061" rel="nofollow noopener" target="_blank">Sam Altman氏がX上で告知</a>して当時話題となりました。</p>
+<p data-sourcepos="7:1-7:53"><a href="https://www.anthropic.com/news/model-context-protocol" class="mirror-link-card">https://www.anthropic.com/news/model-context-protocol</a>
+</p>
+<p data-sourcepos="9:1-9:393">しかし、上記の説明は少し抽象的かもしれません。そこで本稿では、MCPを「役所での住所変更手続き」に例えて説明します。自然言語で依頼を受けたLLMが、MCPに従ってツール群を呼び出し、結果を取得し、最終的な応答を返すまでの流れを、役所の窓口業務に対応付けて理解してみましょう。</p>
+<blockquote data-sourcepos="11:1-12:101">
+<p data-sourcepos="11:3-12:101">HTTPやAPIの概念も役所での手続きによく例えられますが、MCPもプロトコルの一種なのでこれら同様に例えることができます。<br>
+分かりやすさを優先するため、細かい部分の違いはここでは無視します。</p>
+</blockquote>
+<h1 data-sourcepos="14:1-14:17">
+<span id="mcpとは何か" class="fragment"></span><a href="#mcp%E3%81%A8%E3%81%AF%E4%BD%95%E3%81%8B"><i class="fa fa-link"></i></a>MCPとは何か</h1>
+<p data-sourcepos="16:1-16:82">MCPは、<strong>LLMが外部システムを利用するための共通規格</strong>です。</p>
+<p data-sourcepos="18:1-18:195">従来、LLMに外部ツールを使わせようとすると、ツールごとに個別の接続方法やAPI仕様を用意する必要がありました。例えば次のようなものです。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="20:1-27:3"><div class="highlight"><pre><code>- ファイルを読み取るツール
+- GitHubのリポジトリを操作するツール
+- データベースを検索するツール
+- カレンダーを参照するツール
+- メールを検索・作成するツール
+- ローカルPC上のスクリプトを実行するツール
+</code></pre></div></div>
+<p data-sourcepos="29:1-29:270">これらをLLMから利用するたびに、個別に接続仕様を作り込んでいると、開発も運用も複雑になってしまい大変です。MCPはこの問題を解決するために、LLMと外部ツールの間に共通の取り決めを設けます。</p>
+<p data-sourcepos="31:1-31:60">MCPの役割は、例えば以下のようなものです。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="33:1-39:3"><div class="highlight"><pre><code>- どのようなツールが利用可能かをLLM側に知らせる
+- 各ツールがどのような入力を受け付けるかを定義する
+- ツール呼び出しの形式を標準化する
+- ツールから返ってくる結果の扱いを整理する
+- LLMが外部システムに無秩序にアクセスしないようにする
+</code></pre></div></div>
+<p data-sourcepos="41:1-41:340">ここで重要なのは、MCPが「LLMそのもの」<strong>ではない</strong>という点です。MCPは、LLMが外の世界と接続するための取り決めのことを指します。外部との接点を提供するものなので、LLMにとっては外部ツールを操作するためのインターフェースとも表現できます。</p>
+<h1 data-sourcepos="43:1-43:38">
+<span id="役所での住所変更に例える" class="fragment"></span><a href="#%E5%BD%B9%E6%89%80%E3%81%A7%E3%81%AE%E4%BD%8F%E6%89%80%E5%A4%89%E6%9B%B4%E3%81%AB%E4%BE%8B%E3%81%88%E3%82%8B"><i class="fa fa-link"></i></a>役所での住所変更に例える</h1>
+<p data-sourcepos="45:1-45:144">冒頭でも述べたように、MCPを理解するには「役所で何か手続きをする場面」を考えると分かりやすいです。</p>
+<p data-sourcepos="47:1-47:81">あなたが市役所に行き、窓口で次のように伝えたとします。</p>
+<blockquote data-sourcepos="49:1-49:56">
+<p data-sourcepos="49:3-49:56">引っ越したので住所変更をしたいです。</p>
+</blockquote>
+<p data-sourcepos="51:1-51:300">これは自然言語による依頼です。この時点では、あなたは細かい行政手続きの内部仕様を知っている必要はありません。例えば、次のようなことを完全に理解していなくても、窓口職員が必要な手続きを案内してくれます。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="53:1-60:3"><div class="highlight"><pre><code>- どの申請書が必要か
+- 本人確認書類が必要か
+- 住民票の情報をどう更新するか
+- マイナンバーカードの住所変更が必要か
+- 国民健康保険や児童手当など、関連手続きがあるか
+- どの部署に確認すべきか
+</code></pre></div></div>
+<p data-sourcepos="62:1-62:135">このとき、窓口職員は、あなたの自然言語の依頼を受け取り、役所内部の手続きに変換しています。</p>
+<p data-sourcepos="64:1-64:181">MCPにおけるLLMも、これと似た役割を果たします。役所の住所変更手続きと、LLM + MCP の構成要素を対応させると、次のようになります。</p>
+<table data-sourcepos="66:1-77:67">
+<thead>
+<tr data-sourcepos="66:1-66:46">
+<th data-sourcepos="66:2-66:18">役所の比喩</th>
+<th data-sourcepos="66:20-66:45">MCPにおける対応物</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="68:1-68:25">
+<td data-sourcepos="68:2-68:9">市民</td>
+<td data-sourcepos="68:11-68:24">ユーザー</td>
+</tr>
+<tr data-sourcepos="69:1-69:85">
+<td data-sourcepos="69:2-69:54">「住所変更をしたいです」という依頼</td>
+<td data-sourcepos="69:56-69:84">自然言語プロンプト</td>
+</tr>
+<tr data-sourcepos="70:1-70:22">
+<td data-sourcepos="70:2-70:15">窓口職員</td>
+<td data-sourcepos="70:17-70:21">LLM</td>
+</tr>
+<tr data-sourcepos="71:1-71:49">
+<td data-sourcepos="71:2-71:33">役所内の手続きルール</td>
+<td data-sourcepos="71:35-71:48">MCPの仕様</td>
+</tr>
+<tr data-sourcepos="72:1-72:67">
+<td data-sourcepos="72:2-72:21">申請書の形式</td>
+<td data-sourcepos="72:23-72:66">ツール呼び出しの入力スキーマ</td>
+</tr>
+<tr data-sourcepos="73:1-73:91">
+<td data-sourcepos="73:2-73:51">住民課・保険課・税務課などの部署</td>
+<td data-sourcepos="73:53-73:90">外部ツール・外部サービス</td>
+</tr>
+<tr data-sourcepos="74:1-74:88">
+<td data-sourcepos="74:2-74:36">部署ごとの内部システム</td>
+<td data-sourcepos="74:38-74:87">MCPサーバーの背後にある実システム</td>
+</tr>
+<tr data-sourcepos="75:1-75:97">
+<td data-sourcepos="75:2-75:45">窓口職員が部署に照会する行為</td>
+<td data-sourcepos="75:47-75:96">LLMがMCP経由でツールを呼び出す行為</td>
+</tr>
+<tr data-sourcepos="76:1-76:70">
+<td data-sourcepos="76:2-76:42">部署から返ってくる確認結果</td>
+<td data-sourcepos="76:44-76:69">ツールの実行結果</td>
+</tr>
+<tr data-sourcepos="77:1-77:67">
+<td data-sourcepos="77:2-77:45">最終的な案内や処理完了の説明</td>
+<td data-sourcepos="77:47-77:66">LLMによる応答</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="79:1-79:294">この対応関係で考えると、MCPの役割はかなり明確になります。MCPは、LLMという「窓口職員」が、役所内の各部署やシステムに対して、決められた形式で問い合わせや処理依頼を行うための共通手続き、と理解できます。</p>
+<h2 data-sourcepos="81:1-81:55">
+<span id="具体例-住所変更の流れと対応付ける" class="fragment"></span><a href="#%E5%85%B7%E4%BD%93%E4%BE%8B-%E4%BD%8F%E6%89%80%E5%A4%89%E6%9B%B4%E3%81%AE%E6%B5%81%E3%82%8C%E3%81%A8%E5%AF%BE%E5%BF%9C%E4%BB%98%E3%81%91%E3%82%8B"><i class="fa fa-link"></i></a>具体例： 住所変更の流れと対応付ける</h2>
+<p data-sourcepos="83:1-83:165">ここでは、MCPを使ったLLMの処理を、役所での住所変更手続きと対応させて整理します。まず、この流れを図解してみます。</p>
+<p data-sourcepos="85:1-85:119"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Fea85cbc8-3f31-4c0f-b027-c15b09c49f92.png?ixlib=rb-4.1.1&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=4ad141037c8d73e9088456e63bb513d8" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/f2d3fb633cf5a745ee906bdd.png" alt="MCP.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/ea85cbc8-3f31-4c0f-b027-c15b09c49f92.png" loading="lazy" decoding="async"></a></p>
+<blockquote data-sourcepos="87:1-87:83">
+<p data-sourcepos="87:3-87:83">この図はAIを使用せず、筆者がPowerPointで作成したものです。</p>
+</blockquote>
+<p data-sourcepos="89:1-89:171">図の左側は、LLM + MCPにおける実際の処理の流れです。図の右側は、それに対応する「役所で住所変更を行う場合」の流れです。</p>
+<p data-sourcepos="91:1-91:57">両者に共通しているのは、次の構造です。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="93:1-109:3"><div class="highlight"><pre><code>自然言語の依頼
+  ↓
+意図の理解
+  ↓
+手続きの書式の確認
+  ↓
+構造化された依頼
+  ↓
+実際の処理
+  ↓
+結果を返す
+  ↓
+説明
+  ↓
+最終案内
+</code></pre></div></div>
+<p data-sourcepos="111:1-111:384">MCPを理解する上で重要なのは、LLMがいきなり外部システムを自由に操作しているわけではない、という点です。ユーザーの自然言語による依頼を受け取り、必要な手続きを判断し、MCPで定義された形式に従ってツールを呼び出し、その結果を読み取って、最後に自然言語で説明します。</p>
+<p data-sourcepos="113:1-113:219">これは、役所の窓口職員が市民の相談を受け、必要な申請書式や担当部署を確認し、内部システムで処理を行い、最後に市民へ結果を案内する流れに似ています。</p>
+<p data-sourcepos="117:1-117:429">先ほどの図で重要なのは、ユーザーが直接データベースや業務システムを操作するのではなく、あくまで自然言語で依頼するだけでよい、という点です。その依頼をLLMが解釈し、必要な外部ツールを判断してMCPに従って呼び出します。そして結果を受け取ったLLMが、最終的にユーザーへ分かりやすい言葉で返答します。</p>
+<hr data-sourcepos="119:1-120:0">
+<p data-sourcepos="121:1-121:84">以下、各ステップごとに、もう少し詳しく見ていきましょう。</p>
+<h3 data-sourcepos="123:1-123:28">
+<span id="1-自然言語の依頼" class="fragment"></span><a href="#1-%E8%87%AA%E7%84%B6%E8%A8%80%E8%AA%9E%E3%81%AE%E4%BE%9D%E9%A0%BC"><i class="fa fa-link"></i></a>1. 自然言語の依頼</h3>
+<p data-sourcepos="124:1-124:132">LLM + MCPの場合、最初にあるのはユーザーからの自然言語の依頼です。例えば次のような依頼です。</p>
+<blockquote data-sourcepos="126:1-126:41">
+<p data-sourcepos="126:3-126:41">ファイルを検索して要約して</p>
+</blockquote>
+<p data-sourcepos="128:1-128:297">この時点では、ユーザーはどのツールを使うべきか、どのAPIを呼ぶべきか、どのような引数を渡すべきかを指定していません。役所での住所変更に対応させると、これは市民が窓口で次のように伝える場面に相当します。</p>
+<blockquote data-sourcepos="130:1-130:53">
+<p data-sourcepos="130:3-130:53">引っ越したので住所を変更したいです</p>
+</blockquote>
+<p data-sourcepos="132:1-132:201">市民も、最初から申請書の内部処理や住民記録システムの仕様を理解しているわけではありません。まずは自然言語で「何をしたいか」を伝えます。</p>
+<h3 data-sourcepos="134:1-134:22">
+<span id="2-意図の理解" class="fragment"></span><a href="#2-%E6%84%8F%E5%9B%B3%E3%81%AE%E7%90%86%E8%A7%A3"><i class="fa fa-link"></i></a>2. 意図の理解</h3>
+<p data-sourcepos="136:1-136:195">次に、LLMはユーザーの依頼の意図を理解します。「ファイルを検索して要約して」という依頼であれば、LLMは少なくとも次のことを判断します。</p>
+<ul data-sourcepos="138:1-142:0">
+<li data-sourcepos="138:1-138:50">何らかのファイル検索が必要である</li>
+<li data-sourcepos="139:1-139:77">検索対象となる文書やキーワードを特定する必要がある</li>
+<li data-sourcepos="140:1-140:53">見つかった内容を読み取る必要がある</li>
+<li data-sourcepos="141:1-142:0">読み取った結果を要約する必要がある</li>
+</ul>
+<p data-sourcepos="143:1-143:444">この段階では、LLMはまだ実際の検索処理をしているわけではありません。依頼の目的を解釈し、どのような外部ツールが必要になりそうかを判断しています。役所の例で言えば、窓口職員が市民の相談内容を聞き取り、「これは住所変更の手続きであり、本人確認や申請書の記入、住民情報の更新が必要だ」と判断する段階です。</p>
+<h3 data-sourcepos="145:1-145:40">
+<span id="3-手続きの書式を確認する" class="fragment"></span><a href="#3-%E6%89%8B%E7%B6%9A%E3%81%8D%E3%81%AE%E6%9B%B8%E5%BC%8F%E3%82%92%E7%A2%BA%E8%AA%8D%E3%81%99%E3%82%8B"><i class="fa fa-link"></i></a>3. 手続きの書式を確認する</h3>
+<p data-sourcepos="146:1-146:270">LLMが外部ツールを使うには、利用可能なツールや入力形式を知る必要があります。MCPでは、利用可能な <code>tools</code>、入力の <code>schema</code>、参照可能な <code>resources</code> などが定義されます（これらは用語として重要です）</p>
+<p data-sourcepos="148:1-148:93">例えば、ファイル検索ツールが次のような入力を要求するとします。</p>
+<div class="code-frame" data-lang="json" data-sourcepos="150:1-155:3"><div class="highlight"><pre><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"keyword"</span><span class="p">:</span><span class="w"> </span><span class="s2">"string"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"limit"</span><span class="p">:</span><span class="w"> </span><span class="s2">"number"</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+<p data-sourcepos="157:1-157:306">この場合、LLMは「検索キーワード」と「取得件数」を構造化して渡す必要があります。これは、役所で住所変更届の申請書式や受付ルールを確認する段階に相当します。住所変更では、例えば次のような情報が必要になります。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="159:1-166:3"><div class="highlight"><pre><code>- 氏名
+- 旧住所
+- 新住所
+- 異動日
+- 本人確認情報
+- 世帯情報
+</code></pre></div></div>
+<p data-sourcepos="168:1-168:103">MCPにおける <code>schema</code> は、役所でいう申請書の記入欄や受付条件に相当します。</p>
+<h3 data-sourcepos="170:1-170:40">
+<span id="4-構造化された依頼を作る" class="fragment"></span><a href="#4-%E6%A7%8B%E9%80%A0%E5%8C%96%E3%81%95%E3%82%8C%E3%81%9F%E4%BE%9D%E9%A0%BC%E3%82%92%E4%BD%9C%E3%82%8B"><i class="fa fa-link"></i></a>4. 構造化された依頼を作る</h3>
+<p data-sourcepos="172:1-172:312">次に、LLMは自然言語の依頼を、ツールが処理できる構造化された形式に変換します。例えば、ユーザーの依頼が「MCPについて書かれたファイルを検索して要約して」であれば、LLMは次のようなツール呼び出しを作るかもしれません。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="174:1-176:3"><div class="highlight"><pre><code>search_documents(keyword="MCP", limit=5)
+</code></pre></div></div>
+<p data-sourcepos="178:1-178:70">あるいは、JSON形式で表すなら次のようになります。</p>
+<div class="code-frame" data-lang="json" data-sourcepos="180:1-188:3"><div class="highlight"><pre><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"tool"</span><span class="p">:</span><span class="w"> </span><span class="s2">"search_documents"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"arguments"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"keyword"</span><span class="p">:</span><span class="w"> </span><span class="s2">"MCP"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"limit"</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="w">
+  </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+<p data-sourcepos="190:1-190:303">ここで起きているのは、自然言語から構造化データへの変換です。役所の住所変更で言えば、市民の「引っ越したので住所を変更したいです」という相談を、申請書に必要な項目へ落とし込み、登録に向けた準備を整えます。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="192:1-197:3"><div class="highlight"><pre><code>氏名：山田太郎
+旧住所：千葉県○○市……
+新住所：東京都○○区……
+異動日：2026年5月1日
+</code></pre></div></div>
+<p data-sourcepos="199:1-199:145">MCPにおける <code>tool call</code> は、役所で言えば、申請書を記入して担当部署へ渡せる状態にすることに対応します。</p>
+<h3 data-sourcepos="201:1-201:31">
+<span id="5-実際の処理を行う" class="fragment"></span><a href="#5-%E5%AE%9F%E9%9A%9B%E3%81%AE%E5%87%A6%E7%90%86%E3%82%92%E8%A1%8C%E3%81%86"><i class="fa fa-link"></i></a>5. 実際の処理を行う</h3>
+<p data-sourcepos="203:1-203:213">構造化された依頼が作られると、MCPサーバーや外部ツールが実際の処理を行います。ファイル検索の例であれば、外部ツールは次のような処理を担当します。</p>
+<ul data-sourcepos="205:1-209:0">
+<li data-sourcepos="205:1-205:35">ファイル一覧を検索する</li>
+<li data-sourcepos="206:1-206:47">キーワードに一致する文書を探す</li>
+<li data-sourcepos="207:1-207:44">必要に応じて文書の中身を読む</li>
+<li data-sourcepos="208:1-209:0">関連する検索結果を返す</li>
+</ul>
+<p data-sourcepos="210:1-210:332">ここで重要なのは、実際にファイルシステムやデータベースへアクセスするのはLLM本体ではなく、MCPサーバーや外部ツール側だという点です。LLMはどのツールをどう呼ぶかを判断し、実際の検索やDB問い合わせ、API実行は外部ツールが担当します。</p>
+<p data-sourcepos="212:1-212:321">役所の例で言えば、窓口職員が住所変更の必要事項を確認したあと、住民課や内部システムで住所変更処理を行う段階です。窓口職員がすべてを口頭で済ませているわけではなく、内部の業務システムや担当部署が実処理を担っています。</p>
+<h3 data-sourcepos="214:1-214:22">
+<span id="6-結果を返す" class="fragment"></span><a href="#6-%E7%B5%90%E6%9E%9C%E3%82%92%E8%BF%94%E3%81%99"><i class="fa fa-link"></i></a>6. 結果を返す</h3>
+<p data-sourcepos="216:1-216:159">外部ツールで処理が完了すると、その結果がLLM側に返されます。ファイル検索であれば、例えば次のような結果です。</p>
+<div class="code-frame" data-lang="json" data-sourcepos="218:1-232:3"><div class="highlight"><pre><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"success"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"results"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">
+    </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"MCPの概要.md"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"snippet"</span><span class="p">:</span><span class="w"> </span><span class="s2">"MCPはLLMが外部ツールを利用するための共通プロトコルです。"</span><span class="w">
+    </span><span class="p">},</span><span class="w">
+    </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"AIエージェント設計メモ.md"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"snippet"</span><span class="p">:</span><span class="w"> </span><span class="s2">"MCPサーバーを介して、ファイル検索やAPI呼び出しを行う。"</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+  </span><span class="p">]</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+<p data-sourcepos="234:1-234:306">この結果には、検索が成功したか、どの文書が見つかったか、どのような内容が含まれていたか、といった情報が含まれます。役所の住所変更で言えば、担当部署や内部システムから次のような処理結果が返ってくる段階です。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="236:1-241:3"><div class="highlight"><pre><code>受付完了
+不備なし
+追加確認なし
+住所変更処理完了
+</code></pre></div></div>
+<p data-sourcepos="243:1-243:99">不備がある場合には、追加書類や再確認が必要であることも返されます。</p>
+<h3 data-sourcepos="245:1-245:46">
+<span id="7-結果を読み取り説明を作る" class="fragment"></span><a href="#7-%E7%B5%90%E6%9E%9C%E3%82%92%E8%AA%AD%E3%81%BF%E5%8F%96%E3%82%8A%E8%AA%AC%E6%98%8E%E3%82%92%E4%BD%9C%E3%82%8B"><i class="fa fa-link"></i></a>7. 結果を読み取り、説明を作る</h3>
+<p data-sourcepos="247:1-247:321">ツールから結果が返ってきたあと、LLMはその結果を読み取ります。ここでLLMが行うのは、単なるデータの転記ではありません。検索結果の中から重要な部分を取り出し、ユーザーの依頼に合うように整理し、分かりやすい説明を作ります。</p>
+<p data-sourcepos="249:1-249:129">例えば、ファイル検索結果に複数の文書が含まれていた場合、LLMは次のような判断を行います。</p>
+<ul data-sourcepos="251:1-256:0">
+<li data-sourcepos="251:1-251:53">どの文書が依頼に最も関係しているか</li>
+<li data-sourcepos="252:1-252:38">重複している内容はどれか</li>
+<li data-sourcepos="253:1-253:53">要約に含めるべき中心的な情報は何か</li>
+<li data-sourcepos="254:1-254:77">ユーザーにそのまま見せるべきでない内部情報はないか</li>
+<li data-sourcepos="255:1-256:0">エラーや不確実性をどう説明すべきか</li>
+</ul>
+<p data-sourcepos="257:1-257:360">役所の例で言えば、窓口職員が内部システムの処理結果を見て、市民への分かりやすい説明を考える段階です。内部システムの画面や処理ログをそのまま市民に見せるのではなく、「手続きは完了しました」「この書類だけ追加で必要です」といった形に整理します。</p>
+<h3 data-sourcepos="259:1-259:28">
+<span id="8-最終応答を返す" class="fragment"></span><a href="#8-%E6%9C%80%E7%B5%82%E5%BF%9C%E7%AD%94%E3%82%92%E8%BF%94%E3%81%99"><i class="fa fa-link"></i></a>8. 最終応答を返す</h3>
+<p data-sourcepos="261:1-261:153">最後に、LLMはユーザーに自然言語で応答します。ファイル検索と要約の例であれば、次のような応答になります。</p>
+<blockquote data-sourcepos="263:1-263:400">
+<p data-sourcepos="263:3-263:400">MCPに関するファイルを検索したところ、主に2件の関連文書が見つかりました。内容を要約すると、MCPはLLMが外部ツールやデータソースを標準化された形式で利用するためのプロトコルであり、AIエージェントがファイル検索、DB問い合わせ、API実行などを安全に扱うための基盤として使われます。</p>
+</blockquote>
+<p data-sourcepos="265:1-265:102">役所の住所変更であれば、窓口職員が市民に次のように案内する場面です。</p>
+<blockquote data-sourcepos="267:1-267:215">
+<p data-sourcepos="267:3-267:215">住所変更の手続きは完了いたしました。記入事項に不備はございませんでした。必要に応じて、マイナンバーカードや保険関係の住所変更もご確認ください。</p>
+</blockquote>
+<p data-sourcepos="269:1-269:198">このように、最終応答では内部で行われた処理そのものよりも、ユーザーにとって意味のある結果が返されます。これで一連の手続きは終了です。</p>
+<h2 data-sourcepos="271:1-271:42">
+<span id="mcpは役所内の共通手続き" class="fragment"></span><a href="#mcp%E3%81%AF%E5%BD%B9%E6%89%80%E5%86%85%E3%81%AE%E5%85%B1%E9%80%9A%E6%89%8B%E7%B6%9A%E3%81%8D"><i class="fa fa-link"></i></a>MCPは「役所内の共通手続き」</h2>
+<p data-sourcepos="273:1-273:369">役所では、窓口職員が各部署へ自由な形式で依頼するわけではありません。住民票の住所変更ひとつとっても、決められた申請書・確認項目・本人確認・住所の記載形式など、厳格なルールが存在します。関連部署への情報共有にも、一定の業務フローが定められています。</p>
+<p data-sourcepos="275:1-275:195">MCPも同じ発想です。LLMが外部ツールを呼び出す際、「いい感じに処理して」と曖昧に投げるのではなく、次のような情報を構造化して渡します。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="277:1-285:3"><div class="highlight"><pre><code>- 呼び出すツール名
+- 入力すべきパラメータ
+- 入力値の型
+- 必須項目
+- 実行結果の形式
+- 利用可能なリソース
+- 権限や接続先
+</code></pre></div></div>
+<p data-sourcepos="287:1-287:138">これは、役所で言えば「所定の申請書に必要事項を記入して、各担当部署に回す」ことに相当します。</p>
+<h2 data-sourcepos="289:1-289:54">
+<span id="mcpサーバーは各部署との接続窓口" class="fragment"></span><a href="#mcp%E3%82%B5%E3%83%BC%E3%83%90%E3%83%BC%E3%81%AF%E5%90%84%E9%83%A8%E7%BD%B2%E3%81%A8%E3%81%AE%E6%8E%A5%E7%B6%9A%E7%AA%93%E5%8F%A3"><i class="fa fa-link"></i></a>MCPサーバーは「各部署との接続窓口」</h2>
+<p data-sourcepos="291:1-291:226">先ほどからすでに何度か登場している用語ですが、プロトコルとしてのMCPにおいて外部ツールやデータソースを提供する側のサーバーを「<strong>MCPサーバー</strong>」と呼びます。</p>
+<p data-sourcepos="293:1-293:121"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Fd706a12c-51da-4616-b8f9-80fc1266bb39.png?ixlib=rb-4.1.1&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=64c5ec6c8c6a7277d49bb3e5b18eab39" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/926fb403ed5daef7e3cd69d3.png" alt="image.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/d706a12c-51da-4616-b8f9-80fc1266bb39.png" loading="lazy" decoding="async"></a></p>
+<blockquote data-sourcepos="295:1-295:47">
+<p data-sourcepos="295:3-295:47">この図は GPT-5.5 が作成しました。</p>
+</blockquote>
+<p data-sourcepos="297:1-297:45">これも役所の例で理解できます。</p>
+<p data-sourcepos="299:1-299:339">窓口職員が住民基本台帳のデータベースを直接操作するとは限りません。実際には、住民課のシステムや担当部署の業務端末を通じて情報を確認します。MCPサーバーも同様に、LLMから見た外部機能の提供口です。例えば次のようなものが挙げられます。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="301:1-310:3"><div class="highlight"><pre><code>- ファイル検索
+- GitHub操作
+- データベース検索
+- Webブラウザ操作
+- ローカルコマンド実行
+- カレンダー参照
+- メール検索
+- 社内ドキュメント検索
+</code></pre></div></div>
+<p data-sourcepos="312:1-312:150">LLMはこれらの実システムを直接操作するのではなく、MCPサーバーが公開している機能を通じてアクセスします。</p>
+<p data-sourcepos="314:1-314:399">ここで押さえておきたいのは、LLMがすべてを自ら実行しているわけではないという点です。役所の窓口職員も同様で、すべての処理を一人で完結させているわけではありません。住民票の更新には住民記録システムが、保険変更には保険担当部署が、税務確認には税務部署がそれぞれ関わります。</p>
+<p data-sourcepos="316:1-316:63">窓口職員の役割は、次のように整理できます。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="318:1-325:3"><div class="highlight"><pre><code>- 市民の依頼内容を理解する
+- 必要な手続きを判断する
+- 必要な部署に照会する
+- 必要書類や入力項目を確認する
+- 戻ってきた結果を整理する
+- 市民に分かりやすく説明する
+</code></pre></div></div>
+<p data-sourcepos="327:1-328:211">LLMも同じです。ユーザーの依頼を自然言語で受け取り、必要なツールを選んでMCP経由で呼び出し、結果を統合して返答します。<br>
+つまりLLMの本質的な役割は、外部システムの「実行主体」ではなく、自然言語と構造化された手続きの間を橋渡しする「<strong>判断・調整・説明の主体</strong>」です。</p>
+<hr data-sourcepos="330:1-331:0">
+<p data-sourcepos="332:1-332:132"><strong>※ 参考： <em>Understanding MCP servers</em> - <a href="https://modelcontextprotocol.io/docs/getting-started/intro" rel="nofollow noopener" target="_blank">Model Context Protocol</a></strong></p>
+<p data-sourcepos="334:1-334:58"><a href="https://modelcontextprotocol.io/docs/learn/server-concepts" class="mirror-link-card">https://modelcontextprotocol.io/docs/learn/server-concepts</a>
+</p>
+<h2 data-sourcepos="337:1-337:30">
+<span id="mcpが重要になる場面" class="fragment"></span><a href="#mcp%E3%81%8C%E9%87%8D%E8%A6%81%E3%81%AB%E3%81%AA%E3%82%8B%E5%A0%B4%E9%9D%A2"><i class="fa fa-link"></i></a>MCPが重要になる場面</h2>
+<p data-sourcepos="339:1-339:162">MCPが特に重要になるのは、LLMに単なる文章生成以上の作業をさせたい場面です。例えば次のような用途が挙げられます。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="341:1-350:3"><div class="highlight"><pre><code>- ファイルを読んで内容を要約する
+- GitHubのIssueやPull Requestを確認する
+- ローカル環境でスクリプトを実行する
+- データベースから条件に合う情報を検索する
+- カレンダーを見て予定を調整する
+- メールを検索して返信案を作る
+- 社内文書を参照して質問に答える
+- 複数のツールを組み合わせてワークフローを実行する
+</code></pre></div></div>
+<p data-sourcepos="352:1-352:392">これらはいずれも、LLM単体では完結しません。LLMは自然言語を理解し、方針を立て、応答を生成できます。しかし最新のファイル、ローカルPC上のデータ、社内システム、外部APIといったリソースにアクセスするには、何らかの接続機構が必要です。その接続機構を標準化するものがMCPです。</p>
+<div data-sourcepos="355:1-373:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<h3 data-sourcepos="356:1-356:61">
+<span id="mcpによってllmが賢くなっている訳ではない" class="fragment"></span><a href="#mcp%E3%81%AB%E3%82%88%E3%81%A3%E3%81%A6llm%E3%81%8C%E8%B3%A2%E3%81%8F%E3%81%AA%E3%81%A3%E3%81%A6%E3%81%84%E3%82%8B%E8%A8%B3%E3%81%A7%E3%81%AF%E3%81%AA%E3%81%84"><i class="fa fa-link"></i></a>MCPによってLLMが賢くなっている訳ではない</h3>
+<p data-sourcepos="358:1-358:336">MCPについて考えるときに把握しておきたいのは、MCPそのものがLLMの賢さを高めるわけではないという点です。MCPはあくまで、LLMが外部ツールを使うための接続規格です。導入したからといって、LLMの推論能力自体が急に向上するわけではありません。</p>
+<p data-sourcepos="360:1-360:489">役所の例で言えば、MCPは「窓口職員の知識量を増やす技術」ではなく、単に「窓口職員が各部署と正しく連携するための業務フロー」です。どんなに賢い窓口職員（＝LLM）でも、部署間の連携ルールが整っていなければ手続きは混乱します。逆に、連携ルールが整っていても、窓口職員が依頼内容を誤解すれば、間違った手続き方法でフローが進んでしまいます。</p>
+<p data-sourcepos="362:1-362:348">LLM + MCPの場合も同様です。MCPは外部ツールとの連携を整理するものですが、どのツールをいつ呼ぶべきか、結果をどう解釈すべきかは、LLM側が判断します。したがって実用上は、MCPに従うことのできる程度には賢いLLMをユーザーが選択しなければなりません。</p>
+<blockquote data-sourcepos="364:1-372:189">
+<p data-sourcepos="364:3-364:80">これは、図書館のレファレンスサービスにも似ています。</p>
+<p data-sourcepos="366:3-366:320">優れた司書は、すべての知識を自分の頭の中に持っている訳ではありません。利用者の質問を聞き取り、必要な情報を見極め、蔵書検索、分類体系、専門データベース、参考図書などを使い分けながら、信頼できる情報に辿り着きます。</p>
+<p data-sourcepos="368:3-368:449">提供される情報が大変に重厚かつ正確で有益であったとしても、それは情報を提供する司書自身が全知全能であることを意味しているのではなく、適切な情報源にアクセスし、それを評価し、利用者に分かりやすく整理して返す能力があるということだけです。（勿論、このような能力が優れたものであることは間違いありません）</p>
+<p data-sourcepos="370:3-370:408">LLM + MCP もこれに近い構造を有しています。MCPはLLMそのものを賢くする技術ではありません。しかし、LLMが外部ツールやデータソースに接続し、それらを一定の手続きに従って利用できるようにします。その結果、LLM単体では答えられない質問にも、外部情報を参照しながら答えられるようになります。</p>
+<p data-sourcepos="372:3-372:189">つまり、MCPはLLMの「知能そのもの」を増やすのではなく、<strong>LLMが参照できる情報源と実行できる手続きを広げる仕組み</strong>と理解すべきです。</p>
+</blockquote>
+</div>
+</div>
+<h1 data-sourcepos="375:1-375:11">
+<span id="まとめ" class="fragment"></span><a href="#%E3%81%BE%E3%81%A8%E3%82%81"><i class="fa fa-link"></i></a>まとめ</h1>
+<p data-sourcepos="377:1-377:75">ここまでの内容を、住所変更の例で改めて整理します。</p>
+<p data-sourcepos="379:1-379:578">市民（＝ユーザー）は、役所の内部システムの仕様を知りません。それでも「住所変更をしたい」と伝えれば、窓口職員が必要な手続きを判断してくれます。LLMの場合も同じです。ユーザーは外部ツールのAPI仕様を知る必要はなく、「このファイルを読んで要約して」「GitHubのIssueを確認して」「予定を調整して」と自然言語で依頼するだけで良いのです。LLMがその意図を解釈し、どれが目的達成に必要なツールかを判断します。</p>
+<p data-sourcepos="381:1-381:285">MCPは、LLMがそれらのツールに対して決められた形式で安全にアクセスするための共通の手続きです。役所で言えば、申請書の様式・部署間の連携や情報伝達のルール・承認フロー・照会手続きなどに相当します。</p>
+<hr data-sourcepos="383:1-384:0">
+<p data-sourcepos="385:1-385:96">ここまで役所の比喩を用いて長々と説明してきましたが、要約すると、</p>
+<ul data-sourcepos="387:1-390:0">
+<li data-sourcepos="387:1-387:43">LLM ＝ 自然言語を理解する窓口</li>
+<li data-sourcepos="388:1-388:97">MCP ＝ その窓口が外部システムに正しい形式で依頼を出すための手続き</li>
+<li data-sourcepos="389:1-390:0">外部ツール ＝ 実際の処理を担当する各部署</li>
+</ul>
+<p data-sourcepos="391:1-391:179">と整理できます。この三者の関係を理解すると、MCPがなぜAIエージェント時代の基盤技術として重要視されているのかが分かります。</p>
+
+</div>
+
+
+{% endraw %}

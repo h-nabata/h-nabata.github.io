@@ -1,0 +1,343 @@
+---
+layout: "qiita-mirror"
+title: "【Linux/Python】Psi4とRDkitの導入～電荷と双極子モーメントの算出"
+qiita_id: "11eb4c14f97d4f761445"
+qiita_url: "https://qiita.com/h-nabata/items/11eb4c14f97d4f761445"
+qiita_created: "2023-06-19T03:39:42+09:00"
+qiita_updated: "2023-06-19T03:39:42+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "計算化学・分子構造"
+mirror_tags: ["Python", "Linux", "RDKit", "計算化学", "Psi4"]
+permalink: "/qiita/11eb4c14f97d4f761445.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<h1 data-sourcepos="1:1-1:8">
+<span id="目的" class="fragment"></span><a href="#%E7%9B%AE%E7%9A%84"><i class="fa fa-link"></i></a>目的</h1>
+<p data-sourcepos="3:1-3:209">本稿の目的は「<strong>xyz形式で与えられた任意の化合物の3次元座標データをもとに、電荷や双極子モーメントを求めるPythonスクリプトを作成すること</strong>」です。</p>
+<h1 data-sourcepos="5:1-5:8">
+<span id="環境" class="fragment"></span><a href="#%E7%92%B0%E5%A2%83"><i class="fa fa-link"></i></a>環境</h1>
+<p data-sourcepos="7:1-7:148">本稿では、既にAnaconda3で構築したPython3系の存在するUbuntu環境に各種パッケージをインストールしていきます。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="9:1-11:3">
+<div class="code-lang"><span class="bold">筆者のLinux環境</span></div>
+<div class="highlight"><pre><code>Linux version 4.4.0-240-generic <span class="o">(</span>buildd@lcy02-amd64-091<span class="o">)</span> <span class="o">(</span>gcc version 5.4.0 20160609 <span class="o">(</span>Ubuntu 5.4.0-6ubuntu1~16.04.12<span class="o">)</span> <span class="o">)</span> <span class="c">#274-Ubuntu SMP Sat Apr 22 13:35:27 UTC 2023</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="13:1-13:205">
+<p data-sourcepos="13:3-13:205">Windowsについては「<a href="/qiita/c1d16471bda6735a5d8a.html" id="reference-2e942725c9dd9f3a5c7e"><strong>RDKitを使うためにWindowsにAnaconda3を導入したときのメモ</strong></a>」の記事を参考にしてください。</p>
+</blockquote>
+<h1 data-sourcepos="16:1-16:23">
+<span id="psi4とrdkitの導入" class="fragment"></span><a href="#psi4%E3%81%A8rdkit%E3%81%AE%E5%B0%8E%E5%85%A5"><i class="fa fa-link"></i></a>Psi4とRDkitの導入</h1>
+<p data-sourcepos="18:1-20:325">まず、<strong>Psi4</strong>と<strong>RDkit</strong>という2つのパッケージを導入します。<br>
+"<a href="https://github.com/psi4/psi4" rel="nofollow noopener" target="_blank"><strong>Psi4</strong></a>"（サイフォー）は量子化学計算用パッケージ「Psi」の最新版で、種々の量子化学計算機能を提供するLGPLライセンスのオープンソースソフトウェアです。<br>
+"<a href="https://rdkit.org/docs_jp/Getting_Started_with_RDKit_in_Python_jp.html" rel="nofollow noopener" target="_blank"><strong>RDkit</strong></a>"（アールディーキット）は計算機上で化合物情報を扱う様々な機能を備えたオープンソースのライブラリで、ケモインフォマティクス（情報化学）分野でよく用いられています。</p>
+<p data-sourcepos="22:1-22:15">ここでは、</p>
+<ol data-sourcepos="23:3-25:0">
+<li data-sourcepos="23:3-23:42">Psi4用の仮想環境を作成する</li>
+<li data-sourcepos="24:3-25:0">1.で作成した仮想環境にRDkitを導入する</li>
+</ol>
+<p data-sourcepos="26:1-26:33">という手順で進めます。</p>
+<hr data-sourcepos="28:1-29:0">
+<p data-sourcepos="30:1-30:76">初めにPsi4用の仮想環境を以下のようにして作成します。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="32:1-34:3"><div class="highlight"><pre><code>conda create <span class="nt">-n</span> p4env psi4 <span class="nt">-c</span> psi4
+</code></pre></div></div>
+<p data-sourcepos="36:1-36:249">これにより <code>(p4env)</code> という仮想環境が3.10.11（2023年6月現在）のバージョンで作成されます。途中で <code>Proceed ([y]/n)?</code> と確認を求めるメッセージが表示されるので <code>y</code> を入力して続行します。</p>
+<blockquote data-sourcepos="38:1-38:96">
+<p data-sourcepos="38:3-38:96">ここでは p4env という名前にしていますが、他の名前でも構いません。</p>
+</blockquote>
+<p data-sourcepos="40:1-40:66">この仮想環境は以下のコマンドで起動できます。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="42:1-44:3"><div class="highlight"><pre><code>conda activate p4env
+</code></pre></div></div>
+<p data-sourcepos="46:1-46:107">仮想環境を起動した状態で <code>python</code> と叩くとPythonのREPL（対話モード）が起動し、</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="48:1-52:3"><div class="highlight"><pre><code>Python 3.10.11 <span class="o">(</span>main, May 16 2023, 00:28:57<span class="o">)</span> <span class="o">[</span>GCC 11.2.0] on linux
+Type <span class="s2">"help"</span>, <span class="s2">"copyright"</span>, <span class="s2">"credits"</span> or <span class="s2">"license"</span> <span class="k">for </span>more information.
+<span class="o">&gt;&gt;&gt;</span>
+</code></pre></div></div>
+<p data-sourcepos="54:1-54:310">とプロンプト待ちの状態になります。ここで以下を打ち込んでみて、Psi4のバージョンが表示されれば、ひとまずインストールは成功です（インストールされるバージョンは特に指定の無い限り、環境や時期によって変わります）。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="56:1-60:3"><div class="highlight"><pre><code><span class="kn">import</span> <span class="n">psi4</span>
+<span class="nf">print</span><span class="p">(</span><span class="sh">'</span><span class="s">psi4 version: </span><span class="sh">'</span><span class="p">,</span> <span class="n">psi4</span><span class="p">.</span><span class="n">__version__</span><span class="p">)</span>
+<span class="c1"># psi4 version:  1.7
+</span></code></pre></div></div>
+<hr data-sourcepos="62:1-63:0">
+<p data-sourcepos="64:1-64:138">次に、仮想環境p4envを起動したままの状態で以下を実行し、RDkitを仮想環境p4envにインストールします。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="66:1-68:3"><div class="highlight"><pre><code>conda <span class="nb">install</span> <span class="nt">-c</span> conda-forge rdkit
+</code></pre></div></div>
+<p data-sourcepos="70:1-70:139">ここでも途中で <code>Proceed ([y]/n)?</code> と確認を求めるメッセージが表示されるので <code>y</code> を入力して続行します。</p>
+<p data-sourcepos="72:1-72:86">インストールが終わったら先ほど同様に <code>python</code> でREPLを起動し、</p>
+<div class="code-frame" data-lang="py" data-sourcepos="74:1-78:3"><div class="highlight"><pre><code><span class="kn">import</span> <span class="n">rdkit</span>
+<span class="nf">print</span><span class="p">(</span><span class="sh">'</span><span class="s">rdkit version: </span><span class="sh">'</span><span class="p">,</span> <span class="n">rdkit</span><span class="p">.</span><span class="n">__version__</span><span class="p">)</span>
+<span class="c1"># rdkit version:  2023.03.1
+</span></code></pre></div></div>
+<p data-sourcepos="80:1-80:69">としてインストールできているか確かめましょう。</p>
+<p data-sourcepos="82:1-82:51">以上でインストール作業は終了です。</p>
+<h1 data-sourcepos="85:1-85:29">
+<span id="分子構造の読み込み" class="fragment"></span><a href="#%E5%88%86%E5%AD%90%E6%A7%8B%E9%80%A0%E3%81%AE%E8%AA%AD%E3%81%BF%E8%BE%BC%E3%81%BF"><i class="fa fa-link"></i></a>分子構造の読み込み</h1>
+<p data-sourcepos="86:1-86:143">以下はMethyl Acetate（酢酸メチル）のxyz形式の座標データです。座標の単位はオングストローム（Å）です。</p>
+<div class="code-frame" data-lang="" data-sourcepos="88:1-102:3">
+<div class="code-lang"><span class="bold">C3H6O2.xyz</span></div>
+<div class="highlight"><pre><code>11
+Methyl Acetate
+O    -0.215688959924     -0.507766095361     -2.428331137742
+O    -0.215688959921      1.603052223086     -1.642788308431
+C    -0.215688959922      0.411818742635     -1.429297182932
+C    -0.215688959920     -0.247834458954     -0.073962214047
+H     0.665459040080     -0.887746825964      0.029389330718
+H    -0.215688959918      0.516223240518      0.701993181357
+H    -1.096836959920     -0.887746825963      0.029389330721
+C    -0.215688959926      0.244364804095     -3.656296572957
+H     0.805003040074      0.445182709213     -4.001214627043
+H    -0.733748959927     -0.297211082767     -4.455932076327
+H    -0.718320959925      1.210363787554     -3.532539926438
+</code></pre></div>
+</div>
+<p data-sourcepos="104:1-104:101">この <code>C3H6O2.xyz</code> というファイルは次のようにして読み込むことができます。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="106:1-113:3">
+<div class="code-lang"><span class="bold">rd1.py</span></div>
+<div class="highlight"><pre><code><span class="kn">from</span> <span class="n">rdkit</span> <span class="kn">import</span> <span class="n">Chem</span>
+
+<span class="n">mol</span> <span class="o">=</span> <span class="n">Chem</span><span class="p">.</span><span class="nc">MolFromXYZFile</span><span class="p">(</span><span class="sh">"</span><span class="s">C3H6O2.xyz</span><span class="sh">"</span><span class="p">)</span>
+<span class="n">smiles</span> <span class="o">=</span> <span class="n">Chem</span><span class="p">.</span><span class="nc">MolToSmiles</span><span class="p">(</span><span class="n">mol</span><span class="p">)</span>
+<span class="nf">print</span><span class="p">(</span><span class="n">smiles</span><span class="p">)</span>
+<span class="c1"># C.C.C.O.O.[HH].[HH].[HH].[HH].[HH].[HH]
+</span></code></pre></div>
+</div>
+<p data-sourcepos="115:1-115:239">SMILES表記の出力を見て分かるように、xyzファイルを読み込んだ段階では分子の結合情報が存在しません。結合情報は以下のようにDetermineBonds関数を用いて与えることができます。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="117:1-130:3">
+<div class="code-lang"><span class="bold">rd2.py</span></div>
+<div class="highlight"><pre><code><span class="kn">from</span> <span class="n">rdkit</span> <span class="kn">import</span> <span class="n">Chem</span>
+<span class="kn">from</span> <span class="n">rdkit.Chem</span> <span class="kn">import</span> <span class="n">rdDetermineBonds</span>
+
+<span class="n">mol</span> <span class="o">=</span> <span class="n">Chem</span><span class="p">.</span><span class="nc">MolFromXYZFile</span><span class="p">(</span><span class="sh">"</span><span class="s">C3H6O2.xyz</span><span class="sh">"</span><span class="p">)</span>
+<span class="n">smiles</span> <span class="o">=</span> <span class="n">Chem</span><span class="p">.</span><span class="nc">MolToSmiles</span><span class="p">(</span><span class="n">mol</span><span class="p">)</span>
+<span class="nf">print</span><span class="p">(</span><span class="n">smiles</span><span class="p">)</span>
+<span class="c1"># C.C.C.O.O.[HH].[HH].[HH].[HH].[HH].[HH]
+</span>
+<span class="n">rdDetermineBonds</span><span class="p">.</span><span class="nc">DetermineBonds</span><span class="p">(</span><span class="n">mol</span><span class="p">)</span>  <span class="c1"># 推測される結合情報をmolオブジェクトに付与
+</span><span class="n">smiles2</span> <span class="o">=</span> <span class="n">Chem</span><span class="p">.</span><span class="nc">MolToSmiles</span><span class="p">(</span><span class="n">mol</span><span class="p">)</span>
+<span class="nf">print</span><span class="p">(</span><span class="n">smiles2</span><span class="p">)</span>
+<span class="c1"># [H]C([H])([H])OC(=O)C([H])([H])[H]
+</span></code></pre></div>
+</div>
+<blockquote data-sourcepos="132:1-132:233">
+<p data-sourcepos="132:3-132:233">直感的にも理解できることですが、DetermineBonds関数は分子の局所安定構造（Minimum）に対して有効であり、遷移状態の構造に対しては適切な情報を与えないことがあります。</p>
+</blockquote>
+<p data-sourcepos="134:1-134:270">結合情報を付与したことで、隣接行列や距離行列（ここではグラフ理論的な意味での「距離行列」を指す）を簡単に求めることができます。これによりWiener index（Wiener数）などが簡単に計算できます。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="136:1-153:3">
+<div class="code-lang"><span class="bold">rd3.py</span></div>
+<div class="highlight"><pre><code><span class="kn">import</span> <span class="n">numpy</span> <span class="k">as</span> <span class="n">np</span>
+<span class="kn">from</span> <span class="n">rdkit</span> <span class="kn">import</span> <span class="n">Chem</span>
+<span class="kn">from</span> <span class="n">rdkit.Chem</span> <span class="kn">import</span> <span class="n">rdDetermineBonds</span>
+
+<span class="n">mol</span> <span class="o">=</span> <span class="n">Chem</span><span class="p">.</span><span class="nc">MolFromXYZFile</span><span class="p">(</span><span class="sh">"</span><span class="s">C3H6O2.xyz</span><span class="sh">"</span><span class="p">)</span>
+<span class="n">rdDetermineBonds</span><span class="p">.</span><span class="nc">DetermineBonds</span><span class="p">(</span><span class="n">mol</span><span class="p">)</span>
+
+<span class="c1"># generate the adjacency matrix
+</span><span class="n">adjacency_matrix</span> <span class="o">=</span> <span class="n">Chem</span><span class="p">.</span><span class="nc">GetAdjacencyMatrix</span><span class="p">(</span><span class="n">mol</span><span class="p">)</span>
+<span class="nf">print</span><span class="p">(</span><span class="n">adjacency_matrix</span><span class="p">)</span>
+
+<span class="c1"># generate the distance matrix, calculate the wiener number
+</span><span class="n">distance_matrix</span> <span class="o">=</span> <span class="n">Chem</span><span class="p">.</span><span class="nc">GetDistanceMatrix</span><span class="p">(</span><span class="n">mol</span><span class="p">)</span>
+<span class="nf">print</span><span class="p">(</span><span class="n">distance_matrix</span><span class="p">)</span>
+<span class="n">wiener_num</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nf">sum</span><span class="p">(</span><span class="n">Chem</span><span class="p">.</span><span class="nc">GetDistanceMatrix</span><span class="p">(</span><span class="n">mol</span><span class="p">))</span> <span class="o">/</span> <span class="mi">2</span>
+<span class="nf">print</span><span class="p">(</span><span class="n">wiener_num</span><span class="p">)</span>
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="" data-sourcepos="155:1-179:3">
+<div class="code-lang"><span class="bold">rd3.pyの出力</span></div>
+<div class="highlight"><pre><code>[[0 0 1 0 0 0 0 1 0 0 0]
+ [0 0 1 0 0 0 0 0 0 0 0]
+ [1 1 0 1 0 0 0 0 0 0 0]
+ [0 0 1 0 1 1 1 0 0 0 0]
+ [0 0 0 1 0 0 0 0 0 0 0]
+ [0 0 0 1 0 0 0 0 0 0 0]
+ [0 0 0 1 0 0 0 0 0 0 0]
+ [1 0 0 0 0 0 0 0 1 1 1]
+ [0 0 0 0 0 0 0 1 0 0 0]
+ [0 0 0 0 0 0 0 1 0 0 0]
+ [0 0 0 0 0 0 0 1 0 0 0]]
+[[0. 2. 1. 2. 3. 3. 3. 1. 2. 2. 2.]
+ [2. 0. 1. 2. 3. 3. 3. 3. 4. 4. 4.]
+ [1. 1. 0. 1. 2. 2. 2. 2. 3. 3. 3.]
+ [2. 2. 1. 0. 1. 1. 1. 3. 4. 4. 4.]
+ [3. 3. 2. 1. 0. 2. 2. 4. 5. 5. 5.]
+ [3. 3. 2. 1. 2. 0. 2. 4. 5. 5. 5.]
+ [3. 3. 2. 1. 2. 2. 0. 4. 5. 5. 5.]
+ [1. 3. 2. 3. 4. 4. 4. 0. 1. 1. 1.]
+ [2. 4. 3. 4. 5. 5. 5. 1. 0. 2. 2.]
+ [2. 4. 3. 4. 5. 5. 5. 1. 2. 0. 2.]
+ [2. 4. 3. 4. 5. 5. 5. 1. 2. 2. 0.]]
+156.0
+</code></pre></div>
+</div>
+<h1 data-sourcepos="182:1-182:33">
+<span id="psi4による電子状態計算" class="fragment"></span><a href="#psi4%E3%81%AB%E3%82%88%E3%82%8B%E9%9B%BB%E5%AD%90%E7%8A%B6%E6%85%8B%E8%A8%88%E7%AE%97"><i class="fa fa-link"></i></a>Psi4による電子状態計算</h1>
+<p data-sourcepos="184:1-184:148">本題に移ります。電荷や双極子モーメントの計算をPythonで行うために、Psi4による電子状態計算を利用します。</p>
+<div class="code-frame" data-lang="" data-sourcepos="186:1-192:3">
+<div class="code-lang"><span class="bold">Psi4に与える主なパラメータ</span></div>
+<div class="highlight"><pre><code>- CPUのスレッド数
+- メモリ容量
+- 入力する分子の構造
+- 電荷とスピン多重度
+- 計算レベル
+</code></pre></div>
+</div>
+<p data-sourcepos="194:1-194:407">xyzファイルの分子を B3LYP/6-31G レベルのDFT計算で構造最適化し、得られた構造の各種計算結果を表示するPythonスクリプトの例を以下に示します。このプログラムでは、 C3H6O2.xyz を読み込み、途中計算のログを C3H6O2.log に書き出し、"C3H6O2.dat" に最終的な計算結果を書き出す、という流れで処理しています。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="196:1-268:3">
+<div class="code-lang"><span class="bold">rd4.py</span></div>
+<div class="highlight"><pre><code><span class="kn">import</span> <span class="n">numpy</span> <span class="k">as</span> <span class="n">np</span>
+<span class="kn">from</span> <span class="n">rdkit</span> <span class="kn">import</span> <span class="n">Chem</span>
+<span class="kn">import</span> <span class="n">psi4</span>
+
+
+<span class="c1">### input section ###
+# level of theory, charge, spin multiplicity, cpu threads, memory
+</span><span class="n">level</span> <span class="o">=</span> <span class="sh">"</span><span class="s">b3lyp/6-31G*</span><span class="sh">"</span>
+<span class="n">mol_input</span> <span class="o">=</span> <span class="sh">"</span><span class="s">0 1</span><span class="sh">"</span>
+<span class="n">mol_name</span> <span class="o">=</span> <span class="sh">"</span><span class="s">C3H6O2</span><span class="sh">"</span>   <span class="c1"># only xyz files are supported
+</span><span class="n">psi4</span><span class="p">.</span><span class="nf">set_num_threads</span><span class="p">(</span><span class="n">nthread</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">psi4</span><span class="p">.</span><span class="nf">set_memory</span><span class="p">(</span><span class="sh">"</span><span class="s">400MB</span><span class="sh">"</span><span class="p">)</span>
+
+<span class="n">inputfile</span> <span class="o">=</span> <span class="n">mol_name</span> <span class="o">+</span> <span class="sh">"</span><span class="s">.xyz</span><span class="sh">"</span>
+<span class="n">outputfile</span> <span class="o">=</span> <span class="n">mol_name</span> <span class="o">+</span> <span class="sh">"</span><span class="s">.log</span><span class="sh">"</span>
+<span class="n">optdatfile</span> <span class="o">=</span> <span class="n">mol_name</span> <span class="o">+</span> <span class="sh">"</span><span class="s">.dat</span><span class="sh">"</span>
+
+<span class="c1"># specify the output file
+</span><span class="n">psi4</span><span class="p">.</span><span class="nf">set_output_file</span><span class="p">(</span><span class="sh">"</span><span class="s">outputfile</span><span class="sh">"</span><span class="p">)</span>
+
+<span class="c1"># generate conformer from the input xyz file
+</span><span class="n">mol</span> <span class="o">=</span> <span class="n">Chem</span><span class="p">.</span><span class="nc">MolFromXYZFile</span><span class="p">(</span><span class="n">inputfile</span><span class="p">)</span>
+<span class="n">conf</span> <span class="o">=</span> <span class="n">mol</span><span class="p">.</span><span class="nc">GetConformer</span><span class="p">()</span>
+
+<span class="c1"># create the input infomation
+</span><span class="k">for</span> <span class="n">atom</span> <span class="ow">in</span> <span class="n">mol</span><span class="p">.</span><span class="nc">GetAtoms</span><span class="p">():</span>
+    <span class="n">mol_input</span> <span class="o">+=</span> <span class="sh">"</span><span class="se">\n</span><span class="s"> </span><span class="sh">"</span> <span class="o">+</span> <span class="n">atom</span><span class="p">.</span><span class="nc">GetSymbol</span><span class="p">()</span> <span class="o">+</span> <span class="sh">"</span><span class="s"> </span><span class="sh">"</span> <span class="o">+</span> <span class="nf">str</span><span class="p">(</span><span class="n">conf</span><span class="p">.</span><span class="nc">GetAtomPosition</span><span class="p">(</span><span class="n">atom</span><span class="p">.</span><span class="nc">GetIdx</span><span class="p">()).</span><span class="n">x</span><span class="p">)</span>\
+    <span class="o">+</span> <span class="sh">"</span><span class="s"> </span><span class="sh">"</span> <span class="o">+</span> <span class="nf">str</span><span class="p">(</span><span class="n">conf</span><span class="p">.</span><span class="nc">GetAtomPosition</span><span class="p">(</span><span class="n">atom</span><span class="p">.</span><span class="nc">GetIdx</span><span class="p">()).</span><span class="n">y</span><span class="p">)</span>\
+    <span class="o">+</span> <span class="sh">"</span><span class="s"> </span><span class="sh">"</span> <span class="o">+</span> <span class="nf">str</span><span class="p">(</span><span class="n">conf</span><span class="p">.</span><span class="nc">GetAtomPosition</span><span class="p">(</span><span class="n">atom</span><span class="p">.</span><span class="nc">GetIdx</span><span class="p">()).</span><span class="n">z</span><span class="p">)</span>
+<span class="n">molecule</span> <span class="o">=</span> <span class="n">psi4</span><span class="p">.</span><span class="nf">geometry</span><span class="p">(</span><span class="n">mol_input</span><span class="p">)</span>
+
+
+<span class="c1">### execute section ###
+# execute optimization
+</span><span class="n">energy</span><span class="p">,</span> <span class="n">wave_function</span> <span class="o">=</span> <span class="n">psi4</span><span class="p">.</span><span class="nf">optimize</span><span class="p">(</span><span class="n">level</span><span class="p">,</span> <span class="n">molecule</span><span class="o">=</span><span class="n">molecule</span><span class="p">,</span> <span class="n">return_wfn</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+
+<span class="c1">### output section ###
+</span>
+<span class="k">with</span> <span class="nf">open</span><span class="p">(</span><span class="n">optdatfile</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="sh">'</span><span class="s">w</span><span class="sh">'</span><span class="p">)</span> <span class="k">as</span> <span class="n">foptdat</span><span class="p">:</span>
+    
+    <span class="c1"># show the coordinates of the optimized structure
+</span>    <span class="n">foptdat</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sh">"</span><span class="se">\n</span><span class="s">level of theory: </span><span class="sh">"</span><span class="o">+</span><span class="n">level</span><span class="o">+</span><span class="sh">"</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span>
+    <span class="n">foptdat</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sh">"</span><span class="se">\n</span><span class="s">obtained structure:</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span>
+    <span class="n">foptdat</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="n">molecule</span><span class="p">.</span><span class="nf">save_string_xyz</span><span class="p">()</span><span class="o">+</span><span class="sh">"</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span>
+    
+    <span class="c1"># total electron energy (unit： au, Hartree)
+</span>    <span class="n">foptdat</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sh">"</span><span class="se">\n</span><span class="s">energy:</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span>
+    <span class="n">foptdat</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="nf">str</span><span class="p">(</span><span class="nf">round</span><span class="p">(</span><span class="n">energy</span><span class="p">,</span><span class="mi">5</span><span class="p">))</span><span class="o">+</span><span class="sh">'</span><span class="s"> a.u.</span><span class="se">\n</span><span class="sh">'</span><span class="p">)</span>
+    
+    <span class="c1"># energy levels of HOMO and LUMO (unit： au, Hartree)
+</span>    <span class="n">LUMO_idx</span> <span class="o">=</span> <span class="n">wave_function</span><span class="p">.</span><span class="nf">nalpha</span><span class="p">()</span>
+    <span class="n">HOMO_idx</span> <span class="o">=</span> <span class="n">LUMO_idx</span> <span class="o">-</span> <span class="mi">1</span>
+    <span class="n">homo</span> <span class="o">=</span> <span class="n">wave_function</span><span class="p">.</span><span class="nf">epsilon_a_subset</span><span class="p">(</span><span class="sh">"</span><span class="s">AO</span><span class="sh">"</span><span class="p">,</span> <span class="sh">"</span><span class="s">ALL</span><span class="sh">"</span><span class="p">).</span><span class="n">np</span><span class="p">[</span><span class="n">HOMO_idx</span><span class="p">]</span>
+    <span class="n">lumo</span> <span class="o">=</span> <span class="n">wave_function</span><span class="p">.</span><span class="nf">epsilon_a_subset</span><span class="p">(</span><span class="sh">"</span><span class="s">AO</span><span class="sh">"</span><span class="p">,</span> <span class="sh">"</span><span class="s">ALL</span><span class="sh">"</span><span class="p">).</span><span class="n">np</span><span class="p">[</span><span class="n">LUMO_idx</span><span class="p">]</span>
+    <span class="n">foptdat</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sh">'</span><span class="s">homo: </span><span class="sh">'</span><span class="o">+</span><span class="nf">str</span><span class="p">(</span><span class="nf">round</span><span class="p">(</span><span class="n">homo</span><span class="p">,</span><span class="mi">5</span><span class="p">))</span><span class="o">+</span><span class="sh">'</span><span class="s"> a.u.</span><span class="se">\n</span><span class="sh">'</span><span class="p">)</span>
+    <span class="n">foptdat</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sh">'</span><span class="s">lumo: </span><span class="sh">'</span><span class="o">+</span><span class="nf">str</span><span class="p">(</span><span class="nf">round</span><span class="p">(</span><span class="n">lumo</span><span class="p">,</span><span class="mi">5</span><span class="p">))</span><span class="o">+</span><span class="sh">'</span><span class="s"> a.u.</span><span class="se">\n</span><span class="sh">'</span><span class="p">)</span>
+    
+    <span class="c1"># mulliken charge
+</span>    <span class="n">psi4</span><span class="p">.</span><span class="nf">oeprop</span><span class="p">(</span><span class="n">wave_function</span><span class="p">,</span> <span class="sh">'</span><span class="s">MULLIKEN_CHARGES</span><span class="sh">'</span><span class="p">)</span> 
+    <span class="n">mulliken</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nf">array</span><span class="p">(</span><span class="n">wave_function</span><span class="p">.</span><span class="nf">atomic_point_charges</span><span class="p">())</span> 
+    <span class="n">foptdat</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sh">"</span><span class="se">\n</span><span class="s">mulliken charge:</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">atom</span> <span class="ow">in</span> <span class="nf">enumerate</span><span class="p">(</span><span class="n">mol</span><span class="p">.</span><span class="nc">GetAtoms</span><span class="p">()):</span>
+        <span class="n">foptdat</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="n">atom</span><span class="p">.</span><span class="nc">GetSymbol</span><span class="p">()</span><span class="o">+</span><span class="sh">"</span><span class="s"> </span><span class="sh">"</span><span class="o">+</span><span class="nf">str</span><span class="p">(</span><span class="nf">round</span><span class="p">(</span><span class="n">mulliken</span><span class="p">[</span><span class="n">i</span><span class="p">],</span><span class="mi">4</span><span class="p">))</span><span class="o">+</span><span class="sh">"</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span>
+    
+    <span class="c1"># dipole moment (unit： au = D, debye)
+</span>    <span class="n">dipole_x</span><span class="p">,</span> <span class="n">dipole_y</span><span class="p">,</span> <span class="n">dipole_z</span> <span class="o">=</span> <span class="n">psi4</span><span class="p">.</span><span class="nf">variable</span><span class="p">(</span><span class="sh">'</span><span class="s">SCF DIPOLE</span><span class="sh">'</span><span class="p">)</span>
+    <span class="n">dipole_moment</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nf">sqrt</span><span class="p">(</span><span class="n">dipole_x</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="n">dipole_y</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="n">dipole_z</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="n">foptdat</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sh">"</span><span class="se">\n</span><span class="s">dipole moment:</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span>
+    <span class="n">foptdat</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="nf">str</span><span class="p">(</span><span class="nf">round</span><span class="p">(</span><span class="n">dipole_x</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span><span class="o">+</span><span class="sh">"</span><span class="s"> </span><span class="sh">"</span><span class="o">+</span><span class="nf">str</span><span class="p">(</span><span class="nf">round</span><span class="p">(</span><span class="n">dipole_y</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span><span class="o">+</span><span class="sh">"</span><span class="s"> </span><span class="sh">"</span><span class="o">+</span><span class="nf">str</span><span class="p">(</span><span class="nf">round</span><span class="p">(</span><span class="n">dipole_z</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span><span class="o">+</span><span class="sh">"</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span>
+    <span class="n">foptdat</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="nf">str</span><span class="p">(</span><span class="nf">round</span><span class="p">(</span><span class="n">dipole_moment</span><span class="p">,</span><span class="mi">5</span><span class="p">))</span><span class="o">+</span><span class="sh">'</span><span class="s"> D</span><span class="sh">'</span><span class="p">)</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="270:1-274:99">
+<p data-sourcepos="270:3-270:14">実行時に</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="271:3-273:6"><div class="highlight"><pre><code>ModuleNotFoundError: No module named <span class="s1">'IPython'</span>
+</code></pre></div></div>
+<p data-sourcepos="274:3-274:99">などとエラーが出たら <code>conda install ipython</code> でインストールしてください。</p>
+</blockquote>
+<p data-sourcepos="276:1-276:239">生成された "C3H6O2.dat" には、最適化された構造、電子エネルギーとフロンティア軌道のエネルギー準位、マリケン電荷、双極子モーメントがそれぞれ以下のように出力されます。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="278:1-317:3">
+<div class="code-lang"><span class="bold">C3H6O2.dat</span></div>
+<div class="highlight"><pre><code><span class="n">level</span> <span class="n">of</span> <span class="n">theory</span><span class="p">:</span> <span class="n">b3lyp</span><span class="o">/</span><span class="mi">6</span><span class="o">-</span><span class="mi">31</span><span class="n">G</span><span class="o">*</span>
+
+<span class="n">obtained</span> <span class="n">structure</span><span class="p">:</span>
+<span class="mi">0</span> <span class="mi">1</span>
+ <span class="n">O</span>   <span class="o">-</span><span class="mf">0.142691767377</span>   <span class="o">-</span><span class="mf">0.715487775027</span>   <span class="o">-</span><span class="mf">0.583744569201</span>
+ <span class="n">O</span>    <span class="mf">0.238145932096</span>    <span class="mf">1.312467781128</span>    <span class="mf">0.338881605767</span>
+ <span class="n">C</span>    <span class="mf">0.037032925478</span>    <span class="mf">0.124696918090</span>    <span class="mf">0.463157590153</span>
+ <span class="n">C</span>   <span class="o">-</span><span class="mf">0.048996325818</span>   <span class="o">-</span><span class="mf">0.624228381503</span>    <span class="mf">1.772658569116</span>
+ <span class="n">H</span>    <span class="mf">0.711630181961</span>   <span class="o">-</span><span class="mf">1.411067105661</span>    <span class="mf">1.807742834855</span>
+ <span class="n">H</span>    <span class="mf">0.098788570745</span>    <span class="mf">0.071838437024</span>    <span class="mf">2.598859014689</span>
+ <span class="n">H</span>   <span class="o">-</span><span class="mf">1.025615663583</span>   <span class="o">-</span><span class="mf">1.110586505160</span>    <span class="mf">1.865393896014</span>
+ <span class="n">C</span>   <span class="o">-</span><span class="mf">0.080307666650</span>   <span class="o">-</span><span class="mf">0.100537862010</span>   <span class="o">-</span><span class="mf">1.880394656820</span>
+ <span class="n">H</span>    <span class="mf">0.897101218553</span>    <span class="mf">0.362632174673</span>   <span class="o">-</span><span class="mf">2.040333617865</span>
+ <span class="n">H</span>   <span class="o">-</span><span class="mf">0.243682798262</span>   <span class="o">-</span><span class="mf">0.907339756802</span>   <span class="o">-</span><span class="mf">2.595685319725</span>
+ <span class="n">H</span>   <span class="o">-</span><span class="mf">0.854492585703</span>    <span class="mf">0.664939497912</span>   <span class="o">-</span><span class="mf">1.981766825708</span>
+
+
+<span class="n">energy</span><span class="p">:</span>
+<span class="o">-</span><span class="mf">268.38849</span> <span class="n">a</span><span class="p">.</span><span class="n">u</span><span class="p">.</span>
+<span class="n">homo</span><span class="p">:</span> <span class="o">-</span><span class="mf">0.26949</span> <span class="n">a</span><span class="p">.</span><span class="n">u</span><span class="p">.</span>
+<span class="n">lumo</span><span class="p">:</span> <span class="mf">0.01453</span> <span class="n">a</span><span class="p">.</span><span class="n">u</span><span class="p">.</span>
+
+<span class="n">mulliken</span> <span class="n">charge</span><span class="p">:</span>
+<span class="n">O</span> <span class="o">-</span><span class="mf">0.4392</span>
+<span class="n">O</span> <span class="o">-</span><span class="mf">0.4662</span>
+<span class="n">C</span> <span class="mf">0.5959</span>
+<span class="n">C</span> <span class="o">-</span><span class="mf">0.5217</span>
+<span class="n">H</span> <span class="mf">0.1817</span>
+<span class="n">H</span> <span class="mf">0.1827</span>
+<span class="n">H</span> <span class="mf">0.1817</span>
+<span class="n">C</span> <span class="o">-</span><span class="mf">0.2168</span>
+<span class="n">H</span> <span class="mf">0.1696</span>
+<span class="n">H</span> <span class="mf">0.1628</span>
+<span class="n">H</span> <span class="mf">0.1695</span>
+
+<span class="n">dipole</span> <span class="n">moment</span><span class="p">:</span>
+<span class="o">-</span><span class="mf">0.12151125</span> <span class="o">-</span><span class="mf">0.66753762</span> <span class="o">-</span><span class="mf">0.17173262</span>
+<span class="mf">0.6999</span> <span class="n">D</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="319:1-319:375">以上により、Pythonで電荷と双極子モーメントを求めることができました。xyzファイルを用意すれば任意の化合物について計算することができます。ただし、基底関数6-31G*がサポートしていないような高周期の元素を含む場合は、より大きな基底関数を指定しなければなりません。</p>
+<blockquote data-sourcepos="321:1-331:5">
+<p data-sourcepos="321:3-321:194">構造最適化せずに1点計算のみ実行したいという場合は <code>psi4.optimize</code> の行について、以下のように <code>optimize</code> を <code>energy</code> と書き換えるだけでOKです。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="323:3-325:5"><div class="highlight"><pre><code><span class="n">energy</span><span class="p">,</span> <span class="n">wave_function</span> <span class="o">=</span> <span class="n">psi4</span><span class="p">.</span><span class="nf">energy</span><span class="p">(</span><span class="n">level</span><span class="p">,</span> <span class="n">molecule</span><span class="o">=</span><span class="n">molecule</span><span class="p">,</span> <span class="n">return_wfn</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+</code></pre></div></div>
+<p data-sourcepos="327:3-327:519">また、遷移状態の最適化を実行したい場合は <code>psi4.optimize</code> の行よりも前に以下のように <code>opt_type</code> を <code>ts</code> に指定する行を加えればOKです。<code>'full_hess_every': 0</code> は初期構造の点でのみヘシアンを計算するオプションで、デフォルトは <code>-1</code> です。例えば <code>5</code> とすると5点ごとにヘシアンが計算されますが、原子数が多くなるほど計算が重くなります（<code>1</code> にすると全点でヘシアンが計算されます）。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="329:3-331:5"><div class="highlight"><pre><code><span class="n">psi4</span><span class="p">.</span><span class="nf">set_options</span><span class="p">({</span><span class="sh">'</span><span class="s">opt_type</span><span class="sh">'</span><span class="p">:</span> <span class="sh">'</span><span class="s">ts</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">full_hess_every</span><span class="sh">'</span><span class="p">:</span> <span class="mi">0</span><span class="p">})</span>
+</code></pre></div></div>
+</blockquote>
+<h1 data-sourcepos="334:1-334:14">
+<span id="参考文献" class="fragment"></span><a href="#%E5%8F%82%E8%80%83%E6%96%87%E7%8C%AE"><i class="fa fa-link"></i></a>参考文献</h1>
+<ul data-sourcepos="336:1-337:0">
+<li data-sourcepos="336:1-337:0"><strong>RDkit関連</strong></li>
+</ul>
+<p data-sourcepos="338:1-338:56"><a href="https://aimedchem.hatenablog.com/entry/2023/05/08/233055" class="mirror-link-card">https://aimedchem.hatenablog.com/entry/2023/05/08/233055</a>
+</p>
+<p data-sourcepos="340:1-340:50"><a href="https://rdkit-users.jp/docs/release-2022-09-1.html" class="mirror-link-card">https://rdkit-users.jp/docs/release-2022-09-1.html</a>
+</p>
+<p data-sourcepos="342:1-342:36"><a href="https://future-chem.com/rdkit-intro/" class="mirror-link-card">https://future-chem.com/rdkit-intro/</a>
+</p>
+<ul data-sourcepos="344:1-345:0">
+<li data-sourcepos="344:1-345:0"><strong>psi4関連</strong></li>
+</ul>
+<p data-sourcepos="346:1-346:59"><a href="https://qiita.com/ottantachinque/items/30aa73dd6bb949d4858b" class="mirror-link-card">https://qiita.com/ottantachinque/items/30aa73dd6bb949d4858b</a>
+</p>
+<p data-sourcepos="348:1-348:42"><a href="https://future-chem.com/psi4-wfn-analysis/" class="mirror-link-card">https://future-chem.com/psi4-wfn-analysis/</a>
+</p>
+<p data-sourcepos="350:1-350:111">より詳しいインストール方法に関しては公式のドキュメントを参照してください：</p>
+<p data-sourcepos="352:1-352:58"><a href="https://psicode.org/psi4manual/master/build_obtaining.html" class="mirror-link-card">https://psicode.org/psi4manual/master/build_obtaining.html</a>
+</p>
+
+</div>
+
+
+{% endraw %}

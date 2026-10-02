@@ -1,0 +1,2443 @@
+### 2026/09/08追記
+本稿の問題セットを用いたベンチマーク結果を以下の記事にまとめている。
+
+https://qiita.com/h-nabata/items/70d7d6ed64e91fce8675
+
+# LLMベンチマーク用のオリジナル上級問題
+
+LLMの高度な推論性能テストのために8分野・各8問の計64問からなるオリジナルの上級問題リストを作成した。
+
+ベンチマーク用の問題はすべて英語を入力言語とした。ただし、固有名詞や文学に関する問題では文中に漢字や日本語を含む場合がある。出力言語に関する指示はプロンプトに含めていない。
+
+ベンチマークテストでは数理的思考に重きを置き、理数系分野からはコーディングを含む情報科学、数学、物理学、化学、生物学の範囲で出題した。数学については「数学（代数・数論）」、「数学（解析・幾何）」の2分野でそれぞれ8問を出題した。いずれも大学入試～国際的な数学コンテストで通用するレベルの問題である。その他の理系分野についても、教養～学部レベルの知識が要求される問題を収集・作問した。入試問題から抜粋・改変したもの以外に、ChatGPT-5.6-Solが提案したものを筆者が改訂する形で作成したため、完全にオリジナルの問題も含まれる。
+
+| 分野                 | # ID |
+| ------------------ | --------------------- |
+| 論理 | LP-LOG-P01 ～ LP-LOG-P08 |
+| 文章理解・翻訳 | LP-LIT-P01 ～ LP-LIT-P08 |
+| 情報科学 | LP-CSC-P01 ～ LP-CSC-P08 |
+| 数学（代数・数論） | SP-NUM-P01 ～ SP-NUM-P08 |
+| 数学（解析・幾何） | SP-ANL-P01 ～ SP-ANL-P08 |
+| 物理学 | SP-PHY-P01 ～ SP-PHY-P08 |
+| 化学 | SP-CHE-P01 ～ SP-CHE-P08 |
+| 生物学 | SP-BIO-P01 ～ SP-BIO-P08 |
+
+> 証明問題など記述式回答を求める設問を含むため、機械的な採点が難しいのは難点。
+
+プロンプト投入用のシェルスクリプト一式をGitHub上で公開している。ベンチマークテストについて、一部の問題に著作権が残る可能性がある点には注意。出典の明示されていないものについては基本的に改変は自由。
+
+https://github.com/h-nabata/LLM/tree/main/Qiita/LLM-jp/local_llm_hard_benchmark_v1_0
+
+* * *
+
+以下、問題セットを掲載する。筆者の主観的評価ではあるが、各問の難度の目安を★の数で示した。一部の問題には出典とコメントを記載した。
+
+## 論理
+
+
+### LP-LOG-P01: 数値に関する論理パズル（★★）
+
+Let $x<y$ be integers, and suppose that $(x,y)$ is one of the following 12 pairs:
+
+$$(2,9), (3,6), (6,12), (3,8), (3,10), (2,12),$$
+
+$$(5,6), (3,9), (4,5), (2,10), (10,12), (7,10).$$
+
+Person A is told only the value of $x+y$, while Person B is told only the value of $xy$.
+
+Both know the complete list of 12 possible pairs, and each knows that the other is perfectly logical. The following statements are made publicly in order, and all of them are true.
+
+B: "I still cannot determine $(x,y)$."
+
+A: "Even after hearing that, I still cannot determine $(x,y)$."
+
+B: "Now I can determine $(x,y)$."
+
+A: "Then now I can determine $(x,y)$ as well."
+
+Determine $(x,y)$.
+
+Output only the JSON array $[x,y]$, with no explanation.
+
+### LP-LOG-P02: 証言から推測する論理パズル（★★）
+
+Exactly two of the five devices A, B, C, D, and E have failed. Five technicians each made two statements.
+
+Exactly three of the technicians are completely reliable, meaning that both of their statements are true. The remaining exactly two technicians are completely unreliable, meaning that both of their statements are false. No technician made one true statement and one false statement.
+
+Technician 1:
+Exactly one of A, C, and D has failed.
+Exactly two of A, D, and E have failed.
+
+Technician 2:
+B is functioning normally.
+A and E are in the same state.
+
+Technician 3:
+Exactly two of A, C, and D have failed.
+Exactly one of A and D has failed.
+
+Technician 4:
+Exactly two of B, C, and D have failed.
+D has failed.
+
+Technician 5:
+Exactly one of C, D, and E has failed.
+Exactly two of A, B, and D have failed.
+
+Determine the failed devices and the completely unreliable technicians.
+
+Output only a JSON object in the following format, with no explanation:
+
+{"failed":["...","..."],"unreliable":[integer,integer]}
+
+List the failed devices in alphabetical order and the technician numbers in ascending order.
+
+### LP-LOG-P03: 研究の採択可否判定（★★）
+
+A foundation selects research projects according to the following rules.
+
+Mandatory Requirement I: The project must have passed ethics review.  
+Mandatory Requirement II: The data management plan must have been approved.
+
+Normally, successful replication is also required.
+
+However, under the exploratory research track, only the successful-replication requirement may be waived, even if replication has not yet succeeded, provided that:
+- replication by an independent institution has already been scheduled,
+- the application explicitly states that the result has not yet been replicated, and
+- the project has passed an external audit.
+
+Even under the exploratory research track, Mandatory Requirements I and II cannot be waived.
+
+Among eligible candidates, the scientific evaluation score has the highest priority.
+Only when the scientific evaluation scores are tied is the lower-cost candidate preferred.
+If there is still a tie, choose the candidate with the lexicographically earlier ID.
+
+The candidates are as follows.
+
+| ID | Ethics | Data Plan | Replication Successful | Exploratory Track | Independent Replication Scheduled | Unreplicated Status Disclosed | External Audit | Score | Cost |
+|----|--------|-----------|------------------------|-------------------|-----------------------------------|----------------------------|----------------|-------|------|
+| P  | Yes    | Yes       | Yes                    | No                | —                                 | —                          | Yes            | 91    | 8    |
+| Q  | Yes    | Yes       | No                     | Yes               | Yes                               | Yes                        | Yes            | 94    | 12   |
+| R  | Yes    | Yes       | No                     | Yes               | Yes                               | No                         | Yes            | 97    | 5    |
+| S  | Yes    | No        | Yes                    | No                | —                                 | —                          | Yes            | 99    | 4    |
+| T  | Yes    | Yes       | No                     | Yes               | Yes                               | Yes                        | No             | 96    | 6    |
+| U  | Yes    | Yes       | Yes                    | No                | —                                 | —                          | Yes            | 94    | 7    |
+
+In addition, the principal investigators of P and Q graduated from the same university, R has the longest application, S also applied last year, T's research topic is close to the area of expertise of one of the foundation's directors, and U has the youngest principal investigator. The rules above contain no special provisions regarding any of these facts.
+
+Determine the list of eligible candidates and the selected candidate.
+
+Output only a JSON object in the following format, with no explanation:
+
+{"eligible":["..."],"selected":"..."}
+
+
+### LP-LOG-P04: 研究資料の移転可否判定（★★★）
+
+A research institution applies the following rules to the transfer or external provision of research materials.
+
+1. To provide controlled materials outside the organization, approval from the principal investigator and an information-security review by the information management officer must both be completed before provision.
+
+2. All unpublished materials are controlled materials.
+
+3. Published aggregate data are controlled materials only if at least one of the following conditions is met:
+- A reasonable risk of re-identification through linkage with other information has been identified.
+- The materials contain at least one aggregate cell consisting of fewer than 5 individuals.
+
+4. In an emergency involving human life or serious equipment damage, only the approval of the principal investigator required under Rule 1 may be obtained retroactively, provided that it is obtained within 24 hours after the materials are provided.
+The security review by the information management officer must always be completed before the materials are provided, even in an emergency.
+
+5. Controlled materials that are subject to a legal hold must not be provided outside the organization even if the procedural requirements of Rule 1 or Rule 4 have been satisfied.
+However, this prohibition on provision is lifted if the provision of the materials itself is required by law or by court order.
+
+6. The exception in Rule 5 lifts only the prohibition on provision arising from the preservation order; it does not waive the procedural requirements of Rules 1 and 4.
+
+7. The emergency exception in Rule 4 alone cannot be used to lift the prohibition on provision arising from a preservation order under Rule 5.
+
+8. Transfer of materials to another department within the same legal entity does not constitute "provision outside the organization" under these rules.
+By contrast, provision to a subsidiary that is a separate legal entity does constitute provision outside the organization.
+
+Using only the rules above, classify each of the following cases.
+
+P:
+The materials are published aggregate data.
+No re-identification risk has been identified, and all aggregate cells contain at least 5 individuals.
+The materials are subject to a legal preservation order.
+They were provided to an external university.
+Neither approval from the principal investigator nor a security review by the information management officer was obtained.
+
+Q:
+The materials are published aggregate data.
+A re-identification risk has been identified.
+They were provided to an external institution during an emergency involving human life.
+They are not subject to a legal preservation order.
+The security review by the information management officer was completed before provision.
+The principal investigator gave retroactive approval 20 hours after provision.
+
+R:
+The materials are published aggregate data.
+No re-identification risk has been identified.
+However, no information is given as to whether the smallest aggregate cell contains fewer than 5 individuals.
+The materials are not subject to a legal preservation order.
+They were provided to an external institution.
+Neither approval from the principal investigator nor a security review by the information management officer was obtained.
+
+S:
+The materials are unpublished.
+They are subject to a legal preservation order, but provision of the materials outside the organization is itself required by law.
+The situation is not an emergency.
+Both approval from the principal investigator and the security review by the information management officer were completed before provision.
+
+T:
+The materials are unpublished.
+They are subject to a legal preservation order, but provision of the materials outside the organization is itself required by law.
+They were provided during an emergency involving human life.
+The security review by the information management officer was completed before provision.
+Approval from the principal investigator was obtained 30 hours after provision.
+
+U:
+The materials are unpublished.
+They are not subject to a legal preservation order.
+They were provided to an external institution during an emergency involving human life.
+At the time of provision, neither approval from the principal investigator nor the security review by the information management officer had been completed.
+The security review by the information management officer was completed 1 hour after provision, and approval from the principal investigator was obtained 5 hours after provision.
+
+V:
+The materials are unpublished.
+They are not subject to a legal preservation order.
+They were transferred to another department within the same legal entity.
+Neither approval from the principal investigator nor a security review by the information management officer was conducted.
+
+Classify each case as "Compliant", "Non-compliant", or "Indeterminate".
+
+Here,
+Compliant: From the given information, it can be determined that no rule has been violated.
+Non-compliant: From the given information, it can be determined that at least one rule has been violated.
+Indeterminate: Based on the information provided, it cannot be determined whether the case is compliant or non-compliant.
+
+Output only a JSON object with no explanation, with the keys in the order P, Q, R, S, T, U, V.
+
+
+### LP-LOG-P05: 媒介分析と選択バイアスに関する因果推論（★★★）
+
+In a randomized trial, treatment $T$, a post-treatment mediator $M$, and outcome $Y$ were measured.
+
+In the fully followed population:
+
+- Random assignment of $T$ changed the distribution of $M$.
+- Random assignment of $T$ also changed $Y$.
+
+A further mechanistic validation experiment was conducted.
+
+- When $M$ was interventionally fixed at the same value $m_0$ in both the treatment and control groups, changing $T$ did not change the mean of $Y$.
+- With $T$ held fixed, randomly manipulating $M$ between $m_0$ and $m_1$ changed the mean of $Y$.
+
+Meanwhile, $S$, indicating continued follow-up, is a post-treatment variable and is known to be affected by both $M$ and an early measure of $Y$. In a complete-case analysis restricted to individuals with $S=1$, no difference in final $Y$ was observed between treatment groups.
+
+Assume that sampling error is negligible, randomization and interventions are perfect, and there is no interference. However, do not additionally assume the absence of effect modification or the cross-world assumptions required for natural direct effects.
+
+Select all statements that are supported.
+
+A. In the fully followed population, $T$ has a total causal effect on $Y$.
+
+B. $M$ has a causal effect on $Y$, at least under the experimentally tested conditions.
+
+C. The average controlled direct effect when $M=m_0$ is zero.
+
+D. It has been established that the natural direct effect is zero for every individual.
+
+E. Conditioning on $S=1$ can induce associations through post-treatment selection that differ from those in the full population.
+
+F. Because the complete-case analysis is null, the total causal effect observed in the fully followed population has been refuted.
+
+G. Because $T$ is randomized, the observed association between $M$ and $Y$ in the main trial is automatically unconfounded.
+
+H. It has been established that $M$ is the sole mediating pathway under all conditions.
+
+Output only a JSON array, with no explanation, listing the letters of all supported statements in alphabetical order.
+
+### LP-LOG-P06: 高リスクモデルの校正を導く仮定の特定（★★★★）
+
+There are seven assumptions about a model.
+
+1. Every high-risk model that has been deployed has been audited.
+2. Every model that has been both audited and deployed is either calibrated or externally validated, or both.
+3. Any high-risk model that is externally validated but not calibrated is not deployed.
+4. There exists at least one model that is both high-risk and deployed.
+5. Every model that is high-risk, deployed, and not calibrated is subject to human oversight.
+6. Any model that is both high-risk and subject to human oversight is not deployed.
+7. Every calibrated model has been audited.
+
+Let conclusion C be:
+
+"There exists at least one model that is simultaneously high-risk, deployed, and calibrated."
+
+Using classical logic, and assuming no relationships other than those explicitly stated, find all inclusion-minimal subsets of the seven assumptions that logically imply C.
+
+That is, find all subsets of the assumptions such that C follows from the entire subset, but if any one assumption is removed from that subset, C no longer necessarily follows.
+
+Output only a two-dimensional JSON array, with no explanation.
+
+Within each inner array, list the assumption numbers in ascending order. Order the inner arrays lexicographically: first by their first element, then by their second element, and so on.
+
+
+### LP-LOG-P07: 研究提案に関する必然性・実現可能性判定（★★★★）
+
+The following are the only known facts about a set of research proposals.
+
+For the purposes of this problem, a proposal has non-public data if and only if it does not have public data.
+
+1. Every accepted proposal has passed ethical review.
+2. Every accepted proposal satisfies exactly one of the following two conditions:
+   - it has undergone a replication study;
+   - it is a Pilot study and has undergone an external audit.
+   
+   Thus, for an accepted proposal, these two conditions are mutually exclusive.
+3. No Pilot study has undergone a replication study.
+4. Every externally audited proposal with non-public data is a multi-center study.
+5. Every multi-center study has either public data or has undergone a replication study, or both.
+6. There exists at least one accepted proposal with non-public data.
+7. Every proposal that has undergone a replication study and has non-public data is externally registered.
+
+Assume no additional relationships among attributes beyond those explicitly stated above.
+
+Classify each of the following statements as one of:
+
+N = necessarily true in every possible world
+P = true in some possible worlds and false in others
+I = impossible, i.e. false in every possible world
+
+A. There exists at least one accepted proposal that has undergone a replication study.
+B. Every accepted proposal has undergone a replication study.
+C. Every accepted Pilot study has public data.
+D. There exists at least one externally registered proposal.
+E. Every externally registered proposal has been accepted.
+F. There exists a proposal that is simultaneously accepted, externally audited, and has undergone a replication study.
+G. There exists a multi-center study that has not been accepted.
+H. There exists an accepted Pilot study with non-public data.
+
+Output only a JSON object with no explanation, with the keys in the order A, B, C, D, E, F, G, H.
+
+### LP-LOG-P08: 集計データの管理（★★★★）
+
+The following timeline applies to the rules governing the external provision of data.
+
+Original rules, effective January 1:
+
+All research data are controlled materials. Provision outside the organization requires both approval from the principal investigator and a security review, and both must be completed before provision.
+
+Amendment effective April 1:
+
+Published aggregate data are excluded from controlled materials if there is no risk of re-identification and every aggregate cell contains at least 5 individuals. The amendment applies only to provisions made on or after April 1.
+
+Emergency measure in effect from May 20 through June 20:
+
+Even for controlled materials, in an emergency, approval from the principal investigator may be postponed until within 24 hours after provision. The security review must still be completed before provision.
+
+Preservation order in effect from June 1 through June 15:
+
+External provision of controlled materials is prohibited. However, the prohibition is lifted if and only if there is a legally mandatory obligation to provide the materials.
+
+The legally mandatory exception lifts only the prohibition created by the preservation order; it does not eliminate the otherwise applicable approval and security-review requirements.
+
+The emergency measure cannot by itself lift the prohibition created by the preservation order. However, if that prohibition has independently been lifted because provision is legally mandatory, the emergency measure remains applicable to the timing of principal-investigator approval. Thus, in an emergency where provision is legally mandatory, principal-investigator approval may still be obtained within 24 hours after provision, while the security review must still be completed before provision.
+
+Court ruling on June 10:
+
+The April 1 amendment was declared invalid. However, the ruling has effect only from June 10 onward and does not affect the treatment of provisions completed before June 10.
+
+All of the following cases involve provision to an external organization.
+
+P:
+March 20.
+Published aggregate data, with no risk of re-identification and all aggregate cells containing at least 5 individuals.
+Neither approval from the principal investigator nor a security review was obtained.
+
+Q:
+April 20.
+Published aggregate data, with no risk of re-identification and all aggregate cells containing at least 5 individuals.
+Neither approval from the principal investigator nor a security review was obtained.
+
+R:
+June 5.
+Published aggregate data, with no risk of re-identification and all aggregate cells containing at least 5 individuals.
+Neither approval from the principal investigator nor a security review was obtained.
+
+S:
+June 5.
+Unpublished materials.
+There was an emergency.
+The security review was completed before provision, and approval from the principal investigator was obtained 12 hours after provision.
+There was no legally mandatory obligation to provide the materials.
+
+T:
+June 5.
+Unpublished materials.
+There was an emergency.
+The security review was completed before provision, and approval from the principal investigator was obtained 12 hours after provision.
+There was a legally mandatory obligation to provide the materials.
+
+U:
+June 12.
+Published aggregate data, with no risk of re-identification and all aggregate cells containing at least 5 individuals.
+There was an emergency.
+The security review was completed before provision, and approval from the principal investigator was obtained 18 hours after provision.
+There was no legally mandatory obligation to provide the materials.
+
+V:
+June 16.
+Published aggregate data, with no risk of re-identification and all aggregate cells containing at least 5 individuals.
+There was an emergency.
+The security review was completed before provision, and approval from the principal investigator was obtained 18 hours after provision.
+There was no legally mandatory obligation to provide the materials.
+
+Select all cases that comply with the applicable rules.
+
+Output only a JSON array with no explanation, listing the IDs in alphabetical order.
+
+
+## 文章理解・翻訳
+
+
+### LP-LIT-P01: バージョン管理と指示対象（★★★）
+
+Read the following passage and answer the questions that follow.
+
+On Monday evening, David, the proofreader, said to Emma, the editor:
+
+"I haven't read the revised version that Michael sent this morning yet. As for the version I read and returned last week, I think there are no other major problems as long as the paragraph immediately before the conclusion is revised."
+
+About an hour before hearing this, Emma had sent Michael the following email:
+
+"David has more or less approved it as well. It looks like everything should be fine if you just address his final comment."
+
+The next morning, Michael replied:
+
+"In the latest version I sent last night, I deleted the paragraph you mentioned. I moved the table corresponding to that paragraph to the appendix, but the table itself has not been changed from the version I sent last week."
+
+Emma forwarded the email to David and wrote:
+
+"It seems that the condition you mentioned yesterday has been satisfied."
+
+David replied:
+
+"What I asked for was a revision, not deletion. Also, the version I read was last week's version, not the latest version sent last night."
+
+For each of the following statements, write T if it must be true based on the passage, F if it contradicts the passage, and U if it cannot be determined from the passage alone.
+
+A. By Monday evening, David had read the revised version that Michael had sent that morning.
+
+B. At the time Emma wrote the email, David had not yet read the revised version sent that day.
+
+C. In the latest version, Michael left the paragraph that David had objected to in the main text and rewrote its contents.
+
+D. By Tuesday, it can be concluded that David would necessarily approve the latest version if he read it.
+
+E. David's statements on Monday and Tuesday are consistent with each other on the point that the paragraph in last week's version required a change.
+
+Output only a JSON object in the following format, with no explanation:
+
+{"A":"T/F/U","B":"T/F/U","C":"T/F/U","D":"T/F/U","E":"T/F/U"}
+
+### LP-LIT-P02: 含意と断定強度（★★★）
+
+Read the following conversation and report.
+
+After the test was completed, the lead researcher, James, made the following statement:
+
+"I would not say that the test was a success as planned. However, it would not be accurate to say that the test itself was a failure either. Of the three evaluation criteria, the temperature was within the specified range. The pressure could not be evaluated because there was a malfunction in the measuring instrument. The purity was below the required standard."
+
+Emily, the staff member responsible for the test, asked:
+
+"Then does that mean we do not need to change the temperature setting for the next test?"
+
+James replied:
+
+"At the very least, we cannot say that the setting needs to be changed solely on the basis of the results of this test."
+
+Later, Emily wrote the following in an internal report:
+
+"This test confirmed that the current temperature setting is appropriate. In addition, it is likely that the pressure met the required standard."
+
+For each of the following statements, classify it as E if it is logically supported by the conversation, C if it contradicts the conversation, and U if it cannot be determined from the conversation alone.
+
+A. The temperature was within the specified range in this test.
+
+B. This test confirmed that the current temperature setting is generally appropriate.
+
+C. The possibility that the pressure met the required standard has been ruled out.
+
+D. It is likely that the pressure met the required standard.
+
+E. The purity did not meet the required standard.
+
+F. James stated that the temperature setting must not be changed for the next test.
+
+Output only a JSON object in the following format:
+
+{"A":"E/C/U","B":"E/C/U","C":"E/C/U","D":"E/C/U","E":"E/C/U","F":"E/C/U"}
+
+
+
+### LP-LIT-P03: 引用・人称・時点（★★★）
+
+LP-LIT-P03
+
+Read the following passage carefully.
+
+On Saturday, Emily told Naomi:
+
+"On Thursday, Kevin told me this:
+
+'Yesterday, Ryan said to me,
+"Tomorrow, I'll tell your older sister that the draft she sent me the day before yesterday was the same as the version I approved last Friday."
+But don't tell her that yet. I haven't checked the draft myself.'
+
+That's what Kevin told me."
+
+Naomi asked:
+
+"So Ryan said on Thursday that he would contact your older sister?"
+
+Emily replied:
+
+"No. I think you've got that part wrong."
+
+Answer the following questions based only on the passage.
+
+A. On what day of the week did Ryan make his statement to Kevin?
+
+B. What day of the week does "tomorrow" in Ryan's statement refer to?
+
+C. Who does "your" in "your older sister" refer to?
+
+D. Whose older sister does Ryan intend to contact?
+
+E. Who does "she" in "the draft she sent me" refer to?
+
+F. On what day of the week was that draft sent to Ryan?
+
+G. In Ryan's statement, does "last Friday" refer to the Friday immediately preceding the week in which Ryan was speaking, or to the Friday of that same week?
+
+H. Can it be determined from the passage whether Ryan actually contacted the older sister?
+
+Output only the following JSON object:
+
+{"A":"day","B":"day","C":"person","D":"person","E":"person","F":"day","G":"preceding Friday/same-week Friday","H":"determinate/indeterminate"}
+
+
+### LP-LIT-P04: 証言に基づく確実性の判断（★★★）
+
+Read the following record carefully.
+
+On Monday afternoon, it was discovered that a sample stored in a laboratory had been moved to a different shelf.
+
+At 2:10 p.m., Sarah told the laboratory manager:
+
+"Shortly after 1:00 p.m., I saw Thomas coming out of the storage room."
+
+Thomas replied:
+
+"I was not in the storage room at any time after noon today."
+
+The access-control system recorded the use of Thomas's access card at 1:07 p.m. However, the system records the use of a card, not the identity of the person who uses it.
+
+Later that afternoon, security footage from the hallway showed a person wearing the gray jacket Thomas normally wears walking near the storage room at approximately 1:08 p.m. The person's face was not visible.
+
+The following day, Daniel stated:
+
+"I had borrowed Thomas's gray jacket from around noon until about 2:00 p.m. yesterday."
+
+Thomas also said:
+
+"There was a period during lunch when I left my card case on my desk while I was away."
+
+Sarah later clarified her original statement:
+
+"I didn't actually see the person's face. I assumed it was Thomas because of the jacket."
+
+There is no video showing anyone actually moving the sample, and the sample can only be established to have been moved sometime between 1:00 p.m. and 1:30 p.m.
+
+For each statement below, classify it as T if it must be true from the record, F if it is contradicted by the record, or U if it cannot be determined from the record.
+
+A. Thomas's access card was used at 1:07 p.m.
+
+B. Thomas himself entered the storage room at 1:07 p.m.
+
+C. At approximately 1:08 p.m., a person wearing Thomas's gray jacket was near the storage room.
+
+D. The person shown in the footage at approximately 1:08 p.m. was Daniel.
+
+E. Sarah's original identification of the person as Thomas was based at least in part on the gray jacket.
+
+F. The access-control record alone proves that Thomas's statement that he was not in the storage room after noon was false.
+
+G. Daniel used Thomas's access card.
+
+H. Thomas moved the sample.
+
+I. Sarah's original identification and Thomas's statement cannot both be literally correct, but this alone does not establish that either person intentionally lied.
+
+Output only the following JSON object:
+
+{"A":"T/F/U","B":"T/F/U","C":"T/F/U","D":"T/F/U","E":"T/F/U","F":"T/F/U","G":"T/F/U","H":"T/F/U","I":"T/F/U"}
+
+
+### LP-LIT-P05: 翻訳：2026年 京都大学 和文英訳（★★）
+
+Translate the following passage into English. Output only the English translation.:
+
+進むべき道を決めるには、事前に入念に検討し、最も満足のいく選択をしたいものだ。ただ、その道が本当に当人に実りをもたらしてくれるかどうかを知るには、ある程度の時間をかけて実際に経験するほかない。ここに避けがたい試練がある。岐路に立った時、その選択の先には想像もつかない世界が待つに違いないと腹をくくることも時には必要だろう。
+
+> 出典：[京都大学 令和8年 入学試験問題 外国語 英語 大問3](https://www.kyoto-u.ac.jp/sites/default/files/inline-files/admissionsundergradpast_eqR08_eqdocumentsR08_5M05-8947b3a61478121834c4ac70a00c229c.pdf#page=3)
+
+> 採点では、原文の意味と論理関係に忠実な翻訳であることを重視する。一般的な人を表す主語として one と you のいずれを用いるかは問わない。
+
+> 訳例：
+> *When deciding which path to take, one naturally wants to consider the matter carefully in advance and make the choice that seems most satisfactory. Yet the only way to know whether that path will truly prove rewarding for the person concerned is to actually follow it and experience it for some time. This is where an unavoidable trial lies. When standing at a crossroads, it may sometimes be necessary to resolve oneself to the idea that an unimaginable world must lie ahead beyond the choice one makes.*
+
+### LP-LIT-P06: 翻訳：入れ子構造の否定（★★★）
+
+Translate the following passage into natural Japanese while preserving its logical structure, scope of negation, tense, and counterfactual meaning. Output only the Japanese translation.:
+
+Had the reviewers merely said that the evidence did not establish that the treatment was ineffective, the editor would not have taken them to be recommending publication. What changed her view was not that any reviewer withdrew the methodological objection, but that two of those who had raised it conceded that, even if the secondary endpoint had been specified post hoc, this alone would not explain why the primary analysis—whose result none of them disputed—favored the treatment.
+
+
+> 訳例：
+> *査読者たちが単に「その証拠から治療が無効であるとは立証できない」と述べただけだったなら、編集者は彼らが掲載を勧めているとは受け取らなかっただろう。彼女の見解を変えたのは、査読者の誰かが方法論上の異議を撤回したことではなく、その異議を唱えていた者のうち二人が、仮に副次評価項目が事後的に設定されたものであったとしても、そのことだけでは、彼らの誰も結果自体には異議を唱えていなかった一次解析が治療に有利な結果となった理由を説明できない、と認めたことであった。*
+
+
+### LP-LIT-P07: 翻訳：和文を引用した中文の英訳（★★★★）
+
+Translate the entire passage below into natural and precise English.
+
+The main explanatory text is written in Chinese and contains a quotation in Japanese. Translate both the Chinese commentary and the Japanese quotation into English, while preserving the fact that the Japanese passage is being quoted and subsequently analyzed by the Chinese writer.
+
+Do not add an interpretation that is stronger than what either the Chinese commentary or the quoted Japanese passage states. Output only the English translation.:
+
+下面这段说明所讨论的，并不是日文原句最终是否“主张维持现状”，而是该句究竟把自己的结论限制在怎样的证据基础之上。原文写道：
+
+「少なくとも、今回の結果だけを理由に設定を変更する必要があるとは言えない。もっとも、これは現在の設定が適切であることが確認されたという意味ではないし、今後別の証拠が得られた場合にも設定を変更すべきでないという意味でもない。」
+
+这里的「変更する必要があるとは言えない」所否定的，是根据“今回の結果だけ”推出“有必要修改设置”这一结论的充分根据，而不是反过来肯定“没有必要修改设置”这个更强的命题。换言之，原句既没有确认“维持现状”是正确行动，也没有把“修改设置”排除为可能行动。
+
+尤其不能把「今回の結果だけを理由に」处理成一个即使删去也不影响结论的附带成分。它限制的正是推论所允许采用的证据范围：句子所说的是，这一项结果本身不足以支持某个结论，而不是说无论还有什么其他证据，那个结论都不能成立。
+
+同样，后一句中的「という意味ではない」也不只是语气上的缓和。它明确阻止读者把前一句提升为两个更强的判断：其一，“现行设置已经得到证实是适当的”；其二，“即使以后出现新的证据，也不应修改设置”。
+
+即便事后真的发现现行设置是最合适的，也不能据此倒过来说原来的句子早已断言了这一点。命题后来碰巧为真，并不会提高先前话语本身的语义强度。反过来说，如果后来证明设置确实需要修改，也不能因此断定原句当时就是错误的；因为原句否定的是由特定证据到特定结论的推断资格，而不一定是否定结论本身。
+
+> 訳例：
+> *The issue addressed in the following explanation is not whether the original Japanese sentence ultimately “advocates maintaining the status quo,” but rather exactly what evidential basis the sentence permits its conclusion to rest on. The original reads:*
+> 
+> *“At the very least, it cannot be said, solely on the basis of the results of this test, that the setting needs to be changed. That said, this does not mean that the current setting has been confirmed to be appropriate, nor does it mean that the setting should not be changed if other evidence is obtained in the future.”*
+> 
+> *What is being denied by “it cannot be said that the setting needs to be changed” is that “the results of this test alone” provide sufficient grounds for concluding that “the setting needs to be changed.” It does not, conversely, affirm the stronger proposition that “there is no need to change the setting.” In other words, the original sentence neither confirms that “maintaining the status quo” is the correct course of action nor rules out “changing the setting” as a possible course of action.*
+> 
+> *In particular, “solely on the basis of the results of this test” must not be treated as an incidental modifier that could be removed without affecting the conclusion. What it restricts is precisely the range of evidence that may legitimately be used in drawing the inference: the sentence says that this result, by itself, is insufficient to support a particular conclusion, not that the conclusion could not hold regardless of whatever other evidence there may be.*
+> 
+> *Likewise, “this does not mean that” in the latter sentence is not merely a softening of tone. It explicitly prevents the reader from strengthening the preceding sentence into two stronger judgments: first, that “the current setting has already been confirmed to be appropriate”; and second, that “the setting should not be changed even if new evidence emerges in the future.”*
+> 
+> *Even if it were later discovered that the current setting was in fact the most appropriate, that would not justify saying, in retrospect, that the original sentence had already asserted as much. The fact that a proposition later happens to turn out to be true does not increase the semantic strength of the earlier utterance itself. Conversely, if it were later shown that the setting did in fact need to be changed, that would not by itself establish that the original sentence had been false at the time. This is because what the original sentence denies is the warrant for inferring a particular conclusion from a particular body of evidence, not necessarily the conclusion itself.*
+
+> 本問は単なる日本語を含む中文英訳というより、原文の「論理的強度」を保ったまま英訳できるかがポイントとなっている。「今回の結果だけでは変更が必要とは言えない」という主張を「変更する必要はない」と強めていないか、など否定表現が作用している範囲を正確に捉える能力を見る。
+
+
+### LP-LIT-P08: 翻訳：漢詩を引用した英文の和訳（★★★★★）
+
+Translate the following passage into natural Japanese while preserving its argumentative structure, the scope of its qualifications, and the distinction between what the critic asserts and what the critic deliberately leaves unresolved. Retain the quoted Classical Chinese lines exactly as they appear in the source text. Do not replace them with a Japanese kundoku reading. Translate the English discussion surrounding them into Japanese. Output only the Japanese translation.:
+
+The critic invokes Du Fu's lines,
+
+「國破山河在，城春草木深。感時花濺淚，恨別鳥驚心。」
+
+not as evidence that the persistence of the natural world somehow compensates for political devastation, but precisely to resist that consolation. On this reading, 「山河在」 is not equivalent to saying that the country, in any politically meaningful sense, endures: what remains is set against, and made painful by, the preceding 「國破」. Nor does the critic regard 「城春」 as undoing the destruction. The arrival of spring makes the ruined city more, not less, difficult to look at.
+
+The next couplet is deliberately treated with greater caution. The critic notes that 「花濺淚」 can be read in more than one way and refuses to settle too quickly whether the flowers are poetically imagined as shedding tears, whether the sight of the flowers causes the speaker to weep, or whether the line is effective precisely because those possibilities are not cleanly separated. Her claim is therefore not that grammatical ambiguity is irrelevant, but that resolving it is not a prerequisite for understanding the emotional relation the couplet establishes between perceiver and perceived.
+
+Had the poem merely opposed a ruined human order to an untouched and therefore consoling natural order, the contrast would be comparatively simple. The critic's argument is that it does something more difficult: spring remains spring, the mountains and rivers remain, and yet none of this cancels the loss against which those continuities are perceived. This is not to say that the poem permits no consolation at all. It is only to say that consolation cannot be inferred from the persistence of nature alone.
+
+> 訳例：
+> *批評家は、杜甫の次の詩句、*
+> 
+> *「國破山河在，城春草木深。感時花濺淚，恨別鳥驚心。」*
+> 
+> *を、自然界が存続していることが政治的な荒廃を何らかのかたちで埋め合わせる、ということの証拠として引いているのではない。むしろ、まさにそのような慰めに抗するために、この詩句を持ち出しているのである。この読み方において、「山河在」は、政治的に意味のあるかたちで国が存続している、と述べることと同じではない。残っているものは、その直前の「國破」と対置され、しかもその「國破」によって痛切なものとなる。また批評家は、「城春」が破壊を帳消しにするとも考えていない。春の到来は、廃墟となった都を目にすることを容易にするどころか、むしろいっそう辛いものにする。*
+> 
+> *次の対句については、批評家は意図的に、より慎重な扱いをしている。彼女は、「花濺淚」には複数の読み方が可能であることを指摘し、花が詩的に涙を流すものとして描かれているのか、花を目にしたことで話者が涙を流すのか、あるいは、そうした可能性が明確に切り分けられていないからこそ、この一句が効果を発揮しているのかを、性急に一つに決めようとはしない。したがって彼女の主張は、文法上の曖昧さが重要ではない、ということではない。そうではなく、その曖昧さを一義的に解消することは、この対句が知覚する者と知覚されるものとのあいだに形づくる感情的な関係を理解するための前提条件ではない、ということである。*
+> 
+> *もしこの詩が、荒廃した人間の秩序と、損なわれることなく残り、それゆえ慰めを与える自然の秩序とを単純に対置しているだけであったなら、その対比は比較的単純なものだっただろう。批評家の主張は、この詩がそれよりも難しいことをしている、という点にある。春はなお春であり、山河はなお残っている。それでも、こうした持続は、まさにそれらがその喪失を背景として知覚される以上、その喪失を打ち消すことはない。これは、この詩がいかなる慰めをも許さない、という意味ではない。ただ、自然が存続しているという事実だけから、慰めを読み取ることはできない、という意味なのである。*
+
+> ベンチマークテストとしては解釈の余地がある問題で不適当かもしれないが、3言語に跨る翻訳の難問として含めた。
+> "difficult to look at" は感情的な解釈を優先し「（物理的に）見にくい」ではなく「見るに堪えない」という意味で訳出するのが良い。
+> "not A, but B" や "not ... irrelevant, but ... not a prerequisite"、"This is not to say ... It is only to say ... " などの否定と限定の積み重ねを正確に保持できているかが、評価の分かれ目となる。
+
+
+## 情報科学
+
+### LP-CSC-P01　最小費用完全マッチング（★★★）
+
+Consider the following unit-capacity min-cost flow network. The left vertices are $A,B,C,D$, the right vertices are $W,X,Y,Z$, and there are source and sink vertices $s,t$.
+
+For every left vertex $u$, the edge $s\to u$ has capacity $1$ and cost $0$. For every right vertex $v$, the edge $v\to t$ has capacity $1$ and cost $0$. Between the left and right sides, every edge has capacity $1$, with costs:
+
+|   | W | X | Y | Z |
+|---|---:|---:|---:|---:|
+| A | 8 | 4 | 6 | 3 |
+| B | 4 | 6 | 4 | 8 |
+| C | 4 | 8 | 5 | 0 |
+| D | 6 | 9 | 5 | 0 |
+
+Starting from zero flow, run the successive shortest augmenting path algorithm until the flow value is $4$.
+
+After each augmentation, use the standard residual network: if one unit of flow is sent through an edge of cost $c$, its reverse residual edge has capacity $1$ and cost $-c$. In each round, choose a simple $s$-$t$ residual path of minimum total cost. If several such paths have the same minimum cost, choose the one whose sequence of intermediate vertex labels is lexicographically smallest under
+$A<B<C<D<W<X<Y<Z$.
+Augment one unit along the chosen path.
+
+Determine all four augmenting paths in order, the residual cost of each path at the time it is chosen, the final matching, and the total cost of the final flow.
+
+Output only a JSON object with no explanation, in the following form:
+
+{"augmentations":[{"path":["s","...","t"],"cost":integer},...],"matching":[["A","..."],["B","..."],["C","..."],["D","..."]],"total_cost":integer}
+
+List the final matching in the order $A,B,C,D$.
+
+### LP-CSC-P02　スナップショット分離と直列化可能性（★★★）
+
+A database contains three integer items $X,Y,Z$, initially all equal to $0$. Transactions execute under snapshot isolation with the following exact rules.
+
+- A transaction reads the most recent committed versions that existed at its start time, together with its own private writes.
+- A transaction that attempts to commit succeeds if and only if no transaction that committed after its start time wrote any item in its own write set. Otherwise it aborts and none of its writes become visible.
+- Read-only effects do not cause aborts.
+
+The execution is:
+
+- $T_1$ starts at time $0$, reads $Y$, and stages $X:=Y+1$.
+- $T_2$ also starts at time $0$, reads $X$, and stages $Y:=X+1$.
+- $T_1$ attempts to commit at time $2$.
+- $T_3$ and $T_4$ both start at time $3$, after the commit attempt of $T_1$ and before any later commit attempt.
+- $T_3$ reads $X$ and $Y$, and stages $Z:=X+Y+1$.
+- $T_4$ reads $Z$, and stages $Y:=Z+2$.
+- $T_4$ attempts to commit at time $4$.
+- $T_3$ attempts to commit at time $5$.
+- $T_2$ attempts to commit at time $6$.
+
+After determining which transactions commit, construct a multiversion dependency graph using only committed transactions and the following edge rules.
+
+- wr edge: add $T_i\to T_j$ if $T_j$ reads a version written by $T_i$.
+- ww edge: add $T_i\to T_j$ if both committed transactions write the same item and the version written by $T_i$ immediately precedes the version written by $T_j$ in commit order.
+- rw edge: add $T_i\to T_j$ if $T_i$ reads a version of an item and $T_j$ commits, after $T_i$ has started, a different version of that item that was not visible in $T_i$'s snapshot. The commit of $T_j$ need not occur after the commit of $T_i$.
+
+Initial database versions are not considered to have been written by any transaction and therefore do not themselves generate wr edges.
+
+If more than one edge type exists for the same ordered pair, list each type separately. A committed execution is serializable for this problem if and only if this dependency graph is acyclic.
+
+Determine the values returned by every read, the committed transactions in commit-time order, the aborted transactions, the final values of $X,Y,Z$, all dependency edges, and whether the committed execution is serializable.
+
+Output only a JSON object with no explanation:
+
+{"reads":{"T1.Y":integer,"T2.X":integer,"T3.X":integer,"T3.Y":integer,"T4.Z":integer},"committed":["..."],"aborted":["..."],"final":{"X":integer,"Y":integer,"Z":integer},"edges":["..."],"serializable":true_or_false}
+
+Represent an edge as "Ti>Tj:type", where type is "wr", "ww", or "rw", and list edges lexicographically.
+
+### LP-CSC-P03　支配関係とPruned SSA（★★★★）
+
+Consider the following control-flow graph with entry block $B0$ and exit block $B6$.
+
+Successor lists:
+
+- $B0: B1$
+- $B1: B2,B5$
+- $B2: B3,B4$
+- $B3: B2$
+- $B4: B1,B5$
+- $B5: B6$
+- $B6:$ no successors
+
+For the three variables $x,y,z$, the block-level USE and DEF sets are:
+
+| Block | USE | DEF |
+|---|---|---|
+| B0 | $\varnothing$ | $\{x,y\}$ |
+| B1 | $\{x\}$ | $\{z\}$ |
+| B2 | $\{y,z\}$ | $\{y\}$ |
+| B3 | $\{x,y\}$ | $\{x\}$ |
+| B4 | $\{x,z\}$ | $\{x,z\}$ |
+| B5 | $\{x,y,z\}$ | $\{y\}$ |
+| B6 | $\{y\}$ | $\varnothing$ |
+
+Use the following standard definitions.
+
+- A block dominates itself.
+- $idom(B)$ is the immediate dominator of $B$.
+- $DF(X)$ is the set of blocks $Y$ such that $X$ dominates some predecessor of $Y$, but $X$ does not strictly dominate $Y$.
+- Backward liveness is defined by
+  $LIVEOUT(B)=\bigcup_{S\in succ(B)} LIVEIN(S)$
+  and
+  $LIVEIN(B)=USE(B)\cup(LIVEOUT(B)-DEF(B))$.
+
+For SSA construction, the original definition blocks are:
+
+- $x$: $B0,B3,B4$
+- $y$: $B0,B2,B5$
+- $z$: $B1,B4$
+
+For unpruned SSA, place $\phi$-functions using the standard iterated-dominance-frontier algorithm.
+
+For pruned SSA, use the same iteration, but place a $\phi$-function for variable $v$ at block $B$ only if $v\in LIVEIN(B)$ according to the liveness solution above. A block at which a $\phi$-function is actually placed is treated as a new definition block for further iteration.
+
+Determine the immediate dominators, every dominance frontier, every $LIVEIN$ set, and the $\phi$-placement sets for both unpruned and pruned SSA.
+
+Output only a JSON object with no explanation:
+
+{"idom":{"B0":null,"B1":"...","B2":"...","B3":"...","B4":"...","B5":"...","B6":"..."},"df":{"B0":[...],"B1":[...],"B2":[...],"B3":[...],"B4":[...],"B5":[...],"B6":[...]},"live_in":{"B0":[...],"B1":[...],"B2":[...],"B3":[...],"B4":[...],"B5":[...],"B6":[...]},"phi_unpruned":{"x":[...],"y":[...],"z":[...]},"phi_pruned":{"x":[...],"y":[...],"z":[...]}}
+
+Sort block names and variable names lexicographically inside every array.
+
+### LP-CSC-P04　Max-Min公平帯域割当（★★）
+
+Seven infinitely backlogged flows $f_1,\ldots,f_7$ share five links $L_1,\ldots,L_5$. Each flow has a fixed route. Link capacities and the flows using each link are:
+
+- $L_1$: capacity $12$; flows $f_1,f_2,f_3$
+- $L_2$: capacity $10$; flows $f_3,f_4,f_5$
+- $L_3$: capacity $8$; flows $f_1,f_4,f_6$
+- $L_4$: capacity $9$; flows $f_2,f_5,f_6,f_7$
+- $L_5$: capacity $7$; flows $f_3,f_7$
+
+Assume fluid rates and no other constraints.
+
+Part 1: Compute the ordinary max-min fair allocation using progressive filling. Start all rates at $0$. Increase every unfrozen flow at the same rate until at least one link saturates. Freeze every unfrozen flow that uses a newly saturated link, keep frozen rates fixed, and continue with the remaining flows.
+
+Part 2: Compute the weighted max-min fair allocation with weights
+
+$w_1=1,\ w_2=2,\ w_3=1,\ w_4=2,\ w_5=1,\ w_6=1,\ w_7=2$.
+
+For the weighted case, at each progressive-filling stage increase each unfrozen flow $f_i$ by $w_i\Delta$ while a common parameter $\Delta$ increases. When a link saturates, freeze every unfrozen flow using that link and continue.
+
+For each part, determine the final rate of every flow and the sequence of links that become newly saturated. If multiple links become saturated at exactly the same stage, list those link IDs together in one inner array.
+
+All fractions must be reduced. Represent every rate as a JSON string, using either an integer such as "3" or a reduced fraction such as "23/8".
+
+Output only a JSON object with no explanation:
+
+{"unweighted":{"rates":{"f1":"...","f2":"...","f3":"...","f4":"...","f5":"...","f6":"...","f7":"..."},"saturation":[["..."],...]},"weighted":{"rates":{"f1":"...","f2":"...","f3":"...","f4":"...","f5":"...","f6":"...","f7":"..."},"saturation":[["..."],...]}}
+
+### LP-CSC-P05　分散スナップショット（★★）
+
+Three processes $P_1,P_2,P_3$ communicate over reliable FIFO channels in both directions between every pair of processes. Each process $P_i$ has a local integer counter $c_i$, initially $0$. Sending or receiving an application message increments the local counter by $1$. Sending or receiving a snapshot marker does not change the counter.
+
+The Chandy-Lamport snapshot algorithm is used according to the following exact rules.
+
+- When the initiator records its local state, it immediately sends a marker on every outgoing channel before performing any later application event. At the same time, it begins recording application messages arriving on each incoming channel. For each incoming channel, it stops recording that channel when the marker on that channel is received. The messages recorded in this interval constitute the recorded state of that incoming channel.
+- When the initiator records its local state, it immediately begins recording each incoming channel, and it stops recording a given incoming channel when the marker on that channel is received.
+- When a non-initiating process receives its first marker, it records its local state and treats the channel on which that first marker arrived as empty in the snapshot. It then immediately sends a marker on every outgoing channel before performing any later application event.
+- For every other incoming channel of that non-initiating process, it records all application messages received after recording its local state and before receiving the marker on that channel.
+- Marker messages themselves are never included in recorded channel states.
+
+No events occur other than those listed below and the marker sends implied by the algorithm. The following is the actual chronological event order:
+
+1. $P_2$ sends application message $m_1$ to $P_1$.
+2. $P_3$ sends application message $m_2$ to $P_1$.
+3. $P_1$ sends application message $m_3$ to $P_3$.
+4. $P_3$ sends application message $m_4$ to $P_2$.
+5. $P_1$ initiates the snapshot, records its local state, and sends its markers.
+6. $P_2$ sends application message $m_5$ to $P_3$.
+7. $P_3$ receives $m_3$.
+8. $P_2$ receives the marker from $P_1$.
+9. $P_3$ receives the marker from $P_1$.
+10. $P_1$ receives $m_1$.
+11. $P_3$ receives $m_5$.
+12. $P_2$ receives $m_4$.
+13. $P_1$ receives $m_2$.
+14. $P_3$ receives the marker from $P_2$.
+15. $P_2$ receives the marker from $P_3$.
+16. $P_1$ receives the marker from $P_2$.
+17. $P_1$ receives the marker from $P_3$.
+
+Determine the recorded local counter values and the recorded state of every directed channel. For channel states, list application-message IDs in receive order. Also state whether the resulting snapshot is a consistent cut.
+
+Output only a JSON object with no explanation:
+
+{"local":{"P1":integer,"P2":integer,"P3":integer},"channels":{"P1>P2":[...],"P1>P3":[...],"P2>P1":[...],"P2>P3":[...],"P3>P1":[...],"P3>P2":[...]},"consistent":true_or_false}
+
+> Chandy–Lamportアルゴリズムに関する出題。
+
+### LP-CSC-P06　TLB・キャッシュ状態追跡（★★★★）
+
+A machine uses 16-bit virtual byte addresses and a fixed page size of $256$ bytes. Thus the high-order 8 bits form the virtual page number (VPN) and the low-order 8 bits are the page offset.
+
+The relevant page-table mappings are:
+
+| VPN | PFN |
+|---|---|
+| 0x10 | 0x3 |
+| 0x11 | 0x7 |
+| 0x12 | 0x3 |
+| 0x13 | 0xB |
+| 0x14 | 0x7 |
+| 0x15 | 0xF |
+
+All listed pages are resident; there are no page faults. Page-table memory accesses are ignored.
+
+The TLB is fully associative with 4 entries and exact LRU replacement. It is initially empty. Every TLB hit makes the entry MRU; every TLB miss inserts the translated VPN as MRU and evicts the LRU entry if necessary.
+
+The L1 data cache is physically addressed and has:
+
+- total capacity $128$ bytes,
+- line size $16$ bytes,
+- $4$ sets,
+- $2$ ways per set,
+- exact LRU replacement within each set,
+- write-back and write-allocate.
+
+The cache is initially empty. Every cache hit makes the line MRU. A write makes the line dirty. On a miss, the referenced physical cache line is loaded as MRU; if a dirty line is evicted, one write-back is counted.
+
+For a physical byte address $P$:
+
+- physical block number $=\lfloor P/16\rfloor$,
+- set index $=(\text{physical block number})\bmod 4$,
+- cache tag $=\lfloor(\text{physical block number})/4\rfloor$.
+
+Because the cache is physically addressed, two different VPNs mapping to the same PFN access the same physical cache lines when their offsets agree.
+
+The following accesses occur in order:
+
+1. R 0x1000
+2. W 0x1100
+3. R 0x1200
+4. R 0x1030
+5. W 0x1300
+6. R 0x1400
+7. R 0x1500
+8. W 0x1010
+9. R 0x1210
+10. R 0x1130
+11. W 0x1330
+12. R 0x1530
+13. R 0x1030
+14. R 0x1100
+
+For each access, determine whether the TLB access is a hit or miss and whether the L1 cache access is a hit or miss. Then determine the total number of dirty write-backs, the final TLB contents from LRU to MRU, and the final contents of every cache set from LRU to MRU.
+
+Encode each access result as a two-letter string: the first letter is the TLB result and the second is the cache result, with H = hit and M = miss.
+
+Represent each final TLB entry by its VPN as a hexadecimal string. Represent each final cache line as [tag,dirty], where tag is an uppercase hexadecimal string such as "0x1C" and dirty is 0 or 1.
+
+Output only a JSON object with no explanation:
+
+{"accesses":["..",...],"writebacks":integer,"tlb_lru_to_mru":["..."],"sets":{"0":[...],"1":[...],"2":[...],"3":[...]}}
+
+### LP-CSC-P07　Hindley–Milner型推論とLet多相（★★★）
+
+Consider the following Hindley-Milner type system.
+
+Types are generated from:
+
+- base types Int and Bool,
+- type variables,
+- product types,
+- function types.
+
+The language contains integer literal 0, Boolean literal true, variables, function abstraction "fun x -> e", application, pairs "(e1,e2)", and nonrecursive let-binding "let x = e1 in e2".
+
+Use standard Hindley-Milner inference with the following exact conventions:
+
+- Function parameters are monomorphic.
+- At a let-binding, generalize exactly those type variables in the inferred type of the bound expression that are not free in the current typing environment.
+- There is no value restriction.
+- Let-bindings are nonrecursive.
+- There is no subtyping or overloading.
+- Application associates to the left.
+
+For each expression below, determine whether it is typable. If it is typable, give its principal type. If it is not typable, write "UNTYPABLE".
+
+```
+E1:
+let f = fun x -> x in
+let g = f f in
+(g 0, g true)
+
+E2:
+fun f ->
+  let g = fun x -> f (x,x) in
+  (g 0, g true)
+
+E3:
+let compose = fun f -> fun g -> fun x -> f (g x) in
+fun h -> compose h h
+
+E4:
+fun x ->
+  let k = fun y -> x in
+  (k 0, k true)
+
+E5:
+fun x ->
+  let id = fun y -> y in
+  (id x, id id)
+```
+
+Use the following canonical notation for output types:
+
+- Int and Bool for base types;
+- type variables "'a", "'b", ... in order of first occurrence;
+- product type "(T1*T2)";
+- function type "(T1->T2)";
+- fully parenthesize every product and function type.
+
+Types that differ only by renaming type variables are considered the same, but your output must use the canonical variable names specified above.
+
+Output only a JSON object with no explanation:
+
+{"E1":"...","E2":"...","E3":"...","E4":"...","E5":"..."}
+
+### LP-CSC-P08　オフライン動的二部性とパリティ照会（★★★★）
+
+Write a complete Python 3 program for the following problem.
+
+An undirected graph has vertices $1,\ldots,n$ and initially has no edges. Then $q$ operations are performed sequentially.
+
+Operations are:
+```
++ u v
+: Add the undirected edge $\{u,v\}$. The edge becomes active immediately and remains active until a later removal operation for the same edge.
+
+- u v
+: Remove the currently active edge $\{u,v\}$. The edge becomes inactive immediately.
+
+? u v
+: Answer a query using exactly the graph state that exists at this point in the operation sequence.
+```
+The input is guaranteed to satisfy:
+
+- $1\le n,q\le200000$;
+- $1\le u,v\le n$ and $u\ne v$;
+- an edge is never added while it is already active;
+- an edge is never removed while it is inactive;
+- there is at most one active copy of any unordered edge.
+
+For a query "? u v", output exactly one of the following:
+
+- DISCONNECTED, if $u$ and $v$ are in different connected components;
+- CONTRADICTION, if $u$ and $v$ are in the same connected component but that component is not bipartite;
+- SAME, if $u$ and $v$ are in the same bipartite connected component and every proper 2-coloring assigns them the same color;
+- DIFFERENT, if $u$ and $v$ are in the same bipartite connected component and every proper 2-coloring assigns them different colors.
+
+If $u$ and $v$ are disconnected, output DISCONNECTED even if one or both of their separate components are non-bipartite.
+
+Resource limits:
+
+- Time limit: 8 seconds.
+- Memory limit: 512 MiB.
+
+The program must handle the maximum constraints within these limits. Third-party libraries are not allowed.
+
+Sample input:
+```
+5 13
++ 1 2
++ 2 3
+? 1 3
++ 3 1
+? 1 2
+- 3 1
+? 1 3
++ 4 5
+? 1 5
++ 3 4
+? 1 5
++ 1 5
+? 2 4
+```
+Sample output:
+```
+SAME
+CONTRADICTION
+SAME
+DISCONNECTED
+SAME
+CONTRADICTION
+```
+Output only the complete Python 3 program source code, with no Markdown code fences and no explanation.
+
+
+## 数学（代数・数論）
+
+### SP-NUM-P01　エレ解2026年8月号 P1（★★★★）
+
+For a positive integer $a$, let $d(a)$ denote the number of digits in its decimal representation. For two positive integers $x$ and $y$, define the integer obtained by concatenating the decimal representations of $x$ and $y$ in that order by $$C(x,y)=x10^{d(y)}+y.$$ All integers are written in their usual decimal representation without leading zeros.
+
+(1) Let $k\ge 1$. Suppose that $x$ and $y$ are both positive $k$-digit integers. Determine, as a function of $k$, the number of ordered pairs $(x,y)$ satisfying $$xy\mid C(x,y).$$ For example,$$C(17,34)=1734=3\cdot17\cdot34,$$and$$C(143,143)=143143=7\cdot143\cdot143.$$
+
+(2) Now allow $x$ and $y$ to have different numbers of digits. For positive integers $x$ and $y$ satisfying$$xy\mid C(x,y),$$determine all possible positive integer values of
+$$\frac{C(x,y)}{xy}.$$ For example, $$C(3,15)=315=7\cdot3\cdot15,$$ so $7$ is one possible value.
+
+> 出典：[数学セミナー「エレガントな解答をもとむ」2026年8月号 出題1](https://www.web-nippyo.jp/59955/)（問題文を改変）
+
+> 題意は把握しやすいが、場合分けがやや煩雑。
+
+### SP-NUM-P02　エレ解2025年4月号 P1（★★★★）
+
+Find all quadruples $(x,y,z,w)\in\mathbb{C}^4$ satisfying: 
+```math
+\begin{cases}
+&\dfrac{2x}{1-x^2}=y,\\[5pt] 
+&\dfrac{2y}{1-y^2}=z,\\[5pt] 
+&\dfrac{2z}{1-z^2}=w,\\[5pt] 
+&\dfrac{2w}{1-w^2}=x. 
+\end{cases} 
+```
+
+> 出典：[数学セミナー「エレガントな解答をもとむ」2025年4月号 出題1](https://www.web-nippyo.jp/39680/)（問題文を改変）
+
+> 原題には数の範囲に関する指示が無い。ここでは無用なノイズを避けるために複素数解の範囲で解くよう明示した。
+
+### SP-NUM-P03: エレ解2025年8月号 P2（★★★★）
+
+Let $n$ be an integer with $n \ge 2$, and let $m$ be a positive integer with $m<n!$. Prove that there exist a positive integer $k<n$ and distinct positive divisors $d_1,\ldots,d_k$ of $n!$ such that $$d_1+\cdots+d_k=m.$$
+
+> 出典：[数学セミナー「エレガントな解答をもとむ」2025年8月号 出題2](https://www.web-nippyo.jp/40012/)（表現を改変）
+
+> 発想するまでが難しいタイプの問題。帰納法を使うと比較的簡潔に証明できる。問題自体がエレガントである。
+
+### SP-NUM-P04: オリジナル出題（★★★）
+
+Find all positive integers $m$, $n$ such that $$m^3+5^n=7^m.$$
+
+
+> ひっかけ問題。実は​このディオファントス方程式は解を持たない。適切な法でのモジュロ演算を多段階で適用し、整数解をもたないことを論理的に示す必要がある。
+
+### SP-NUM-P05: 大阪大学 2017 前期 理系 P3（★★）
+
+Let $a$ and $b$ be positive integers, and consider the following inequality:$$\left|\frac{a}{b}-\sqrt{7}\right|<\frac{2}{b^4}. \tag{A}$$You may use the facts that $2.645<\sqrt{7}<2.646$ and that $\sqrt{7}$ is irrational.
+
+**(1)** Suppose that positive integers $a$ and $b$ satisfy inequality $(\mathrm{A})$ and $b\ge 2$. Prove that$$\left|\frac{a}{b}+\sqrt{7}\right|<6.$$
+
+**(2)** Find all pairs of positive integers $(a,b)$ satisfying inequality $(\mathrm{A})$ with $b\ge 2$.
+
+> 実数を有理数で近似する方法として[ディオファントス近似](https://ja.wikipedia.org/wiki/%E3%83%87%E3%82%A3%E3%82%AA%E3%83%95%E3%82%A1%E3%83%B3%E3%83%88%E3%82%B9%E8%BF%91%E4%BC%BC)が知られているが、本問はこれに因んだ出題。
+
+### SP-NUM-P06: 2017 Balkan MO, P1（★★★）
+
+Find all pairs of positive integers $(x,y)$ such that $$x^3+y^3=x^2+42xy+y^2.$$
+
+> 出典：[Balkan Mathematical Olympiad 2017](https://www.imo-register.org.uk/2017-balkan-report.pdf#page=1)（第34回バルカン数学オリンピック 決勝 第1問）
+
+> 斉次対称式であることに着目して $s=x+y$、$t=x-y$ などと置いて式変形すれば絞り込みが簡単になる。単純に与式を因数分解しても良い。
+
+### SP-NUM-P07: 2013 Czech And Slovak MO IIIA3, P1（★★★）
+
+Find all pairs of integers $a, b$ such that $$\frac{a^2+1}{2b^2-3}=\frac{a-1}{2b-1}.$$
+
+> 出典：[Czech And Slovak Mathematical Olympiad 2013](https://www.matematickaolympiada.cz/media/3459592/a62angl.pdf#page=19)（第62回チェコ・スロバキア数学オリンピック、カテゴリーⅢ、A3第1問）
+
+> 左辺に$a$、右辺に$b$を集めて $u=a−1$、$v=2b−1$ などと置いて約分していくと見通しが良い。日本の大学入試問題としては（誘導設問が無ければ）難問だが、数オリ級の数論としては中程度。
+
+### SP-NUM-P08: 2023 German MO, P4（★★★）
+
+Determine all triples $(a,b,c)$ of real numbers with $$a+\frac{4}{b}=b+\frac{4}{c}=c+\frac{4}{a}.$$
+
+> 出典：[2023 German Math Olympiad Problems](https://www.scribd.com/document/833606569/Germany-2023)（第62回ドイツ数学オリンピック 決勝 第4問）
+
+> $a=2x$、$b=2y$、$c=2z$ などと置くと見通しが良い。ここから $xyz=\pm 1$ が導かれるので実質的に2変数の問題に帰着する。
+
+
+
+## 数学（解析・幾何）
+
+### SP-ANL-P01: 九州大学 2026 前期 理系 P5（★★★）
+
+Let $f:\mathbb{R}\to\mathbb{R}$ be defined by $$f(x)=\int_x^{x+1}\log(4t^2+1) dt,$$ where $\log$ denotes the natural logarithm. Answer the following questions. 
+
+(1) Determine all real values of $x$ at which $f(x)$ has a local extremum. Classify each extremum as a local maximum or local minimum, and determine the corresponding value of $f(x)$.
+
+(2) Evaluate the limit 
+$$\lim_{x\to\infty} x\left(f(x)-f(x-1)\right).$$
+
+> 出典：[九州大学 令和8年度入学者選抜 前期日程 数学（理科系） 第5問](https://www.kyushu-u.ac.jp/f/65328/2026_sugaku_rikei_kyudai.pdf#page=12)
+
+> 積分と極限に関する計算能力を測るのに丁度良い難度の問題。
+
+### SP-ANL-P02: エレ解2025年8月号 P1（★★★）
+
+Answer the following problems.
+
+(1) Let $a$ be one of the vertices of a regular octahedron. At time $0$, an ant is at vertex $a$. Every second, the ant moves to one of the four vertices adjacent to its current vertex, choosing each with equal probability. For a nonnegative integer $t$, find, as a function of $t$, the probability that the ant is at vertex $a$ after $t$ seconds.
+
+(2) Let $a$ be one of the vertices of a regular icosahedron. At time $0$, an ant is at vertex $a$. Every second, the ant moves to one of the five vertices adjacent to its current vertex, choosing each with equal probability. For a nonnegative integer $t$, find, as a function of $t$, the probability that the ant is at vertex $a$ after $t$ seconds.
+
+> 出典：[数学セミナー「エレガントな解答をもとむ」2026年5月号 出題1](https://www.web-nippyo.jp/40012/)（表現を改変）
+
+> (2)では4項間漸化式が登場する。特性方程式は3次なので解くことが可能。
+
+### SP-ANL-P03: 東京大学 2024 前期 理科 P5（★★★）
+
+In three-dimensional coordinate space, let $A(1,0,0)$, $B(0,1,0)$, $C(0,0,1)$, and let $D$ be the midpoint of the line segment $AC$.
+
+Find the volume of the solid obtained by rotating the triangle $ABD$, including its boundary and interior, once about the $x$-axis.
+
+> 出典：[東京大学 令和6年度 第2次学力試験 前期日程 数学（理科） 第5問](https://www.u-tokyo.ac.jp/content/400263415.pdf#page=12)
+
+> シンプルな回転体だが三角形の切り口を考える際に場合分けを要する。パップス＝ギュルダンの定理という飛び道具が封じられており、飛びつくと誤答となる。
+
+
+### SP-ANL-P04: 2026 Austrian MO Final Round P1（★★★★）
+
+Let $ABC$ be an acute triangle with orthocenter $H$ and circumcircle $k$. Let $S$ be the intersection point of the tangents to $k$ at points $A$ and $B$, let $M$ be the midpoint of $AB$, and let $H'$ be the reflection of $H$ with respect to $AB$. Let $P$ be the intersection point of the line $MH$ with the circumcircle $k$ such that $H$ lies between $M$ and $P$. Prove that the points $S$, $H'$, and $P$ are collinear.
+
+> [57th Austrian Mathematical Olympiad 2026](https://www.math.aau.at/OeMO/problems/)
+
+> 難問。複素平面で解くこともできるが、余程習熟していないと完答は困難である。座標平面上に乗せて解析的に証明することも可能。
+
+### SP-ANL-P05: 京都大学 2026 理系 P4（★★★★）
+
+In the plane, determine the minimum possible side length of an equilateral triangle satisfying the following condition: 
+(*) There exists a square of side length $1$ such that all four of its vertices lie either inside the equilateral triangle or on its boundary.
+
+> 出典：[京都大学 令和8年 入学試験問題 数学（理系） 第4問](https://www.kyoto-u.ac.jp/sites/default/files/inline-files/admissionsundergradpast_eqR08_eqdocumentsR08_3M04-67eab9889126ec2b1c07384f2e5e4fff.pdf#page=3)
+
+> 非常に美しい問題だが最小性の論証が難しく、試験会場では恐らく捨て問扱い。
+
+### SP-ANL-P06: 2024 Korea MO Final P4（★★★★★）
+
+Let $ABC$ be a triangle with circumcircle $O$, and let $D$ be a point on the ray $BA$. Let $E$ and $F$ be points on $O$ such that $DE$ and $DF$ are tangent to $O$, and let $EF$ intersect $AC$ at $T\\ne C$. Let $P\\ne B,C$ be a point on the arc $BC$ not containing $A$, and let $DP$ meet $O$ again at $Q\\ne P$. Let $X\\ne Q$ be the intersection of $BQ$ and $DT$, and let $PT$ meet $O$ again at $Y\\ne P$. Prove that $C$, $X$, and $Y$ are collinear.
+
+> 出典：[[KMO] 연도별 문제](https://www.kmo.or.kr/kmo/sub07.html)（韓国数学オリンピック 2024 決勝 第4問）（文法を修正）
+
+> かなりの難問だが、実はパスカルの定理を3回適用すれば初等幾何の範囲で証明が完了する。ただし縮退した点（すなわち円の接線）に対して適用する必要があり、この手の問題に習熟していなければ発想するのは難しい。
+> 因みに、ChatGPT-5.6-Solは点Dが三角形ABCの外接円の「極線」であることに着目し、射影座標を用いた解析的な解答を提案した。
+
+### SP-ANL-P07: 2025年 一橋大学 前期 P3（★★）
+
+Determine the range of real numbers $k$ for which the equation $$6\int_0^2 \left|x^2-a\right| dx=a^2-2a+k$$ has exactly four real solutions $a$.
+
+> 出典：[一橋大学 令和7年 一般選抜 前期日程 数学 第3問](https://juken.hit-u.ac.jp/admission/info/files/R7_02_suugaku_zenki_mondai.pdf#page=2)
+
+> 高度な定理は不要な問題だが、正確な場合分け、パラメータをグラフの水平線として解釈、交点の数の管理が要求される。この点で、途中計算や論理の信頼性・一貫性を測定するのにちょうど良い問題だと言える。
+
+### SP-ANL-P08: エレ解2018年11月号 P1（★★★）
+
+Let $N\ge 4$ be an integer. Determine all values of $N$ for which there exists a simple orthogonal $N$-gon whose consecutive side lengths, in cyclic order, are $$ 1,2,3,\ldots,N. $$ Here, a simple orthogonal polygon means a non-self-intersecting polygon in which every side is horizontal or vertical and every pair of consecutive sides is perpendicular.
+
+> 出典：[数学セミナー「エレガントな解答をもとむ」2018年11月号 出題1](https://www.web-nippyo.jp/9812/)（表現を改変）
+
+> 正解は「$N$が8の倍数のとき」であるが、十分性（＝実際に$N$が8の倍数のときに題意を満たすような直交多角形が構成できるか）を保証しているか否かが評価の分かれ目。
+
+
+## 物理学
+
+日本の大学院入試問題を参考にChatGPT-5.6-Solに作問させたオリジナルの出題。いずれも回答には学部レベルの知識が求められる。
+
+### SP-PHY-P01　可動円環上の質点（★★）
+
+A hoop of mass $M$ and radius $a$ is constrained to remain in a vertical plane. Its orientation is fixed, but its center can move freely along a frictionless horizontal rail. No external horizontal force acts on the hoop.
+
+A bead of mass $m$ moves without friction along the hoop. Let $X$ be the horizontal coordinate of the center of the hoop, and let $\theta$ denote the angular position of the bead measured from the lowest point of the hoop. Thus, the coordinates of the bead are
+
+$$
+x=X+a\sin\theta,\qquad y=-a\cos\theta.
+$$
+
+Let $g$ be the gravitational acceleration.
+
+(1) Write the Lagrangian $L$ of the system in terms of $X$ and $\theta$, and show that the momentum $P_X$ conjugate to $X$ is conserved.
+
+(2) Suppose that the total horizontal momentum of the system is zero, i.e. $P_X=0$. Eliminate $X$ and obtain an effective Lagrangian involving only $\theta$. Then derive the exact equation of motion for $\theta$.
+
+(3) Determine the angular frequency of small oscillations about $\theta=0$.
+
+(4) Assume $P_X=0$, and suppose that at some instant $X=0$ and $\theta=\theta_0$. Determine the subsequent position $X$ of the center of the hoop as a function of $\theta$.
+
+> 解析力学から出題した。問題文にある通り円環は固定されていないため、単純な単振り子として扱わないことがポイント。水平方向の運動量保存則から円環の自由度を消去すると、その後の運動方程式と振動運動の解析が見通しよく進む。
+
+### SP-PHY-P02　修正中心力と軌道歳差（★★★）
+
+A particle of mass $m$ moves in a plane under the central potential
+
+$$
+V(r)=-\frac{k}{r}+\frac{\lambda}{2r^2},
+$$
+
+where $k>0$ and $\lambda$ is a real constant. Let the nonzero angular momentum be $\ell$.
+
+(1) Determine the effective potential $V_{\mathrm{eff}}(r)$. Find the condition under which a stable circular orbit of finite radius exists, and determine its radius $r_0$.
+
+(2) Let $u=1/r$. Derive the differential equation satisfied by the orbit $u(\phi)$.
+
+(3) For a bound orbit, express the solution in the form
+
+$$u(\phi)=u_0 \left( 1+e\cos[\nu(\phi-\phi_0)]\right )$$
+
+and determine $u_0$ and $\nu$. Also determine the increase in azimuthal angle between two successive periapses.
+
+(4) Relative to the Kepler problem $\lambda=0$, determine the periapsis precession per radial period. Then obtain its leading-order approximation for
+
+$$
+\left|\frac{m\lambda}{\ell^2}\right|\ll1,
+$$
+
+and state whether the precession is prograde or retrograde for each sign of $\lambda$.
+
+Finally, for a noncircular bound orbit with $e\neq0$, state the necessary and sufficient condition in terms of $\nu$ for the orbit to be closed.
+
+> （２）の微分方程式はビネ方程式に当たる。ここから軌道の歳差を支配する $\nu$ を得る。円形でない束縛軌道が閉軌道となる条件は $\nu\in\mathbb{Q}$ である。
+
+### SP-PHY-P03　循環を伴う円柱まわりの理想流体（★★★）
+
+Consider a two-dimensional, steady flow of an incompressible and inviscid fluid of density $\rho$. Outside a circular cylinder of radius $a$, i.e. for $r\ge a$, the stream function is
+
+$$
+\psi(r,\theta)=U\left(r-\frac{a^2}{r}\right)\sin\theta
+-\frac{\Gamma}{2\pi}\ln\frac{r}{a}.
+$$
+
+The velocity components in polar coordinates are defined by
+
+$$
+v_r=\frac{1}{r}\frac{\partial\psi}{\partial\theta},
+\qquad
+v_\theta=-\frac{\partial\psi}{\partial r}.
+$$
+
+Let $U>0$. The circulation $\Gamma$ is real, with $\Gamma>0$ corresponding to counterclockwise circulation.
+
+(1) Determine $v_r$ and $v_\theta$, and show that the fluid does not penetrate the cylinder surface $r=a$.
+
+(2) Determine the condition on $\Gamma$ for stagnation points to exist on the surface of the cylinder, and determine their angular positions.
+
+(3) Let the pressure at infinity be $p_\infty$. Using Bernoulli's theorem, determine the pressure distribution $p(a,\theta)$ on the surface of the cylinder.
+
+(4) Integrate the pressure over the cylinder surface and determine the $x$- and $y$-components of the force per unit length exerted by the fluid on the cylinder.
+
+Do not merely quote the Kutta–Joukowski formula. Derive the sign of the force explicitly using the circulation convention specified above.
+
+> 流体力学に関する問題。流れ関数から速度場を導出し、円柱表面の接線速度からBernoulliの定理を用いて圧力分布を求める。最後に圧力を円柱表面で積分する際、符号と力の向きに注意することが重要。
+
+### SP-PHY-P04　点電荷と導体球（★★★）
+
+A perfectly conducting sphere of radius $a$ is centered at the origin. A point charge $q$ is placed on the $z$-axis at $z=d$, where $d>a$. Let $\varepsilon_0$ denote the vacuum permittivity.
+
+First consider the case in which the conducting sphere is grounded.
+
+(1) Using the method of images, determine the magnitude and position of the image charge that reproduces the electrostatic potential outside the sphere.
+
+(2) Determine the force acting on the point charge $q$. Also determine the total charge induced on the conducting sphere.
+
+Now consider the same conducting sphere when it is isolated rather than grounded, with total charge zero.
+
+(3) Determine the additional image charge required to represent the electric field outside the sphere while satisfying the neutrality condition. Also determine the electric potential of the conducting sphere.
+
+(4) Determine the force acting on the point charge $q$.
+
+(5) In the limit $d\gg a$, obtain the leading asymptotic form of the force found in (4). Compare its dependence on $d$ with that for the grounded sphere.
+
+> 接地球では球面電位 $V=0$、孤立中性球では球の全電荷が0であることが条件となる。導体に課される境界条件が異なることを理解できるかが問われる。
+
+### SP-PHY-P05　半無限導体における表皮効果（★★★）
+
+A homogeneous conductor of conductivity $\sigma$ and permeability $\mu$ occupies the half-space $x>0$. The displacement current may be neglected relative to the conduction current.
+
+At the surface $x=0$, an external magnetic field is applied such that
+
+$$
+H_z(0,t)=H_0\cos\omega t.
+$$
+
+All physical quantities depend only on $x$, and the electromagnetic fields vanish as $x\to\infty$ inside the conductor.
+
+Use the complex time dependence $e^{i\omega t}$.
+
+(1) Starting from Maxwell's equations and Ohm's law, derive the diffusion equation satisfied by $H_z(x,t)$ inside the conductor.
+
+(2) Define the skin depth $\delta$, and determine the complex amplitude $\widetilde H_z(x)$ of the magnetic field.
+
+(3) Determine the electric field $\widetilde E_y(x)$ inside the conductor and the surface impedance
+
+$$
+Z_s=\frac{\widetilde E_y(0)}{\widetilde H_z(0)}.
+$$
+
+(4) Determine the time-averaged Joule heating per unit volume and integrate it over the conductor to obtain the average absorbed power per unit surface area.
+
+> Maxwell方程式から磁場拡散方程式を導出する。この際、符号に注意する。（４）のジュール損失の計算では $\sigma$ の次数を取り違えやすいため注意を要する。
+
+### SP-PHY-P06　質量・ばね欠陥を含む弦における波の散乱（★★★★）
+
+A uniform string of tension $T$ and linear mass density $\mu$ extends over $-\infty<x<\infty$.
+
+At $x=0$, a point mass $M$ is inserted into the string. The mass is also connected to a fixed support by a spring of spring constant $K>0$. The displacement of the point mass is always equal to the displacement of the string at $x=0$. There is no dissipation.
+
+A wave of angular frequency $\omega$ is incident from the left. Define the wave speed and wavenumber by
+
+$$
+c=\sqrt{\frac{T}{\mu}},
+\qquad
+k=\frac{\omega}{c}.
+$$
+
+The displacement is written as
+
+$$
+y(x,t)=
+\begin{cases}
+\operatorname{Re}\left[(e^{ikx}+r e^{-ikx})e^{-i\omega t}\right],&x<0,\\
+\operatorname{Re}\left[t e^{ikx}e^{-i\omega t}\right],&x>0.
+\end{cases}
+$$
+
+(1) Using continuity of displacement at $x=0$ and the equation of motion of the point mass, derive the equations satisfied by the reflection and transmission amplitudes $r$ and $t$.
+
+(2) Define
+
+$$
+\eta=\frac{K-M\omega^2}{2kT}.
+$$
+
+Determine $r$ and $t$ in terms of $\eta$.
+
+(3) Determine the energy reflection coefficient $R$ and the energy transmission coefficient $\mathcal T$, and show that
+
+$$
+R+\mathcal T=1.
+$$
+
+(4) Determine the angular frequency at which perfect transmission occurs, and explain the physical reason for this phenomenon.
+
+> 質点位置での変位の境界条件を導き、張力・ばね力を含む運動方程式を正しく立てることがポイント。特に張力による力の符号に注意が必要。
+
+### SP-PHY-P07　直交する電場・磁場中の水素原子（★★★★★）
+
+Consider the $n=2$ level of the hydrogen atom. Neglect electron spin, fine structure, hyperfine structure, and the diamagnetic term proportional to $B^2$.
+
+Apply simultaneously a weak uniform electric field
+
+$$
+\mathbf E=E\mathbf e_z
+$$
+
+and a weak uniform magnetic field
+
+$$
+\mathbf B=B\mathbf e_x.
+$$
+
+Restrict attention to the degenerate $n=2$ subspace and use the real orbital basis
+
+$$
+|2s\rangle,\quad |2p_x\rangle,\quad |2p_y\rangle,\quad |2p_z\rangle.
+$$
+
+The perturbation Hamiltonian is
+
+$$
+H'=eEz+\frac{\mu_BB}{\hbar}L_x,
+$$
+
+where $e>0$ is the elementary charge and $\mu_B$ is the Bohr magneton.
+
+Choose the phases of the basis states such that
+
+$$
+\langle 2s|eEz|2p_z\rangle=d,
+\qquad
+d=3ea_0E.
+$$
+
+All other Stark matrix elements between $|2s\rangle$ and the $2p$ states may be taken to vanish.
+
+(1) Determine the $4\times4$ matrix representation of $H'$ in the ordered basis
+
+$$
+(|2s\rangle,|2p_z\rangle,|2p_y\rangle,|2p_x\rangle).
+$$
+
+(2) Determine all first-order energy shifts of the $n=2$ level and state their degeneracies.
+
+(3) Show that the limits $E=0$ and $B=0$ reproduce the usual orbital Zeeman effect and linear Stark effect, respectively.
+
+(4) Explain why, when the electric and magnetic fields are perpendicular, it is incorrect simply to add the Stark shifts $\pm d$ independently to the Zeeman shifts $\pm\mu_BB$.
+
+> Stark効果とZeeman効果を別々に解いて固有値を足すのではなく、縮退した $n=2$ 部分空間で摂動ハミルトニアン全体を一度に対角化する必要がある。(4)において、Stark項とZeeman項が $|2p_z\rangle$ を共有するため、独立には対角化できない、という点に気付けるかがポイント。
+
+### SP-PHY-P08　トランジットと視線速度（★★★★）
+
+A single planet moves in a circular orbit around a star. The orbit is exactly edge-on as viewed by the observer, and the transit passes through the center of the stellar disk.
+
+Let the stellar mass and radius be $M_\*$ and $R_\*$, and the planetary mass and radius be $M_p$ and $R_p$, respectively. Assume
+
+$$M_p\ll M_\*.$$
+
+The stellar surface brightness is uniform, and limb darkening may be neglected.
+
+The following four quantities are measured exactly:
+
+- orbital period $P$,
+- transit depth $\delta$,
+- total transit duration $\tau$, measured from first contact to fourth contact,
+- stellar radial-velocity semi-amplitude $K$.
+
+Let $a$ denote the orbital separation, i.e. the semimajor axis of the relative orbit.
+
+(1) Determine $k=\dfrac{R_p}{R_{\*}}$ from $\delta$. Then, using the exact transit geometry, express $a/R_\*$ solely in terms of $P$, $\tau$, and $\delta$.
+
+(2) Using Kepler's third law, express the stellar mean density
+
+$$\rho_\* = \dfrac{3M_\*}{4\pi {R_\*}^3}$$
+
+solely in terms of the observables $P$, $\tau$, and $\delta$.
+
+(3) Determine the combination of $M_p$ and $M_\*$ that is fixed by the radial-velocity semi-amplitude $K$.
+
+(4) Can the absolute values of $M_\*$, $R_\*$, $M_p$, $R_p$ be determined uniquely from these four observables alone?
+
+If not, explicitly exhibit a one-parameter scaling transformation that leaves all four observables $P,\delta,\tau,K$ invariant, thereby proving the non-uniqueness.
+
+(5) Suppose an independent external observation provides the absolute value of $R_\*$. Give formulas for determining $M_\*$, $R_p$, and $M_p$.
+
+> 天文物理に関する出題。系外惑星の観測では、トランジット法と視線速度法のデータから様々な比や組み合わせは決まるが、これらの観測量だけでは恒星や惑星の実際の半径・質量は一意には決まらない。観測量を変えないような拡大縮小変換を考えてみると、観測から一意に決定できる量を整理しやすい。
+
+## 化学
+
+### SP-CHE-P01　物理化学：熱容量変化を伴う化学平衡と反応進行度（★★★）
+
+Consider the ideal-gas reaction
+
+$$
+\mathrm{A(g) \rightleftharpoons B(g)+C(g)}.
+$$
+
+At $T_0=298.15\ \mathrm{K}$, the standard reaction quantities are
+
+$$
+\Delta_r H^\circ(T_0)=15.00\ \mathrm{kJ\,mol^{-1}},
+\qquad
+\Delta_r S^\circ(T_0)=50.00\ \mathrm{J\,mol^{-1}\,K^{-1}}.
+$$
+
+The standard isobaric heat-capacity change is independent of temperature over $200\le T\le1000\ \mathrm{K}$:
+
+$$
+\Delta_r C_p^\circ=-80.00\ \mathrm{J\,mol^{-1}\,K^{-1}}.
+$$
+
+Take the standard pressure as $p^\circ=1.000\ \mathrm{bar}$, and use
+
+$$
+R=8.3144626\ \mathrm{J\,mol^{-1}\,K^{-1}}.
+$$
+
+Assume ideal-gas behavior and no phase transition.
+
+(1) Starting from Kirchhoff's law and the thermodynamic relation for entropy, derive explicit expressions for $\Delta_r H^\circ(T)$, $\Delta_r S^\circ(T)$, $\Delta_r G^\circ(T)$, and the dimensionless equilibrium constant $K_p(T)$.
+
+(2) Determine all temperatures in the interval $200\le T\le1000\ \mathrm{K}$ for which $K_p(T)=1$. Give each temperature to $0.1\ \mathrm{K}$. Explain why more than one such temperature can occur even though the sign of $\Delta_r H^\circ(298.15\ \mathrm{K})$ is fixed.
+
+(3) Calculate $K_p$ at $T=500.0\ \mathrm{K}$ to three significant figures.
+
+(4) At $500.0\ \mathrm{K}$, a mixture initially contains $1.000\ \mathrm{mol}$ of A and $1.000\ \mathrm{mol}$ of an inert gas, with no B or C. The system is maintained at a constant total pressure of $5.000\ \mathrm{bar}$. Let the equilibrium extent of reaction be $\xi_P$. Derive the equation satisfied by $\xi_P$ and determine its physically admissible value.
+
+(5) A second system has the same initial amounts and the same temperature, but is placed in a rigid vessel whose volume is chosen so that the initial total pressure is also $5.000\ \mathrm{bar}$. Let its equilibrium extent be $\xi_V$. Derive the corresponding equilibrium equation and determine $\xi_V$.
+
+(6) Compare $\xi_P$ and $\xi_V$, and explain the difference using both Le Chatelier's principle and the explicit form of the reaction quotient. A numerical answer without the derivations is not sufficient.
+
+> 物理化学分野の問題。$\Delta C_p^\circ\neq0$ のときの $\Delta H^\circ(T)$、$\Delta S^\circ(T)$、$K_p(T)$ の温度依存性。$K_p=1$ が複数温度で成立し得ることと、定圧・定容条件で平衡反応進行度が異なることを扱う。計算はやや煩雑。
+
+### SP-CHE-P02　物理化学：前平衡を伴う競争反応の速度論と同位体効果（★★★★）
+
+A reactant A can form two products through the following kinetic network:
+
+$$
+\mathrm{A \rightleftharpoons I}
+$$
+
+is a rapid pre-equilibrium, followed by
+
+$$
+\mathrm{I \rightarrow P}
+$$
+
+and a competing direct pathway
+
+$$
+\mathrm{A \rightarrow Q}.
+$$
+
+For the pre-equilibrium $\mathrm{A\rightleftharpoons I}$,
+
+$$
+\Delta H^\circ_{\mathrm{eq}}=20.00\ \mathrm{kJ\,mol^{-1}},
+\qquad
+\Delta S^\circ_{\mathrm{eq}}=40.00\ \mathrm{J\,mol^{-1}\,K^{-1}}.
+$$
+
+For $\mathrm{I\rightarrow P}$,
+
+$$
+\Delta H_P^\ddagger=45.00\ \mathrm{kJ\,mol^{-1}},
+\qquad
+\Delta S_P^\ddagger=-20.00\ \mathrm{J\,mol^{-1}\,K^{-1}},
+$$
+
+and for $\mathrm{A\rightarrow Q}$,
+
+$$
+\Delta H_Q^\ddagger=70.00\ \mathrm{kJ\,mol^{-1}},
+\qquad
+\Delta S_Q^\ddagger=30.00\ \mathrm{J\,mol^{-1}\,K^{-1}}.
+$$
+
+Assume the thermodynamic quantities above are temperature independent over the range of interest. Use the Eyring equation
+
+$$
+k(T)=\frac{k_{\mathrm B}T}{h}
+\exp\left(\frac{\Delta S^\ddagger}{R}\right)
+\exp\left(-\frac{\Delta H^\ddagger}{RT}\right),
+$$
+
+with $R=8.3144626\ \mathrm{J mol^{-1} K^{-1}}$, $k_{\mathrm B}=1.380649\times10^{-23}\ \mathrm{J K^{-1}}$, $h=6.62607015\times10^{-34}\ \mathrm{J s}.$
+
+Products P and Q are formed irreversibly, and product inhibition is absent. Define the analytically observed reactant concentration by
+
+$$
+[A]_{\mathrm T}=[A]+[I].
+$$
+
+(1) Derive expressions for the equilibrium constant $K_{\mathrm{eq}}(T)=[I]/[A]$, the two elementary rate constants $k_P(T)$ and $k_Q(T)$, and the pseudo-first-order disappearance rate constant $k_{\mathrm{obs}}(T)$ defined by 
+
+```math
+-\dfrac{d\,[A]_\mathrm{T}}{dt}=k_\mathrm{obs}[A]_\mathrm{T}.
+```
+
+(2) Derive an expression for the instantaneous product-rate ratio $r_P/r_Q$. Determine the temperature at which $r_P=r_Q$.
+
+(3) At $T=500.0\ \mathrm{K}$, calculate $K_{\mathrm{eq}}$, $k_P$, $k_Q$, $k_{\mathrm{obs}}$, and the branching fractions to P and Q.
+
+(4) Define the apparent activation energy of the overall disappearance process by
+
+$$
+E_{\mathrm{app}}(T)=-R\frac{d\ln k_{\mathrm{obs}}}{d(1/T)}.
+$$
+
+Derive $E_{\mathrm{app}}(T)$ from the expression obtained in part (1), without replacing the two parallel pathways by a single Arrhenius process. Evaluate $E_{\mathrm{app}}$ at $500.0\ \mathrm{K}$.
+
+(5) Now consider an isotopically substituted reactant for which only the activation enthalpies change:
+
+$$
+\Delta H_{P,\mathrm{iso}}^\ddagger=\Delta H_P^\ddagger+4.00\ \mathrm{kJ\,mol^{-1}},
+$$
+
+$$
+\Delta H_{Q,\mathrm{iso}}^\ddagger=\Delta H_Q^\ddagger+1.00\ \mathrm{kJ\,mol^{-1}},
+$$
+
+while all activation entropies and the A-I pre-equilibrium remain unchanged. Determine the new temperature at which $r_P=r_Q$, and calculate $r_P/r_Q$ at $500.0\ \mathrm{K}$. Explain why isotope substitution can change product selectivity even though it does not alter the pre-equilibrium.
+
+> こちらも物理化学分野からの出題。前平衡 $A\rightleftharpoons I$ と競合反応 $\mathrm{A \rightarrow Q}$ を組み合わせた反応速度論に関する問題とした。Eyringの式、生成物選択性、見かけの活性化エネルギー、同位体効果を一貫して扱えるかを問う。
+
+
+### SP-CHE-P03　分析化学：多重平衡下におけるEDTA錯形成（★★★★）
+
+A solution contains $\mathrm{Zn^{2+}}$, $\mathrm{Mg^{2+}}$, and EDTA. Let the fully deprotonated EDTA ligand be $Y^{4-}$, and let the total concentration of all protonation states of uncomplexed EDTA be denoted by $[Y']$.
+
+For the acid $\mathrm{H_4Y}$,
+
+$$
+pK_{a1}=2.00,\qquad
+pK_{a2}=2.67,\qquad
+pK_{a3}=6.16,\qquad
+pK_{a4}=10.26.
+$$
+
+The solution is buffered at $pH=10.00$. Ignore activity-coefficient corrections.
+
+The intrinsic formation constants are
+
+$$
+K_f^{\mathrm{Zn}}
+=\frac{[\mathrm{ZnY^{2-}}]}
+{[\mathrm{Zn^{2+}}][Y^{4-}]}
+=3.00\times10^{16},
+$$
+
+$$
+K_f^{\mathrm{Mg}}
+=\frac{[\mathrm{MgY^{2-}}]}
+{[\mathrm{Mg^{2+}}][Y^{4-}]}
+=5.00\times10^{8}.
+$$
+
+A competing ligand is present. Its concentration is buffered so that the metal side-reaction coefficients are constant:
+
+$$
+\alpha_{\mathrm{Zn}}
+=\frac{[\mathrm{Zn}']}{[\mathrm{Zn^{2+}}]}
+=1.00\times10^5,
+$$
+
+$$
+\alpha_{\mathrm{Mg}}
+=\frac{[\mathrm{Mg}']}{[\mathrm{Mg^{2+}}]}
+=10.0,
+$$
+
+where $[\mathrm{M}']$ denotes the total concentration of all uncomplexed forms of metal M, including the free aquo ion and complexes with the competing ligand, but excluding EDTA complexes.
+
+The analytical concentrations are
+
+$$
+C_{\mathrm{Zn}}=1.00\times10^{-3}\ \mathrm{mol\,L^{-1}},
+$$
+
+$$
+C_{\mathrm{Mg}}=1.00\times10^{-3}\ \mathrm{mol\,L^{-1}},
+$$
+
+$$
+C_Y=1.20\times10^{-3}\ \mathrm{mol\,L^{-1}}.
+$$
+
+Assume that only the 1:1 EDTA complexes $\mathrm{ZnY^{2-}}$ and $\mathrm{MgY^{2-}}$ form.
+
+(1) Derive the expression for the EDTA protonation fraction
+
+$$
+\alpha_Y=\frac{[Y^{4-}]}{[Y']}
+$$
+
+in terms of $[H^+]$ and $K_{a1},K_{a2},K_{a3},K_{a4}$. Evaluate $\alpha_Y$ at $pH=10.00$.
+
+(2) Derive the conditional formation constants $K_{\mathrm{Zn}}''$ and $K_{\mathrm{Mg}}''$ defined by
+
+$$
+K_{\mathrm M}''=\frac{[\mathrm{MY}]}{[\mathrm M'][Y']}.
+$$
+
+Evaluate both constants numerically.
+
+(3) Let $y=[Y']$. Using the metal and EDTA mass balances, derive a single nonlinear equation containing only $y$ as an unknown. Do not assume that EDTA first reacts quantitatively with Zn and only then with Mg.
+
+(4) Solve for $y$, and then determine
+
+$$
+[\mathrm{ZnY^{2-}}],
+\quad
+[\mathrm{MgY^{2-}}],
+\quad
+[\mathrm{Zn}'],
+\quad
+[\mathrm{Mg}'],
+\quad
+[\mathrm{Zn^{2+}}],
+\quad
+[\mathrm{Mg^{2+}}]
+$$
+
+to three significant figures.
+
+(5) Calculate $p\mathrm{Zn}=-\log_{10}[\mathrm{Zn^{2+}}]$ and $p\mathrm{Mg}=-\log_{10}[\mathrm{Mg^{2+}}]$.
+
+(6) For the conditional exchange reaction
+
+$$
+\mathrm{Zn' + MgY \rightleftharpoons ZnY + Mg'},
+$$
+
+derive its equilibrium constant from the two conditional formation constants and evaluate it. Explain why a very large exchange constant does not imply that $\mathrm{MgY}$ must be exactly zero at equilibrium.
+
+> EDTA（エチレンジアミン四酢酸、エデト酸）は、金属イオンと結合して安定なキレート化合物を作るキレート剤の一つ。EDTAのプロトン化、金属側の副反応、Zn/Mgの競争錯形成を同時に扱う多重平衡問題である。条件生成定数と物質収支を正しく定義できるかが本問の核心。
+
+### SP-CHE-P04　無機化学：酸化還元電位と不均化平衡のpH依存性（★★★）
+
+An element X has three relevant oxidation-state species in aqueous solution: $XO_4^-$ with X in oxidation state +VII, $XO_2(s)$ with X in oxidation state +IV, and $X^{2+}$ with X in oxidation state +II. At $298.15\ \mathrm{K}$, the standard reduction half-reactions in acidic solution are
+
+$$
+XO_4^-+4H^+ +3e^-
+\rightarrow
+XO_2(s)+2H_2O,
+\qquad
+E_1^\circ=0.900\ \mathrm{V},
+$$
+
+$$
+XO_2(s)+4H^+ +2e^-
+\rightarrow
+X^{2+}+2H_2O,
+\qquad
+E_2^\circ=1.200\ \mathrm{V}.
+$$
+
+Treat the activities of pure liquid water and $XO_2(s)$ as unity. At $298.15\ \mathrm{K}$, use
+
+$$
+E=E^\circ-\frac{0.05916}{n}\log_{10}Q
+$$
+
+and
+
+$$
+\log_{10}K=\frac{nE^\circ_{\mathrm{cell}}}{0.05916}
+$$
+
+for a balanced redox reaction.
+
+(1) Determine the standard reduction potential for the overall five-electron reduction of $XO_4^-$ to $X^{2+}$. Show explicitly why the two given standard potentials must not be combined by an unweighted arithmetic mean.
+
+(2) Determine whether $XO_2(s)$ is thermodynamically unstable toward disproportionation into $XO_4^-$ and $X^{2+}$ under standard conditions. Balance the disproportionation reaction, including $H^+$, $H_2O$, and the stoichiometric coefficients of all X-containing species.
+
+(3) For the balanced disproportionation reaction, determine $E^\circ_{\mathrm{cell}}$, the number $n$ of electrons transferred in the balanced redox combination, $\log_{10}K$, and $K$.
+
+(4) Suppose the activities of $XO_4^-$ and $X^{2+}$ are both unity. Derive $E_{\mathrm{cell}}$ as an explicit function of pH for the disproportionation reaction. Determine the pH at which $E_{\mathrm{cell}}=0$. State on which side of this pH disproportionation is thermodynamically favored under these activity conditions.
+
+(5) Now take $pH=6.00$,
+
+$$
+a_{XO_4^-}=1.00\times10^{-3},
+\qquad
+a_{X^{2+}}=1.00\times10^{-2}.
+$$
+
+Calculate $E_{\mathrm{cell}}$ for disproportionation and determine the spontaneous direction.
+
+(6) A student argues that because $E_2^\circ>E_1^\circ$, $XO_2(s)$ must disproportionate at every pH and at every composition. Identify precisely what is wrong with this statement.
+
+> 異なる電子数を持つ標準電極電位の合成、不均化反応の平衡、Nernst式によるpH・組成依存性。標準状態と実際の反応方向を区別できるかを問う。
+
+### SP-CHE-P05　無機化学：有機ロジウム錯体の触媒サイクル解析（★★★）
+
+Consider the following simplified Rh-catalyzed carbonylation cycle. Use the ionic method for oxidation-state and electron-count assignments.
+
+$$
+A=[\mathrm{RhI_2(CO)_2}]^-.
+$$
+
+Oxidative addition of methyl iodide gives
+
+$$
+A+\mathrm{CH_3I}\rightarrow
+B=[\mathrm{RhI_3(CH_3)(CO)_2}]^-.
+$$
+
+Migratory insertion of one coordinated CO ligand into the Rh-CH$_3$ bond gives
+
+$$
+B\rightarrow
+C=[\mathrm{RhI_3(C(O)CH_3)(CO)}]^-.
+$$
+
+Association of an external CO ligand gives
+
+$$
+C+\mathrm{CO}\rightarrow
+D=[\mathrm{RhI_3(C(O)CH_3)(CO)_2}]^-.
+$$
+
+Reductive elimination then produces acetyl iodide and regenerates A:
+
+$$
+D\rightarrow A+\mathrm{CH_3COI}.
+$$
+
+Use the following electron-counting conventions:
+
+- Rh is a group-9 metal.
+- $I^-$, $CH_3^-$, and the acyl ligand $\mathrm{C(O)CH_3^-}$ are X-type two-electron donors.
+- CO is a neutral L-type two-electron donor.
+
+(1) For each of A, B, C, and D, determine: (i) the oxidation state of Rh, (ii) the $d^n$ configuration of Rh, and (iii) the total valence-electron count of the complex.
+
+(2) Classify each of the four transformations $A\rightarrow B$, $B\rightarrow C$, $C\rightarrow D$, and $D\rightarrow A$ as oxidative addition, migratory insertion, ligand association, or reductive elimination. For each step, state whether the Rh oxidation state and the total electron count change.
+
+(3) Write the net chemical reaction for one complete catalytic cycle. Explain why CO is simultaneously a ligand in the cycle and a stoichiometric reactant in the net reaction.
+
+(4) An isotopic-labeling experiment starts from catalyst A in which exactly one of its two coordinated CO ligands is $^{13}\mathrm{CO}$ and the other is $^{12}\mathrm{CO}$. Assume:
+(i) the two CO ligands in B are equivalent with respect to migratory insertion;
+(ii) insertion chooses either coordinated CO with equal probability;
+(iii) there is no CO exchange before insertion;
+(iv) the external CO that associates in $C\rightarrow D$ is exclusively $^{12}\mathrm{CO}$.
+
+After exactly one catalytic turnover, what fraction of the acetyl iodide molecules contain $^{13}\mathrm C$ at the carbonyl carbon? What fraction of the regenerated A molecules still contain the original $^{13}\mathrm{CO}$ ligand? Justify both answers by atom tracking.
+
+(5) Now consider a kinetic variant in which A can reversibly bind one additional CO to form an inactive 18-electron resting state $A_{\mathrm{CO}}$:
+
+$$
+A+\mathrm{CO}\rightleftharpoons A_{\mathrm{CO}},
+\qquad
+K_{\mathrm{CO}}=\frac{[A_{\mathrm{CO}}]}{[A][\mathrm{CO}]}.
+$$
+
+Only A undergoes the rate-determining oxidative addition of $\mathrm{CH_3I}$, with rate
+
+$$v=k[A][\mathrm{CH_3I}].$$
+
+Assume all other catalytic intermediates are present at negligible steady-state concentrations, so that
+
+```math
+[\mathrm{Rh}]_{\mathrm T}=[A]+[A_{\mathrm{CO}}].
+```
+
+Derive the rate law in terms of $[\mathrm{Rh}]_{\mathrm T}$, $[\mathrm{CH_3I}]$, $[\mathrm{CO}]$, $k$, and $K_{\mathrm{CO}}$. Give the limiting reaction order in CO at low and high CO concentration.
+
+(6) If $K_{\mathrm{CO}}=20.0\ \mathrm{L\,mol^{-1}}$ and $[\mathrm{CO}]=0.100\ \mathrm{mol\,L^{-1}}$, by what factor is the rate reduced relative to the hypothetical limit $[\mathrm{CO}]\rightarrow0$ at the same $[\mathrm{Rh}]_{\mathrm T}$ and $[\mathrm{CH_3I}]$?
+
+> ロジウム錯体の触媒サイクルについて、酸化数・$d$電子数・18電子則、酸化的付加・挿入・還元的脱離を解析させる問題。さらに同位体追跡とCO阻害を含む速度式を扱う。
+> Qiitaのレンダリング処理の不備によって一部のスタイルが乱れて表示されているが、問題文としては適当。
+
+### SP-CHE-P06　有機化学：シクロヘキサンのE2脱離と配座効果（★★★★）
+
+Consider E2 elimination from the two stereoisomers
+
+$$
+\text{cis-1-bromo-2-tert-butylcyclohexane}
+$$
+
+and
+
+$$
+\text{trans-1-bromo-2-tert-butylcyclohexane}.
+$$
+
+At $298.15\ \mathrm{K}$, use the conformational free-energy penalties
+
+$$
+A(\text{Br})=2.00\ \mathrm{kJ\,mol^{-1}},
+\qquad
+A(\text{tert-Bu})=22.00\ \mathrm{kJ\,mol^{-1}},
+$$
+
+where $A(\text{X})$ is the free-energy penalty for placing substituent X axial rather than equatorial. Assume additive conformational free energies and rapid chair-chair interconversion. Use
+
+$$
+R=8.3144626\ \mathrm{J\,mol^{-1}\,K^{-1}}.
+$$
+
+For a cyclohexane E2 reaction, the C-Br bond and the beta C-H or C-D bond being broken must be anti-periplanar; in a chair conformation this requires a trans-diaxial arrangement.
+
+Number the carbon bearing Br as C1 and the carbon bearing tert-butyl as C2. In the reactive chair of the cis isomer, Br is axial and tert-butyl is equatorial. In that chair, axial beta hydrogens are present at both C2 and C6.
+
+(1) For the cis and trans stereoisomers separately, identify the lower-energy chair conformation and the ring-flipped conformation, specifying whether Br and tert-butyl are axial or equatorial in each.
+
+(2) Only conformers with axial Br can react by E2. Using Boltzmann populations, calculate the fraction of molecules in an E2-reactive conformation for each stereoisomer at $298.15\ \mathrm{K}$. For part (2) only, define $k_{\rm int}$ as the total first-order E2 rate constant of a molecule once it occupies an E2-reactive chair, and assume that this total $k_{\rm int}$ is identical for the cis and trans stereoisomers. Estimate the ratio
+
+$$
+\frac{k_{\mathrm{obs,cis}}}{k_{\mathrm{obs,trans}}}.
+$$
+
+(3) For the reactive chair of the cis isomer, two eliminations are geometrically possible: formation of a C1=C2 double bond and formation of a C1=C6 double bond. Suppose that, for the unlabeled substrate, the intrinsic rates from this same chair satisfy
+
+$$
+k_{1,2}:k_{1,6}=4.00:1.00.
+$$
+
+What product ratio is expected if conformational interconversion is much faster than reaction and no isotope substitution is present?
+
+(4) Now replace only the axial beta hydrogen at C2 in the reactive cis chair by deuterium. The primary kinetic isotope effect for cleavage of that bond is
+
+$$
+k_H/k_D=6.00,
+$$
+
+and all secondary isotope effects may be neglected. Determine the new ratio of C1=C2 to C1=C6 elimination products. State whether the more substituted alkene must still be the major product.
+
+(5) In the E2-reactive ring-flipped conformation of the trans isomer, both Br and tert-butyl are axial. Explain why elimination toward C2 is impossible in this conformer even though C2 is adjacent to C1, and identify which beta carbon can undergo elimination.
+
+(6) Explain why a rule stated only as "the more substituted alkene is favored in E2" is insufficient for this system. Your explanation must distinguish conformational population effects, stereoelectronic requirements, and intrinsic alkene-forming preferences.
+
+> 有機化学の発展問題。シクロヘキサンの立体配座解析、E2脱離の立体的要件、ボルツマン分布、速度論における同位体効果を組み合わせて考察する必要があり、有機化学の教科書的な理解を超えた応用力が問われる。
+
+### SP-CHE-P07　有機化学：ベンザイン機構とSNAr機構の識別（★★★）
+
+Two nucleophilic aromatic substitution experiments are used to distinguish an elimination-addition benzyne mechanism from an addition-elimination $S_\mathrm{N}Ar$ mechanism.
+
+In experiment A, the carbon bearing chlorine in 1-chloro-3-methylbenzene is labeled with $^{13}\mathrm C$; call this carbon C1. The two ortho carbons are C2 and C6. The substrate is treated with excess $\mathrm{NaNH_2}$ in liquid ammonia.
+
+Assume the following simplified kinetic model:
+
+- Elimination of the proton at C2 to form the C1-C2 benzyne occurs three times as fast as elimination of the proton at C6 to form the C1-C6 benzyne.
+- Once the C1-C2 benzyne is formed, nucleophilic attack by $NH_2^-$ occurs at C1 and C2 in the ratio $2:3$.
+- Once the C1-C6 benzyne is formed, attack occurs at C1 and C6 in the ratio $1:4$.
+- Benzyne formation is irreversible under the reaction conditions, the two benzyne intermediates do not interconvert, and subsequent protonation does not change the carbon skeleton.
+
+(1) Calculate the fractions of total amination product in which the new C-N bond is formed at C1, C2, and C6.
+
+(2) The $^{13}\mathrm C$ label remains attached to the original C1 atom throughout the reaction. What fraction of the total product has $^{13}\mathrm C$ directly bonded to $NH_2$? What fraction has the $^{13}\mathrm C$ label ortho to $NH_2$? Explain why this isotopic result does not require any migration of the carbon label.
+
+In experiment B, [1-$^{13}$C]-1-fluoro-2,4-dinitrobenzene is treated with $NH_3$ under conditions where substitution proceeds exclusively by the classical addition-elimination $S_\mathrm{N}Ar$ mechanism through a Meisenheimer intermediate.
+
+(3) State the position of the $^{13}\mathrm C$ label relative to the newly introduced $NH_2$ group in the product of experiment B, and contrast the atom mapping with experiment A.
+
+(4) For the series 1-halo-2,4-dinitrobenzene with halogen $F$, $Cl$, or $Br$, assume nucleophilic addition is rate determining. Rank the substrates from fastest to slowest $S_\mathrm{N}Ar$ reaction. Explain why this order can be opposite to the usual leaving-group order encountered in many $S_\mathrm{N}1$ or $S_\mathrm{N}2$ reactions.
+
+(5) Explain why unsubstituted chlorobenzene is normally resistant to addition-elimination $S_\mathrm{N}Ar$ under mild conditions, yet can undergo amination with $\mathrm{NaNH_2}$ in liquid ammonia. Your answer must identify the role of electron-withdrawing substituents in stabilizing a Meisenheimer intermediate and the distinct role of a strong base in generating benzyne.
+
+(6) Suppose an analyst observes partial scrambling of the $^{13}\mathrm C$ label between the ipso and ortho positions relative to $NH_2$, but no loss of the label from the aromatic ring. Which of the two idealized mechanisms above is more consistent with that observation, and what mechanistic inference can and cannot be made from the isotope pattern alone?
+
+> Robertsらの実験的検証をそのまま出題すると、生成比が50:50という有名な教科書的予備知識だけでも回答できてしまう。本問ではこれを避けるため、敢えて速度論のパラメータを設定して少し捻りを加えてある。
+> なお（６）に関して、同位体標識による分類だけではベンザイン機構を完全に証明したことにはならない。この結果から確実に言えるのは、反応中にC1と隣接炭素が化学的に等価になる中間体を経由した、ということまでである。ベンザインであることの直接証明には、中間体の捕捉実験や速度論的証拠などが別途必要になる。
+
+> 完全に余談だが、[*o*-ベンザイン](https://ja.wikipedia.org/wiki/%E3%83%99%E3%83%B3%E3%82%B6%E3%82%A4%E3%83%B3)に相当する C₆H₄ 中間体が明示的に提唱された論文としてはWerner Emmanuel Bachmann と Hans Thacher Clarkeによる[Wurtz-Fittig反応に関する1927年の論文](10.1021/ja01407a038)が最初とされる（論文中では "free *o*-phenylene"として扱われる）。1942年にはGeorg Wittigの[フェニルリチウムに関する論文](https://doi.org/10.1007/BF01489519)において環内に三重結合を持つアライン（aryne）構造が提案されており、1953年の[John D. Robertsらの実証実験](https://doi.org/10.1021/ja01109a523)に繋がる。Robertsらの発想は本問のコンセプトに近しい。
+> なお、環内に三重結合が存在するのか否かという論争が終結したのは1992年と比較的最近のことであり、同位体置換したベンザインの赤外吸収スペクトルの測定で三重結合による吸収が確認されたことで決着した。
+
+### SP-CHE-P08　高分子化学：多官能モノマー重合におけるゲル化（★★★★）
+
+Consider an ideal step-growth polymerization in which only A-type and B-type functional groups react with each other. The monomers are difunctional $A_2$, difunctional $B_2$, and trifunctional $B_3$. The molecular-number ratio of the B monomers is
+
+$$
+B_2:B_3=9:1.
+$$
+
+The initial number of A functional groups is adjusted to equal the initial number of B functional groups exactly. Assume:
+
+- all functional groups of a given type are equally reactive;
+- reactions occur randomly;
+- there are no intramolecular reactions or cyclic species;
+- the Flory-Stockmayer tree approximation applies;
+- the extents of reaction satisfy $p_A=p_B=p$.
+
+(1) A B functional group is selected at random and followed to the B monomer on which it resides. Show that the mean number of *other* B functional groups on that monomer is
+
+$$
+g_B=
+\frac{\sum_i N_i f_i(f_i-1)}
+{\sum_i N_i f_i},
+$$
+
+and evaluate $g_B$ for the stated $B_2:B_3$ mixture. Explain why the simple molecular-number average functionality is not the correct quantity.
+
+(2) Starting from a branching-process argument, derive the Flory-Stockmayer gel condition for this $A_2$-$B_f$ system,
+
+$$
+p_Ap_Bg_B=1,
+$$
+
+and calculate the critical conversion $p_c$.
+
+(3) Take $9.00\ \mathrm{mol}$ of $B_2$ and $1.00\ \mathrm{mol}$ of $B_3$. Determine the amount of $A_2$ required for exact A/B functional-group stoichiometry. At $p=0.900$, verify whether the system is below or above the gel point. Under the no-cycle assumption, calculate the number-average degree of polymerization
+
+$$
+X_n=
+\frac{\text{initial number of monomer molecules}}
+{\text{number of connected molecular clusters}}
+$$
+
+at this conversion.
+
+(4) Now consider $p=0.960$, which is above the gel point. Define $x_A$ as the probability that following a randomly chosen A functional group away from its parent monomer does not ultimately lead to the infinite gel, and define $x_B$ analogously for a randomly chosen B functional group.
+
+Derive the coupled extinction-probability equations
+
+$$
+x_A
+=1-p+p\left(
+\frac{6}{7}x_B+\frac{1}{7}x_B^2
+\right),
+$$
+
+$$
+x_B=1-p+px_A.
+$$
+
+Solve for the physically relevant solution with $x_A<1$ and $x_B<1$.
+
+(5) Using the solution from part (4), calculate the fraction of all monomer molecules that belong to the infinite gel. For the initial amounts in part (3), use the fact that an $A_2$ molecule is in the sol only if both of its A branches become extinct, a $B_2$ molecule is in the sol only if both of its B branches become extinct, and a $B_3$ molecule is in the sol only if all three of its B branches become extinct.
+
+(6) The equations in part (4) also possess the solution $x_A=x_B=1$, even above the gel point. Explain why the nontrivial solution, rather than the unit solution, gives the physical extinction probabilities above $p_c$. Relate this to the stability of the branching process and to the gel-point criterion derived in part (2).
+
+> 高分子科学に関する問題だが数学的な考察が求められる難問。Flory-Stockmayer理論を用いる。問題文の条件やヒントを読み取る力だけでなく、ゲル化に関する知識の運用能力と数理的な処理能力が求められる。
+
+## 生物学
+
+### SP-BIO-P01　転写活性化とmRNAの安定化（★★★★）
+
+A mammalian gene X is induced by ligand L. Two cis-regulatory elements are suspected to contribute independently to the response: an enhancer E and a sequence U in the 3' untranslated region. A transcription factor A binds E, whereas an RNA-binding protein B binds U.
+
+Nascent RNA was measured with an intronic probe and is assumed to be proportional to the transcription rate. Mature mRNA abundance and mRNA half-life were measured independently. For this problem, treat all measurements as steady-state measurements and assume that the first-order degradation approximation is valid.
+
+The untreated wild-type condition is normalized to 1.0.
+
+| Condition | Nascent RNA (fold) | mRNA half-life, $t_{1/2}$ (min) | Mature mRNA (fold) |
+| --- | ---: | ---: | ---: |
+| WT, no L | 1.0 | 30 | 1.0 |
+| WT + L | 8.0 | 120 | 32 |
+| $\Delta E$ + L | 2.0 | 120 | 8.0 |
+| $U^*$ + L | 8.0 | 30 | 8.0 |
+| $\Delta E\,U^*$ + L | 2.0 | 30 | 2.0 |
+| A depleted + L | 1.2 | 118 | 4.7 |
+| B depleted + L | 7.8 | 32 | 8.3 |
+
+Here, $U^*$ is a mutation that prevents B from binding U but does not alter the coding sequence, polyadenylation site, or transcription termination. Assume that mature mRNA abundance satisfies $M \propto k_{\mathrm{syn}}/k_{\mathrm{deg}}$ and that $k_{\mathrm{deg}} = \ln(2)/t_{1/2}$.
+
+Answer all of the following.
+
+1. Derive an expression for the expected fold change in steady-state mature mRNA relative to untreated WT in terms of the measured nascent-RNA fold change and $t_{1/2}$. Verify quantitatively that the first five rows are mutually consistent with the model.
+
+2. Based only on these data, infer the primary roles of E, U, factor A, and factor B. Distinguish effects on transcription from effects on mRNA degradation.
+
+3. Assume that depletion of A and depletion of B act independently and that simultaneous depletion gives the transcription rate observed with A depletion and the mRNA half-life observed with B depletion. Predict the mature-mRNA fold change after simultaneous depletion of A and B in the presence of L.
+
+4. A researcher measures only mature mRNA and observes an eightfold induction by L in an unknown mutant. Explain why this observation alone cannot distinguish between an approximately eightfold increase in transcription and a smaller transcriptional increase combined with increased mRNA stability. Name one experimental measurement that would distinguish the two mechanisms and explain what it measures.
+
+Give quantitative reasoning where appropriate and explicitly separate conclusions directly supported by the data from assumptions used in the calculation.
+
+
+### SP-BIO-P02　NMDと選択的スプライシングによるmRNA安定性制御（★★★★）
+
+A eukaryotic gene contains six exons. Its normal translation termination codon is located in exon 6. For this problem, use the following simplified rule for nonsense-mediated mRNA decay (NMD):
+
+A translation termination codon triggers NMD if it lies more than 50 nucleotides upstream of at least one exon-exon junction remaining in the mature mRNA.
+
+Assume that exon-junction complexes are deposited normally, transcription rates are identical among all constructs, translation initiation rates are identical unless explicitly stated otherwise, and no other RNA-surveillance pathway is relevant.
+
+The following constructs were analyzed.
+
+WT: the normal termination codon in exon 6.
+
+Construct A: a premature termination codon, PTC, is introduced in exon 4, 90 nucleotides upstream of the exon 4-exon 5 junction.
+
+Construct B: the same PTC as in A is present, but exon 5 is skipped. In the resulting mature RNA, the PTC lies 35 nucleotides upstream of the exon 4-exon 6 junction. Exon skipping does not otherwise alter RNA stability.
+
+Construct C: a PTC is introduced in exon 6, 80 nucleotides upstream of the normal termination codon. There is no exon-exon junction downstream of this PTC.
+
+Construct D: identical to construct A, but UPF1 is strongly depleted.
+
+Measured mRNA half-lives are:
+
+| Construct | $t_{1/2}$ (min) |
+| --- | ---: |
+| WT | 180 |
+| A | 24 |
+| B | 165 |
+| C | 170 |
+| D | 155 |
+
+Answer all of the following.
+
+1. For each of A, B, and C, predict whether the transcript should be an NMD substrate according to the rule given above. Explain how alternative splicing changes the NMD status of B relative to A.
+
+2. Assuming equal transcription rates and first-order degradation, calculate the expected steady-state mRNA abundance of A, B, C, and D relative to WT. Use $M \propto t_{1/2}$ under the stated assumptions.
+
+3. Explain why depletion of UPF1 strongly stabilizes construct A. Then predict what should happen to the abundance of the truncated protein encoded by A after UPF1 depletion, assuming that the truncated polypeptide itself is stable.
+
+4. A short treatment with a translation-elongation inhibitor is applied immediately before an RNA-decay experiment. Predict the qualitative effect on the measured decay of construct A and explain why NMD is translation-dependent.
+
+5. Finally, consider a mutant cell in which exon-junction-complex deposition is abolished but transcription, splicing, nuclear export, and translation are otherwise normal. Predict qualitatively the mRNA abundance and truncated-protein production from construct A. State clearly which part of your answer follows from the simplified NMD rule and which part requires the additional assumptions given in the problem.
+
+### SP-BIO-P03　転写減衰における翻訳とRNA二次構造の連動（★★★★）
+
+Consider a bacterial biosynthetic operon regulated by transcription attenuation in its leader region. Transcription from the promoter itself occurs at the same rate under all conditions in this problem, so only attenuation needs to be considered.
+
+The leader RNA contains four consecutive sequence regions, designated 1, 2, 3, and 4. The following mutually exclusive RNA structures can form:
+
+- region 1 can pair with region 2;
+- region 2 can pair with region 3;
+- region 3 can pair with region 4.
+
+The 3-4 structure is an intrinsic transcription terminator. The 2-3 structure is an antiterminator and prevents formation of the 3-4 terminator.
+
+A short leader peptide is translated while the leader RNA is being transcribed. Region 1 contains two adjacent tryptophan codons. Assume the following behavior.
+
+When charged $tRNA^{Trp}$ is abundant, the ribosome rapidly translates through the tryptophan codons and occupies region 2 when region 3 becomes available.
+
+When charged $tRNA^{Trp}$ is scarce, the ribosome stalls at the tryptophan codons in region 1, leaving region 2 available to pair with region 3.
+
+All other charged tRNAs are abundant unless stated otherwise.
+
+For each genotype below, predict whether transcription of the downstream structural genes will be predominantly HIGH or LOW under both high-tryptophan and low-tryptophan conditions.
+
+Genotypes:
+
+A. WT.
+
+B. The start codon of the leader peptide is destroyed, so no ribosome initiates translation of the leader.
+
+C. The two tryptophan codons are replaced by phenylalanine codons. Charged $tRNA^{Phe}$ remains abundant even under low-tryptophan conditions.
+
+D. Region 4 is mutated so that the 3-4 terminator cannot form, while all other pairings remain possible.
+
+E. Region 2 is mutated specifically so that 2-3 pairing cannot occur, while 1-2 and 3-4 pairing remain possible.
+
+Answer all of the following.
+
+1. Construct a table giving HIGH or LOW downstream transcription for genotypes A-E under high and low tryptophan.
+
+2. For each genotype, explain the ribosome position and the RNA secondary structure that determine the result.
+
+3. Explain why genotype B is not expected to behave like a permanently starved cell, even though no ribosome can translate through the tryptophan codons.
+
+4. Suppose the intracellular tryptophan concentration is high but the enzyme that charges $tRNA^{Trp}$ is partially inhibited, causing charged $tRNA^{Trp}$ to become limiting. Predict the response of the WT attenuator and explain whether the attenuator senses free tryptophan directly or instead senses the translation status associated with charged $tRNA^{Trp}$.
+
+Your answer must distinguish promoter activity from attenuation-mediated transcriptional readthrough.
+
+
+### SP-BIO-P04　糖鎖修飾とプロテアーゼ保護から推定する膜タンパク質トポロジー（★★★★）
+
+A 420-amino-acid eukaryotic membrane protein is synthesized in the presence of sealed rough-ER microsomes.
+
+The protein contains:
+
+- a cleavable N-terminal signal peptide at residues 1-25;
+- a hydrophobic segment H1 at residues 180-202;
+- a hydrophobic segment H2 at residues 300-322;
+- potential N-linked glycosylation sequons centered at residues 90, 250, and 350.
+
+For this problem, assume that N-linked glycosylation occurs only when a sequon is exposed to the ER lumen during translocation, that the microsomal membrane is impermeable to externally added protease, and that protease completely digests any sufficiently exposed cytosolic polypeptide.
+
+The following results are obtained.
+
+For WT protein:
+
+- the N-terminal signal peptide is cleaved;
+- the sequons at residues 90 and 350 are glycosylated;
+- the sequon at residue 250 is not glycosylated;
+- treatment of intact microsomes with protease removes most of the segment between H1 and H2, but protected fragments containing residue 90 and residue 350 remain;
+- addition of detergent together with protease causes complete digestion.
+
+A second construct lacks H2 but is otherwise unchanged. In this construct:
+
+- residue 90 remains glycosylated;
+- residues 250 and 350 are not glycosylated;
+- essentially all residues C-terminal to H1 are protease-sensitive in intact microsomes.
+
+Answer all of the following.
+
+1. Infer the membrane topology of WT protein after cleavage of the signal peptide. State whether each of the following regions is lumenal, transmembrane, or cytosolic: residues 26-179, H1, residues 203-299, H2, and residues 323-420.
+
+2. Identify which internal hydrophobic segment acts as a stop-transfer sequence and which acts as a start-transfer sequence. Explain how the glycosylation results support your assignment.
+
+3. Explain why the sequon at residue 250 is not glycosylated even though the protein enters the ER and contains an intact glycosylation consensus sequence.
+
+4. Predict the location of the C terminus and the glycosylation state of residue 350 when H2 is deleted. Explain why these predictions agree with the protease-protection result.
+
+5. How many membrane-spanning segments are present in the mature WT protein after signal-peptide cleavage? Explain why the cleaved N-terminal signal peptide should not be counted as a membrane-spanning segment of the mature protein.
+
+Your reasoning must use both the glycosylation data and the protease-protection data; an answer based only on hydrophobic-sequence positions is insufficient.
+
+### SP-BIO-P05　生存選択補正を伴う三点交雑連鎖解析（★★★★★）
+
+Three genes, A/a, B/b, and C/c, are located on the same chromosome. A female heterozygous for all three loci has the parental haplotypes $ABC/abc$ and is testcrossed to an $abc/abc$ individual.
+
+The resulting offspring are classified according to the gamete produced by the heterozygous parent. However, genotype-dependent viability selection occurs after fertilization.
+
+Offspring that are homozygous recessive at both locus A and locus C, i.e. $a/a;c/c$, survive to the time of scoring with probability $1/2$, whereas all other offspring survive with probability 1.
+
+Assume that viability depends only on this joint A-C genotype and is otherwise independent of genotype and meiotic recombination.
+
+The observed numbers of surviving offspring are:
+
+| Gamete from heterozygous parent | Observed survivors |
+| --- | ---: |
+| $ABC$ | 344 |
+| $abc$ | 170 |
+| $Abc$ | 80 |
+| $aBC$ | 80 |
+| $ABc$ | 70 |
+| $abC$ | 70 |
+| $AbC$ | 8 |
+| $aBc$ | 4 |
+
+Answer all of the following.
+
+1. Determine which gamete classes produce offspring subject to the viability penalty. Correct the observed survivor counts to estimate the numbers of zygotes originally produced in all eight classes, and confirm the corrected total.
+
+2. Using the corrected counts, identify the two parental classes and the two double-crossover classes. Determine the gene order.
+
+3. Calculate the recombination fraction and map distance for each of the two adjacent intervals. Express the map distances in centimorgans.
+
+4. Calculate the recombination fraction between the two outer genes directly from the corrected offspring classes. Explain why this recombination fraction is not equal to the sum of the two adjacent map distances.
+
+5. Under the assumption that crossovers in the two adjacent intervals occur independently, calculate the expected number of double-crossover progeny from the corrected data. From the observed corrected number of double crossovers, calculate the coefficient of coincidence and interference, using $$\text{coefficient of coincidence}=\dfrac{\text{observed DCO}}{\text{expected DCO}}$$ and $$\text{interference}=1-\text{coefficient of coincidence}.$$
+
+6. Now deliberately ignore viability selection and repeat the linkage calculations using the observed survivor counts directly. Calculate the apparent recombination fractions for the two adjacent intervals and for the two outer genes. Also calculate the apparent coefficient of coincidence and interference.
+
+7. Compare the corrected and uncorrected results quantitatively. Explain why genotype-dependent viability selection distorts the linkage estimates in this experiment. Your explanation should identify which reciprocal classes are affected unequally and why post-fertilization selection can be mistaken for an altered meiotic recombination pattern.
+
+Show all calculations.
+
+
+### SP-BIO-P06　Shhシグナルの濃度・時間依存性とエピスタシス（★★★）
+
+Consider an idealized vertebrate neural-tube system in which Sonic Hedgehog, Shh, specifies ventral neural progenitor identities through Smoothened, Smo, and Gli-dependent transcription.
+
+For this problem, assume the causal signaling pathway is to be inferred from the experimental data rather than simply assumed. Also assume that no secondary signaling pathway from neighboring cells affects the stated cell fates.
+
+Three mutually exclusive progenitor states are monitored:
+
+Pax7-positive: dorsal-like state.
+
+Olig2-positive: intermediate ventral state.
+
+Nkx2.2-positive: strongly ventral state.
+
+The following results are obtained after 24 h:
+
+| Condition | Final predominant state |
+| --- | --- |
+| WT, no Shh | Pax7-positive |
+| WT, 2 nM Shh for 24 h | Olig2-positive |
+| WT, 10 nM Shh for 24 h | Nkx2.2-positive |
+| WT, 10 nM Shh for 4 h, then washout for 20 h | Olig2-positive |
+| WT, 10 nM Shh for 12 h, then washout for 12 h | Nkx2.2-positive |
+| $Smo^{-/-}$, 10 nM Shh for 24 h | Pax7-positive |
+| $Smo^{-/-}$, no Shh, constitutively active GliA induced for 12 h | Nkx2.2-positive |
+| WT, Smo agonist for 24 h plus dominant-negative Gli that blocks Gli-dependent transcription | Pax7-positive |
+
+Answer all of the following.
+
+1. Use the genetic and pharmacological perturbations to infer the causal order among Shh, Smo, and Gli-dependent transcription. Identify which observations provide the relevant epistasis evidence.
+
+2. Explain why a model in which cell fate depends only on the instantaneous Shh concentration is insufficient. Also explain why a model in which cell fate depends only on exposure duration, irrespective of concentration, is insufficient.
+
+3. Based on the data, formulate the simplest qualitative model that accounts for both Shh concentration and duration of signaling in specifying Olig2-positive versus Nkx2.2-positive states. You do not need to propose a detailed molecular mechanism.
+
+4. Consider a small $Smo^{-/-}$ clone surrounded by WT cells in a region continuously exposed to 10 nM extracellular Shh. Under the assumptions of this problem, predict the predominant fate of the mutant clone and explain whether the defect is cell-autonomous with respect to Shh signal transduction.
+
+5. Now suppose constitutively active GliA is induced in that $Smo^{-/-}$ clone for only 4 h. Can the final fate of the clone be uniquely predicted from the data provided? Answer either yes or no and justify your answer. Do not assume that 4 h of GliA activity is equivalent to 4 h of 10 nM Shh unless the data establish that equivalence.
+
+6. A student concludes that the 10 nM Shh, 12 h experiment proves that extracellular Shh concentration alone irreversibly specifies the Nkx2.2-positive fate. Identify the logical error in this conclusion.
+
+Distinguish conclusions that are directly supported by the experiments from mechanistic interpretations that remain underdetermined.
+
+### SP-BIO-P07　腎クリアランス・尿細管輸送と輸送最大（★★★）
+
+An idealized renal physiology experiment is performed in a healthy adult. The following quantities are measured during a steady-state urine collection.
+
+Urine flow rate:
+
+$V = 1.00\ \mathrm{mL/min}$
+
+For any substance X, clearance is defined as
+
+$C_X = U_X V/P_X$,
+
+where $U_X$ is the urine concentration and $P_X$ is the plasma concentration.
+
+The measurements are:
+
+| Substance | Plasma concentration $P_X$ | Urine concentration $U_X$ |
+| --- | ---: | ---: |
+| Inulin | $0.25\ \mathrm{mg/mL}$ | $30.0\ \mathrm{mg/mL}$ |
+| PAH | $0.020\ \mathrm{mg/mL}$ | $10.8\ \mathrm{mg/mL}$ |
+| Glucose | $3.00\ \mathrm{mg/mL}$ | $60.0\ \mathrm{mg/mL}$ |
+
+Assume:
+
+- inulin is freely filtered and is neither reabsorbed nor secreted;
+- PAH is filtered and secreted, and its renal extraction ratio is $E_{\mathrm{PAH}}=0.90$;
+- hematocrit is $0.40$;
+- glucose is freely filtered;
+- at the stated plasma glucose concentration, glucose reabsorption has reached its transport maximum;
+- ignore nephron heterogeneity and transport splay.
+
+Answer all of the following.
+
+1. Calculate the glomerular filtration rate, GFR, from the inulin clearance.
+
+2. Calculate the effective renal plasma flow from PAH clearance. Then correct for the PAH extraction ratio to obtain the true renal plasma flow.
+
+3. Calculate renal blood flow from the true renal plasma flow and hematocrit.
+
+4. Calculate the filtration fraction using the true renal plasma flow.
+
+5. Calculate the filtered load, urinary excretion rate, and tubular reabsorption rate of glucose. From these values, determine the glucose transport maximum, $T_m$, under the assumptions of the problem.
+
+6. A drug reduces the glucose $T_m$ to $180\ \mathrm{mg/min}$ without changing GFR, plasma glucose concentration, or urine flow rate. Under the idealized no-splay assumption, calculate the new urinary glucose excretion rate and urine glucose concentration.
+
+7. Explain mechanistically why PAH clearance can substantially exceed GFR, whereas inulin clearance equals GFR. Also explain why PAH clearance must be corrected when the extraction ratio is less than 1.
+
+Show all calculations with units.
+
+
+### SP-BIO-P08　塩化物イオン恒常性とGABA作用の発達的極性転換（★★★）
+
+Consider two neurons that differ only in their intracellular chloride concentration. Ignore bicarbonate permeability and treat all conductances as ohmic.
+
+At $37^\circ\mathrm{C}$, use
+
+```math
+E_{\mathrm{Cl}}=-61.5\log_{10}\left(\frac{[\mathrm{Cl}^-]_{\mathrm{out}}}{[\mathrm{Cl}^-]_{\mathrm{in}}}\right)\ \mathrm{mV}.
+```
+
+The extracellular chloride concentration is
+
+$[\mathrm{Cl}^-]_{\mathrm{out}}=120\ \mathrm{mM}$.
+
+The two neurons are:
+
+Neuron I: $[\mathrm{Cl}^-]_{\mathrm{in}}=30\ \mathrm{mM}$.
+
+Neuron M: $[\mathrm{Cl}^-]_{\mathrm{in}}=6\ \mathrm{mM}$.
+
+Assume fixed potassium and sodium reversal potentials
+
+$E_K=-90\ \mathrm{mV}$
+
+and
+
+$E_{Na}=+60\ \mathrm{mV}$.
+
+Before GABA is applied, the membrane conductances are
+
+$g_K=20\ \mathrm{nS}$,
+
+$g_{Na}=2\ \mathrm{nS}$,
+
+and
+
+$g_{\mathrm{Cl}}=3\ \mathrm{nS}$.
+
+Approximate the steady membrane potential by $$V_m=\dfrac{g_KE_K+g_{Na}E_{Na}+g_{\mathrm{Cl}}E_{\mathrm{Cl}}}{g_K+g_{Na}+g_{\mathrm{Cl}}}.$$
+
+Activation of GABA_A receptors adds a chloride conductance of $20\ \mathrm{nS}$, so that total $g_{\mathrm{Cl}}$ becomes $23\ \mathrm{nS}$. Assume an action-potential threshold of $-60\ \mathrm{mV}$.
+
+Answer all of the following.
+
+1. Calculate $E_{\mathrm{Cl}}$ for neuron I and neuron M.
+
+2. Calculate the resting $V_m$ of each neuron before GABA application.
+
+3. Calculate the new steady $V_m$ of each neuron during strong GABA_A-receptor activation.
+
+4. Under the assumptions of this model, determine whether GABA is depolarizing or hyperpolarizing in each neuron and whether GABA alone is predicted to move the membrane potential beyond the stated action-potential threshold.
+
+5. For each neuron, determine the net direction of chloride-ion movement immediately after GABA_A channels open at the pre-GABA resting potential. Explain your answer in terms of the relationship between $V_m$ and $E_{\mathrm{Cl}}$.
+
+6. In many developing neurons, expression of chloride transporters changes so that intracellular chloride decreases with maturation. Explain how such a change can convert GABA_A-receptor signaling from depolarizing to hyperpolarizing without changing the ion selectivity of the GABA_A receptor itself.
+
+7. Suppose a mature neuron undergoes strong inhibition of a chloride-exporting transporter and its intracellular chloride concentration gradually approaches $30\ \mathrm{mM}$ while all other parameters remain unchanged. Predict the qualitative change in the effect of GABA and explain why this is a change in the chloride electrochemical gradient rather than a change in receptor identity.
+
+Round membrane potentials to approximately $0.1\ \mathrm{mV}$ where appropriate.
+
+> 電位の計算ミスに注意する。
+
+
+# ボツ問題
+
+### SP-NUM-P0x: オリジナル出題（★★）
+
+Let $r$ be an integer with $10\le r\le 98$, and let $N$ be the four-digit integer obtained by concatenating the two-digit decimal representations of $r$ and $r+1$ in that order. Thus, $$N=100r+(r+1)=101r+1.$$ Suppose that $$N=pq$$ for primes $p<q$, and that there is no prime strictly between $p$ and $q$; equivalently, $p$ and $q$ are consecutive primes.
+
+Find all integers $N$ satisfying these conditions.
+
+> 単純な総当たりの計算問題なのでChatGPTに却下されてしまった。余談だが、$r$が2桁であるという制約を外せば$$r=794018604377235322848433897872605582$$という巨大な例が知られている。$r$と$r+1$を連結してできる数$$794018604377235322848433897872605582794018604377235322848433897872605583$$は$$891077215721081784886888257701070827$$および$$891077215721081784886888257701070829$$という双子素数の積で表される。
+> 
+> 参考：
+> https://math.stackexchange.com/questions/3961535/a-2021-problem-20-sim-21-and-43-times-47​
+
+
+### SP-NUM-P0y: IMO 2022 決勝 P5（★★★★）
+
+Find all triples $(a,b,p)$ of positive integers with $p$ prime and $$a^p=b!+p.$$
+
+> ChatGPTから「IMO 2022 Problem 5 そのもの」であり学習データ汚染のリスクがかなり高い上、「2022年IMOでは平均得点が 3.52/7、589人中171人が満点でした。したがってIMOのProblem 5としては十分難しいものの、極端な最難関というほどではありません」との指摘を受け、差し替えた。
+
+### SP-ANL-P0x: 東京大学 2024 前期 文科 P2（★）
+
+Answer the following questions. You may use the fact that $0.3<\log_{10}2<0.31$ if necessary.
+
+(1) Find the smallest positive integer $n$ such that $5^n>10^{19}$.
+
+(2) Find the smallest positive integer $m$ such that $5^m+4^m>10^{19}$.
+
+> 簡単すぎて差がつかないため問題を差し替えた。
+
+

@@ -1,0 +1,39 @@
+---
+layout: "qiita-mirror"
+title: "Linux mint入りのSSDを追加してWindowsとデュアルブートする"
+qiita_id: "3e83d9b0a908fb6bcf50"
+qiita_url: "https://qiita.com/h-nabata/items/3e83d9b0a908fb6bcf50"
+qiita_created: "2022-06-15T14:01:36+09:00"
+qiita_updated: "2022-06-15T14:01:36+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "計算環境・Linux"
+mirror_tags: ["grub", "Linux_Mint", "デュアルブート", "Bootloader"]
+permalink: "/qiita/3e83d9b0a908fb6bcf50.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="1:1-1:208">Windows環境がインストールされたデスクトップPCに、Linux mint環境をインストールしたSSDを新たに付け足してデュアルブートできるようにした際のメモです。</p>
+<blockquote data-sourcepos="3:1-7:4">
+<p data-sourcepos="3:3-3:81">マザーボードはASRock製で、biosのバージョンは以下の通り。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="4:2-7:4"><div class="highlight"><pre><code>SMBIOSBIOSVersion
+P1.40
+</code></pre></div></div>
+</blockquote>
+<p data-sourcepos="9:1-9:235">SSDとマザーボードを接続するSATAケーブルはマザーボードの付属品を使い、SSDに電力を供給する電源ケーブルは電源ユニットの付属品を使います（無ければ新たに調達する）。</p>
+<p data-sourcepos="11:1-11:71">SSDをPC本体に追加した後、以下の手順を実行します。</p>
+<ol data-sourcepos="13:1-18:0">
+<li data-sourcepos="13:1-13:27">F2キーでbiosを開く</li>
+<li data-sourcepos="14:1-14:102">アドバンスド（Advanced）のタブへ移動 → SATAコントローラを「AHCI」にする</li>
+<li data-sourcepos="15:1-15:164">起動（Boot）のタブへ移動 → 起動優先順位について、ブートドライブ #1 を Linux mint にする（#2 は自動的にWindowsになる）</li>
+<li data-sourcepos="16:1-16:217">Linux mint 環境を立ち上げ、ターミナルを起動して <code>sudo update-grub</code> を実行して grub（Linuxのブートローダー）を更新する（これでgrubが既存のWindows環境を認識する）</li>
+<li data-sourcepos="17:1-18:0">Linux mint 環境をシャットダウンしてからPCを起動してブート画面が表示されれば成功</li>
+</ol>
+<p data-sourcepos="19:1-19:152">ブート画面で起動するOSを十字キーで選択できます。このように、別ディスクでのデュアルブートはお手軽です。</p>
+<blockquote data-sourcepos="21:1-21:104">
+<p data-sourcepos="21:3-21:104">未設定のシステムを選択してしまった場合は Ctrl + Alt + Del で抜けられます。</p>
+</blockquote>
+
+</div>
+
+
+{% endraw %}

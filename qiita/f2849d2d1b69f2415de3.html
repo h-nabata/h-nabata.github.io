@@ -1,0 +1,357 @@
+---
+layout: "qiita-mirror"
+title: "Julia初心者がJuliaをさわってみた"
+qiita_id: "f2849d2d1b69f2415de3"
+qiita_url: "https://qiita.com/h-nabata/items/f2849d2d1b69f2415de3"
+qiita_created: "2020-09-17T14:04:11+09:00"
+qiita_updated: "2021-12-15T16:03:39+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "プログラミング・可視化"
+mirror_tags: ["Julia"]
+permalink: "/qiita/f2849d2d1b69f2415de3.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="1:1-3:85">Windowsユーザー＆Julia触りたての方（Pythonはある程度使える想定）向けのメモです。<br>
+使用しているJuliaは<strong>v1.5.1</strong>で、エディタは<strong>Atom</strong>を使っています。<br>
+【2021/12/15加筆；v1.7.0でも同様に動作することを確認しました】</p>
+<h1 data-sourcepos="5:1-5:43">
+<span id="プログラミング言語julia" class="fragment"></span><a href="#%E3%83%97%E3%83%AD%E3%82%B0%E3%83%A9%E3%83%9F%E3%83%B3%E3%82%B0%E8%A8%80%E8%AA%9Ejulia"><i class="fa fa-link"></i></a>・プログラミング言語「Julia」</h1>
+<p data-sourcepos="7:1-7:609">「<a href="https://julialang.org" rel="nofollow noopener" target="_blank"><strong>Julia</strong></a>」は2012年に公開された比較的若いプログラミング言語で、Pythonのような書きやすさとCのような処理（計算）速度を兼ね備えた次世代を担う言語と目されています。Juliaは数値計算やfor文の処理がPythonに比べて格段に速く、機械学習関係のライブラリも整備されつつあります。最近ではJuliaの日本語版解説本が出版されるなど、じわじわと脚光を浴びており、10年も経てばPython並みにメジャーな言語になると期待されています。</p>
+<blockquote data-sourcepos="9:1-10:439">
+<p data-sourcepos="9:2-10:439">(※注)<br>
+Pythonのライブラリは充実し過ぎているため、Juliaのライブラリの少なさが目に付くことも少なくありません。しかし、Pythonが今年で大体20歳を迎えるのに対してJuliaはまだ8歳くらいですし、開発コミュニティの規模を考えれば見劣りするのはある程度仕方がないと言えます。Juliaのライブラリは今後充実してくることでしょう。</p>
+</blockquote>
+<p data-sourcepos="12:1-12:607">使用人口の少ない今こそJuliaを習得する好機！ということで、今回はテキストエディタ「<a href="https://atom.io/" rel="nofollow noopener" target="_blank"><strong>Atom</strong></a>」でJuliaを動かしてみることにします。Atomは<a href="https://atom.io/" rel="nofollow noopener" target="_blank"><strong>公式サイト</strong></a>からダウンロードできます。この記事ではAtomについては深く立ち入りません。Atomの詳しい使い方や設定方法については「<a href="https://qiita.com/spiegel-im-spiegel/items/3d41d98dacc107d73431" id="reference-af3e0605a5a3e6764b41"><strong>ATOM Editor をそろそろ始めようか</strong></a>」に掲載されているブックマーク等を参考にしてみて下さい。</p>
+<blockquote data-sourcepos="14:1-15:140">
+<p data-sourcepos="14:2-15:140">(※注)<br>
+Visual Studio Code の方が扱いやすいという声も多数ありますので、ご自分で色々なIDEを試してみて下さい。</p>
+</blockquote>
+<h1 data-sourcepos="18:1-18:41">
+<span id="juliaの導入環境変数の設定" class="fragment"></span><a href="#julia%E3%81%AE%E5%B0%8E%E5%85%A5%E7%92%B0%E5%A2%83%E5%A4%89%E6%95%B0%E3%81%AE%E8%A8%AD%E5%AE%9A"><i class="fa fa-link"></i></a>・Juliaの導入&amp;環境変数の設定</h1>
+<h3 data-sourcepos="19:1-19:52">
+<span id="atom上でjuliaを動かすまでにやること" class="fragment"></span><a href="#atom%E4%B8%8A%E3%81%A7julia%E3%82%92%E5%8B%95%E3%81%8B%E3%81%99%E3%81%BE%E3%81%A7%E3%81%AB%E3%82%84%E3%82%8B%E3%81%93%E3%81%A8"><i class="fa fa-link"></i></a>Atom上でJuliaを動かすまでにやること</h3>
+<ol data-sourcepos="20:1-23:0">
+<li data-sourcepos="20:1-20:29">Juliaのインストール</li>
+<li data-sourcepos="21:1-21:26">Juliaのパスを通す</li>
+<li data-sourcepos="22:1-23:0">（Atomエディタの場合）パッケージ「language-julia」をインストールする</li>
+</ol>
+<hr data-sourcepos="24:1-25:0">
+<p data-sourcepos="26:1-26:362">Julia本体は<a href="https://julialang.org/downloads/" rel="nofollow noopener" target="_blank"><strong>公式サイト</strong></a>からダウンロード可能です。自分のPC環境に合ったパッケージを選んで下さい。Jupyterを利用されている方は「<a href="https://qiita.com/msekino/items/dbfe11ad05f20fd3efd3" id="reference-ead758658e6163e7a53b"><strong>Juliaの開発環境構築</strong></a>」という記事を参考に導入してみて下さい。</p>
+<blockquote data-sourcepos="28:1-29:76">
+<p data-sourcepos="28:2-29:76">当方のPCの環境は Windows 10 Pro (バージョン 1903) なので、私はWindows用の「64-bit (installer)」を選びました。ダウンロードしたJuliaはv1.5.1です。<br>
+【2021/12/15加筆；v1.7.0でも同様にインストール可能です】</p>
+</blockquote>
+<p data-sourcepos="31:1-31:166">Atomをインストール済みの人は早速動かしてみたくなるでしょうが、そのまま実行すると以下のようなエラーが出てきます。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="33:1-36:3"><div class="highlight"><pre><code>'julia' �́A�����R�}���h�܂��͊O���R�}���h�A
+����\�ȃv���O�����܂��̓o�b�` �t�@�C���Ƃ��ĔF������Ă��܂���B
+</code></pre></div></div>
+<p data-sourcepos="38:1-38:267">これはAtomがjuliaの実行ファイルの置かれた場所を見つけられないために出てくるメッセージです。これを解消するためには、以下のような手順でjulia.exeのパスを環境変数に登録する必要があります。</p>
+<blockquote data-sourcepos="40:1-45:199">
+<p data-sourcepos="40:2-45:199">① コントロールパネルを開く（プログラム → Windowsシステムツール から選択できる）<br>
+② システムとセキュリティ → システム に移動<br>
+③ システムの詳細設定 をクリックしてプロパティを開く<br>
+④「環境設定」をクリック →「環境変数」をクリック<br>
+⑤ ユーザー環境変数の一覧から変数「PATH」（もしくは「Path」）を選択して「編集」ボタンをクリック<br>
+⑥「新規」をクリックして、julia.exeがあるフォルダの絶対パス（「C:\Users\name\AppData\Local\Programs\Julia 1.5.1\bin」など）を入力して、OKボタンをクリック</p>
+</blockquote>
+<p data-sourcepos="47:1-47:97">以上の手順を踏むことで、Atomがjulia.exeを見つけられるようになります。</p>
+<p data-sourcepos="49:1-49:203">この他に、Atom側で「<strong>julia-client</strong>」や「<strong>language-julia</strong>」といったパッケージをインストールしておきます。これで、Atom上でJuliaが使用可能になります。</p>
+<blockquote data-sourcepos="51:1-51:167">
+<p data-sourcepos="51:2-51:167">juliaのバージョン指定が複雑でなければインストール時に「Add to PATH」にチェックを入れてパスに追加しても良いでしょう。</p>
+</blockquote>
+<h1 data-sourcepos="53:1-53:28">
+<span id="juliaを使ってみる" class="fragment"></span><a href="#julia%E3%82%92%E4%BD%BF%E3%81%A3%E3%81%A6%E3%81%BF%E3%82%8B"><i class="fa fa-link"></i></a>・Juliaを使ってみる</h1>
+<p data-sourcepos="55:1-55:110">それでは早速Juliaを動かしてみましょう。使い方の例を簡単に掲載しておきます。</p>
+<h3 data-sourcepos="56:1-56:16">
+<span id="ご挨拶" class="fragment"></span><a href="#%E3%81%94%E6%8C%A8%E6%8B%B6"><i class="fa fa-link"></i></a>・ご挨拶</h3>
+<div class="code-frame" data-lang="Julia" data-sourcepos="58:1-62:3"><div class="highlight"><pre><code><span class="n">println</span><span class="x">(</span><span class="s">"Hello, Julia!"</span><span class="x">)</span>
+<span class="c"># print    改行なし出力</span>
+<span class="c"># println  改行あり出力</span>
+</code></pre></div></div>
+<blockquote data-sourcepos="63:1-63:64">
+<p data-sourcepos="63:2-63:64">print関数やprintln関数で文字列を表示できます。</p>
+</blockquote>
+<div class="code-frame" data-lang="Julia" data-sourcepos="65:1-68:3"><div class="highlight"><pre><code><span class="n">print</span><span class="x">(</span><span class="s">"Hello, "</span><span class="x">);</span> <span class="n">print</span><span class="x">(</span><span class="s">"Julia!"</span><span class="x">)</span>
+<span class="c"># 出力結果は Hello, Julia!</span>
+</code></pre></div></div>
+<blockquote data-sourcepos="69:1-69:80">
+<p data-sourcepos="69:2-69:80">セミコロンで繋げば出力を1行で表示することができます。</p>
+</blockquote>
+<h3 data-sourcepos="71:1-71:19">
+<span id="printf関数" class="fragment"></span><a href="#printf%E9%96%A2%E6%95%B0"><i class="fa fa-link"></i></a>・printf関数</h3>
+<div class="code-frame" data-lang="Julia" data-sourcepos="72:1-77:3"><div class="highlight"><pre><code><span class="k">using</span> <span class="n">Printf</span>
+<span class="n">num</span> <span class="o">=</span> <span class="mi">2020</span>
+<span class="n">str</span> <span class="o">=</span> <span class="s">"hogehoge"</span>
+<span class="nd">@printf</span> <span class="s">"num: %d str: %s"</span> <span class="n">num</span> <span class="n">str</span>
+</code></pre></div></div>
+<p data-sourcepos="78:1-78:156">printf関数は出力フォーマットを制御できる便利な関数ですが、Juliaでは <code>using Printf</code> と書いておかないと使えません。</p>
+<blockquote data-sourcepos="79:1-80:157">
+<p data-sourcepos="79:2-80:157">(※注)<br>
+<code>using printf</code> とパッケージ名を小文字で書いてしまうと <code>Package printf not found in current path</code> と怒られるので要注意です。</p>
+</blockquote>
+<h3 data-sourcepos="82:1-82:33">
+<span id="for文例fizzbuzz" class="fragment"></span><a href="#for%E6%96%87%E4%BE%8Bfizzbuzz"><i class="fa fa-link"></i></a>・for文（例：FizzBuzz）</h3>
+<div class="code-frame" data-lang="Julia" data-sourcepos="84:1-96:3"><div class="highlight"><pre><code><span class="k">for</span> <span class="n">i</span> <span class="k">in</span> <span class="mi">1</span><span class="o">:</span><span class="mi">15</span>
+    <span class="k">if</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">15</span> <span class="o">==</span> <span class="mi">0</span>
+        <span class="n">println</span><span class="x">(</span><span class="s">"fizzbuzz"</span><span class="x">)</span>
+    <span class="k">elseif</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">5</span> <span class="o">==</span> <span class="mi">0</span>
+        <span class="n">println</span><span class="x">(</span><span class="s">"buzz"</span><span class="x">)</span>
+    <span class="k">elseif</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">3</span> <span class="o">==</span> <span class="mi">0</span>
+        <span class="n">println</span><span class="x">(</span><span class="s">"fizz"</span><span class="x">)</span>
+    <span class="k">else</span>
+        <span class="n">println</span><span class="x">(</span><span class="n">i</span><span class="x">)</span>
+    <span class="k">end</span>
+<span class="k">end</span>
+</code></pre></div></div>
+<blockquote data-sourcepos="98:1-98:256">
+<p data-sourcepos="98:2-98:256">Pythonとは異なり、Juliaでは制御構文をインデントで制御する必要はありません。ここでは見やすさのためにインデントを付けてあります。条件分岐は <code>elseif</code> を使い、if文は <code>end</code> で閉じます。</p>
+</blockquote>
+<h3 data-sourcepos="100:1-100:17">
+<span id="1行for文" class="fragment"></span><a href="#1%E8%A1%8Cfor%E6%96%87"><i class="fa fa-link"></i></a>・1行for文</h3>
+<div class="code-frame" data-lang="Julia" data-sourcepos="102:1-104:3"><div class="highlight"><pre><code><span class="k">for</span> <span class="n">n</span> <span class="o">=</span> <span class="mi">1</span><span class="o">:</span><span class="mi">10</span><span class="x">;</span> <span class="n">println</span><span class="x">(</span><span class="n">n</span><span class="x">);</span> <span class="k">end</span>
+</code></pre></div></div>
+<blockquote data-sourcepos="106:1-106:136">
+<p data-sourcepos="106:2-106:136"><code>; end</code> が抜けていると怒られます。Juliaでは必ず構文ブロックを end で締め括らなければなりません。</p>
+</blockquote>
+<h3 data-sourcepos="108:1-108:31">
+<span id="文字列の取り扱い" class="fragment"></span><a href="#%E6%96%87%E5%AD%97%E5%88%97%E3%81%AE%E5%8F%96%E3%82%8A%E6%89%B1%E3%81%84"><i class="fa fa-link"></i></a>・文字列の取り扱い</h3>
+<div class="code-frame" data-lang="Julia" data-sourcepos="109:1-116:3"><div class="highlight"><pre><code><span class="n">str</span> <span class="o">=</span> <span class="s">"Hello, World!"</span>
+<span class="n">println</span><span class="x">(</span><span class="n">str</span><span class="x">)</span>
+<span class="n">println</span><span class="x">(</span><span class="n">str</span><span class="x">[</span><span class="mi">1</span><span class="o">:</span><span class="mi">5</span><span class="x">])</span> <span class="c"># スライス表記</span>
+<span class="n">println</span><span class="x">(</span><span class="n">str</span><span class="x">[</span><span class="k">end</span><span class="o">-</span><span class="mi">5</span><span class="o">:</span><span class="k">end</span><span class="x">])</span> <span class="c"># 末尾の6文字を表示</span>
+<span class="n">println</span><span class="x">(</span><span class="n">lowercase</span><span class="x">(</span><span class="n">str</span><span class="x">))</span> <span class="c"># 小文字に変換</span>
+<span class="n">println</span><span class="x">(</span><span class="n">uppercase</span><span class="x">(</span><span class="n">str</span><span class="x">))</span> <span class="c"># 大文字に変換</span>
+</code></pre></div></div>
+<blockquote data-sourcepos="117:1-117:73">
+<p data-sourcepos="117:2-117:73">後ろから$n$番目という指定は <code>[end-(n-1)]</code> で可能です。</p>
+</blockquote>
+<h3 data-sourcepos="119:1-119:16">
+<span id="リスト" class="fragment"></span><a href="#%E3%83%AA%E3%82%B9%E3%83%88"><i class="fa fa-link"></i></a>・リスト</h3>
+<div class="code-frame" data-lang="Julia" data-sourcepos="120:1-128:3"><div class="highlight"><pre><code><span class="n">fruits</span> <span class="o">=</span> <span class="x">[</span><span class="s">"apple"</span><span class="x">,</span> <span class="s">"banana"</span><span class="x">,</span> <span class="s">"cherry"</span><span class="x">]</span>
+<span class="n">println</span><span class="x">(</span><span class="n">fruits</span><span class="x">[</span><span class="mi">1</span><span class="x">])</span>
+<span class="c"># 出力結果は apple</span>
+<span class="n">println</span><span class="x">(</span><span class="n">fruits</span><span class="x">[</span><span class="k">end</span><span class="o">-</span><span class="mi">1</span><span class="x">])</span>
+<span class="c"># 出力結果は banana</span>
+<span class="n">println</span><span class="x">(</span><span class="n">fruits</span><span class="x">[</span><span class="k">end</span><span class="o">-</span><span class="mi">1</span><span class="o">:</span><span class="k">end</span><span class="x">])</span>
+<span class="c"># 出力結果は ["banana", "cherry"] というリスト</span>
+</code></pre></div></div>
+<blockquote data-sourcepos="129:1-129:73">
+<p data-sourcepos="129:2-129:73">listのindexは0からではなく<strong>1</strong>からなので要注意です。</p>
+</blockquote>
+<h3 data-sourcepos="131:1-131:20">
+<span id="2次元配列" class="fragment"></span><a href="#2%E6%AC%A1%E5%85%83%E9%85%8D%E5%88%97"><i class="fa fa-link"></i></a>・2次元配列</h3>
+<div class="code-frame" data-lang="Julia" data-sourcepos="132:1-136:3"><div class="highlight"><pre><code><span class="n">array</span> <span class="o">=</span> <span class="x">[</span><span class="mi">1</span> <span class="mi">2</span><span class="x">;</span> <span class="mi">3</span> <span class="mi">4</span><span class="x">;</span> <span class="mi">5</span> <span class="mi">6</span><span class="x">]</span>
+<span class="n">println</span><span class="x">(</span><span class="n">array</span><span class="x">[</span><span class="mi">3</span><span class="x">,</span><span class="mi">2</span><span class="x">])</span>
+<span class="c"># 出力結果は 6</span>
+</code></pre></div></div>
+<blockquote data-sourcepos="137:1-137:164">
+<p data-sourcepos="137:2-137:164">Pythonなどでは <code>array = [[1, 2], [3, 4], [5, 6]]</code> と書きますが、Juliaでは要素(列)は空白で区切り、行はセミコロンで区切ります。</p>
+</blockquote>
+<h3 data-sourcepos="140:1-140:28">
+<span id="日本語の変数名" class="fragment"></span><a href="#%E6%97%A5%E6%9C%AC%E8%AA%9E%E3%81%AE%E5%A4%89%E6%95%B0%E5%90%8D"><i class="fa fa-link"></i></a>・日本語の変数名</h3>
+<div class="code-frame" data-lang="Julia" data-sourcepos="141:1-146:3"><div class="highlight"><pre><code><span class="n">数字1</span> <span class="o">=</span> <span class="mi">3</span>
+<span class="n">数字2</span> <span class="o">=</span> <span class="mi">5</span>
+<span class="n">足し算</span> <span class="o">=</span> <span class="n">数字1</span> <span class="o">+</span> <span class="n">数字2</span>
+<span class="n">println</span><span class="x">(</span><span class="n">足し算</span><span class="x">)</span>
+</code></pre></div></div>
+<blockquote data-sourcepos="147:1-147:120">
+<p data-sourcepos="147:2-147:120">Juliaでは変数名に日本語を含められます。…が、個人的にはあまり使いたくありません。</p>
+</blockquote>
+<h3 data-sourcepos="149:1-149:13">
+<span id="関数" class="fragment"></span><a href="#%E9%96%A2%E6%95%B0"><i class="fa fa-link"></i></a>・関数</h3>
+<div class="code-frame" data-lang="Julia" data-sourcepos="150:1-175:3"><div class="highlight"><pre><code><span class="c"># 試し割り法による素因数分解</span>
+<span class="k">function</span><span class="nf"> factorization</span><span class="x">(</span><span class="n">n</span><span class="x">)</span>
+    <span class="n">a</span> <span class="o">=</span> <span class="x">[]</span>
+    <span class="k">while</span> <span class="n">n</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span>
+        <span class="n">push!</span><span class="x">(</span><span class="n">a</span><span class="x">,</span><span class="mi">2</span><span class="x">)</span>
+        <span class="n">n</span> <span class="o">//=</span> <span class="mi">2</span>
+    <span class="k">end</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="mi">3</span>
+    <span class="k">while</span> <span class="n">p</span> <span class="o">*</span> <span class="n">p</span> <span class="o">&lt;=</span> <span class="n">n</span>
+        <span class="k">if</span> <span class="n">n</span> <span class="o">%</span> <span class="n">p</span> <span class="o">==</span> <span class="mi">0</span>
+            <span class="n">push!</span><span class="x">(</span><span class="n">a</span><span class="x">,</span><span class="n">p</span><span class="x">)</span>
+            <span class="n">n</span> <span class="o">//=</span> <span class="n">p</span>
+        <span class="k">else</span>
+            <span class="n">p</span> <span class="o">+=</span> <span class="mi">2</span>
+        <span class="k">end</span>
+    <span class="k">end</span>
+    <span class="k">if</span> <span class="n">n</span> <span class="o">!=</span> <span class="mi">1</span>
+        <span class="n">push!</span><span class="x">(</span><span class="n">a</span><span class="x">,</span><span class="n">n</span><span class="x">)</span>
+    <span class="k">end</span>
+    <span class="k">return</span> <span class="n">a</span>
+<span class="k">end</span>
+
+<span class="n">println</span><span class="x">(</span><span class="n">factorization</span><span class="x">(</span><span class="mi">2020</span><span class="x">))</span>
+<span class="c"># 出力結果は Any[2, 2, 5, 101//1]</span>
+</code></pre></div></div>
+<blockquote data-sourcepos="177:1-177:283">
+<p data-sourcepos="177:2-177:283">JuliaではPythonに比べてloop処理が数段速く実行できます。Pythonとは逆に、Juliaではベクトル化せずにloopを回す方が一般に速く処理できます。検索すればその辺りのベンチマークテスト結果などが色々出てきます。</p>
+</blockquote>
+<blockquote data-sourcepos="179:1-179:133">
+<p data-sourcepos="179:2-179:133">数学関数については<a href="https://docs.julialang.org/en/v1/base/math/" rel="nofollow noopener" target="_blank"><strong>公式ページ</strong></a>に詳しく記載されています。</p>
+</blockquote>
+<h3 data-sourcepos="181:1-181:25">
+<span id="ファイル処理" class="fragment"></span><a href="#%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E5%87%A6%E7%90%86"><i class="fa fa-link"></i></a>・ファイル処理</h3>
+<div class="code-frame" data-lang="Julia" data-sourcepos="182:1-199:3"><div class="highlight"><pre><code><span class="c"># ファイルへの書き出し</span>
+<span class="n">open</span><span class="x">(</span><span class="s">"output.txt"</span><span class="x">,</span> <span class="s">"w"</span><span class="x">)</span> <span class="k">do</span> <span class="n">f</span> <span class="c"># ファイルを書き込みモードで開く</span>
+    <span class="k">for</span> <span class="n">n</span> <span class="o">=</span> <span class="mi">0</span><span class="o">:</span><span class="mi">9</span>
+        <span class="n">println</span><span class="x">(</span><span class="n">f</span><span class="x">,</span> <span class="n">n</span><span class="x">)</span>
+    <span class="k">end</span>
+<span class="k">end</span> <span class="c"># ファイルを閉じる</span>
+
+<span class="c"># 改行の削除</span>
+<span class="n">open</span><span class="x">(</span><span class="s">"output.txt"</span><span class="x">,</span> <span class="s">"r"</span><span class="x">)</span> <span class="k">do</span> <span class="n">f1</span> <span class="c"># 読み込みモードで開く</span>
+    <span class="n">lines</span> <span class="o">=</span> <span class="n">readlines</span><span class="x">(</span><span class="n">f1</span><span class="x">)</span>
+    <span class="n">open</span><span class="x">(</span><span class="s">"output2.txt"</span><span class="x">,</span> <span class="s">"w"</span><span class="x">)</span> <span class="k">do</span> <span class="n">f2</span> <span class="c"># 書き込みモードで開く</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="k">in</span> <span class="n">lines</span>
+            <span class="n">print</span><span class="x">(</span><span class="n">f2</span><span class="x">,</span><span class="n">line</span><span class="x">)</span> <span class="c"># print()を使えば改行コードが入らない</span>
+        <span class="k">end</span>
+    <span class="k">end</span> <span class="c"># f2を閉じる</span>
+<span class="k">end</span> <span class="c"># f1を閉じる</span>
+</code></pre></div></div>
+<blockquote data-sourcepos="201:1-201:60">
+<p data-sourcepos="201:2-201:60"><code>do ~ end</code> で閉じる場合は <code>close</code> は不要です。</p>
+</blockquote>
+<h3 data-sourcepos="203:1-203:28">
+<span id="コメントアウト" class="fragment"></span><a href="#%E3%82%B3%E3%83%A1%E3%83%B3%E3%83%88%E3%82%A2%E3%82%A6%E3%83%88"><i class="fa fa-link"></i></a>・コメントアウト</h3>
+<div class="code-frame" data-lang="Julia" data-sourcepos="204:1-223:3"><div class="highlight"><pre><code><span class="c"># 行頭に#でコメントアウトできる</span>
+<span class="c"># open("output.txt", "w") do f</span>
+<span class="c">#     for n = 0:9</span>
+<span class="c">#         println(f, n)</span>
+<span class="c">#     end</span>
+<span class="c"># end</span>
+
+<span class="c"># = まとめてコメントアウトもできる</span>
+<span class="n">open</span><span class="x">(</span><span class="s">"output.txt"</span><span class="x">,</span> <span class="s">"r"</span><span class="x">)</span> <span class="k">do</span> <span class="n">f1</span>
+    <span class="n">lines</span> <span class="o">=</span> <span class="n">readlines</span><span class="x">(</span><span class="n">f1</span><span class="x">)</span>
+    <span class="n">open</span><span class="x">(</span><span class="s">"output2.txt"</span><span class="x">,</span> <span class="s">"w"</span><span class="x">)</span> <span class="k">do</span> <span class="n">f2</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="k">in</span> <span class="n">lines</span>
+            <span class="n">print</span><span class="x">(</span><span class="n">f2</span><span class="x">,</span><span class="n">line</span><span class="x">)</span>
+        <span class="k">end</span>
+    <span class="k">end</span>
+<span class="k">end</span>
+<span class="o">=</span><span class="c"># </span>
+<span class="c"># ↑ここまでコメントアウト</span>
+</code></pre></div></div>
+<blockquote data-sourcepos="225:1-225:159">
+<p data-sourcepos="225:2-225:159">Juliaでは <code>#= ... =#</code> と囲むことで複数行をまとめてコメントアウト可能です。これはphpやCなどの <code>/* ... */</code> と同じです。</p>
+</blockquote>
+<h1 data-sourcepos="228:1-228:35">
+<span id="パッケージの確認方法" class="fragment"></span><a href="#%E3%83%91%E3%83%83%E3%82%B1%E3%83%BC%E3%82%B8%E3%81%AE%E7%A2%BA%E8%AA%8D%E6%96%B9%E6%B3%95"><i class="fa fa-link"></i></a>・パッケージの確認方法</h1>
+<p data-sourcepos="230:1-232:128">windowsの場合、[プログラム] から [Julia 1.5.1]（など）を開くと、画像のようなコンソール画面が立ち上がります。<br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F15c1c906-dcca-3fa1-a320-31cc2e91e3ff.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=75be05b7dc6285a1628f4edfb10e6a81" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/10912d56f3a70ec6602b6014.png" width="70%" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/15c1c906-dcca-3fa1-a320-31cc2e91e3ff.png" loading="lazy" decoding="async"></a><br>
+JuliaのREPLには以下の5つのモードがあります。他のモードからは Ctrl+C でJuliaモードに戻れます。</p>
+<ul data-sourcepos="234:1-249:0">
+<li data-sourcepos="234:1-236:0">
+<p data-sourcepos="234:3-235:62"><strong>Juliaモード</strong><br>
+Juliaのスクリプトを実行できる（デフォルト）</p>
+</li>
+<li data-sourcepos="237:1-239:0">
+<p data-sourcepos="237:3-238:57"><strong>パッケージモード</strong><br>
+パッケージを管理できる（ ] キーで起動）</p>
+</li>
+<li data-sourcepos="240:1-242:0">
+<p data-sourcepos="240:3-241:81"><strong>ヘルプモード</strong><br>
+関数やマクロのドキュメントを確認できる（ ? キーで起動）</p>
+</li>
+<li data-sourcepos="243:1-245:0">
+<p data-sourcepos="243:3-244:63"><strong>シェルモード</strong><br>
+シェルコマンドを実行できる（ ; キーで起動）</p>
+</li>
+<li data-sourcepos="246:1-249:0">
+<p data-sourcepos="246:3-247:59"><strong>サーチモード</strong><br>
+コマンド履歴を検索できる（ Ctrl+r で起動）</p>
+</li>
+</ul>
+<p data-sourcepos="250:1-250:154">パッケージモードにして <code>status</code> と叩くと、以下のように現在インストール済みのパッケージ一覧が表示されます。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="252:1-257:3"><div class="highlight"><pre><code>(@v1.5) pkg&gt; status
+Status `C:\Users\name\.julia\environments\v1.5\Project.toml`
+  [438e738f] PyCall v1.91.4
+  [d330b81b] PyPlot v2.9.0
+</code></pre></div></div>
+<p data-sourcepos="259:1-259:208">足りないものがあると、スクリプトを実行したときにエラーになってしまいます。（下の例はPyCallパッケージが無くてmatplotlibを呼べなかった時のエラー）</p>
+<div class="code-frame" data-lang="text" data-sourcepos="261:1-281:3"><div class="highlight"><pre><code>ERROR: LoadError: PyError (PyImport_ImportModule
+
+The Python package matplotlib.pyplot could not be found by pyimport. Usually this means
+that you did not install matplotlib.pyplot in the Python version being used by PyCall.
+
+PyCall is currently configured to use the Julia-specific Python distribution
+installed by the Conda.jl package.  To install the matplotlib.pyplot module, you can
+use `pyimport_conda("matplotlib.pyplot", PKG)`, where PKG is the Anaconda
+package the contains the module matplotlib.pyplot, or alternatively you can use the
+Conda package directly (via `using Conda` followed by `Conda.add` etcetera).
+
+Alternatively, if you want to use a different Python distribution on your
+system, such as a system-wide Python (as opposed to the Julia-specific Python),
+you can re-configure PyCall with that Python.   As explained in the PyCall
+documentation, set ENV["PYTHON"] to the path/name of the python executable
+you want to use, run Pkg.build("PyCall"), and re-launch Julia.
+
+) &lt;class 'ModuleNotFoundError'&gt;
+ModuleNotFoundError("No module named 'matplotlib'")
+</code></pre></div></div>
+<p data-sourcepos="283:1-283:72">今後使うものは予めインストールしておきましょう。</p>
+<h1 data-sourcepos="287:1-287:29">
+<span id="pycallを使ってみる" class="fragment"></span><a href="#pycall%E3%82%92%E4%BD%BF%E3%81%A3%E3%81%A6%E3%81%BF%E3%82%8B"><i class="fa fa-link"></i></a>・PyCallを使ってみる</h1>
+<p data-sourcepos="289:1-289:191">「<a href="https://github.com/JuliaPy/PyCall.jl" rel="nofollow noopener" target="_blank"><strong>PyCall</strong></a>」というパッケージを使うことで<strong>Juliaのコード内からPythonの関数を呼び出すことが可能</strong>になります。</p>
+<h2 data-sourcepos="292:1-292:43">
+<span id="例-mathライブラリを呼び出す" class="fragment"></span><a href="#%E4%BE%8B-math%E3%83%A9%E3%82%A4%E3%83%96%E3%83%A9%E3%83%AA%E3%82%92%E5%91%BC%E3%81%B3%E5%87%BA%E3%81%99"><i class="fa fa-link"></i></a>(例) mathライブラリを呼び出す</h2>
+<p data-sourcepos="294:1-294:171">Pythonの<a href="https://docs.python.org/ja/3/library/math.html" rel="nofollow noopener" target="_blank"><strong>mathライブラリ</strong></a>を呼び出して使うときは以下のようにpyimportマクロを利用します。</p>
+<div class="code-frame" data-lang="Julia" data-sourcepos="296:1-303:3"><div class="highlight"><pre><code><span class="k">using</span> <span class="n">PyCall</span>
+<span class="nd">@pyimport</span> <span class="n">math</span>
+<span class="n">println</span><span class="x">(</span><span class="n">math</span><span class="o">.</span><span class="n">sin</span><span class="x">(</span><span class="n">math</span><span class="o">.</span><span class="nb">pi</span> <span class="o">/</span> <span class="mi">6</span><span class="x">))</span>
+
+<span class="c"># 出力結果は 0.49999999999999994 でPythonを用いた場合と全く同じ</span>
+<span class="c"># mathライブラリを使わずに println(sin(pi / 6)) としても同様</span>
+</code></pre></div></div>
+<blockquote data-sourcepos="305:1-317:139">
+<p data-sourcepos="305:2-306:58">(※注)<br>
+もしPyCallが無いとか文句を言われる場合は</p>
+<div class="code-frame" data-lang="Julia" data-sourcepos="308:2-310:4"><div class="highlight"><pre><code><span class="k">import</span> <span class="n">Pkg</span><span class="x">;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">add</span><span class="x">(</span><span class="s">"PyCall"</span><span class="x">)</span>
+</code></pre></div></div>
+<p data-sourcepos="312:2-312:46">と書くか、JuliaのREPLのPkgモードで</p>
+<div class="code-frame" data-lang="Julia" data-sourcepos="314:2-316:4"><div class="highlight"><pre><code><span class="x">(</span><span class="nd">@v1.5</span><span class="x">)</span> <span class="n">pkg</span><span class="o">&gt;</span> <span class="n">add</span> <span class="n">PyCall</span>
+</code></pre></div></div>
+<p data-sourcepos="317:2-317:139">などとして、PyCallパッケージをインストールして下さい（基本的にインストールは1回だけでOKです）。</p>
+</blockquote>
+<h2 data-sourcepos="321:1-321:49">
+<span id="例-matplotlibライブラリを呼び出す" class="fragment"></span><a href="#%E4%BE%8B-matplotlib%E3%83%A9%E3%82%A4%E3%83%96%E3%83%A9%E3%83%AA%E3%82%92%E5%91%BC%E3%81%B3%E5%87%BA%E3%81%99"><i class="fa fa-link"></i></a>(例) matplotlibライブラリを呼び出す</h2>
+<p data-sourcepos="323:1-323:128">Pythonの<a href="https://matplotlib.org/" rel="nofollow noopener" target="_blank"><strong>matplotlibライブラリ</strong></a>を呼び出して使うときは以下のようにします。</p>
+<div class="code-frame" data-lang="Julia" data-sourcepos="325:1-332:3"><div class="highlight"><pre><code><span class="k">using</span> <span class="n">PyCall</span>
+<span class="k">using</span> <span class="n">PyPlot</span>
+
+<span class="n">x</span> <span class="o">=</span> <span class="n">range</span><span class="x">(</span><span class="mi">0</span><span class="x">;</span><span class="n">stop</span><span class="o">=</span><span class="mi">2</span><span class="o">*</span><span class="nb">pi</span><span class="x">,</span><span class="n">length</span><span class="o">=</span><span class="mi">1000</span><span class="x">);</span> <span class="n">y</span> <span class="o">=</span> <span class="n">sin</span><span class="o">.</span><span class="x">(</span><span class="mi">3</span><span class="o">*</span><span class="n">x</span> <span class="o">+</span> <span class="mi">4</span><span class="o">*</span><span class="n">cos</span><span class="o">.</span><span class="x">(</span><span class="mi">2</span><span class="o">*</span><span class="n">x</span><span class="x">));</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="x">(</span><span class="n">x</span><span class="x">,</span> <span class="n">y</span><span class="x">,</span> <span class="n">color</span><span class="o">=</span><span class="s">"red"</span><span class="x">,</span> <span class="n">linewidth</span><span class="o">=</span><span class="mf">2.0</span><span class="x">,</span> <span class="n">linestyle</span><span class="o">=</span><span class="s">"--"</span><span class="x">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">show</span><span class="x">()</span>
+</code></pre></div></div>
+<p data-sourcepos="334:1-335:126">出力結果は以下の通りです。当然ながらmatplotlibと同じ出力になっています。<br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Fe8c7c70e-300d-9fdf-2dc3-76f79250e0fd.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=e03f49ba468e9a7cc3da3c5376e22bb1" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/58a93c7f927b70b214fa62e2.png" alt="tst_figure.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/e8c7c70e-300d-9fdf-2dc3-76f79250e0fd.png" loading="lazy" decoding="async"></a></p>
+<blockquote data-sourcepos="337:1-349:194">
+<p data-sourcepos="337:2-338:83">(※注)<br>
+もしPyPlotが無いとかmatplotlibが無いとか文句を言われる場合は</p>
+<div class="code-frame" data-lang="Julia" data-sourcepos="340:2-342:4"><div class="highlight"><pre><code><span class="k">import</span> <span class="n">Pkg</span><span class="x">;</span> <span class="n">Pkg</span><span class="o">.</span><span class="n">add</span><span class="x">(</span><span class="s">"PyPlot"</span><span class="x">)</span>
+</code></pre></div></div>
+<p data-sourcepos="344:2-344:58">とするか、もしくはJuliaのREPLのPkgモードで</p>
+<div class="code-frame" data-lang="Julia" data-sourcepos="346:2-348:4"><div class="highlight"><pre><code><span class="x">(</span><span class="nd">@v1.5</span><span class="x">)</span> <span class="n">pkg</span><span class="o">&gt;</span> <span class="n">add</span> <span class="n">PyPlot</span>
+</code></pre></div></div>
+<p data-sourcepos="349:2-349:194">などとすれば、PyPlotなどの一連のパッケージのインストールが始まります。そもそもmatplotlibが無い場合はpipなどでインストールして下さい...。</p>
+</blockquote>
+<h2 data-sourcepos="351:1-351:60">
+<span id="例-機械学習関連のライブラリを呼び出す" class="fragment"></span><a href="#%E4%BE%8B-%E6%A9%9F%E6%A2%B0%E5%AD%A6%E7%BF%92%E9%96%A2%E9%80%A3%E3%81%AE%E3%83%A9%E3%82%A4%E3%83%96%E3%83%A9%E3%83%AA%E3%82%92%E5%91%BC%E3%81%B3%E5%87%BA%E3%81%99"><i class="fa fa-link"></i></a>(例) 機械学習関連のライブラリを呼び出す</h2>
+<p data-sourcepos="353:1-353:351">まず、Juliaにも機械学習関連のライブラリが用意されています。「<a href="https://qiita.com/yatra9/items/0a1a9a5ba19e9efe08c0" id="reference-325cacd51e36931baa62"><strong>PyCall.jlでPyTorch使ってDeep Learningする</strong></a>」の記事にJuliaのDeep Learningフレームワークについて主なものが簡単にまとめられていますので、参考にして下さい。</p>
+<p data-sourcepos="355:1-355:85">色々な事情により、PyTorchの方が使い勝手が良いという場合は、</p>
+<div class="code-frame" data-lang="Julia" data-sourcepos="357:1-360:3"><div class="highlight"><pre><code><span class="k">using</span> <span class="n">PyCall</span>
+<span class="n">torch</span> <span class="o">=</span> <span class="n">pyimport</span><span class="x">(</span><span class="s">"torch"</span><span class="x">)</span>
+</code></pre></div></div>
+<p data-sourcepos="362:1-362:36">などとして呼び出します。</p>
+<p data-sourcepos="364:1-364:316">特に「<a href="https://qiita.com/cometscome_phys/items/e09e0300e303ba184bcc" id="reference-03b4d0788f67902e8989"><strong>Juliaで機械学習：PyCall.jlを使ってTensorFlowのKerasを使ってみる</strong></a>」の記事には機械学習フレームワークに関する記事が多数まとめられていますので、こちらも参考にしてみて下さい。</p>
+<h1 data-sourcepos="367:1-367:17">
+<span id="終わりに" class="fragment"></span><a href="#%E7%B5%82%E3%82%8F%E3%82%8A%E3%81%AB"><i class="fa fa-link"></i></a>・終わりに</h1>
+<p data-sourcepos="369:1-369:247">「Julia Advent Calendar」などで検索すると、Juliaに関する素晴らしい記事が多数閲覧できます。無料公開されているJuliaの教科書pdfもネット上で閲覧できますので、是非探してみて下さい。</p>
+<p data-sourcepos="371:1-371:294">昨日初めてJuliaを触りましたが、慣れれば結構使いやすそうな言語だと感じました。Pythonを卒業するというにはまだまだ時期尚早ですが、Pythonerの方であればJuliaの習得にはそれほど難儀しないのではないかと思います。</p>
+
+</div>
+
+
+{% endraw %}

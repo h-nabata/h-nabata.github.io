@@ -1,0 +1,324 @@
+---
+layout: "qiita-mirror"
+title: "Windows 11 + WSL2 のPC 2台とRaspberry PiをLAN内で相互SSH接続する"
+qiita_id: "a5f0d3b6b13910c734fd"
+qiita_url: "https://qiita.com/h-nabata/items/a5f0d3b6b13910c734fd"
+qiita_created: "2026-09-20T23:59:17+09:00"
+qiita_updated: "2026-09-20T23:59:17+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "計算環境・Linux"
+mirror_tags: ["Windows11", "WSL2", "RaspberryPi", "SSH", "Network"]
+permalink: "/qiita/a5f0d3b6b13910c734fd.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="1:1-1:12">手元に、</p>
+<ul data-sourcepos="3:1-5:0">
+<li data-sourcepos="3:1-3:51">Windows 11 + WSL2 のデスクトップPC × 2台</li>
+<li data-sourcepos="4:1-5:0">Raspberry Pi × 1台</li>
+</ul>
+<p data-sourcepos="6:1-6:109">があり、これら3台を同一LAN内で相互にSSH接続できるよう設定した際のメモです。</p>
+<p data-sourcepos="8:1-8:182">WSL2の<code>mirrored networking</code>周辺で少しハマったため、その切り分けと、うまく動かなかったPCでは<code>NAT + portproxy</code>で回避した手順もまとめます。</p>
+<h1 data-sourcepos="10:1-10:8">
+<span id="構成" class="fragment"></span><a href="#%E6%A7%8B%E6%88%90"><i class="fa fa-link"></i></a>構成</h1>
+<p data-sourcepos="12:1-12:60">PCは3台とも同じルーターに接続しています。</p>
+<div class="code-frame" data-lang="" data-sourcepos="14:1-24:3">
+<div class="code-lang"><span class="bold">構成</span></div>
+<div class="highlight"><pre><code>                Router
+             192.168.11.1
+                  |
+        +---------+---------+
+        |         |         |
+   Desktop A  Desktop B  Raspberry Pi
+  192.168.11.2 .11.4      .11.10
+       |          |
+      WSL        WSL
+</code></pre></div>
+</div>
+<p data-sourcepos="26:1-26:135">まず、 <code>ipconfig</code> およびPi側の <code>ip -4 addr</code> から、3台とも <code>192.168.11.0/24</code> に存在することを確認しました。</p>
+<blockquote data-sourcepos="28:1-28:130">
+<p data-sourcepos="28:3-28:130">Pi側では既にSSHを有効化していた。未設定の場合は sudo systemctl enable --now ssh などで有効化する。</p>
+</blockquote>
+<h1 data-sourcepos="30:1-30:58">
+<span id="最初の状態windows機へのpingだけ通らない" class="fragment"></span><a href="#%E6%9C%80%E5%88%9D%E3%81%AE%E7%8A%B6%E6%85%8Bwindows%E6%A9%9F%E3%81%B8%E3%81%AEping%E3%81%A0%E3%81%91%E9%80%9A%E3%82%89%E3%81%AA%E3%81%84"><i class="fa fa-link"></i></a>最初の状態：Windows機へのpingだけ通らない</h1>
+<p data-sourcepos="32:1-32:36">最初はアクセス可能なのが</p>
+<div class="code-frame" data-lang="text" data-sourcepos="34:1-42:3"><div class="highlight"><pre><code>Desktop A → Pi    OK
+Desktop B → Pi    OK
+
+Pi → Desktop A    NG
+Pi → Desktop B    NG
+A → B             NG
+B → A             NG
+</code></pre></div></div>
+<p data-sourcepos="44:1-44:134">という状態でした。この原因はWindows Firewallで、Windows側のネットワークプロファイルを確認すると、</p>
+<div class="code-frame" data-lang="powershell" data-sourcepos="46:1-48:3"><div class="highlight"><pre><code><span class="n">Get-NetConnectionProfile</span><span class="w">
+</span></code></pre></div></div>
+<p data-sourcepos="50:1-50:6">で、</p>
+<div class="code-frame" data-lang="text" data-sourcepos="52:1-54:3"><div class="highlight"><pre><code>NetworkCategory : Public
+</code></pre></div></div>
+<p data-sourcepos="56:1-56:73">となっていました。管理者権限でPowerShellを起動して、</p>
+<div class="code-frame" data-lang="powershell" data-sourcepos="58:1-62:3"><div class="highlight"><pre><code><span class="n">Set-NetConnectionProfile</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-InterfaceAlias</span><span class="w"> </span><span class="s2">"イーサネット"</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-NetworkCategory</span><span class="w"> </span><span class="nx">Private</span><span class="w">
+</span></code></pre></div></div>
+<p data-sourcepos="64:1-64:21">と変更します。</p>
+<blockquote data-sourcepos="66:1-70:35">
+<p data-sourcepos="66:3-66:51">通常権限のPowerShellから実行すると、</p>
+<div class="code-frame" data-lang="text" data-sourcepos="67:3-69:5"><div class="highlight"><pre><code>Unable to set the NetworkCategory...
+</code></pre></div></div>
+<p data-sourcepos="70:3-70:35">と拒否されるので注意。</p>
+</blockquote>
+<p data-sourcepos="72:1-72:57">さらにLAN内からのICMP Echoを許可しました。</p>
+<div class="code-frame" data-lang="powershell" data-sourcepos="74:1-83:3"><div class="highlight"><pre><code><span class="n">New-NetFirewallRule</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-DisplayName</span><span class="w"> </span><span class="s2">"LAN ICMPv4 Echo"</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-Direction</span><span class="w"> </span><span class="nx">Inbound</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-Action</span><span class="w"> </span><span class="nx">Allow</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-Protocol</span><span class="w"> </span><span class="nx">ICMPv4</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-IcmpType</span><span class="w"> </span><span class="nx">8</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-RemoteAddress</span><span class="w"> </span><span class="nx">192.168.11.0/24</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-Profile</span><span class="w"> </span><span class="nx">Private</span><span class="w">
+</span></code></pre></div></div>
+<p data-sourcepos="85:1-85:65">これで3台間のpingが確認できるようになります。</p>
+<h1 data-sourcepos="87:1-87:33">
+<span id="wsl側にssh-serverを立てる" class="fragment"></span><a href="#wsl%E5%81%B4%E3%81%ABssh-server%E3%82%92%E7%AB%8B%E3%81%A6%E3%82%8B"><i class="fa fa-link"></i></a>WSL側にSSH Serverを立てる</h1>
+<p data-sourcepos="89:1-89:69">Windows自身にOpenSSH Serverを立てる必要はありません。</p>
+<p data-sourcepos="91:1-91:118">今回の目的はWindowsではなくWSLへログインすることなので、各WSL内に<code>sshd</code>を起動します。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="93:1-98:3"><div class="highlight"><pre><code><span class="nb">sudo </span>apt update
+<span class="nb">sudo </span>apt <span class="nb">install </span>openssh-server
+
+<span class="nb">sudo </span>systemctl <span class="nb">enable</span> <span class="nt">--now</span> ssh
+</code></pre></div></div>
+<div class="code-frame" data-lang="bash" data-sourcepos="100:1-115:3">
+<div class="code-lang"><span class="bold">SSH状態確認</span></div>
+<div class="highlight"><pre><code><span class="nv">$ </span>systemctl status ssh
+● ssh.service - OpenBSD Secure Shell server
+     Loaded: loaded <span class="o">(</span>/usr/lib/systemd/system/ssh.service<span class="p">;</span> enabled<span class="p">;</span> preset: enabled<span class="o">)</span>
+     Active: active <span class="o">(</span>running<span class="o">)</span> since Sun 2026-09-20 22:06:18 JST<span class="p">;</span> 1h 26min ago
+TriggeredBy: ● ssh.socket
+       Docs: man:sshd<span class="o">(</span>8<span class="o">)</span>
+             man:sshd_config<span class="o">(</span>5<span class="o">)</span>
+    Process: 167 <span class="nv">ExecStartPre</span><span class="o">=</span>/usr/sbin/sshd <span class="nt">-t</span> <span class="o">(</span><span class="nv">code</span><span class="o">=</span>exited, <span class="nv">status</span><span class="o">=</span>0/SUCCESS<span class="o">)</span>
+   Main PID: 187 <span class="o">(</span>sshd<span class="o">)</span>
+      Tasks: 1 <span class="o">(</span>limit: 57805<span class="o">)</span>
+     Memory: 2.6M <span class="o">()</span>
+        CPU: 44ms
+     CGroup: /system.slice/ssh.service
+             └─187 <span class="s2">"sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups"</span>
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="bash" data-sourcepos="117:1-121:3">
+<div class="code-lang"><span class="bold">listen状態の確認</span></div>
+<div class="highlight"><pre><code><span class="nv">$ </span>ss <span class="nt">-ltnp</span> | <span class="nb">grep</span> <span class="s1">':22'</span>
+LISTEN 0      4096          0.0.0.0:22         0.0.0.0:<span class="k">*</span>
+LISTEN 0      4096             <span class="o">[</span>::]:22            <span class="o">[</span>::]:<span class="k">*</span>
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="bash" data-sourcepos="124:1-127:3">
+<div class="code-lang"><span class="bold">パスワード認証の確認</span></div>
+<div class="highlight"><pre><code><span class="nv">$ </span><span class="nb">sudo </span>sshd <span class="nt">-T</span> | <span class="nb">grep </span>passwordauthentication
+passwordauthentication <span class="nb">yes</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="129:1-129:81">ここまで正常なら、Linux側のSSH Server自体は動作しています。</p>
+<h1 data-sourcepos="131:1-131:37">
+<span id="wsl2をmirrored-networkingにする" class="fragment"></span><a href="#wsl2%E3%82%92mirrored-networking%E3%81%AB%E3%81%99%E3%82%8B"><i class="fa fa-link"></i></a>WSL2をmirrored networkingにする</h1>
+<p data-sourcepos="133:1-133:214">WSL2は標準ではNATネットワークを使用するため、LAN内から直接WSLへ入るには少し準備が必要。Windows側の <code>C:\Users\&lt;ユーザー名&gt;\.wslconfig</code> を以下のようにしました。</p>
+<div class="code-frame" data-lang="ini" data-sourcepos="135:1-139:3"><div class="highlight"><pre><code><span class="nn">[wsl2]</span><span class="w">
+</span><span class="py">networkingMode</span><span class="p">=</span><span class="s">mirrored</span>
+<span class="py">firewall</span><span class="p">=</span><span class="s">true</span>
+</code></pre></div></div>
+<p data-sourcepos="141:1-141:12">変更後、</p>
+<div class="code-frame" data-lang="powershell" data-sourcepos="143:1-145:3"><div class="highlight"><pre><code><span class="n">wsl</span><span class="w"> </span><span class="nt">--shutdown</span><span class="w">
+</span></code></pre></div></div>
+<p data-sourcepos="147:1-147:84">してWSLを再起動します。その後、ネットワークの設定を確認。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="149:1-151:3">
+<div class="code-lang"><span class="bold">確認</span></div>
+<div class="highlight"><pre><code>wslinfo <span class="nt">--networking-mode</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="153:1-158:62">
+<p data-sourcepos="153:3-153:47">ここがうまく設定できていないと</p>
+<div class="code-frame" data-lang="text" data-sourcepos="155:3-157:5"><div class="highlight"><pre><code>nat
+</code></pre></div></div>
+<p data-sourcepos="158:3-158:62">と出てLAN側からWSLへ直接アクセスできない。</p>
+</blockquote>
+<p data-sourcepos="160:1-160:15">最終的に、</p>
+<div class="code-frame" data-lang="text" data-sourcepos="162:1-164:3"><div class="highlight"><pre><code>mirrored
+</code></pre></div></div>
+<p data-sourcepos="166:1-166:26">になっていればOK。</p>
+<h1 data-sourcepos="168:1-168:39">
+<span id="hyper-v-firewallでsshを許可する" class="fragment"></span><a href="#hyper-v-firewall%E3%81%A7ssh%E3%82%92%E8%A8%B1%E5%8F%AF%E3%81%99%E3%82%8B"><i class="fa fa-link"></i></a>Hyper-V FirewallでSSHを許可する</h1>
+<p data-sourcepos="170:1-170:137">mirrored networkingではHyper-V Firewallも関係するため、管理者PowerShellからLAN内の22番ポートを許可しました。</p>
+<div class="code-frame" data-lang="powershell" data-sourcepos="172:1-181:3"><div class="highlight"><pre><code><span class="n">New-NetFirewallHyperVRule</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-Name</span><span class="w"> </span><span class="s2">"WSL-SSH-LAN"</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-DisplayName</span><span class="w"> </span><span class="s2">"WSL SSH from LAN"</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-Direction</span><span class="w"> </span><span class="nx">Inbound</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-VMCreatorId</span><span class="w"> </span><span class="s1">'{40E0AC32-46A5-438A-A0B2-2B479E8F2E90}'</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-Protocol</span><span class="w"> </span><span class="nx">TCP</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-LocalPorts</span><span class="w"> </span><span class="nx">22</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-RemoteAddresses</span><span class="w"> </span><span class="nx">192.168.11.0/24</span><span class="w">
+</span></code></pre></div></div>
+<blockquote data-sourcepos="183:1-195:53">
+<p data-sourcepos="183:3-183:47">すでに同名のルールがある場合、</p>
+<div class="code-frame" data-lang="text" data-sourcepos="185:3-187:5"><div class="highlight"><pre><code>既に存在するファイルを作成することはできません。
+</code></pre></div></div>
+<p data-sourcepos="189:3-189:44">と表示されます。その場合は、</p>
+<div class="code-frame" data-lang="powershell" data-sourcepos="191:3-193:5"><div class="highlight"><pre><code><span class="n">Get-NetFirewallHyperVRule</span><span class="w"> </span><span class="nt">-Name</span><span class="w"> </span><span class="s2">"WSL-SSH-LAN"</span><span class="w">
+</span></code></pre></div></div>
+<p data-sourcepos="195:3-195:53">で既存ルールを確認すれば十分です。</p>
+</blockquote>
+<div data-sourcepos="197:1-228:3" class="note warn">
+<span class="fa fa-fw fa-exclamation-circle"></span><div>
+<h3 data-sourcepos="199:1-199:37">
+<span id="tcp転送経路に関する問題" class="fragment"></span><a href="#tcp%E8%BB%A2%E9%80%81%E7%B5%8C%E8%B7%AF%E3%81%AB%E9%96%A2%E3%81%99%E3%82%8B%E5%95%8F%E9%A1%8C"><i class="fa fa-link"></i></a>TCP転送経路に関する問題</h3>
+<p data-sourcepos="201:1-201:129">Desktop Aでは正常に接続できた一方、Desktop BではLAN側からWSLのTCPポートへ接続できませんでした。</p>
+<p data-sourcepos="203:1-203:39">確認結果は以下の通りです。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="205:1-222:3"><div class="highlight"><pre><code><span class="c"># LAN側からDesktop BのSSHポートへ接続</span>
+nc <span class="nt">-vz</span> <span class="nt">-w</span> 3 192.168.11.4 22
+→ <span class="nb">timeout</span>
+
+<span class="c"># Desktop BのWSL内部からsshdへ接続</span>
+nc <span class="nt">-vz</span> 127.0.0.1 22
+→ succeeded
+
+<span class="c"># Windows側からWSLのlocalhostへ接続</span>
+Test-NetConnection 127.0.0.1 <span class="nt">-Port</span> 22
+→ TcpTestSucceeded : False
+
+<span class="c"># SSH固有の問題か確認するため別ポートでも試験</span>
+python3 <span class="nt">-m</span> http.server 22222 <span class="nt">--bind</span> 0.0.0.0
+Test-NetConnection 192.168.11.4 <span class="nt">-Port</span> 22222
+→ failed
+</code></pre></div></div>
+<p data-sourcepos="224:1-224:151">WSL内部では<code>sshd</code>へ正常に接続できる一方、Windows側やLAN側からはSSH以外のポートも含めて接続できませんでした。</p>
+<p data-sourcepos="226:1-226:223">このことから、問題は<code>sshd</code>やTCP/22固有のものではなく、Desktop BにおけるWSL2の<code>mirrored networking</code>経由のTCP転送経路にある可能性があります。（根本的な解決には至らず）</p>
+</div>
+</div>
+<h1 data-sourcepos="231:1-231:38">
+<span id="desktop-bはnat--portproxyで回避" class="fragment"></span><a href="#desktop-b%E3%81%AFnat--portproxy%E3%81%A7%E5%9B%9E%E9%81%BF"><i class="fa fa-link"></i></a>Desktop BはNAT + portproxyで回避</h1>
+<p data-sourcepos="233:1-233:173">上述のようにDesktop Bでは<code>mirrored networking</code>経由のTCP接続が正常に動作しなかったため、従来の<code>NAT + portproxy</code>方式へ切り替えました。</p>
+<p data-sourcepos="235:1-235:42">まずWSLをNATモードに戻します。</p>
+<div class="code-frame" data-lang="ini" data-sourcepos="237:1-240:3"><div class="highlight"><pre><code><span class="nn">[wsl2]</span><span class="w">
+</span><span class="py">networkingMode</span><span class="p">=</span><span class="s">nat</span>
+</code></pre></div></div>
+<p data-sourcepos="242:1-242:12">設定後、</p>
+<div class="code-frame" data-lang="powershell" data-sourcepos="244:1-246:3"><div class="highlight"><pre><code><span class="n">wsl</span><span class="w"> </span><span class="nt">--shutdown</span><span class="w">
+</span></code></pre></div></div>
+<p data-sourcepos="248:1-248:68">でWSLを再起動し、WSL側のIPアドレスを確認します。</p>
+<div class="code-frame" data-lang="powershell" data-sourcepos="250:1-252:3"><div class="highlight"><pre><code><span class="n">wsl</span><span class="w"> </span><span class="nx">hostname</span><span class="w"> </span><span class="nt">-I</span><span class="w">
+</span></code></pre></div></div>
+<p data-sourcepos="254:1-254:109">例えばWSL側IPが<code>172.27.208.184</code>なら、Windows側で次のようにポート転送を設定します。</p>
+<div class="code-frame" data-lang="powershell" data-sourcepos="256:1-262:3"><div class="highlight"><pre><code><span class="n">netsh</span><span class="w"> </span><span class="nx">interface</span><span class="w"> </span><span class="nx">portproxy</span><span class="w"> </span><span class="nx">add</span><span class="w"> </span><span class="nx">v4tov4</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nx">listenaddress</span><span class="o">=</span><span class="mf">0.0</span><span class="o">.</span><span class="nf">0</span><span class="o">.</span><span class="nf">0</span><span class="w"> </span><span class="se">`</span><span class="w">
+  </span><span class="n">listenport</span><span class="o">=</span><span class="mi">2222</span><span class="w"> </span><span class="se">`</span><span class="w">
+  </span><span class="n">connectaddress</span><span class="o">=</span><span class="mf">172.27</span><span class="o">.</span><span class="nf">208</span><span class="o">.</span><span class="nf">184</span><span class="w"> </span><span class="se">`</span><span class="w">
+  </span><span class="n">connectport</span><span class="o">=</span><span class="mi">22</span><span class="w">
+</span></code></pre></div></div>
+<p data-sourcepos="264:1-264:75">さらに、LAN内からのTCP/2222をWindows Firewallで許可します。</p>
+<div class="code-frame" data-lang="powershell" data-sourcepos="266:1-275:3"><div class="highlight"><pre><code><span class="n">New-NetFirewallRule</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-DisplayName</span><span class="w"> </span><span class="s2">"WSL SSH portproxy"</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-Direction</span><span class="w"> </span><span class="nx">Inbound</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-Action</span><span class="w"> </span><span class="nx">Allow</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-Protocol</span><span class="w"> </span><span class="nx">TCP</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-LocalPort</span><span class="w"> </span><span class="nx">2222</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-RemoteAddress</span><span class="w"> </span><span class="nx">192.168.11.0/24</span><span class="w"> </span><span class="se">`
+</span><span class="w">  </span><span class="nt">-Profile</span><span class="w"> </span><span class="nx">Private</span><span class="w">
+</span></code></pre></div></div>
+<p data-sourcepos="277:1-277:33">これでDesktop BのWSLには、</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="279:1-281:3"><div class="highlight"><pre><code>ssh <span class="nt">-p</span> 2222 &lt;WSLユーザー名&gt;@192.168.11.4
+</code></pre></div></div>
+<p data-sourcepos="283:1-283:24">で接続できます。</p>
+<p data-sourcepos="285:1-285:93">実際にDesktop A、Raspberry Piの両方から接続できることを確認しました。</p>
+<h1 data-sourcepos="287:1-287:14">
+<span id="最終構成" class="fragment"></span><a href="#%E6%9C%80%E7%B5%82%E6%A7%8B%E6%88%90"><i class="fa fa-link"></i></a>最終構成</h1>
+<p data-sourcepos="289:1-289:48">最終的には次のようになりました。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="291:1-303:3"><div class="highlight"><pre><code>                         Router
+                      192.168.11.1
+                           |
+            +--------------+--------------+
+            |              |              |
+       Desktop A       Desktop B      Raspberry Pi
+      192.168.11.2    192.168.11.4   192.168.11.10
+            |              |              |
+           WSL            WSL            sshd
+      mirrored SSH    NAT + portproxy
+          :22             :2222
+</code></pre></div></div>
+<p data-sourcepos="305:1-305:33">Desktop Aへは通常どおり、</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="307:1-309:3"><div class="highlight"><pre><code>ssh user@192.168.11.2
+</code></pre></div></div>
+<p data-sourcepos="311:1-311:18">Desktop Bへは、</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="313:1-315:3"><div class="highlight"><pre><code>ssh <span class="nt">-p</span> 2222 user@192.168.11.4
+</code></pre></div></div>
+<p data-sourcepos="317:1-317:27">とアクセスします。</p>
+<blockquote data-sourcepos="319:1-319:112">
+<p data-sourcepos="319:3-319:112">ネットワークの設定方式がPC間で異なっていても、実用上は特に問題ありません。</p>
+</blockquote>
+<h1 data-sourcepos="321:1-321:30">
+<span id="ssh-configを書いておく" class="fragment"></span><a href="#ssh-config%E3%82%92%E6%9B%B8%E3%81%84%E3%81%A6%E3%81%8A%E3%81%8F"><i class="fa fa-link"></i></a>SSH configを書いておく</h1>
+<p data-sourcepos="323:1-323:59">毎回IPやポート番号を書くのは面倒なので、</p>
+<div class="code-frame" data-lang="text" data-sourcepos="325:1-327:3"><div class="highlight"><pre><code>~/.ssh/config
+</code></pre></div></div>
+<p data-sourcepos="329:1-329:15">に例えば、</p>
+<div class="code-frame" data-lang="text" data-sourcepos="331:1-344:3"><div class="highlight"><pre><code>Host pc-a
+    HostName 192.168.11.2
+    User userA
+
+Host pc-b
+    HostName 192.168.11.4
+    User userB
+    Port 2222
+
+Host rpi
+    HostName 192.168.11.10
+    User hogehoge
+</code></pre></div></div>
+<p data-sourcepos="346:1-346:24">と書いておけば、</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="348:1-352:3"><div class="highlight"><pre><code>ssh pc-a
+ssh pc-b
+ssh rpi
+</code></pre></div></div>
+<p data-sourcepos="354:1-354:39">だけで相互に接続できます。</p>
+<div data-sourcepos="357:1-365:3" class="note warn">
+<span class="fa fa-fw fa-exclamation-circle"></span><div>
+<h3 data-sourcepos="359:1-359:41">
+<span id="アドレスの設定dhcp予約" class="fragment"></span><a href="#%E3%82%A2%E3%83%89%E3%83%AC%E3%82%B9%E3%81%AE%E8%A8%AD%E5%AE%9Adhcp%E4%BA%88%E7%B4%84"><i class="fa fa-link"></i></a>アドレスの設定（DHCP予約）</h3>
+<p data-sourcepos="361:1-361:346">本記事では説明を簡単にするためIPアドレスを直接指定していますが、ルーターのDHCP設定によってはDesktop A/BやRaspberry Piの<code>192.168.11.x</code>が変化する可能性があります。常用する場合は、ルーター側のDHCP予約機能で各端末のIPアドレスを固定しておくと安全です。</p>
+<p data-sourcepos="363:1-363:206">また、NATモードのWSL側IP（<code>172.x.x.x</code>）もWSL再起動時などに変わる場合があるため、<code>portproxy</code>を利用する場合は転送先IPの更新が必要になることがあります。</p>
+</div>
+</div>
+<h1 data-sourcepos="367:1-367:11">
+<span id="まとめ" class="fragment"></span><a href="#%E3%81%BE%E3%81%A8%E3%82%81"><i class="fa fa-link"></i></a>まとめ</h1>
+<p data-sourcepos="369:1-369:127">今回は、Windows 11 + WSL2 のPC 2台とRaspberry Piを同一LAN内で相互にSSH接続できるよう設定しました。</p>
+<p data-sourcepos="371:1-371:194">Desktop Aでは<code>mirrored networking</code>で問題なく接続できましたが、Desktop BではTCP転送経路に問題があり、<code>NAT + portproxy</code>へ切り替えることで回避しました。</p>
+<p data-sourcepos="373:1-373:21">今回の要点は、</p>
+<ul data-sourcepos="375:1-378:0">
+<li data-sourcepos="375:1-375:86">
+<code>wslinfo --networking-mode</code>で実際のWSLネットワークモードを確認する</li>
+<li data-sourcepos="376:1-376:104">
+<code>sshd</code>自体が正常か、LAN側からのTCP接続だけが失敗しているのかを切り分ける</li>
+<li data-sourcepos="377:1-378:0">
+<code>mirrored networking</code>で問題が出る場合は<code>NAT + portproxy</code>に切り替える</li>
+</ul>
+<p data-sourcepos="379:1-379:22">という3点です。</p>
+<h2 data-sourcepos="381:1-381:60">
+<span id="補足外部ネットワークから接続する場合" class="fragment"></span><a href="#%E8%A3%9C%E8%B6%B3%E5%A4%96%E9%83%A8%E3%83%8D%E3%83%83%E3%83%88%E3%83%AF%E3%83%BC%E3%82%AF%E3%81%8B%E3%82%89%E6%8E%A5%E7%B6%9A%E3%81%99%E3%82%8B%E5%A0%B4%E5%90%88"><i class="fa fa-link"></i></a>補足：外部ネットワークから接続する場合</h2>
+<p data-sourcepos="383:1-383:51">今回はLAN内接続までを確認しました。</p>
+<p data-sourcepos="385:1-385:230">外部からアクセスする場合、集合住宅の無料回線では二重NATやCGNATになっていることもあるため、SSHポートを直接公開するより、Tailscale等を利用する方法が考えられます。</p>
+<p data-sourcepos="387:1-387:66">未検証ですが、例えばRaspberry Piを常時稼働させ、</p>
+<div class="code-frame" data-lang="text" data-sourcepos="389:1-399:3"><div class="highlight"><pre><code>外出先PC
+   |
+Tailscale
+   |
+Raspberry Pi
+   |
+LAN
+   +-- Desktop A
+   +-- Desktop B
+</code></pre></div></div>
+<p data-sourcepos="401:1-401:77">のようにPiを踏み台にする構成の方が扱いやすそうです。</p>
+
+</div>
+
+
+{% endraw %}

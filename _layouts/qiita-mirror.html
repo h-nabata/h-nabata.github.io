@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <title>{{ page.title | escape }} | Qiita記事ミラー</title>
+  {% include head-assets.html %}
+  <link rel="canonical" href="{{ page.qiita_url | escape }}">
+  <link rel="stylesheet" href="/assets/qiita-original.css?v=1">
+  <link rel="stylesheet" href="/assets/qiita-mirror.css?v=1">
+  <script defer src="/assets/qiita-mirror.js?v=1"></script>
+</head>
+<body class="qiita-mirror">
+  {% include header.html %}
+  <div class="top-wrapper"><div class="container"><h1>Qiita Articles</h1><p>公開記事のミラー・バックアップ</p></div></div>
+  <main class="mirror-main">
+    <nav class="mirror-breadcrumb" aria-label="パンくずリスト"><a href="/toc.html">目次</a> / <a href="/qiita/">Qiita記事ミラー</a> / {{ page.mirror_category | escape }}</nav>
+    <header class="mirror-article-header">
+      <p class="mirror-category">{{ page.mirror_category | escape }}</p>
+      <h1>{{ page.title | escape }}</h1>
+      <ul class="mirror-tags">{% for tag in page.mirror_tags %}<li>{{ tag | escape }}</li>{% endfor %}</ul>
+      <p class="mirror-dates">Qiita公開: <time datetime="{{ page.qiita_created }}">{{ page.qiita_created | date: "%Y/%m/%d" }}</time> · 元記事更新: <time datetime="{{ page.qiita_updated }}">{{ page.qiita_updated | date: "%Y/%m/%d" }}</time><br>バックアップ取得: <time datetime="{{ page.mirror_saved }}">{{ page.mirror_saved | date: "%Y/%m/%d %H:%M" }} JST</time></p>
+      <p class="mirror-origin">筆者自身のQiita記事を転載しています。内容は取得時点の記録です。<a href="{{ page.qiita_url | escape }}">Qiitaの元記事</a> · <a href="/qiita/backup/{{ page.qiita_id }}.md.txt" download="{{ page.qiita_id }}.md">原文Markdownを保存</a></p>
+    </header>
+    <details class="mirror-toc"><summary>この記事の目次</summary><nav id="mirror-toc-list" aria-label="記事内目次"></nav></details>
+    <article id="mirror-article">{{ content }}</article>
+    <footer class="mirror-footer"><a href="/qiita/">記事一覧へ戻る</a> · <a href="{{ page.qiita_url | escape }}">Qiitaの元記事</a><p>バックアップ取得日: {{ page.mirror_saved | date: "%Y/%m/%d" }}</p></footer>
+  </main>
+</body>
+</html>

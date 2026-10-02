@@ -1,0 +1,126 @@
+---
+layout: "qiita-mirror"
+title: "RDKitを使うためにWindowsにAnaconda3を導入したときのメモ"
+qiita_id: "c1d16471bda6735a5d8a"
+qiita_url: "https://qiita.com/h-nabata/items/c1d16471bda6735a5d8a"
+qiita_created: "2021-07-01T19:07:34+09:00"
+qiita_updated: "2021-07-02T00:05:56+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "計算化学・分子構造"
+mirror_tags: ["Python", "Windows", "RDKit", "Anaconda", "anaconda3"]
+permalink: "/qiita/c1d16471bda6735a5d8a.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<h1 data-sourcepos="1:1-1:17">
+<span id="やったこと" class="fragment"></span><a href="#%E3%82%84%E3%81%A3%E3%81%9F%E3%81%93%E3%81%A8"><i class="fa fa-link"></i></a>やったこと</h1>
+<p data-sourcepos="2:1-4:47"><strong>① Anaconda3をwindowsにインストール<br>
+② Anaconda3上でPython3.7系の仮想環境を構築<br>
+③ 仮想環境でRDKitをインストール</strong></p>
+<p data-sourcepos="6:1-6:37">環境： windows 10（ノートPC）</p>
+<h1 data-sourcepos="8:1-8:46">
+<span id="-anaconda3をwindowsにインストール" class="fragment"></span><a href="#-anaconda3%E3%82%92windows%E3%81%AB%E3%82%A4%E3%83%B3%E3%82%B9%E3%83%88%E3%83%BC%E3%83%AB"><i class="fa fa-link"></i></a>① Anaconda3をwindowsにインストール</h1>
+<h4 data-sourcepos="9:1-9:43">
+<span id="anaconda3を導入するメリット-" class="fragment"></span><a href="#anaconda3%E3%82%92%E5%B0%8E%E5%85%A5%E3%81%99%E3%82%8B%E3%83%A1%E3%83%AA%E3%83%83%E3%83%88-"><i class="fa fa-link"></i></a>Anaconda3を導入するメリット :</h4>
+<p data-sourcepos="10:1-10:165"><strong>RDKitを動かすのに必要な諸々のパッケージがまとまっていて、個々のパッケージを導入するよりも労力が小さくて済む。</strong></p>
+<p data-sourcepos="13:1-13:195">…というわけで<a href="https://www.anaconda.com/products/individual" rel="nofollow noopener" target="_blank"><strong>公式サイト</strong></a>からwindows用の.exeファイルをダウンロードし、以下の点に注意して実行します。</p>
+<ol data-sourcepos="15:1-17:0">
+<li data-sourcepos="15:1-15:191">Add Anaconda to the system PATH environment variable は推奨されていないようなので、チェックを外してインストールする（既存のPythonとの競合を防止）</li>
+<li data-sourcepos="16:1-17:0">パス名は日本語を含まないように注意</li>
+</ol>
+<p data-sourcepos="18:1-19:43">その他のインストールの詳細については解説記事が無数にあるので、どれかを参考にして入れて下さい。<br>
+基本的には [Next] 連打でOKです。</p>
+<blockquote data-sourcepos="20:1-21:164">
+<p data-sourcepos="20:2-21:164">※インストールには結構時間が掛かりました。（1時間弱くらい？）<br>
+※パスを通さないとそのままでは動かないので注意。私の場合、システム環境変数の "Path" に以下のパスを追加しました。</p>
+</blockquote>
+<blockquote data-sourcepos="23:1-23:68">
+<div class="code-frame" data-lang="" data-sourcepos="23:2-24:28">
+<div class="code-lang"><span class="bold">anaconda3を置く場所はインストール時に指定可能</span></div>
+<div class="highlight"><pre><code></code></pre></div>
+</div>
+</blockquote>
+<p data-sourcepos="24:1-27:50">C:\Users(user名)\anaconda3<br>
+C:\Users(user名)\anaconda3\Scripts<br>
+C:\Users(user名)\anaconda3\Library\bin<br>
+C:\Users(user名)\anaconda3\Library\mingw-w64\bin</p>
+<div class="code-frame" data-lang="text" data-sourcepos="28:1-45:3"><div class="highlight"><pre><code>
+Anacondaが正しく導入されているかどうかは `conda --version` などで確かめられます。
+
+
+# ② Anaconda3上でPython3.7系の仮想環境を構築
+しかしこのままではRDKitは使えません。なぜなら、`conda` で導入できるRDKitはPython3.8系には対応していないからです😅。
+（参考：[**RDKit をインストールできなかったり import できなかったりしたときの対処法まとめ (Anaconda ユーザー向け)**]
+(https://datachemeng.com/rdkit_install_import)）
+
+そこで、Python3.7系の仮想環境を構築することにします😤。
+
+`conda create --name myenv python=3.7` をコマンドプロンプトで実行して仮想環境（Python 3.7.10）を新規作成。
+（参考：[**Anaconda3 コマンドまとめ**](https://qiita.com/WestRiver/items/cce9c99076d59abd3f69)）
+
+```:Python3.7系の仮想環境を構築
+C:\Users\(user名)&gt; conda create --name myenv python=3.7
+</code></pre></div></div>
+<blockquote data-sourcepos="47:1-50:117">
+<p data-sourcepos="47:2-50:117">※<strong>仮想環境の名前は何でもよい</strong>（今後さらに仮想環境が増えるなら「py37」とかの方が分かりやすいかも？）。<br>
+※私のPCでは仮想環境の構築に10分以上要しました。<br>
+※ <code>conda activate myenv</code> を実行しても <code>CommandNotFoundError: Your shell has not been properly configured to use 'conda activate'.</code> と出てエラーになる場合は<strong>コマンドプロンプトを再起動する</strong>。<br>
+（<code>C:\Users\(user名)\anaconda3\etc\profile.d</code> にあるシェルスクリプトは特に変更していません）</p>
+</blockquote>
+<p data-sourcepos="52:1-52:118"><code>conda activate myenv</code> で仮想環境「myenv」を起動すると入力待ちが以下のように変わります。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="54:1-56:3"><div class="highlight"><pre><code>(myenv) C:\Users\(user名)&gt;
+</code></pre></div></div>
+<blockquote data-sourcepos="58:1-58:60">
+<p data-sourcepos="58:3-58:60"><code>conda deactivate</code> で仮想環境を終了できます。</p>
+</blockquote>
+<h1 data-sourcepos="61:1-61:47">
+<span id="-仮想環境でrdkitをインストール" class="fragment"></span><a href="#-%E4%BB%AE%E6%83%B3%E7%92%B0%E5%A2%83%E3%81%A7rdkit%E3%82%92%E3%82%A4%E3%83%B3%E3%82%B9%E3%83%88%E3%83%BC%E3%83%AB"><i class="fa fa-link"></i></a>③ 仮想環境でRDKitをインストール</h1>
+<p data-sourcepos="63:1-63:110">以下のコマンドをコマンドプロンプトで実行して仮想環境でRDKitをインストール。</p>
+<div class="code-frame" data-lang="" data-sourcepos="65:1-67:3">
+<div class="code-lang"><span class="bold">RDKitをインストール</span></div>
+<div class="highlight"><pre><code>conda install -y -c rdkit rdkit
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="68:1-68:65">
+<p data-sourcepos="68:2-68:65">※RDKitのインストールには30分ほど要しました。</p>
+</blockquote>
+<p data-sourcepos="70:1-70:133">Pythonを対話型で起動して <code>import rdkit</code> がエラーにならなければ導入できています。お疲れ様でした。</p>
+<h1 data-sourcepos="72:1-72:11">
+<span id="おまけ" class="fragment"></span><a href="#%E3%81%8A%E3%81%BE%E3%81%91"><i class="fa fa-link"></i></a>おまけ</h1>
+<p data-sourcepos="74:1-74:153">もう少し遊びたい人は、以下の3行を入力してみて下さい。トルエン骨格のxyz座標がMolBlock​形式で出力されます。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="76:1-101:3">
+<div class="code-lang"><span class="bold">実行例</span></div>
+<div class="highlight"><pre><code><span class="o">&gt;&gt;&gt;</span> <span class="kn">from</span> <span class="n">rdkit</span> <span class="kn">import</span> <span class="n">Chem</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">m</span> <span class="o">=</span> <span class="n">Chem</span><span class="p">.</span><span class="nc">MolFromSmiles</span><span class="p">(</span><span class="sh">'</span><span class="s">Cc1ccccc1</span><span class="sh">'</span><span class="p">)</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="nf">print</span><span class="p">(</span><span class="n">Chem</span><span class="p">.</span><span class="nc">MolToMolBlock</span><span class="p">(</span><span class="n">m</span><span class="p">))</span>
+
+     <span class="n">RDKit</span>          <span class="mi">2</span><span class="n">D</span>
+
+  <span class="mi">7</span>  <span class="mi">7</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0999</span> <span class="n">V2000</span>
+    <span class="mf">3.0000</span>    <span class="mf">0.0000</span>    <span class="mf">0.0000</span> <span class="n">C</span>   <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>
+    <span class="mf">1.5000</span>    <span class="mf">0.0000</span>    <span class="mf">0.0000</span> <span class="n">C</span>   <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>
+    <span class="mf">0.7500</span>   <span class="o">-</span><span class="mf">1.2990</span>    <span class="mf">0.0000</span> <span class="n">C</span>   <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>
+   <span class="o">-</span><span class="mf">0.7500</span>   <span class="o">-</span><span class="mf">1.2990</span>    <span class="mf">0.0000</span> <span class="n">C</span>   <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>
+   <span class="o">-</span><span class="mf">1.5000</span>    <span class="mf">0.0000</span>    <span class="mf">0.0000</span> <span class="n">C</span>   <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>
+   <span class="o">-</span><span class="mf">0.7500</span>    <span class="mf">1.2990</span>    <span class="mf">0.0000</span> <span class="n">C</span>   <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>
+    <span class="mf">0.7500</span>    <span class="mf">1.2990</span>    <span class="mf">0.0000</span> <span class="n">C</span>   <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>  <span class="mi">0</span>
+  <span class="mi">1</span>  <span class="mi">2</span>  <span class="mi">1</span>  <span class="mi">0</span>
+  <span class="mi">2</span>  <span class="mi">3</span>  <span class="mi">2</span>  <span class="mi">0</span>
+  <span class="mi">3</span>  <span class="mi">4</span>  <span class="mi">1</span>  <span class="mi">0</span>
+  <span class="mi">4</span>  <span class="mi">5</span>  <span class="mi">2</span>  <span class="mi">0</span>
+  <span class="mi">5</span>  <span class="mi">6</span>  <span class="mi">1</span>  <span class="mi">0</span>
+  <span class="mi">6</span>  <span class="mi">7</span>  <span class="mi">2</span>  <span class="mi">0</span>
+  <span class="mi">7</span>  <span class="mi">2</span>  <span class="mi">1</span>  <span class="mi">0</span>
+<span class="n">M</span>  <span class="n">END</span>
+
+<span class="o">&gt;&gt;&gt;</span> 
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="103:1-103:102">
+<p data-sourcepos="103:2-103:102">仮想環境で.pyファイルを実行すればRDKitを使うスクリプトが実行できます。</p>
+</blockquote>
+
+</div>
+
+
+{% endraw %}

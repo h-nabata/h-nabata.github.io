@@ -1,0 +1,869 @@
+[
+  {
+    "layout": "qiita-mirror",
+    "title": "【ローカルLLM】LLM-jp-4.1-33Bの推論性能検証（RTX 5070 Ti + RTX 3070 Ti）",
+    "qiita_id": "2499d24fc29fa7f45844",
+    "qiita_url": "https://qiita.com/h-nabata/items/2499d24fc29fa7f45844",
+    "qiita_created": "2026-10-01T07:21:24+09:00",
+    "qiita_updated": "2026-10-01T07:37:10+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "LLM・生成AI",
+    "mirror_tags": [
+      "ローカルLLM",
+      "LLM",
+      "LLM-jp",
+      "生成AI",
+      "性能評価"
+    ],
+    "permalink": "/qiita/2499d24fc29fa7f45844.html",
+    "url": "/qiita/2499d24fc29fa7f45844.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【2026年最新版】主要出版社の投稿規定における生成AIの取り扱い",
+    "qiita_id": "836492786d57c2ae78ea",
+    "qiita_url": "https://qiita.com/h-nabata/items/836492786d57c2ae78ea",
+    "qiita_created": "2026-09-27T23:15:17+09:00",
+    "qiita_updated": "2026-09-27T23:15:17+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "研究・論文執筆",
+    "mirror_tags": [
+      "生成AI",
+      "AIガバナンス",
+      "研究",
+      "画像生成",
+      "論文執筆"
+    ],
+    "permalink": "/qiita/836492786d57c2ae78ea.html",
+    "url": "/qiita/836492786d57c2ae78ea.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "Windows 11 + WSL2 のPC 2台とRaspberry PiをLAN内で相互SSH接続する",
+    "qiita_id": "a5f0d3b6b13910c734fd",
+    "qiita_url": "https://qiita.com/h-nabata/items/a5f0d3b6b13910c734fd",
+    "qiita_created": "2026-09-20T23:59:17+09:00",
+    "qiita_updated": "2026-09-20T23:59:17+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算環境・Linux",
+    "mirror_tags": [
+      "Windows11",
+      "WSL2",
+      "RaspberryPi",
+      "SSH",
+      "Network"
+    ],
+    "permalink": "/qiita/a5f0d3b6b13910c734fd.html",
+    "url": "/qiita/a5f0d3b6b13910c734fd.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "GRRMのPython外部計算を常駐サーバー化して高速化する",
+    "qiita_id": "2cd7d5e3d182647209f0",
+    "qiita_url": "https://qiita.com/h-nabata/items/2cd7d5e3d182647209f0",
+    "qiita_created": "2026-09-13T20:05:12+09:00",
+    "qiita_updated": "2026-09-13T20:05:12+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算化学・分子構造",
+    "mirror_tags": [
+      "化学",
+      "計算化学",
+      "ソケット通信",
+      "Python",
+      "高速化"
+    ],
+    "permalink": "/qiita/2cd7d5e3d182647209f0.html",
+    "url": "/qiita/2cd7d5e3d182647209f0.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【ローカルLLM】続・精選問題による国産LLM「LLM-jp-4-33B」と「Qwen3.8-27B」の推論性能比較（RTX 5070 Ti + RTX 3070 Ti）",
+    "qiita_id": "70d7d6ed64e91fce8675",
+    "qiita_url": "https://qiita.com/h-nabata/items/70d7d6ed64e91fce8675",
+    "qiita_created": "2026-09-06T04:35:56+09:00",
+    "qiita_updated": "2026-09-07T01:36:34+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "LLM・生成AI",
+    "mirror_tags": [
+      "ローカルLLM",
+      "LLM",
+      "LLM-jp",
+      "Qwen3.8",
+      "AI"
+    ],
+    "permalink": "/qiita/70d7d6ed64e91fce8675.html",
+    "url": "/qiita/70d7d6ed64e91fce8675.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【LLM】ベンチマーク用オリジナル上級問題（v1）",
+    "qiita_id": "8ba25944017b64207792",
+    "qiita_url": "https://qiita.com/h-nabata/items/8ba25944017b64207792",
+    "qiita_created": "2026-09-06T03:49:17+09:00",
+    "qiita_updated": "2026-09-08T23:36:05+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "LLM・生成AI",
+    "mirror_tags": [
+      "ローカルLLM",
+      "LLM",
+      "AI",
+      "ベンチマーク",
+      "推論"
+    ],
+    "permalink": "/qiita/8ba25944017b64207792.html",
+    "url": "/qiita/8ba25944017b64207792.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【ローカルLLM】国産LLM「LLM-jp-4-33B」と「Qwen3.8-27B」の推論性能比較（RTX 5070 Ti + RTX 3070 Ti）",
+    "qiita_id": "b80484406e839ee6507b",
+    "qiita_url": "https://qiita.com/h-nabata/items/b80484406e839ee6507b",
+    "qiita_created": "2026-08-24T02:34:14+09:00",
+    "qiita_updated": "2026-09-06T16:29:10+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "LLM・生成AI",
+    "mirror_tags": [
+      "GPU",
+      "ローカルLLM",
+      "LLM",
+      "LLM-jp",
+      "性能評価"
+    ],
+    "permalink": "/qiita/b80484406e839ee6507b.html",
+    "url": "/qiita/b80484406e839ee6507b.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【ローカルLLM】Qwen3.8-27BをデュアルGPUで高速化する",
+    "qiita_id": "80e75333ecb952ae2979",
+    "qiita_url": "https://qiita.com/h-nabata/items/80e75333ecb952ae2979",
+    "qiita_created": "2026-08-20T01:25:38+09:00",
+    "qiita_updated": "2026-08-20T01:25:38+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "LLM・生成AI",
+    "mirror_tags": [
+      "GPU",
+      "ローカルLLM",
+      "LLM",
+      "Qwen",
+      "Qwen3.8"
+    ],
+    "permalink": "/qiita/80e75333ecb952ae2979.html",
+    "url": "/qiita/80e75333ecb952ae2979.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【ローカルLLM】Qwen3.8-27Bの推論性能をテストする（WSL2 + Ollama + RTX 5070 Ti）",
+    "qiita_id": "390b3558be49c30f85a7",
+    "qiita_url": "https://qiita.com/h-nabata/items/390b3558be49c30f85a7",
+    "qiita_created": "2026-08-16T02:58:03+09:00",
+    "qiita_updated": "2026-08-20T08:17:28+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "LLM・生成AI",
+    "mirror_tags": [
+      "WSL",
+      "ローカルLLM",
+      "LLM",
+      "Qwen",
+      "Qwen3.8"
+    ],
+    "permalink": "/qiita/390b3558be49c30f85a7.html",
+    "url": "/qiita/390b3558be49c30f85a7.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "汎用NNP「OrbMol-v2」の潜在電荷（latent charge）の挙動を観察する",
+    "qiita_id": "33bff630ef0750d07076",
+    "qiita_url": "https://qiita.com/h-nabata/items/33bff630ef0750d07076",
+    "qiita_created": "2026-07-14T03:20:46+09:00",
+    "qiita_updated": "2026-07-15T10:47:15+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算化学・分子構造",
+    "mirror_tags": [
+      "Python",
+      "GPU",
+      "計算化学",
+      "ニューラルネットワークポテンシャル",
+      "OrbMol"
+    ],
+    "permalink": "/qiita/33bff630ef0750d07076.html",
+    "url": "/qiita/33bff630ef0750d07076.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【LLM】MCPを「役所での住所変更」で簡単に理解する",
+    "qiita_id": "77e54041bf7cc0086248",
+    "qiita_url": "https://qiita.com/h-nabata/items/77e54041bf7cc0086248",
+    "qiita_created": "2026-05-20T03:05:27+09:00",
+    "qiita_updated": "2026-05-20T21:32:20+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "LLM・生成AI",
+    "mirror_tags": [
+      "AI",
+      "MCP",
+      "生成AI",
+      "LLM",
+      "AIエージェント"
+    ],
+    "permalink": "/qiita/77e54041bf7cc0086248.html",
+    "url": "/qiita/77e54041bf7cc0086248.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【ローカルLLM】Qwen2.5-Coder:14Bによる計算化学ワークフローのJSON化を検証する",
+    "qiita_id": "15f7856b036f055a431b",
+    "qiita_url": "https://qiita.com/h-nabata/items/15f7856b036f055a431b",
+    "qiita_created": "2026-05-17T05:47:36+09:00",
+    "qiita_updated": "2026-05-19T21:01:40+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "LLM・生成AI",
+    "mirror_tags": [
+      "AI",
+      "計算化学",
+      "Qwen",
+      "ローカルLLM",
+      "AIエージェント"
+    ],
+    "permalink": "/qiita/15f7856b036f055a431b.html",
+    "url": "/qiita/15f7856b036f055a431b.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【機械学習ポテンシャル】UMA-S-1.2をGPUで動かす",
+    "qiita_id": "f2a9d301a6c93efdf0b2",
+    "qiita_url": "https://qiita.com/h-nabata/items/f2a9d301a6c93efdf0b2",
+    "qiita_created": "2026-03-12T00:31:02+09:00",
+    "qiita_updated": "2026-03-12T00:31:02+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算化学・分子構造",
+    "mirror_tags": [
+      "Python",
+      "GPU",
+      "計算化学",
+      "ニューラルネットワークポテンシャル",
+      "fairchem"
+    ],
+    "permalink": "/qiita/f2a9d301a6c93efdf0b2.html",
+    "url": "/qiita/f2a9d301a6c93efdf0b2.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "MobaXtermを複数インスタンス起動する",
+    "qiita_id": "e6892c62175bfd4dfd9f",
+    "qiita_url": "https://qiita.com/h-nabata/items/e6892c62175bfd4dfd9f",
+    "qiita_created": "2026-01-08T19:48:17+09:00",
+    "qiita_updated": "2026-01-08T19:48:17+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算環境・Linux",
+    "mirror_tags": [
+      "効率化",
+      "MobaXterm"
+    ],
+    "permalink": "/qiita/e6892c62175bfd4dfd9f.html",
+    "url": "/qiita/e6892c62175bfd4dfd9f.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "WSL-Ubuntu + RTX 5070 Ti で fairchem-core (UMA) をGPUで動かす",
+    "qiita_id": "efb8c8ea0ccf5fccc1ab",
+    "qiita_url": "https://qiita.com/h-nabata/items/efb8c8ea0ccf5fccc1ab",
+    "qiita_created": "2025-11-24T04:41:11+09:00",
+    "qiita_updated": "2025-11-24T04:41:11+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算化学・分子構造",
+    "mirror_tags": [
+      "Python",
+      "GPU",
+      "計算化学",
+      "ニューラルネットワークポテンシャル",
+      "fairchem"
+    ],
+    "permalink": "/qiita/efb8c8ea0ccf5fccc1ab.html",
+    "url": "/qiita/efb8c8ea0ccf5fccc1ab.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "WSL環境にfairchem-coreを導入して汎用NNP「UMA」をテストする",
+    "qiita_id": "788f97e09c8593ac3951",
+    "qiita_url": "https://qiita.com/h-nabata/items/788f97e09c8593ac3951",
+    "qiita_created": "2025-06-12T02:43:38+09:00",
+    "qiita_updated": "2026-03-10T02:58:44+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算化学・分子構造",
+    "mirror_tags": [
+      "Python",
+      "Linux",
+      "計算化学",
+      "ニューラルネットワークポテンシャル",
+      "fairchem"
+    ],
+    "permalink": "/qiita/788f97e09c8593ac3951.html",
+    "url": "/qiita/788f97e09c8593ac3951.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "オフライン環境のユーザーローカルにgcc-14.3.0を導入する",
+    "qiita_id": "9457b0d51653c7eeab06",
+    "qiita_url": "https://qiita.com/h-nabata/items/9457b0d51653c7eeab06",
+    "qiita_created": "2025-06-01T04:17:05+09:00",
+    "qiita_updated": "2025-06-02T20:39:24+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算環境・Linux",
+    "mirror_tags": [
+      "Linux",
+      "GCC",
+      "コンパイラ",
+      "コンパイル",
+      "オフライン環境"
+    ],
+    "permalink": "/qiita/9457b0d51653c7eeab06.html",
+    "url": "/qiita/9457b0d51653c7eeab06.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【Python】距離行列の計算と実行時間",
+    "qiita_id": "2a8283c99fe7493aaf35",
+    "qiita_url": "https://qiita.com/h-nabata/items/2a8283c99fe7493aaf35",
+    "qiita_created": "2025-03-16T22:32:44+09:00",
+    "qiita_updated": "2025-03-16T22:32:44+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "プログラミング・可視化",
+    "mirror_tags": [
+      "Python",
+      "距離行列",
+      "実行時間"
+    ],
+    "permalink": "/qiita/2a8283c99fe7493aaf35.html",
+    "url": "/qiita/2a8283c99fe7493aaf35.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "ローカル環境に導入したdeepseek-r1をCLIで動かしてみる",
+    "qiita_id": "e191f5106ce1c2cd18f3",
+    "qiita_url": "https://qiita.com/h-nabata/items/e191f5106ce1c2cd18f3",
+    "qiita_created": "2025-02-02T06:58:38+09:00",
+    "qiita_updated": "2025-02-02T06:58:38+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "LLM・生成AI",
+    "mirror_tags": [
+      "Linux",
+      "AI",
+      "ローカル環境",
+      "生成AI",
+      "DeepSeekR1"
+    ],
+    "permalink": "/qiita/e191f5106ce1c2cd18f3.html",
+    "url": "/qiita/e191f5106ce1c2cd18f3.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【Python】SMILESから立体異性体を全列挙する【RDkit】",
+    "qiita_id": "0d477fccb9f1e054c4a3",
+    "qiita_url": "https://qiita.com/h-nabata/items/0d477fccb9f1e054c4a3",
+    "qiita_created": "2024-12-14T00:07:29+09:00",
+    "qiita_updated": "2024-12-14T00:07:29+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算化学・分子構造",
+    "mirror_tags": [
+      "Python",
+      "RDKit",
+      "化学",
+      "Smiles"
+    ],
+    "permalink": "/qiita/0d477fccb9f1e054c4a3.html",
+    "url": "/qiita/0d477fccb9f1e054c4a3.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【Python】sdf形式を経由してChemDrawの構造式からxyz座標を取得する",
+    "qiita_id": "a7a3cbcd1d8e6ecd04e2",
+    "qiita_url": "https://qiita.com/h-nabata/items/a7a3cbcd1d8e6ecd04e2",
+    "qiita_created": "2024-07-18T00:49:09+09:00",
+    "qiita_updated": "2024-07-18T00:49:09+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算化学・分子構造",
+    "mirror_tags": [
+      "Python",
+      "RDKit",
+      "sdf",
+      "化学",
+      "chemdraw"
+    ],
+    "permalink": "/qiita/a7a3cbcd1d8e6ecd04e2.html",
+    "url": "/qiita/a7a3cbcd1d8e6ecd04e2.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "renameコマンドが使えないときにファイル名を一括置換するワンライナー",
+    "qiita_id": "f18eb202bf035fb4d705",
+    "qiita_url": "https://qiita.com/h-nabata/items/f18eb202bf035fb4d705",
+    "qiita_created": "2024-05-18T20:29:02+09:00",
+    "qiita_updated": "2024-05-18T20:29:02+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算環境・Linux",
+    "mirror_tags": [
+      "Linux",
+      "tips",
+      "shell",
+      "シェル芸",
+      "Linuxコマンド"
+    ],
+    "permalink": "/qiita/f18eb202bf035fb4d705.html",
+    "url": "/qiita/f18eb202bf035fb4d705.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "簡単なスラブモデルの作り方",
+    "qiita_id": "290a575e07a2e56c7c94",
+    "qiita_url": "https://qiita.com/h-nabata/items/290a575e07a2e56c7c94",
+    "qiita_created": "2023-11-22T15:42:37+09:00",
+    "qiita_updated": "2023-11-25T16:36:51+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算化学・分子構造",
+    "mirror_tags": [
+      "化学",
+      "計算化学",
+      "VESTA",
+      "結晶構造",
+      "周期境界条件"
+    ],
+    "permalink": "/qiita/290a575e07a2e56c7c94.html",
+    "url": "/qiita/290a575e07a2e56c7c94.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "アイリングの式から反応速度定数を見積もる",
+    "qiita_id": "ada3098b933e17613dca",
+    "qiita_url": "https://qiita.com/h-nabata/items/ada3098b933e17613dca",
+    "qiita_created": "2023-06-21T12:46:42+09:00",
+    "qiita_updated": "2023-06-21T12:46:42+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "プログラミング・可視化",
+    "mirror_tags": [
+      "Python",
+      "数値計算",
+      "化学",
+      "反応速度論"
+    ],
+    "permalink": "/qiita/ada3098b933e17613dca.html",
+    "url": "/qiita/ada3098b933e17613dca.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【Python】resting stateの存在する化学反応の速度論シミュレーション",
+    "qiita_id": "3ffdabb45cb08eaab2f0",
+    "qiita_url": "https://qiita.com/h-nabata/items/3ffdabb45cb08eaab2f0",
+    "qiita_created": "2023-06-20T15:39:47+09:00",
+    "qiita_updated": "2023-06-23T02:34:12+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算化学・分子構造",
+    "mirror_tags": [
+      "Python",
+      "数値計算",
+      "シミュレーション",
+      "ルンゲクッタ法",
+      "化学"
+    ],
+    "permalink": "/qiita/3ffdabb45cb08eaab2f0.html",
+    "url": "/qiita/3ffdabb45cb08eaab2f0.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【Python】4次ルンゲ＝クッタ法で化学反応速度論シミュレーション",
+    "qiita_id": "3e9c79fa462fb7716d71",
+    "qiita_url": "https://qiita.com/h-nabata/items/3e9c79fa462fb7716d71",
+    "qiita_created": "2023-06-19T19:34:25+09:00",
+    "qiita_updated": "2023-06-23T02:33:09+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算化学・分子構造",
+    "mirror_tags": [
+      "Python",
+      "数値計算",
+      "シミュレーション",
+      "ルンゲクッタ法",
+      "化学"
+    ],
+    "permalink": "/qiita/3e9c79fa462fb7716d71.html",
+    "url": "/qiita/3e9c79fa462fb7716d71.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【Linux/Python】Psi4とRDkitの導入～電荷と双極子モーメントの算出",
+    "qiita_id": "11eb4c14f97d4f761445",
+    "qiita_url": "https://qiita.com/h-nabata/items/11eb4c14f97d4f761445",
+    "qiita_created": "2023-06-19T03:39:42+09:00",
+    "qiita_updated": "2023-06-19T03:39:42+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算化学・分子構造",
+    "mirror_tags": [
+      "Python",
+      "Linux",
+      "RDKit",
+      "計算化学",
+      "Psi4"
+    ],
+    "permalink": "/qiita/11eb4c14f97d4f761445.html",
+    "url": "/qiita/11eb4c14f97d4f761445.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "結晶構造から特定の指数面を切り出す",
+    "qiita_id": "129f1dc2ca00332fc971",
+    "qiita_url": "https://qiita.com/h-nabata/items/129f1dc2ca00332fc971",
+    "qiita_created": "2023-02-21T13:44:35+09:00",
+    "qiita_updated": "2023-02-27T13:32:17+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算化学・分子構造",
+    "mirror_tags": [
+      "座標変換",
+      "VESTA",
+      "結晶構造"
+    ],
+    "permalink": "/qiita/129f1dc2ca00332fc971.html",
+    "url": "/qiita/129f1dc2ca00332fc971.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【Python】igraphでグラフ・ネットワークを生成・描画する",
+    "qiita_id": "a17b41fd4e72b2855e8a",
+    "qiita_url": "https://qiita.com/h-nabata/items/a17b41fd4e72b2855e8a",
+    "qiita_created": "2023-02-03T01:25:36+09:00",
+    "qiita_updated": "2023-02-03T13:41:38+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "プログラミング・可視化",
+    "mirror_tags": [
+      "Python",
+      "Network",
+      "iGraph",
+      "樹形図"
+    ],
+    "permalink": "/qiita/a17b41fd4e72b2855e8a.html",
+    "url": "/qiita/a17b41fd4e72b2855e8a.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【Linux】最新版のOpenBabelをローカルにインストールする",
+    "qiita_id": "d234345c54e5eccc0cd7",
+    "qiita_url": "https://qiita.com/h-nabata/items/d234345c54e5eccc0cd7",
+    "qiita_created": "2023-02-02T22:06:13+09:00",
+    "qiita_updated": "2023-02-02T22:06:13+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算化学・分子構造",
+    "mirror_tags": [
+      "環境構築",
+      "ケモインフォマティクス",
+      "計算化学",
+      "情報化学"
+    ],
+    "permalink": "/qiita/d234345c54e5eccc0cd7.html",
+    "url": "/qiita/d234345c54e5eccc0cd7.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "xyz座標の結晶構造をcif形式に変換する",
+    "qiita_id": "c3da4b35553618037dca",
+    "qiita_url": "https://qiita.com/h-nabata/items/c3da4b35553618037dca",
+    "qiita_created": "2022-11-10T20:11:58+09:00",
+    "qiita_updated": "2022-11-10T20:11:58+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算化学・分子構造",
+    "mirror_tags": [
+      "Python",
+      "結晶構造",
+      "周期境界条件"
+    ],
+    "permalink": "/qiita/c3da4b35553618037dca.html",
+    "url": "/qiita/c3da4b35553618037dca.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【Python】png,jpeg,gif画像をeps形式に変換する",
+    "qiita_id": "100057e9823f9878eeb9",
+    "qiita_url": "https://qiita.com/h-nabata/items/100057e9823f9878eeb9",
+    "qiita_created": "2022-09-05T22:52:57+09:00",
+    "qiita_updated": "2022-09-05T22:52:57+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "プログラミング・可視化",
+    "mirror_tags": [
+      "Python",
+      "EPS",
+      "画像変換",
+      "pillow"
+    ],
+    "permalink": "/qiita/100057e9823f9878eeb9.html",
+    "url": "/qiita/100057e9823f9878eeb9.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "Linux mint入りのSSDを追加してWindowsとデュアルブートする",
+    "qiita_id": "3e83d9b0a908fb6bcf50",
+    "qiita_url": "https://qiita.com/h-nabata/items/3e83d9b0a908fb6bcf50",
+    "qiita_created": "2022-06-15T14:01:36+09:00",
+    "qiita_updated": "2022-06-15T14:01:36+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算環境・Linux",
+    "mirror_tags": [
+      "grub",
+      "Linux_Mint",
+      "デュアルブート",
+      "Bootloader"
+    ],
+    "permalink": "/qiita/3e83d9b0a908fb6bcf50.html",
+    "url": "/qiita/3e83d9b0a908fb6bcf50.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "mplfinanceでドル円（USDJPY）の年足チャートを描く",
+    "qiita_id": "844912c4cc1ab246d6a1",
+    "qiita_url": "https://qiita.com/h-nabata/items/844912c4cc1ab246d6a1",
+    "qiita_created": "2022-04-14T04:25:18+09:00",
+    "qiita_updated": "2022-04-19T10:08:48+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "プログラミング・可視化",
+    "mirror_tags": [
+      "Python",
+      "mplfinance"
+    ],
+    "permalink": "/qiita/844912c4cc1ab246d6a1.html",
+    "url": "/qiita/844912c4cc1ab246d6a1.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "Qiitaでアスタリスクやアンダーバーを含む数式を書くときの注意",
+    "qiita_id": "193b030a48b122907a08",
+    "qiita_url": "https://qiita.com/h-nabata/items/193b030a48b122907a08",
+    "qiita_created": "2022-02-10T16:32:12+09:00",
+    "qiita_updated": "2022-02-10T16:32:12+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "プログラミング・可視化",
+    "mirror_tags": [
+      "Qiita",
+      "数式"
+    ],
+    "permalink": "/qiita/193b030a48b122907a08.html",
+    "url": "/qiita/193b030a48b122907a08.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "Selenium経由でSlackのDMを取得･送信･スクショする",
+    "qiita_id": "7cec84f02db8bd1ca754",
+    "qiita_url": "https://qiita.com/h-nabata/items/7cec84f02db8bd1ca754",
+    "qiita_created": "2022-01-31T16:40:37+09:00",
+    "qiita_updated": "2022-01-31T16:40:37+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "プログラミング・可視化",
+    "mirror_tags": [
+      "Python",
+      "Selenium",
+      "自動化",
+      "Slack"
+    ],
+    "permalink": "/qiita/7cec84f02db8bd1ca754.html",
+    "url": "/qiita/7cec84f02db8bd1ca754.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "SeleniumでSlackに自動でログインする",
+    "qiita_id": "96d6a9068cb7c6ad26ae",
+    "qiita_url": "https://qiita.com/h-nabata/items/96d6a9068cb7c6ad26ae",
+    "qiita_created": "2022-01-28T23:54:31+09:00",
+    "qiita_updated": "2022-01-29T00:10:22+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "プログラミング・可視化",
+    "mirror_tags": [
+      "Python",
+      "Selenium",
+      "自動化",
+      "Slack"
+    ],
+    "permalink": "/qiita/96d6a9068cb7c6ad26ae.html",
+    "url": "/qiita/96d6a9068cb7c6ad26ae.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【Anaconda3】仮想環境で起動したAtomからコードを直接実行する（RDKit）",
+    "qiita_id": "a5d8cb9589d8a7347321",
+    "qiita_url": "https://qiita.com/h-nabata/items/a5d8cb9589d8a7347321",
+    "qiita_created": "2022-01-27T20:55:47+09:00",
+    "qiita_updated": "2022-04-10T00:30:22+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算化学・分子構造",
+    "mirror_tags": [
+      "Python",
+      "ATOM",
+      "RDKit",
+      "仮想環境",
+      "Anaconda"
+    ],
+    "permalink": "/qiita/a5d8cb9589d8a7347321.html",
+    "url": "/qiita/a5d8cb9589d8a7347321.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【Atom】gpp-compilerでC、C++を手軽に実行する",
+    "qiita_id": "ef8e2d900b1ae5bd99b1",
+    "qiita_url": "https://qiita.com/h-nabata/items/ef8e2d900b1ae5bd99b1",
+    "qiita_created": "2022-01-24T18:17:41+09:00",
+    "qiita_updated": "2022-01-25T22:47:19+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "プログラミング・可視化",
+    "mirror_tags": [
+      "C",
+      "C++",
+      "ATOM",
+      "compiler",
+      "コンパイル"
+    ],
+    "permalink": "/qiita/ef8e2d900b1ae5bd99b1.html",
+    "url": "/qiita/ef8e2d900b1ae5bd99b1.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "RDKitを使うためにWindowsにAnaconda3を導入したときのメモ",
+    "qiita_id": "c1d16471bda6735a5d8a",
+    "qiita_url": "https://qiita.com/h-nabata/items/c1d16471bda6735a5d8a",
+    "qiita_created": "2021-07-01T19:07:34+09:00",
+    "qiita_updated": "2021-07-02T00:05:56+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算化学・分子構造",
+    "mirror_tags": [
+      "Python",
+      "Windows",
+      "RDKit",
+      "Anaconda",
+      "anaconda3"
+    ],
+    "permalink": "/qiita/c1d16471bda6735a5d8a.html",
+    "url": "/qiita/c1d16471bda6735a5d8a.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "seabornを使うのを諦めた人のメモ",
+    "qiita_id": "3719ecab1dc804e30606",
+    "qiita_url": "https://qiita.com/h-nabata/items/3719ecab1dc804e30606",
+    "qiita_created": "2021-06-06T02:11:13+09:00",
+    "qiita_updated": "2021-06-06T14:12:23+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "プログラミング・可視化",
+    "mirror_tags": [
+      "Python",
+      "seaborn",
+      "ImportError"
+    ],
+    "permalink": "/qiita/3719ecab1dc804e30606.html",
+    "url": "/qiita/3719ecab1dc804e30606.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "scikit-learn導入時にOSErrorが出たときのメモ",
+    "qiita_id": "0c07792d4ef6f69b4e18",
+    "qiita_url": "https://qiita.com/h-nabata/items/0c07792d4ef6f69b4e18",
+    "qiita_created": "2021-06-05T22:56:57+09:00",
+    "qiita_updated": "2021-06-05T22:56:57+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "プログラミング・可視化",
+    "mirror_tags": [
+      "Python",
+      "scikit-learn",
+      "OSError"
+    ],
+    "permalink": "/qiita/0c07792d4ef6f69b4e18.html",
+    "url": "/qiita/0c07792d4ef6f69b4e18.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【LaTeX: fancyhdr】表紙のヘッダー/フッターを無効化する",
+    "qiita_id": "869c1366be0ca6f0b619",
+    "qiita_url": "https://qiita.com/h-nabata/items/869c1366be0ca6f0b619",
+    "qiita_created": "2021-01-23T15:36:00+09:00",
+    "qiita_updated": "2021-01-23T15:36:00+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "プログラミング・可視化",
+    "mirror_tags": [
+      "LaTeX",
+      "Overleaf"
+    ],
+    "permalink": "/qiita/869c1366be0ca6f0b619.html",
+    "url": "/qiita/869c1366be0ca6f0b619.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "Juliaで3Dのgifアニメを作りたい！",
+    "qiita_id": "6bdf5972720154a2f271",
+    "qiita_url": "https://qiita.com/h-nabata/items/6bdf5972720154a2f271",
+    "qiita_created": "2020-09-24T18:35:11+09:00",
+    "qiita_updated": "2020-09-24T18:39:12+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "プログラミング・可視化",
+    "mirror_tags": [
+      "3D",
+      "GIF",
+      "Julia",
+      "GIFアニメ"
+    ],
+    "permalink": "/qiita/6bdf5972720154a2f271.html",
+    "url": "/qiita/6bdf5972720154a2f271.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "Goで実装する並列処理（Hello, world!を10000回出力してみる）",
+    "qiita_id": "854076d3437b70990cb3",
+    "qiita_url": "https://qiita.com/h-nabata/items/854076d3437b70990cb3",
+    "qiita_created": "2020-09-21T01:20:01+09:00",
+    "qiita_updated": "2023-01-30T15:04:21+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "プログラミング・可視化",
+    "mirror_tags": [
+      "Go"
+    ],
+    "permalink": "/qiita/854076d3437b70990cb3.html",
+    "url": "/qiita/854076d3437b70990cb3.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "Go言語初心者がGo言語をさわってみた",
+    "qiita_id": "7688354b917e18c0b000",
+    "qiita_url": "https://qiita.com/h-nabata/items/7688354b917e18c0b000",
+    "qiita_created": "2020-09-19T19:10:11+09:00",
+    "qiita_updated": "2022-10-24T11:12:20+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "プログラミング・可視化",
+    "mirror_tags": [
+      "Go"
+    ],
+    "permalink": "/qiita/7688354b917e18c0b000.html",
+    "url": "/qiita/7688354b917e18c0b000.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "Julia初心者がJuliaをさわってみた",
+    "qiita_id": "f2849d2d1b69f2415de3",
+    "qiita_url": "https://qiita.com/h-nabata/items/f2849d2d1b69f2415de3",
+    "qiita_created": "2020-09-17T14:04:11+09:00",
+    "qiita_updated": "2021-12-15T16:03:39+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "プログラミング・可視化",
+    "mirror_tags": [
+      "Julia"
+    ],
+    "permalink": "/qiita/f2849d2d1b69f2415de3.html",
+    "url": "/qiita/f2849d2d1b69f2415de3.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "結晶格子の並進ベクトルの座標計算（Calculate xyz coordinates of translation vectors from cif format）",
+    "qiita_id": "0b99e16b8e0ed4e32a82",
+    "qiita_url": "https://qiita.com/h-nabata/items/0b99e16b8e0ed4e32a82",
+    "qiita_created": "2020-08-24T21:11:59+09:00",
+    "qiita_updated": "2022-11-10T18:22:00+09:00",
+    "mirror_saved": "2026-10-02T20:35:35+09:00",
+    "mirror_category": "計算化学・分子構造",
+    "mirror_tags": [
+      "Python",
+      "結晶構造",
+      "周期境界条件"
+    ],
+    "permalink": "/qiita/0b99e16b8e0ed4e32a82.html",
+    "url": "/qiita/0b99e16b8e0ed4e32a82.html"
+  }
+]

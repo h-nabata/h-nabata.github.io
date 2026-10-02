@@ -1,0 +1,169 @@
+---
+layout: "qiita-mirror"
+title: "Selenium経由でSlackのDMを取得･送信･スクショする"
+qiita_id: "7cec84f02db8bd1ca754"
+qiita_url: "https://qiita.com/h-nabata/items/7cec84f02db8bd1ca754"
+qiita_created: "2022-01-31T16:40:37+09:00"
+qiita_updated: "2022-01-31T16:40:37+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "プログラミング・可視化"
+mirror_tags: ["Python", "Selenium", "自動化", "Slack"]
+permalink: "/qiita/7cec84f02db8bd1ca754.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="1:1-1:369">ブラウザの操作を自動化するライブラリ「<a href="https://www.selenium.dev/documentation/" rel="nofollow noopener" target="_blank"><strong>Selenium</strong></a>」を使って<a href="https://slack.com/intl/ja-jp/" rel="nofollow noopener" target="_blank"><strong>Slack</strong></a>へ自動でログインし、特定のメンバーのDM欄からテキストを自動で取得・送信したり、スクリーンショットを保存したりするプログラムの一例です。</p>
+<blockquote data-sourcepos="3:1-3:55">
+<p data-sourcepos="3:2-3:55">先日の投稿の上位互換プログラムです。</p>
+</blockquote>
+<p data-sourcepos="5:1-5:53"><a href="/qiita/96d6a9068cb7c6ad26ae.html" class="mirror-link-card">https://qiita.com/h-nabata/items/96d6a9068cb7c6ad26ae</a>
+</p>
+<div class="code-frame" data-lang="py" data-sourcepos="7:1-144:3">
+<div class="code-lang"><span class="bold">auto-dm.py</span></div>
+<div class="highlight"><pre><code><span class="c1"># （Selenium 4.1.0 で動作確認済み）
+# webdriver は使用しているChromeのバージョンに合わせて以下のページから取得する。
+# https://chromedriver.chromium.org/downloads
+</span>
+<span class="kn">from</span> <span class="n">selenium</span> <span class="kn">import</span> <span class="n">webdriver</span>
+<span class="kn">from</span> <span class="n">selenium.webdriver.common.by</span> <span class="kn">import</span> <span class="n">By</span>
+<span class="kn">from</span> <span class="n">selenium.webdriver.common.keys</span> <span class="kn">import</span> <span class="n">Keys</span>
+<span class="kn">from</span> <span class="n">selenium.webdriver.chrome</span> <span class="kn">import</span> <span class="n">service</span> <span class="k">as</span> <span class="n">fs</span>
+<span class="kn">import</span> <span class="n">time</span>
+<span class="kn">import</span> <span class="n">sys</span>
+<span class="kn">import</span> <span class="n">os</span>
+
+<span class="c1"># パラメータ
+</span><span class="n">slackurl</span>    <span class="o">=</span> <span class="sh">'</span><span class="s">sample.slack.com</span><span class="sh">'</span>        <span class="c1"># Slack URL
+</span><span class="n">mailaddress</span> <span class="o">=</span> <span class="sh">'</span><span class="s">sample@gmail.com</span><span class="sh">'</span>        <span class="c1"># 登録済みメールアドレス
+</span><span class="n">mypassword</span>  <span class="o">=</span> <span class="sh">'</span><span class="s">abrakadabra</span><span class="sh">'</span>             <span class="c1"># ログインパスワード
+</span><span class="n">waittime</span>    <span class="o">=</span> <span class="mf">10.0</span>                      <span class="c1"># (sec.) 待機時間 (通信速度 &amp; PCスペックに応じて調整)
+</span><span class="n">logintime</span>   <span class="o">=</span> <span class="mf">10.0</span>                      <span class="c1"># (sec.) ログインを維持する時間 (適宜調整)
+</span><span class="n">driverpath</span>  <span class="o">=</span> <span class="sh">'</span><span class="s">C:/Users/[user名]/Downloads/chromedriver_win32/chromedriver.exe</span><span class="sh">'</span> <span class="c1"># webdriver が置かれている path を指定
+</span><span class="n">workpath</span>    <span class="o">=</span> <span class="sh">'</span><span class="s">C:/Users/[user名]/Downloads/</span><span class="sh">'</span>                                    <span class="c1"># 取得した画像などの保存先を指定
+</span><span class="n">url</span>         <span class="o">=</span> <span class="sh">'</span><span class="s">https://app.slack.com/client/XXXYYYZZZ/AAABBBCCC</span><span class="sh">'</span>                <span class="c1"># 目的地となる Slack WorkSpace のURL
+</span><span class="n">recipient</span>   <span class="o">=</span> <span class="sh">'</span><span class="s">山田</span><span class="sh">'</span>    <span class="c1"># 相手(DMの受信者)のアカウント名
+</span><span class="n">mymessage</span>   <span class="o">=</span> <span class="sh">'</span><span class="s">Yes My Darkness!</span><span class="sh">'</span>    <span class="c1"># DMの内容
+</span><span class="n">order</span>       <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># 何番目に最新のメッセージを取得するか
+</span><span class="n">dm_mode</span>     <span class="o">=</span> <span class="mi">0</span>  <span class="c1"># 0 -&gt; 何もしない  //  1 -&gt; メッセージを送信する
+</span><span class="n">ss_mode</span>     <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># 0 -&gt; 何もしない  //  1 -&gt; 最新のメッセージのスクリーンショットを保存  //  2 -&gt; DM欄全体のスクリーンショットを保存
+</span>
+
+<span class="c1"># フォルダの存在確認
+</span><span class="k">if</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="nf">exists</span><span class="p">(</span><span class="n">workpath</span><span class="p">)</span> <span class="o">==</span> <span class="bp">False</span><span class="p">:</span>
+    <span class="nf">print</span><span class="p">(</span><span class="sh">'</span><span class="s">% Error: The </span><span class="sh">"</span><span class="s">workpath</span><span class="sh">"</span><span class="s"> is invalid...</span><span class="sh">'</span><span class="p">)</span>
+    <span class="n">sys</span><span class="p">.</span><span class="nf">exit</span><span class="p">()</span>
+
+<span class="c1"># webdriverの存在確認
+</span><span class="k">if</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="nf">exists</span><span class="p">(</span><span class="n">driverpath</span><span class="p">)</span> <span class="o">==</span> <span class="bp">False</span><span class="p">:</span>
+    <span class="nf">print</span><span class="p">(</span><span class="sh">'</span><span class="s">% Error: The </span><span class="sh">"</span><span class="s">driverpath</span><span class="sh">"</span><span class="s"> is invalid...</span><span class="sh">'</span><span class="p">)</span>
+    <span class="n">sys</span><span class="p">.</span><span class="nf">exit</span><span class="p">()</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="c1"># 自動ログイン
+</span>    <span class="k">try</span><span class="p">:</span>
+        <span class="c1"># Webページにアクセス
+</span>        <span class="n">chrome_service</span> <span class="o">=</span> <span class="n">fs</span><span class="p">.</span><span class="nc">Service</span><span class="p">(</span><span class="n">executable_path</span><span class="o">=</span><span class="n">driverpath</span><span class="p">)</span>
+        <span class="n">driver</span>  <span class="o">=</span> <span class="n">webdriver</span><span class="p">.</span><span class="nc">Chrome</span><span class="p">(</span><span class="n">service</span><span class="o">=</span><span class="n">chrome_service</span><span class="p">)</span>
+        <span class="n">driver</span><span class="p">.</span><span class="nf">maximize_window</span><span class="p">()</span>  <span class="c1">#全画面表示にする (オプション)
+</span>        <span class="n">driver</span><span class="p">.</span><span class="nf">get</span><span class="p">(</span><span class="n">url</span><span class="p">)</span>
+        <span class="n">driver</span><span class="p">.</span><span class="nf">implicitly_wait</span><span class="p">(</span><span class="n">waittime</span><span class="p">)</span>  <span class="c1"># 遷移待ち
+</span>
+        <span class="c1"># Slack WorkSpaceの選択
+</span>        <span class="n">ch_element</span> <span class="o">=</span> <span class="n">driver</span><span class="p">.</span><span class="nf">find_element</span><span class="p">(</span><span class="n">By</span><span class="p">.</span><span class="n">ID</span><span class="p">,</span> <span class="sh">'</span><span class="s">domain</span><span class="sh">'</span><span class="p">)</span>
+        <span class="n">ch_element</span><span class="p">.</span><span class="nf">send_keys</span><span class="p">(</span><span class="n">slackurl</span><span class="p">)</span>
+        <span class="n">ch_element</span><span class="p">.</span><span class="nf">send_keys</span><span class="p">(</span><span class="n">Keys</span><span class="p">.</span><span class="n">ENTER</span><span class="p">)</span>
+        <span class="n">driver</span><span class="p">.</span><span class="nf">implicitly_wait</span><span class="p">(</span><span class="n">waittime</span><span class="p">)</span>  <span class="c1"># 遷移待ち
+</span>
+        <span class="c1"># email, password の自動入力
+</span>        <span class="n">mail_element</span> <span class="o">=</span> <span class="n">driver</span><span class="p">.</span><span class="nf">find_element</span><span class="p">(</span><span class="n">By</span><span class="p">.</span><span class="n">ID</span><span class="p">,</span> <span class="sh">'</span><span class="s">email</span><span class="sh">'</span><span class="p">)</span>
+        <span class="n">mail_element</span><span class="p">.</span><span class="nf">send_keys</span><span class="p">(</span><span class="n">mailaddress</span><span class="p">)</span>
+        <span class="n">driver</span><span class="p">.</span><span class="nf">implicitly_wait</span><span class="p">(</span><span class="n">waittime</span><span class="p">)</span>  <span class="c1"># 待機 (オプション)
+</span>        <span class="n">password_element</span> <span class="o">=</span> <span class="n">driver</span><span class="p">.</span><span class="nf">find_element</span><span class="p">(</span><span class="n">By</span><span class="p">.</span><span class="n">ID</span><span class="p">,</span> <span class="sh">'</span><span class="s">password</span><span class="sh">'</span><span class="p">)</span>
+        <span class="n">password_element</span><span class="p">.</span><span class="nf">send_keys</span><span class="p">(</span><span class="n">mypassword</span><span class="p">)</span>
+        <span class="n">password_element</span><span class="p">.</span><span class="nf">send_keys</span><span class="p">(</span><span class="n">Keys</span><span class="p">.</span><span class="n">ENTER</span><span class="p">)</span>
+        <span class="n">driver</span><span class="p">.</span><span class="nf">implicitly_wait</span><span class="p">(</span><span class="n">waittime</span><span class="p">)</span>  <span class="c1"># 遷移待ち (少し長め)
+</span>
+        <span class="c1"># 自動ログインに成功
+</span>        <span class="nf">print</span><span class="p">(</span><span class="sh">'</span><span class="s">% Successfully logged in:</span><span class="sh">'</span><span class="p">)</span>
+        <span class="n">url</span>     <span class="o">=</span> <span class="n">driver</span><span class="p">.</span><span class="n">current_url</span>    <span class="c1"># URLを取得する (オプション)
+</span>        <span class="n">title</span>   <span class="o">=</span> <span class="n">driver</span><span class="p">.</span><span class="n">title</span>          <span class="c1"># タイトルを取得する (オプション)
+</span>        <span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">% URL       :</span><span class="sh">"</span><span class="p">,</span> <span class="n">url</span><span class="p">,</span> <span class="p">)</span>
+        <span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">% title     :</span><span class="sh">"</span><span class="p">,</span> <span class="n">title</span><span class="p">)</span>
+
+    <span class="k">except</span><span class="p">:</span>
+        <span class="c1"># ログインに失敗した場合はセッションを終了する
+</span>        <span class="n">driver</span><span class="p">.</span><span class="nf">quit</span><span class="p">()</span>
+        <span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">% Error: Your login has been failed...</span><span class="sh">"</span><span class="p">)</span>
+        <span class="n">sys</span><span class="p">.</span><span class="nf">exit</span><span class="p">()</span>
+
+    <span class="c1"># 送信先(recipient)のDMを開く
+</span>    <span class="n">recipient_list</span> <span class="o">=</span> <span class="n">driver</span><span class="p">.</span><span class="nf">find_elements</span><span class="p">(</span><span class="n">By</span><span class="p">.</span><span class="n">CSS_SELECTOR</span><span class="p">,</span> <span class="sh">'</span><span class="s">[data-qa=</span><span class="sh">"</span><span class="s">channel_sidebar_name_</span><span class="sh">'</span> <span class="o">+</span> <span class="n">recipient</span> <span class="o">+</span> <span class="sh">'"</span><span class="s">]</span><span class="sh">'</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nf">len</span><span class="p">(</span><span class="n">recipient_list</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>    <span class="c1"># DMリストに名前が表示されている場合
+</span>        <span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">% DM is showing in the current list.</span><span class="sh">"</span><span class="p">)</span>
+        <span class="n">driver</span><span class="p">.</span><span class="nf">find_element</span><span class="p">(</span><span class="n">By</span><span class="p">.</span><span class="n">CSS_SELECTOR</span><span class="p">,</span> <span class="sh">'</span><span class="s">[data-qa=</span><span class="sh">"</span><span class="s">channel_sidebar_name_</span><span class="sh">'</span> <span class="o">+</span> <span class="n">recipient</span> <span class="o">+</span> <span class="sh">'"</span><span class="s">]</span><span class="sh">'</span><span class="p">).</span><span class="nf">click</span><span class="p">()</span>
+        <span class="n">driver</span><span class="p">.</span><span class="nf">implicitly_wait</span><span class="p">(</span><span class="n">waittime</span><span class="p">)</span>  <span class="c1"># 遷移待ち
+</span>    <span class="k">else</span><span class="p">:</span>    <span class="c1"># DMリストに名前が表示されていない場合
+</span>        <span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">% DM is NOT showing in the current list.</span><span class="sh">"</span><span class="p">)</span>
+        <span class="n">searchbox_element</span> <span class="o">=</span> <span class="n">driver</span><span class="p">.</span><span class="nf">find_element</span><span class="p">(</span><span class="n">By</span><span class="p">.</span><span class="n">CSS_SELECTOR</span><span class="p">,</span> <span class="sh">'</span><span class="s">[class=</span><span class="sh">"</span><span class="s">c-button-unstyled p-top_nav__search p-top_nav__search--windows-linux</span><span class="sh">"</span><span class="s">]</span><span class="sh">'</span><span class="p">)</span>
+        <span class="n">searchbox_element</span><span class="p">.</span><span class="nf">send_keys</span><span class="p">(</span><span class="sh">"</span><span class="s">@</span><span class="sh">"</span> <span class="o">+</span> <span class="n">recipient</span><span class="p">)</span>
+        <span class="n">driver</span><span class="p">.</span><span class="nf">implicitly_wait</span><span class="p">(</span><span class="n">waittime</span><span class="p">)</span>  <span class="c1"># 待機 (オプション)
+</span>        <span class="n">driver</span><span class="p">.</span><span class="nf">find_element</span><span class="p">(</span><span class="n">By</span><span class="p">.</span><span class="n">CSS_SELECTOR</span><span class="p">,</span> <span class="sh">'</span><span class="s">[class=</span><span class="sh">"</span><span class="s">c-truncate c-truncate--break_words</span><span class="sh">"</span><span class="s">]</span><span class="sh">'</span><span class="p">).</span><span class="nf">click</span><span class="p">()</span>
+        <span class="n">driver</span><span class="p">.</span><span class="nf">implicitly_wait</span><span class="p">(</span><span class="n">waittime</span><span class="p">)</span>  <span class="c1"># 待機 (オプション)
+</span>
+    <span class="c1"># DMの要素をリストとして取得
+</span>    <span class="n">message_element_list</span> <span class="o">=</span> <span class="n">driver</span><span class="p">.</span><span class="nf">find_elements</span><span class="p">(</span><span class="n">By</span><span class="p">.</span><span class="n">CSS_SELECTOR</span><span class="p">,</span> <span class="sh">'</span><span class="s">[class=</span><span class="sh">"</span><span class="s">c-message_kit__gutter</span><span class="sh">"</span><span class="s">]</span><span class="sh">'</span><span class="p">)</span>  <span class="c1"># メッセージの要素を特定
+</span>    <span class="n">messagenum</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="o">*</span><span class="n">order</span>
+    <span class="n">target_massage</span> <span class="o">=</span> <span class="n">message_element_list</span><span class="p">[</span><span class="n">messagenum</span><span class="p">]</span>  <span class="c1"># 最新のメッセージをテキストで取得
+</span>    <span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">% sender    :</span><span class="sh">"</span><span class="p">,</span> <span class="n">target_massage</span><span class="p">.</span><span class="nf">find_element</span><span class="p">(</span><span class="n">By</span><span class="p">.</span><span class="n">CSS_SELECTOR</span><span class="p">,</span> <span class="sh">'</span><span class="s">[class=</span><span class="sh">"</span><span class="s">c-message__sender c-message_kit__sender</span><span class="sh">"</span><span class="s">]</span><span class="sh">'</span><span class="p">).</span><span class="n">text</span><span class="p">)</span> <span class="c1"># 最新のメッセージの送信者
+</span>    <span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">% timestamp :</span><span class="sh">"</span><span class="p">,</span> <span class="n">target_massage</span><span class="p">.</span><span class="nf">find_element</span><span class="p">(</span><span class="n">By</span><span class="p">.</span><span class="n">CSS_SELECTOR</span><span class="p">,</span> <span class="sh">'</span><span class="s">[class=</span><span class="sh">"</span><span class="s">c-timestamp__label</span><span class="sh">"</span><span class="s">]</span><span class="sh">'</span><span class="p">).</span><span class="n">text</span><span class="p">)</span> <span class="c1"># 最新のメッセージの送信時刻
+</span>    <span class="k">if</span> <span class="n">target_massage</span><span class="p">.</span><span class="nf">find_elements</span><span class="p">(</span><span class="n">By</span><span class="p">.</span><span class="n">CSS_SELECTOR</span><span class="p">,</span> <span class="sh">'</span><span class="s">[class=</span><span class="sh">"</span><span class="s">p-rich_text_section</span><span class="sh">"</span><span class="s">]</span><span class="sh">'</span><span class="p">):</span>
+        <span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">% message   :</span><span class="sh">"</span><span class="p">,</span> <span class="n">target_massage</span><span class="p">.</span><span class="nf">find_element</span><span class="p">(</span><span class="n">By</span><span class="p">.</span><span class="n">CSS_SELECTOR</span><span class="p">,</span> <span class="sh">'</span><span class="s">[class=</span><span class="sh">"</span><span class="s">p-rich_text_section</span><span class="sh">"</span><span class="s">]</span><span class="sh">'</span><span class="p">).</span><span class="n">text</span><span class="p">,</span> <span class="n">sep</span><span class="o">=</span><span class="sh">"</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span> <span class="c1"># 最新のメッセージの本文
+</span>    <span class="k">else</span><span class="p">:</span>
+        <span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">% (There is no text in the message.)</span><span class="sh">"</span><span class="p">)</span>  <span class="c1"># テキストを含まないメッセージの場合
+</span>        <span class="n">ss_mode</span> <span class="o">=</span> <span class="mi">1</span>  <span class="c1"># スクリーンショットの保存を強制する (オプション)
+</span>
+    <span class="c1"># メッセージを送る (オプション)
+</span>    <span class="k">if</span> <span class="n">dm_mode</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">post_element</span> <span class="o">=</span> <span class="n">driver</span><span class="p">.</span><span class="nf">find_element</span><span class="p">(</span><span class="n">By</span><span class="p">.</span><span class="n">CSS_SELECTOR</span><span class="p">,</span> <span class="sh">'</span><span class="s">[class=</span><span class="sh">"</span><span class="s">ql-editor ql-blank</span><span class="sh">"</span><span class="s">]</span><span class="sh">'</span><span class="p">)</span>
+        <span class="n">post_element</span><span class="p">.</span><span class="nf">click</span><span class="p">()</span>
+        <span class="n">driver</span><span class="p">.</span><span class="nf">implicitly_wait</span><span class="p">(</span><span class="n">waittime</span><span class="p">)</span>  <span class="c1"># 待機 (オプション)
+</span>        <span class="n">post_element</span><span class="p">.</span><span class="nf">send_keys</span><span class="p">(</span><span class="n">mymessage</span><span class="p">)</span>  <span class="c1"># メッセージ入力
+</span>        <span class="n">post_element</span><span class="p">.</span><span class="nf">send_keys</span><span class="p">(</span><span class="n">Keys</span><span class="p">.</span><span class="n">ENTER</span><span class="p">)</span>
+        <span class="n">driver</span><span class="p">.</span><span class="nf">implicitly_wait</span><span class="p">(</span><span class="n">waittime</span><span class="p">)</span>  <span class="c1"># 待機 (オプション)
+</span>        <span class="n">driver</span><span class="p">.</span><span class="nf">find_element</span><span class="p">(</span><span class="n">By</span><span class="p">.</span><span class="n">CSS_SELECTOR</span><span class="p">,</span> <span class="sh">'</span><span class="s">[class=</span><span class="sh">"</span><span class="s">c-icon c-icon--paperplane-filled</span><span class="sh">"</span><span class="s">]</span><span class="sh">'</span><span class="p">).</span><span class="nf">click</span><span class="p">()</span>
+        <span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">% Your message was successfully sent.</span><span class="sh">"</span><span class="p">)</span>
+
+    <span class="c1"># DMの画像を取得する (オプション)
+</span>    <span class="k">if</span> <span class="n">ss_mode</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">time</span><span class="p">.</span><span class="nf">sleep</span><span class="p">(</span><span class="n">waittime</span><span class="p">)</span>  <span class="c1"># 強制的な待機 (オプション)
+</span>        <span class="n">png</span> <span class="o">=</span> <span class="n">message_element_list</span><span class="p">[</span><span class="n">messagenum</span><span class="p">].</span><span class="n">screenshot_as_png</span>  <span class="c1"># 最新のメッセージのみをpngで取得
+</span>        <span class="k">with</span> <span class="nf">open</span><span class="p">(</span><span class="n">workpath</span> <span class="o">+</span> <span class="sh">'</span><span class="s">image_from_slack.png</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">wb</span><span class="sh">'</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">f</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="n">png</span><span class="p">)</span>  <span class="c1"># 画像の書き出し
+</span>            <span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">% The image of the latest message has been saved successfully.</span><span class="sh">"</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">ss_mode</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="n">time</span><span class="p">.</span><span class="nf">sleep</span><span class="p">(</span><span class="n">waittime</span><span class="p">)</span>  <span class="c1"># 強制的な待機 (オプション)
+</span>        <span class="n">dmfield_element</span> <span class="o">=</span> <span class="n">driver</span><span class="p">.</span><span class="nf">find_elements</span><span class="p">(</span><span class="n">By</span><span class="p">.</span><span class="n">CSS_SELECTOR</span><span class="p">,</span> <span class="sh">'</span><span class="s">[class=</span><span class="sh">"</span><span class="s">p-workspace__primary_view</span><span class="sh">"</span><span class="s">]</span><span class="sh">'</span><span class="p">)</span>  <span class="c1"># DM欄の要素を特定
+</span>        <span class="n">png</span> <span class="o">=</span> <span class="n">dmfield_element</span><span class="p">[</span><span class="n">messagenum</span><span class="p">].</span><span class="n">screenshot_as_png</span>  <span class="c1">#DM欄をpngで取得
+</span>        <span class="k">with</span> <span class="nf">open</span><span class="p">(</span><span class="n">workpath</span> <span class="o">+</span> <span class="sh">'</span><span class="s">image_from_slack.png</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">wb</span><span class="sh">'</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+            <span class="n">f</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="n">png</span><span class="p">)</span>  <span class="c1"># 画像の書き出し
+</span>            <span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">% The image of the messages being displayed has been saved successfully.</span><span class="sh">"</span><span class="p">)</span>
+
+
+    <span class="n">time</span><span class="p">.</span><span class="nf">sleep</span><span class="p">(</span><span class="n">logintime</span><span class="p">)</span>    <span class="c1"># 任意時間ログイン状態を維持
+</span>
+<span class="k">finally</span><span class="p">:</span>
+    <span class="n">driver</span><span class="p">.</span><span class="nf">quit</span><span class="p">()</span>    <span class="c1"># セッションの終了
+</span>    <span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">% Done.</span><span class="sh">"</span><span class="p">)</span>
+    <span class="n">sys</span><span class="p">.</span><span class="nf">exit</span><span class="p">()</span>
+
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="146:1-147:152">
+<p data-sourcepos="146:2-147:152">セキュリティの問題が生じない範囲で適宜改変してご利用下さい。<br>
+Slack内のクラス名などは予告なく変更されることがありますので、継続的に使用する場合は適宜保守して下さい。</p>
+</blockquote>
+
+</div>
+
+
+{% endraw %}

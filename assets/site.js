@@ -4,10 +4,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (window.hljs && typeof window.hljs.highlightAll === 'function') {
-    window.hljs.highlightAll();
+    document.querySelectorAll('pre code').forEach(el => { if (!el.closest('#mirror-article')) window.hljs.highlightElement(el); });
   }
 
   if (typeof window.renderMathInElement === 'function') {
-    window.renderMathInElement(document.body);
+    window.renderMathInElement(document.body, { ignoredClasses: ['mirror-main'] });
   }
 });

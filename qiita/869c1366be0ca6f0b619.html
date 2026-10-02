@@ -1,0 +1,64 @@
+---
+layout: "qiita-mirror"
+title: "【LaTeX: fancyhdr】表紙のヘッダー/フッターを無効化する"
+qiita_id: "869c1366be0ca6f0b619"
+qiita_url: "https://qiita.com/h-nabata/items/869c1366be0ca6f0b619"
+qiita_created: "2021-01-23T15:36:00+09:00"
+qiita_updated: "2021-01-23T15:36:00+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "プログラミング・可視化"
+mirror_tags: ["LaTeX", "Overleaf"]
+permalink: "/qiita/869c1366be0ca6f0b619.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="1:1-2:138">Overleafで文書を作成するときに調べたので共有します。<br>
+TeXのfancyhdrパッケージを使用した際に表紙のヘッダー/フッターを無効化する書き方の一例を示します。</p>
+<div class="code-frame" data-lang="" data-sourcepos="4:1-26:3">
+<div class="code-lang"><span class="bold">書き方の例</span></div>
+<div class="highlight"><pre><code>
+\documentclass{jsarticle}
+　･･･
+　（各種プリアンブル）
+　･･･
+\usepackage{fancyhdr}
+\pagestyle{fancy} %pagestyleはお好みで
+    \lhead{ヘッダ左} %ヘッダ左
+    \chead{ヘッダ中央} %ヘッダ中央
+    \rhead{ヘッダ右} %ヘッダ右．コンパイルした日付を表示
+    \lfoot{フッタ左} %フッタ左
+    \cfoot{—\, \thepage \, —} %フッタ中央．ページ番号を表示
+    \rfoot{© 著作権} %フッタ右
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+　･･･
+　（中略）
+　･･･
+\end{document}
+</code></pre></div>
+</div>
+<p data-sourcepos="28:1-28:416">重要な部分は <code>\thispagestyle{empty}</code> の行です。これを <code>\maketitle</code> の直後に書くことで表紙のヘッダー/フッターのスタイルを無効化することができます。当然ですがOverleaf上でも同様に機能します。なお、プリアンブルに <code>\renewcommand{\headrulewidth}{0pt}</code> と書いておけば全ページでヘッダーの羅線を消すことができます。</p>
+<p data-sourcepos="30:1-30:193">ページの制御は <code>\newpage</code> などのコマンドで可能なので、特定のページ（下の例では <code>aaa</code> のページ）だけスタイルを無効化することもできます。</p>
+<div class="code-frame" data-lang="" data-sourcepos="32:1-45:3">
+<div class="code-lang"><span class="bold">書き方の例</span></div>
+<div class="highlight"><pre><code>\begin{document}
+
+\newpage
+
+\thispagestyle{empty}
+aaa
+
+\newpage
+
+bbb
+
+\end{document}
+</code></pre></div>
+</div>
+
+</div>
+
+
+{% endraw %}

@@ -1,0 +1,319 @@
+---
+layout: "qiita-mirror"
+title: "【機械学習ポテンシャル】UMA-S-1.2をGPUで動かす"
+qiita_id: "f2a9d301a6c93efdf0b2"
+qiita_url: "https://qiita.com/h-nabata/items/f2a9d301a6c93efdf0b2"
+qiita_created: "2026-03-12T00:31:02+09:00"
+qiita_updated: "2026-03-12T00:31:02+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "計算化学・分子構造"
+mirror_tags: ["Python", "GPU", "計算化学", "ニューラルネットワークポテンシャル", "fairchem"]
+permalink: "/qiita/f2a9d301a6c93efdf0b2.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<div data-sourcepos="1:1-6:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<p data-sourcepos="2:1-2:123">計算化学における「機械学習ポテンシャル」の概念については以下の記事等を参照のこと。</p>
+<ul data-sourcepos="4:1-5:105">
+<li data-sourcepos="4:1-4:204"><a href="https://ja.wikipedia.org/wiki/%E6%A9%9F%E6%A2%B0%E5%AD%A6%E7%BF%92%E5%8E%9F%E5%AD%90%E9%96%93%E3%83%9D%E3%83%86%E3%83%B3%E3%82%B7%E3%83%A3%E3%83%AB" rel="nofollow noopener" target="_blank">機械学習原子間ポテンシャル - Wikipedia</a></li>
+<li data-sourcepos="5:1-5:105"><a href="https://matlantis.com/ja/resources/blog/mlip-intro/" rel="nofollow noopener" target="_blank">機械学習ポテンシャル入門 - Matlantis</a></li>
+</ul>
+</div>
+</div>
+<h1 data-sourcepos="9:1-9:35">
+<span id="uma-smallモデルのリリース" class="fragment"></span><a href="#uma-small%E3%83%A2%E3%83%87%E3%83%AB%E3%81%AE%E3%83%AA%E3%83%AA%E3%83%BC%E3%82%B9"><i class="fa fa-link"></i></a>UMA smallモデルのリリース</h1>
+<p data-sourcepos="11:1-11:272">MetaのFairChemから機械学習ポテンシャル「UMA」のsmallモデルについて、新しいモデル（uma-s-1.2）がリリースされた。<a href="https://github.com/facebookresearch/fairchem" rel="nofollow noopener" target="_blank">公式リポジトリ</a>のREADMEには以下のように記載がある。</p>
+<table data-sourcepos="13:1-17:138">
+<thead>
+<tr data-sourcepos="13:1-13:28">
+<th data-sourcepos="13:2-13:13">Model Name</th>
+<th data-sourcepos="13:15-13:27">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="15:1-15:148">
+<td data-sourcepos="15:2-15:12">uma-s-1p2</td>
+<td data-sourcepos="15:14-15:147">Latest version of the UMA small model, fastest of the UMA models while still SOTA on most benchmarks (6.6M/290M active/total params)</td>
+</tr>
+<tr data-sourcepos="16:1-16:120">
+<td data-sourcepos="16:2-16:12">uma-s-1p1</td>
+<td data-sourcepos="16:14-16:119">Early version of the UMA small model while still SOTA on most benchmarks (6.6M/150M active/total params)</td>
+</tr>
+<tr data-sourcepos="17:1-17:138">
+<td data-sourcepos="17:2-17:12">uma-m-1p1</td>
+<td data-sourcepos="17:14-17:137">Best in class UMA model across all metrics, but slower and more memory intensive than uma-s (50M/1.4B active/total params)</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="20:1-20:213">モデルとしては拡張されているが、活性化するパラメータ数は従来と同規模に抑えられており、さらなるチューニングによって推論速度が向上したとのこと。</p>
+<p data-sourcepos="22:1-22:45">新たに増強された学習データは、</p>
+<ul data-sourcepos="23:1-28:0">
+<li data-sourcepos="23:1-25:51">酸化物や電極表面などの広範な無機物質
+<ul data-sourcepos="24:3-25:51">
+<li data-sourcepos="24:3-24:59">OC22: <a href="https://pubs.acs.org/doi/10.1021/acscatal.2c05426" class="autolink" rel="nofollow noopener" target="_blank">https://pubs.acs.org/doi/10.1021/acscatal.2c05426</a>
+</li>
+<li data-sourcepos="25:3-25:51">OC25: <a href="https://doi.org/10.48550/arXiv.2509.17862" class="autolink" rel="nofollow noopener" target="_blank">https://doi.org/10.48550/arXiv.2509.17862</a>
+</li>
+</ul>
+</li>
+<li data-sourcepos="26:1-28:0">高分子
+<ul data-sourcepos="27:3-28:0">
+<li data-sourcepos="27:3-28:0">OPoly26: <a href="https://doi.org/10.48550/arXiv.2512.23117" class="autolink" rel="nofollow noopener" target="_blank">https://doi.org/10.48550/arXiv.2512.23117</a>
+</li>
+</ul>
+</li>
+</ul>
+<p data-sourcepos="29:1-29:111">が該当する。このモデル一つで、より広い領域の材料が扱えるようになっている。</p>
+<p data-sourcepos="32:1-32:125">昨年公開されたarΧivの論文も今月v2にアップデートされており、補足資料も更新されている。</p>
+<p data-sourcepos="34:1-34:34"><a href="https://arxiv.org/abs/2506.23971v2" class="mirror-link-card">https://arxiv.org/abs/2506.23971v2</a>
+</p>
+<h1 data-sourcepos="36:1-36:14">
+<span id="環境構築" class="fragment"></span><a href="#%E7%92%B0%E5%A2%83%E6%A7%8B%E7%AF%89"><i class="fa fa-link"></i></a>環境構築</h1>
+<p data-sourcepos="38:1-38:197">早速動かしてみる。以前の記事に倣い、最新の<a href="https://github.com/facebookresearch/fairchem" rel="nofollow noopener" target="_blank">fairchem-coreライブラリ</a>を導入する。（2026/03/10現在は 2.17 が最新）</p>
+<p data-sourcepos="40:1-40:53"><a href="/qiita/788f97e09c8593ac3951.html" class="mirror-link-card">https://qiita.com/h-nabata/items/788f97e09c8593ac3951</a>
+</p>
+<p data-sourcepos="42:1-43:115">fairchem-core 2.17 では dependencies に <code>"torch~=2.8.0"</code> とあるので、PyTorchは 2.8.0 のバージョンを入れる必要がある。<br>
+また、<code>requires-python = "&gt;=3.11, &lt;3.14"</code> とあるので、ここでは Python 3.12 で環境を構築する。</p>
+<div data-sourcepos="45:1-51:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<p data-sourcepos="46:1-46:31"><strong>インストールの流れ</strong></p>
+<ol data-sourcepos="48:1-50:49">
+<li data-sourcepos="48:1-48:45">conda仮想環境を Python 3.12 で作成</li>
+<li data-sourcepos="49:1-49:59">PyTorch 2.8.0 のGPU対応版をインストールする</li>
+<li data-sourcepos="50:1-50:49">fairchem-core 2.17 をインストールする</li>
+</ol>
+</div>
+</div>
+<div data-sourcepos="53:1-57:3" class="note warn">
+<span class="fa fa-fw fa-exclamation-circle"></span><div>
+<p data-sourcepos="54:1-54:47"><strong>fairchem-coreのバージョンについて</strong></p>
+<p data-sourcepos="56:1-56:261">古いバージョンでは新しいモデルを動かせないケースがあるため、可能な限り最新のバージョンのfairchem-coreをインストールするのが良い。今回の UMA-s-1.2 のモデルは 2.16 以上が想定されている。</p>
+</div>
+</div>
+<details><summary>【参考】fairchem-core 2.17 の依存関係</summary>
+<div class="code-frame" data-lang="" data-sourcepos="61:1-152:3">
+<div class="code-lang"><span class="bold">pyproject.toml</span></div>
+<div class="highlight"><pre><code>[build-system]
+requires = ["hatchling", "hatch-vcs", "hatch-fancy-pypi-readme&gt;=24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fairchem-core"
+description = "Machine learning models for chemistry and materials science by the FAIR Chemistry team"
+license = {text = "MIT License"}
+dynamic = ["version", "readme"]
+requires-python = "&gt;=3.11, &lt;3.14"
+dependencies = [
+    "torch~=2.8.0",
+    "ray[serve]&gt;=2.53.0",
+    "numpy&gt;=2.0,&lt;2.4",
+    "scipy&gt;=1.15.0",
+    "lmdb&gt;=1.6.2,&lt;=1.7.3",
+    "numba&gt;=0.62.0",
+    "e3nn&gt;=0.5",
+    "huggingface_hub&gt;=0.27.1",
+    "ase&gt;=3.26.0",
+    "ase-db-backends&gt;=0.10.0",
+    "monty&gt;=v2025.1.3",
+    "clusterscope==0.0.18",
+    "setuptools&lt;81.0.0",
+    "requests",
+    "orjson",
+    "tqdm",
+    "submitit",
+    "hydra-core",
+    "torchtnt",
+    "pyyaml",
+    "wandb",
+    "websockets",
+]
+
+[project.optional-dependencies]  # add optional dependencies, e.g. to be installed as pip install fairchem.core[dev]
+dev = ["pre-commit", "pytest", "pytest-cov", "coverage", "syrupy", "ruff==0.5.1"]
+docs = ["jupyter-book", "jupytext", "sphinx","sphinx-autoapi==3.3.3", "astroid&lt;4", "umap-learn", "vdict", "ipywidgets", "jupyter_book&gt;=2.0", "torch-dftd"]
+adsorbml = ["dscribe", "x3dase", "scikit-image"]
+extras = ["pymatgen", "quacc[phonons]&gt;=0.15.3", "pandas", "nvalchemi-toolkit-ops", "pyarrow"]
+
+
+[project.scripts]
+fairchem = "fairchem.core._cli:main"
+
+[project.urls]
+repository = "https://github.com/facebookresearch/fairchem"
+home = "https://opencatalystproject.org/"
+documentation = "https://fair-chem.github.io/"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+root = "../../"
+git_describe_command = 'git describe --tags --match fairchem_core-*'
+
+[tool.hatch.build]
+directory = "../../dist-core"
+
+[tool.hatch.build.targets.sdist]
+only-include = ["src/fairchem/core", "src/fairchem/experimental"]
+
+[tool.hatch.build.targets.wheel]
+sources = ["src"]
+only-include = ["src/fairchem/core", "src/fairchem/experimental"]
+
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+fragments = [
+  { path = "src/fairchem/core/README.md" },
+  { path = "src/fairchem/core/LICENSE.md" },
+]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts  =  "-p no:warnings -x --quiet -rxXs --color yes"
+filterwarnings  = [
+    'ignore::UserWarning',
+    'ignore::FutureWarning',
+    'ignore::RuntimeWarning'
+    ]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["fairchem.core"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+</code></pre></div>
+</div>
+</details>
+<h2 data-sourcepos="159:1-159:24">
+<span id="仮想環境の作成" class="fragment"></span><a href="#%E4%BB%AE%E6%83%B3%E7%92%B0%E5%A2%83%E3%81%AE%E4%BD%9C%E6%88%90"><i class="fa fa-link"></i></a>仮想環境の作成</h2>
+<p data-sourcepos="161:1-161:37">bash環境で以下を実行する。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="163:1-169:3"><div class="highlight"><pre><code>conda create <span class="nt">-y</span> <span class="nt">-n</span> uma217 <span class="nv">python</span><span class="o">=</span>3.12
+conda activate uma217
+
+pip <span class="nb">install </span><span class="nv">torch</span><span class="o">==</span>2.8.0+cu128 <span class="nt">--index-url</span> https://download.pytorch.org/whl/cu128
+pip <span class="nb">install </span>fairchem-core<span class="o">==</span>2.17.0
+</code></pre></div></div>
+<blockquote data-sourcepos="170:1-170:98">
+<p data-sourcepos="170:3-170:98">仮想環境名は任意。ここでは fairchem-core 2.17 に合わせて <code>uma217</code> とした。</p>
+</blockquote>
+<blockquote data-sourcepos="172:1-172:112">
+<p data-sourcepos="172:3-172:112">pipで数分でインストールが完了した。uvを利用すればさらに速いものと思われる。</p>
+</blockquote>
+<h2 data-sourcepos="174:1-174:36">
+<span id="umaの重みファイルの取得" class="fragment"></span><a href="#uma%E3%81%AE%E9%87%8D%E3%81%BF%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E3%81%AE%E5%8F%96%E5%BE%97"><i class="fa fa-link"></i></a>UMAの重みファイルの取得</h2>
+<p data-sourcepos="176:1-177:117">Hugging Faceから重みファイルをダウンロードする（アカウントが必要なので無ければ登録・作成する）。<br>
+ここではUMAのSmallモデルを利用する。2026年3月現在の最新バージョンは<code>uma-s-1.2</code>である。</p>
+<p data-sourcepos="179:1-179:35"><a href="https://huggingface.co/facebook/UMA" class="mirror-link-card">https://huggingface.co/facebook/UMA</a>
+</p>
+<p data-sourcepos="181:1-181:180"><code>uma-s-1p2.pt</code> をローカル環境の適当なところに置く。ファイル容量は前バージョンの <code>uma-s-1p1.pt</code> から倍増して 2.17 GB程度となっている。</p>
+<h1 data-sourcepos="183:1-183:17">
+<span id="テスト計算" class="fragment"></span><a href="#%E3%83%86%E3%82%B9%E3%83%88%E8%A8%88%E7%AE%97"><i class="fa fa-link"></i></a>テスト計算</h1>
+<p data-sourcepos="185:1-185:158">例によって、All-Benzene Multi-Macrocyclic Nanocarbonの鎖を4つにした712原子からなる構造（下図）をUMAで計算を実施してみた。</p>
+<p data-sourcepos="187:1-187:121"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F62506c43-2df3-4cf7-8015-9234e376a692.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=616e6bb6f34f87c669e7e25193f9ecff" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/1e809dd0ba5cfe7738b2e139.png" alt="image.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/62506c43-2df3-4cf7-8015-9234e376a692.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="189:1-189:174"><code>fmax=0.03</code> の条件で最適化したところ、ステップ数は275であった。所用時間は次の通り。比較のために過去の計算結果も掲載した。</p>
+<table data-sourcepos="191:1-195:123">
+<thead>
+<tr data-sourcepos="191:1-191:98">
+<th style="text-align: left" data-sourcepos="191:2-191:3"></th>
+<th style="text-align: center" data-sourcepos="191:5-191:24">CPU<sup>a, b</sup>
+</th>
+<th style="text-align: center" data-sourcepos="191:26-191:42">GPU<sup>b</sup>
+</th>
+<th style="text-align: center" data-sourcepos="191:44-191:61">GPU<sup>c</sup>
+</th>
+<th style="text-align: center" data-sourcepos="191:63-191:80">GPU<sup>d</sup>
+</th>
+<th style="text-align: center" data-sourcepos="191:82-191:97">GPU<sup>e</sup>
+</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="193:1-193:98">
+<td style="text-align: left" data-sourcepos="193:2-193:17"><strong>Time</strong></td>
+<td style="text-align: center" data-sourcepos="193:19-193:37">46分31秒</td>
+<td style="text-align: center" data-sourcepos="193:39-193:57">1分41秒</td>
+<td style="text-align: center" data-sourcepos="193:59-193:69">1分08秒</td>
+<td style="text-align: center" data-sourcepos="193:71-193:82">1分06秒</td>
+<td style="text-align: center" data-sourcepos="193:84-193:96">1分08秒</td>
+</tr>
+<tr data-sourcepos="194:1-194:57">
+<td style="text-align: left" data-sourcepos="194:2-194:15"><strong>Step</strong></td>
+<td style="text-align: center" data-sourcepos="194:17-194:26">276</td>
+<td style="text-align: center" data-sourcepos="194:28-194:38">276</td>
+<td style="text-align: center" data-sourcepos="194:40-194:44">275</td>
+<td style="text-align: center" data-sourcepos="194:46-194:50">276</td>
+<td style="text-align: center" data-sourcepos="194:52-194:56">275</td>
+</tr>
+<tr data-sourcepos="195:1-195:123">
+<td style="text-align: left" data-sourcepos="195:2-195:17"><strong>Energy(eV)</strong></td>
+<td style="text-align: center" data-sourcepos="195:19-195:39">-452542.746219</td>
+<td style="text-align: center" data-sourcepos="195:41-195:63">-452542.742874</td>
+<td style="text-align: center" data-sourcepos="195:65-195:88">-452542.700321</td>
+<td style="text-align: center" data-sourcepos="195:90-195:105">-452542.698745</td>
+<td style="text-align: center" data-sourcepos="195:107-195:122">-452542.663232</td>
+</tr>
+</tbody>
+</table>
+<blockquote data-sourcepos="197:1-201:123">
+<p data-sourcepos="197:3-201:123"><sup>a</sup> AMD Ryzen 7 5800X3D (8-Core Processor) で実行。<br>
+<sup>b</sup> fairchem-core 2.2.0, PyTorch 2.6.0, RTX3070Ti上で実行。ポテンシャルは uma-sm.pt を使用。<br>
+<sup>c</sup> fairchem-core 2.12.0, PyTorch 2.8.0, RTX5070Ti上で実行。ポテンシャルは uma-s-1p1.pt を使用。<br>
+<sup>e</sup> fairchem-core 2.17.0, PyTorch 2.8.0, RTX5070Ti上で実行。ポテンシャルは uma-s-1p1.pt を使用。<br>
+<sup>e</sup> fairchem-core 2.17.0, PyTorch 2.8.0, RTX5070Ti上で実行。ポテンシャルは uma-s-1p2.pt を使用。</p>
+</blockquote>
+<p data-sourcepos="203:1-203:255">fairchem-coreのバージョンアップによって推論速度が向上したとのことであったが、特段速くなっていないように思われる。推論モードをturboにすれば速い場合があるかもしれない（未検証）。</p>
+<blockquote data-sourcepos="205:1-227:5">
+<p data-sourcepos="205:3-205:256">計算実行時における<code>nvidia-smi</code>のスナップショット。RTX 5070 Tiはパワーがあるのでそこそこの消費電力になっている。今の時期は窓を開放すれば空冷できるので、計算には良い時期と言える。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="206:3-227:5"><div class="highlight"><pre><code>+-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 575.64.01              Driver Version: 576.88         CUDA Version: 12.9     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+| 31%   59C    P1            204W /  300W |    8164MiB /  16303MiB |     86%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A            4459      C   /python3.12                           N/A      |
++-----------------------------------------------------------------------------------------+
+
+</code></pre></div></div>
+</blockquote>
+<h1 data-sourcepos="229:1-229:35">
+<span id="論文の補足資料について" class="fragment"></span><a href="#%E8%AB%96%E6%96%87%E3%81%AE%E8%A3%9C%E8%B6%B3%E8%B3%87%E6%96%99%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6"><i class="fa fa-link"></i></a>論文の補足資料について</h1>
+<p data-sourcepos="231:2-231:185">UMA-S-1.2へのアップデートに合わせて、<a href="https://arxiv.org/abs/2506.23971v2" rel="nofollow noopener" target="_blank">arΧivの論文</a>もv2にアップデートされている。この補足資料が興味深い。</p>
+<p data-sourcepos="233:1-234:121">補足資料の「<strong>G Diatomics</strong>」の項目に二原子ポテンシャルの挙動を示したプロットが掲載されているが、初期モデル（UMA-1.0 / 1.1）は酷く不安定な挙動を示していることが分かる（下図、論文より引用）。<br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Fe220eefe-d5bf-447e-bd37-3550f600ea8b.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=ac1fe9e4ccbbab8443d7fa69b6a7b57b" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/7db33bb9c06d1b2329d522ce.png" alt="image.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/e220eefe-d5bf-447e-bd37-3550f600ea8b.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="236:1-237:121">これが UMA-S-1.2 では大幅に改善されている（下図、論文より引用）。二原子のデータ（dimer calculations）を訓練セットに追加することで問題を改善したとのことで、MAE（平均絶対誤差）が1/40になったと報告されている。<br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Ff42646f9-91ec-4858-8361-67903949cdb4.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=7b05596d0f4bbfe2beff84e6eeffb053" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/e1d853ac737c35f95835be3f.png" alt="image.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/f42646f9-91ec-4858-8361-67903949cdb4.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="239:1-239:290">単原子が解離するような系、特に表面上での反応や吸着などの計算を実施する場合は、従来のモデルではなく今回の UMA-S-1.2 を利用すべきであろう。モデルとしては従来のものとは別物と考えた方が良さそうである。</p>
+<blockquote data-sourcepos="241:1-243:89">
+<p data-sourcepos="241:3-243:89">このデータが追加された経緯は不明だが、外部から指摘されたことで修正したのではないかと思われる。モデルとしては格段に精度が向上していると考えられる。<br>
+同種二原子のポテンシャル曲線だけでなく、異種二原子のポテンシャル曲線も学習されていることが望ましい。表面反応などでは特に精度面で影響が大きいと思われるので、学習データに含まれているべきである。<br>
+（UMAの異種二原子のポテンシャル曲線は筆者の手元では未検証）</p>
+</blockquote>
+<hr data-sourcepos="245:1-246:0">
+<p data-sourcepos="247:1-247:91">UMA-S-1.2 の現状の限界についても言及がある。例えば、下記の通り。</p>
+<ul data-sourcepos="249:1-251:0">
+<li data-sourcepos="249:1-249:86">約5.5 Å以上の長距離ではエネルギー挙動が完全には正しくない</li>
+<li data-sourcepos="250:1-251:0">N₂の解離付近に小さなバリアが現れる</li>
+</ul>
+<p data-sourcepos="252:1-252:264">長距離でのポテンシャル面が不正確になる可能性はあるが、実用上は解離して遠く離れたような構造を計算することは少ないため、直ちに問題にはならなさそうである。今後の改善に期待したい。</p>
+<blockquote data-sourcepos="254:1-254:420">
+<p data-sourcepos="254:3-254:420">MLIP一般の問題として、UMAでもカットオフ半径の影響などにより 6 Å程度離れた位置でポテンシャル面がフラット化し、エネルギーが不連続になるアーティファクト的な領域が発生することは筆者の手元でも確認している。今回リリースされたモデルでも、この問題は根本的には解決していないように思われる。</p>
+</blockquote>
+
+</div>
+
+
+{% endraw %}

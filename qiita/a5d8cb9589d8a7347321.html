@@ -1,0 +1,86 @@
+---
+layout: "qiita-mirror"
+title: "【Anaconda3】仮想環境で起動したAtomからコードを直接実行する（RDKit）"
+qiita_id: "a5d8cb9589d8a7347321"
+qiita_url: "https://qiita.com/h-nabata/items/a5d8cb9589d8a7347321"
+qiita_created: "2022-01-27T20:55:47+09:00"
+qiita_updated: "2022-04-10T00:30:22+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "計算化学・分子構造"
+mirror_tags: ["Python", "ATOM", "RDKit", "仮想環境", "Anaconda"]
+permalink: "/qiita/a5d8cb9589d8a7347321.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="1:1-1:323">以前、RDkitという化学系ライブラリを使用するためにPython3.7系の仮想環境を作成しました（RDkitがPython3.8以上に対応していないため）。このような仮想環境下でAtomエディタから直接スクリプトを実行する方法を調べたのでメモしておきます。</p>
+<div class="code-frame" data-lang="" data-sourcepos="3:1-8:3">
+<div class="code-lang"><span class="bold">利用環境</span></div>
+<div class="highlight"><pre><code>Python: 3.8.8 (Anaconda3で導入)
+(RDkit用の仮想環境のPythonは 3.7.11)
+OS: Windows 10
+エディタ: Atom ("script" パッケージ導入済み)
+</code></pre></div>
+</div>
+<p data-sourcepos="10:1-10:188">※ここでは既にRDkit用の仮想環境が準備できているものとします。仮想環境を構築する方法については過去のエントリを参考にして下さい。</p>
+<p data-sourcepos="12:1-12:53"><a href="/qiita/c1d16471bda6735a5d8a.html" class="mirror-link-card">https://qiita.com/h-nabata/items/c1d16471bda6735a5d8a</a>
+</p>
+<h1 data-sourcepos="14:1-14:8">
+<span id="手順" class="fragment"></span><a href="#%E6%89%8B%E9%A0%86"><i class="fa fa-link"></i></a>手順</h1>
+<h3 data-sourcepos="16:1-16:87">
+<span id="anacondaパッケージに同梱されているanaconda-promptを起動" class="fragment"></span><a href="#anaconda%E3%83%91%E3%83%83%E3%82%B1%E3%83%BC%E3%82%B8%E3%81%AB%E5%90%8C%E6%A2%B1%E3%81%95%E3%82%8C%E3%81%A6%E3%81%84%E3%82%8Banaconda-prompt%E3%82%92%E8%B5%B7%E5%8B%95"><i class="fa fa-link"></i></a>①　Anacondaパッケージに同梱されている「Anaconda Prompt」を起動</h3>
+<h3 data-sourcepos="17:1-17:92">
+<span id="anaconda-promptでactivate-仮想環境名を実行して仮想環境を起動" class="fragment"></span><a href="#anaconda-prompt%E3%81%A7activate-%E4%BB%AE%E6%83%B3%E7%92%B0%E5%A2%83%E5%90%8D%E3%82%92%E5%AE%9F%E8%A1%8C%E3%81%97%E3%81%A6%E4%BB%AE%E6%83%B3%E7%92%B0%E5%A2%83%E3%82%92%E8%B5%B7%E5%8B%95"><i class="fa fa-link"></i></a>②　Anaconda Promptで<code>activate [仮想環境名]</code>を実行して仮想環境を起動</h3>
+<blockquote data-sourcepos="19:1-26:80">
+<p data-sourcepos="19:2-19:79">環境一覧を取得したいときは<code>conda info -e</code>で表示できます。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="20:2-25:4"><div class="highlight"><pre><code># conda environments:
+#
+base                  *  C:\Users\[ユーザー名]\anaconda3
+rdkitenv                 C:\Users\[ユーザー名]\anaconda3\envs\rdkitenv
+</code></pre></div></div>
+<p data-sourcepos="26:3-26:80">ここでは仮想環境を <code>rdkitenv</code> という名前にしてあります。</p>
+</blockquote>
+<h3 data-sourcepos="28:1-28:74">
+<span id="anaconda-promptでatomを実行してatomエディタを起動" class="fragment"></span><a href="#anaconda-prompt%E3%81%A7atom%E3%82%92%E5%AE%9F%E8%A1%8C%E3%81%97%E3%81%A6atom%E3%82%A8%E3%83%87%E3%82%A3%E3%82%BF%E3%82%92%E8%B5%B7%E5%8B%95"><i class="fa fa-link"></i></a>③　Anaconda Promptで<code>atom</code>を実行してAtomエディタを起動</h3>
+<blockquote data-sourcepos="30:1-30:58">
+<p data-sourcepos="30:3-30:58">コマンドプロンプトで起動してもOKです。</p>
+</blockquote>
+<h3 data-sourcepos="32:1-32:34">
+<span id="スクリプトを実行" class="fragment"></span><a href="#%E3%82%B9%E3%82%AF%E3%83%AA%E3%83%97%E3%83%88%E3%82%92%E5%AE%9F%E8%A1%8C"><i class="fa fa-link"></i></a>④　スクリプトを実行</h3>
+<blockquote data-sourcepos="34:1-34:107">
+<p data-sourcepos="34:3-34:107">Atomに "script" パッケージを導入済みであれば「Ctrl + Shift + B」で実行できます。</p>
+</blockquote>
+<p data-sourcepos="36:1-36:69">問題が無ければ以下のプログラムが動くはずです。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="38:1-60:3">
+<div class="code-lang"><span class="bold">sample.py</span></div>
+<div class="highlight"><pre><code><span class="kn">from</span> <span class="n">rdkit</span> <span class="kn">import</span> <span class="n">Chem</span>
+<span class="kn">import</span> <span class="n">sys</span>
+
+<span class="nf">print</span><span class="p">(</span><span class="n">sys</span><span class="p">.</span><span class="n">version_info</span><span class="p">)</span>
+<span class="c1"># sys.version_info(major=3, minor=7, micro=11, releaselevel='final', serial=0)
+</span>
+<span class="c1"># 周期表の取得（インスタンス化）
+</span><span class="n">pt</span> <span class="o">=</span> <span class="n">Chem</span><span class="p">.</span><span class="n">rdchem</span><span class="p">.</span><span class="nc">GetPeriodicTable</span><span class="p">()</span>
+
+<span class="c1"># 1 ~ 9 番目までの元素記号を表示
+</span><span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nf">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">10</span><span class="p">):</span>
+    <span class="nf">print</span><span class="p">(</span><span class="n">Chem</span><span class="p">.</span><span class="n">PeriodicTable</span><span class="p">.</span><span class="nc">GetElementSymbol</span><span class="p">(</span><span class="n">pt</span><span class="p">,</span> <span class="n">i</span><span class="p">))</span>
+<span class="c1"># H
+# He
+# Li
+# Be
+# B
+# C
+# N
+# O
+# F
+</span></code></pre></div>
+</div>
+<p data-sourcepos="62:1-62:158">私のRDkit用の仮想環境 <code>rdkitenv</code> のPythonのバージョンは3.7.11なので、意図した環境で実行できていることが分かります。</p>
+<h1 data-sourcepos="64:1-64:8">
+<span id="後記" class="fragment"></span><a href="#%E5%BE%8C%E8%A8%98"><i class="fa fa-link"></i></a>後記</h1>
+<p data-sourcepos="66:1-66:382">以上のことは単純に「仮想環境からAtomを起動することで仮想環境のバージョンのPythonが使われる」という理解で良いかと思います。私が知らないだけで実は常識だったのかは分かりませんが、参考になる日本語の記事を上手く見つけられなかったので個人的にまとめてみた次第です。</p>
+
+</div>
+
+
+{% endraw %}

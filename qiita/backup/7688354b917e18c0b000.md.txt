@@ -1,0 +1,764 @@
+Windowsユーザー＆Goに初めて触れるor久々に触れる人が流し読む用のメモです。
+使用しているGoのバージョンは**go1.15.2 windows/amd64**で、エディタは**Atom**を使っています。
+
+# プログラミング言語「Go」
+
+「[**Go**](https://golang.org./)」は2009年に発表されたGoogle発のプログラミング言語で、バージョン1.0が2012年に公開された、比較的最近登場した言語です。「**Golang**」や「**Go言語**」などと呼ばれていますが、正式名称は「**Go**」だそうです。Googleが開発しているだけあって、YouTubeなどのシステムはGoで構築されています。
+
+Goは以下のような特長を備えています。
+
+* **静的型付け**
+* **コンパイルが速い**
+* **タイプセーフかつメモリセーフ**
+* **並列処理が得意** （など...）
+
+Goはモバイル向けのアプリ開発や、Webサーバー構築などの用途で採用されることの多い言語です。CやC++に迫る高速処理がウリで、GoroutineやChannelなどの機能を使えば同時並行で処理を進める（並列処理）ことができます。
+
+>なお、GoのデメリットについてはQiita内外の各所で議論されていますので、興味のある方は探してみて下さい。私はGo言語初心者なので、取り敢えず動けばOK、のスタンスです。
+
+Goの文法については後で詳しく見ていきますが、C言語Likeに記述でき、あまり自由な書き方が許されていないことから、**ソフトウェア等の共同開発に向いている言語**と評価されています。Cを知らないPythonエンジニアなどにとっては習得に時間が掛かりそうですが、Cに慣れていればそれほど苦労せずコーディングできるようになると思います。
+
+
+今回はテキストエディタ「[**Atom**](https://atom.io/)」でGoを動かしてみます。Atomは[**公式サイト**](https://atom.io/)からダウンロードできます。この記事ではAtomについては深く立ち入りません。Atomの詳しい使い方や設定方法については「[**ATOM Editor をそろそろ始めようか**](https://qiita.com/spiegel-im-spiegel/items/3d41d98dacc107d73431)」に掲載されているブックマーク等を参考にしてみて下さい。
+
+今回の主な目的はWindowsユーザーが手早くGoを使える環境を作ることです。書いて保存してコンパイルして実行...という手順を楽しみたい方はご自由にどうぞ...。Ubuntuをご利用の方は「[**Ubuntuに最新のGolangをインストールする**](https://qiita.com/notchi/items/5f76b2f77cff39eca4d8)」などをご覧下さい。
+
+
+# Goを導入する手順
+
+主にWindows向けに紹介します。
+まず[**Goの公式サイト**](https://go.dev/dl/)から、PCの環境に合った Go installer をダウンロードします。
+
+>当方のPCの環境は Windows 10 Pro (バージョン 1903) なので、私は go1.15.2.windows-amd64.msi (116 MB) をダウンロードしました。
+
+ダウンロードした.msiファイルを実行すると以下のような画面が出てきますので、[Next] を押しまくってデフォルトの設定のままインストールします。
+
+<img src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/3f134f0d-ea6f-a151-046d-01c4f0cd8045.png", width="70%">
+>Macなら.pkgファイルを開いてインストールする、もしくは `brew install go` でインストールする。（詳しくは「[**他言語から来た人がGoを使い始めてすぐハマったこととその答え**](https://qiita.com/mumoshu/items/0d2f2a13c6e9fc8da2a4#comments)」を参照）
+Linuxなら `tar -C /usr/local -xzf go1.15.2.linux-amd64.tar.gz` として.tar.gzファイルを解凍する。
+
+[finish] を押せば、以上でGoのインストールは完了です。コマンドプロンプトで `go version` と叩けば、
+
+```
+go version go1.15.2 windows/amd64
+```
+
+などと返ってきます。
+
+あとはGoのパスを通せばAtom上で使えるようになります…が、デフォルト設定でインストールした場合は既にユーザー環境変数に「GOPATH」が追加されているはずです（不慮の事故を防止するため、GOPATHは普通は1つだけ指定しておきます）。デフォルトでは `C:\Users\name\go` にパスが通っています。
+
+環境変数の確認方法は以下の通りです。
+
+>① コントロールパネルを開く（プログラム → Windowsシステムツール から選択できる）
+>② システムとセキュリティ → システム に移動
+>③ システムの詳細設定 をクリックしてプロパティを開く
+>④「環境設定」をクリック →「環境変数」をクリック
+
+以上でGoのパスが通ったので、Atom上でGoのスクリプトが動かせるようになりました。
+
+>Goをインストールしていない状態、もしくは、GoのPathが通っていない状態でGoのスクリプトを実行すると以下のようなエラーが出てきます。
+>```
+>'go' �́A�����R�}���h�܂��͊O���R�}���h�A
+>����\�ȃv���O�����܂��̓o�b�` �t�@�C���Ƃ��ĔF������Ă��܂���B
+>```
+>これはAtomがGoの実行ファイルの場所を見つけられない時に出てくるエラーですが、上記の手順を踏む限り、このエラーには遭遇しないはずです。
+
+# Goを使ってみる
+テキストエディタとしてAtomを使う場合は「**script**」パッケージをインストールしておくと、**[Ctrl + Shift + B]** でスクリプトを実行することができるので便利です。冒頭でも述べましたがGoはコンパイラ型言語です。Atom上でGoスクリプトを実行する際はコンパイルする手間が掛かるので、レスポンスは多少遅くなります（プログラム自体が遅い訳ではありません）。
+
+以下、Goの使用例とTipsを紹介していきます。
+
+### ご挨拶 (Println関数, Print関数)
+
+```Go
+package main
+import "fmt"
+
+func main() {
+    fmt.Println("Hello, world")
+}
+// Print    改行なし出力
+// Println  改行あり出力
+```
+> fmt は入出力を制御するパッケージで、Print関数やPrintln関数によって文字列を表示できます。このとき `print` のように小文字にしてしまうとエラーになるので注意して下さい。
+
+```Go
+package main
+import "fmt"
+
+func main() {
+    fmt.Print("Hello, "); fmt.Print("world!")
+}
+// 出力結果は Hello, world!
+```
+>セミコロンで繋げば出力を1行で表示することができます。C言語と似たような仕様です。
+
+### Printf関数の取り扱い
+
+```Go
+package main
+import "fmt"
+
+func main() {
+    fmt.Printf("%v\n", "apple")
+    fmt.Printf("%v\n", 2020)
+    fmt.Printf("%v\n", uint(2020))
+    fmt.Printf("%v\n", 12.345)
+    fmt.Printf("%v\n", 2 + 1i) // 複素数
+    fmt.Printf("%v\n", "ぴえん🥺")
+    fmt.Printf("%v\n", make(chan bool))
+    fmt.Printf("%v\n", new(int))
+}
+```
+```:出力結果
+apple
+2020
+2020
+12.345
+(2+1i)
+ぴえん🥺
+0xc000014120
+0xc000010098
+```
+>書式指定子がCと少し異なりますが、Printfが使えます。詳しい使い方については以下の記事をご参照ください。
+>・「[**fmt.Printfなんかこわくない**](https://qiita.com/rock619/items/14eb2b32f189514b5c3c)」
+>・「[**【Go】print系関数の違い**](https://qiita.com/taji-taji/items/77845ef744da7c88a6fe)」
+
+### for文、if文の取り扱い
+```Go:FizzBuzz
+package main
+import "fmt"
+
+func main() {
+    var i = 1
+    for i < 16 {
+        switch { // Cと同様にswitch文が利用可能
+        case i % 15 == 0:
+            fmt.Println("FizzBuzz")
+        case i % 3 == 0:
+            fmt.Println("Fizz")
+        case i % 5 == 0:
+            fmt.Println("Buzz")
+        default:
+            fmt.Println(i)
+        }
+        i++
+    }
+}
+```
+> `var i = 1` という変数の定義の仕方は `i := 1` のような型を省略した変数宣言に置き換えることができます。いわゆる「セイウチ演算子」です。
+>また、GoではCやJavaと異なりif文の条件を丸括弧で囲む必要はありません。
+
+```Go:1行for文
+package main
+import "fmt"
+
+func main() {
+    for i := 1; i <= 10; i++ {fmt.Printf("%d\n", i)}
+}
+```
+
+```Go:無限ループ
+package main
+import "fmt"
+
+func main() {
+    i := 1
+    for { // <-- 条件を書かない
+        if i > 10 {
+            break // ループを抜ける
+        }
+        fmt.Printf("%d\n", i)
+        i++
+    }
+}
+```
+
+>**Goにはwhile文が無く、すべてのloop処理はfor文で書きます。**他の言語から来た方や久し振りにGoを触る方は、whileを使おうと頑張らないで下さい...。
+
+
+### 文字列の取り扱い
+```Go:文字列の結合
+package main
+import "fmt"
+
+func main() {
+    a := "ABCDEF"
+    b := "abcdef"
+    fmt.Println(a + b) // ABCDEFabcdef
+    c := a + b
+    fmt.Println(c) // ABCDEFabcdef
+}
+```
+```Go:文字列の分割（インデックス指定）
+package main
+import "fmt"
+
+func main() {
+    a := "ABCDEF"
+    fmt.Println(a[:3]) // ABC
+    fmt.Println(a[3:]) // DEF
+}
+```
+```Go:大文字化・小文字化
+package main
+import ("fmt"; "strings")
+
+func main() {
+    a := "ABCdef"
+    fmt.Println(strings.ToUpper(a))  // ABCDEF
+    fmt.Println(strings.ToLower(a))  // abcdef
+}
+```
+
+> 変数型の変換については「[**golang　文字列→数値、数値→文字列変換**](https://qiita.com/quicksort/items/c9522793a941edf074fd)」などの記事を参考にして下さい。
+
+### 配列(Arrays)とスライス(Slices)の取り扱い
+Goの**配列(Arrays)**の宣言には以下の3タイプがあります。
+①　`var 変数名 [長さ]型`
+②　`var 変数名 [長さ]型 = [大きさ]型{初期値1, 初期値n}`
+③　`変数名 := [...]型{初期値１, 初期値n}`
+
+③の記法は**要素数の指定が不要**でシンプルに書けるため、よく使われているようです。
+
+
+```Go
+package main
+import "fmt"
+
+func main(){
+    arr := [...] string{"apple", "banana", "cherry"}
+    fmt.Println(arr[0], arr[1])
+    fmt.Println(arr, len(arr))
+}
+/* 出力結果
+apple banana
+[apple banana cherry] 3
+*/
+```
+> len関数で配列の長さ（要素数）を取得できます。
+
+
+配列(Arrays)は長さ（要素数）が固定されているのに対して、**スライス(Slices)**は長さ（要素数）が可変です。Goの「配列」はCの配列と似ており、Goの「スライス」はPythonのリストやRubyの配列に近いイメージでしょうか。
+
+スライスの宣言方法も何通りか知られています。
+①　`var 変数名 []型`
+②　`var 変数名 []型 = []型{初期値1, ..., 初期値n}`
+③　`変数名 := []型{初期値1, ..., 初期値n}`
+④　`変数名 := 配列[start:end]`
+
+④は既に存在する配列をスライスにする方法です。例えば以下のようにします。
+
+```Go
+package main
+import "fmt"
+
+func main(){
+    arr := [...] string{"apple", "banana", "cherry"}
+    slice := arr[0:2]
+    fmt.Println(slice)
+    fmt.Println(arr)
+}
+/* 出力結果
+[apple banana]
+[apple banana cherry]
+*/
+```
+
+> 参考：
+「[**【Go】基本文法④(配列・スライス)**](https://qiita.com/k-penguin-sato/items/daad9986d6c42bdcde90)」
+「[**Go言語のスライスで勘違いしやすいこところ**](https://qiita.com/Kashiwara/items/e621a4ad8ec00974f025)」
+「[**Go言語の基本 — array と slice の違い**](https://qiita.com/YumaInaura/items/aec7857518102ff5e27c)」
+「[**Goのarrayとsliceを理解するときがきた**](https://qiita.com/seihmd/items/d9bc98a4f4f606ecaef7)」
+
+### 配列は要素数を増やせない
+```Go:配列(要素数指定)だと怒られる
+package main
+import "fmt"
+
+func main(){
+    numbers := [3]int{1, 2, 3}
+    numbers = append(numbers, 4)
+    fmt.Println(numbers) // first argument to append must be slice; have [3]int
+}
+```
+```Go:要素数を指定しなければ動く...？
+package main
+import "fmt"
+
+func main(){
+    numbers := []int{1, 2, 3}
+    numbers = append(numbers, 4)
+    fmt.Println(numbers) // [1 2 3 4]
+}
+```
+> 実は後者の `test` は配列ではなく、**スライスとして宣言されています**。そのため、appendで要素の追加が可能です。
+
+### 2次元配列、多次元配列
+中括弧 `{ }` で二重に囲めば、2次元配列・2次元スライス（行列）になります。
+
+```Go:2次元スライスへの行追加
+package main
+import "fmt"
+
+func main() {
+    numbers := [][]int{{1, 1}, {1, 2}, {1, 3}, {1, 4}}
+    numbers = append(numbers, []int{1, 5})
+    fmt.Println(numbers) // [[1 1] [1 2] [1 3] [1 4] [1 5]]
+}
+```
+> これは以下の操作に該当します。
+```math:
+\left[\begin{array}{ll}
+1 & 1 \\
+1 & 2 \\
+1 & 3 \\
+1 & 4
+\end{array}\right]
+\to
+\left[\begin{array}{ll}
+1 & 1 \\
+1 & 2 \\
+1 & 3 \\
+1 & 4 \\
+1 & 5
+\end{array}\right]
+```
+
+なお、多次元配列は以下のように生成可能です。
+
+```Go:多次元配列の生成
+package main
+import "fmt"
+
+func main() {
+    multiDimArray := [2][4][3][2]string{}
+    fmt.Println(multiDimArray)
+}
+// 以下のような多次元「配列」が作成されます。
+// [[[[ ] [ ] [ ]] [[ ] [ ] [ ]] [[ ] [ ] [ ]] [[ ] [ ] [ ]]] [[[ ] [ ] [ ]] [[ ] [ ] [ ]] [[ ] [ ] [ ]] [[ ] [ ] [ ]]]]
+```
+
+> 要素数を指定したくないからといって `[][][][]型{}` のように書いても多次元配列は生成されません。
+
+### 関数（例：ニュートン法による平方根の計算）
+```Go:ニュートン法による平方根の計算
+package main
+
+import (
+    "fmt"
+    "math"
+)
+
+func mySqrt(x float64) (float64) {
+	z := 1.0
+	for i := 0; i < 10; i++ { // 10回最適化する
+		calculation := z - (z*z-x)/(2*z)
+		if calculation == z {
+			break
+		}
+		z = calculation
+	}
+	return z
+}
+
+func main() {
+    a := [4]float64{0, 0.25, 0.999, 2020} // この4点について平方根を求める
+    for i := 0; i < 4; i++ {
+        mySqrt := mySqrt(a[i])
+        mathSqrt := math.Sqrt(a[i])
+
+        fmt.Println("自作Sqrt関数  = ", mySqrt, "(x =", a[i], "のとき)")
+        fmt.Println("math.Sqrt関数 = ", mathSqrt, "(x =", a[i], "のとき)")
+        fmt.Println("自作Sqrt関数とmath.Sqrt関数の差 = ", math.Abs(mySqrt-mathSqrt), "\n")
+    }
+}
+```
+```:出力結果
+自作Sqrt関数  =  0.0009765625 (x = 0 のとき)
+math.Sqrt関数 =  0 (x = 0 のとき)
+自作Sqrt関数とmath.Sqrt関数の差 =  0.0009765625 
+
+自作Sqrt関数  =  0.5 (x = 0.25 のとき)
+math.Sqrt関数 =  0.5 (x = 0.25 のとき)
+自作Sqrt関数とmath.Sqrt関数の差 =  0 
+
+自作Sqrt関数  =  0.999499874937461 (x = 0.999 のとき)
+math.Sqrt関数 =  0.999499874937461 (x = 0.999 のとき)
+自作Sqrt関数とmath.Sqrt関数の差 =  0 
+
+自作Sqrt関数  =  44.94441010848846 (x = 2020 のとき)
+math.Sqrt関数 =  44.94441010848846 (x = 2020 のとき)
+自作Sqrt関数とmath.Sqrt関数の差 =  0 
+```
+
+
+### ファイル処理
+osパッケージを利用してファイルの読み書きが可能です。
+例として以下のようなテキストファイル（test.txt）を読み込んでみます。
+
+```:test.txt
+apple
+banana
+cherry
+```
+
+バイト型スライスを利用すると以下のようにファイルの読み込みが可能です。
+
+```Go:ファイルの読み込み
+package main
+import(
+    "fmt"
+    "os"
+)
+
+func main(){
+    f, err := os.Open("test.txt") // ファイルを開く
+    if err != nil{ // 読み取り時の例外処理
+        fmt.Println("error")
+    }
+    defer f.Close() // 関数終了時にファイルを閉じる
+
+    buf := make([]byte, 1024) // バイト型スライスを用意する
+    for {
+        n, err := f.Read(buf) // n = バイト数
+        if n == 0{ // バイト数が 0 になれば読み取り終了
+            break
+        }
+        if err != nil{ // 読み取り時の例外処理
+            break
+        }
+        fmt.Println(string(buf[:n])) // バイト型スライスを文字列型に変換して出力
+    }
+}
+```
+
+ファイルへの書き出しは次のようにします。
+
+```Go:ファイルへの書き出し
+package main
+import(
+    "fmt"
+    "os"
+)
+
+func writeByres(filename string) error {
+    file, err := os.Create(filename) // 新規ファイルの作成
+    if err != nil { // ファイル作成時の例外処理
+        return err
+    }
+    defer file.Close() // 関数終了時にファイルを閉じる
+
+    for _, line := range lines { // インデックスの値は変数 _ に逃がす
+        b := []byte(line) // バイト型スライスを用意する
+        _, err := file.Write(b) // ファイル書き込み
+        if err != nil { // ファイル書き込み時の例外処理
+            return err
+        }
+    }
+    return nil
+}
+
+var ( // ファイルに書き込む文字列
+    lines = []string{"apple\n", "banana\n", "cherry\n"}
+)
+
+func main() {
+    if err := writeByres("write.txt"); err != nil { // write.txt に書き込む
+        fmt.Println(os.Stderr, err)
+        os.Exit(1)
+    }
+}
+```
+
+> os.Create は既に同じ名前のファイルがある場合でも新規作成（上書き）するので使い方には要注意です。
+>
+>参考：
+「[**Goでテキストファイルを読み書きする時に使う標準パッケージ**](https://qiita.com/qt-luigi/items/2c13ad68e7d9f8f8c0f2)」
+
+### コメントアウト
+```Go
+// 一行ずつコメントアウト
+// apple
+// banana
+// cherry
+
+/* 複数行コメントアウト
+apple
+banana
+cherry
+*/
+```
+> C言語と同じです。
+
+### 日本語文字列の取り扱い
+
+文字列はバイト列になっているので、マルチバイト文字を含む文字列をインデックス指定で取り出そうとしても、文字単位での指定はできません。
+
+```Go:stringのスライスはバイト単位
+package main
+import "fmt"
+
+func main() {
+    var s = "あいうえお"
+    fmt.Println(s[:3])         //-> あ
+    fmt.Printf("%x\n", s[:3])  //-> e38182
+    fmt.Println(s[:4])         //-> あ�
+    fmt.Printf("%x\n", s[:4])  //-> e38182e3
+}
+```
+
+「ルーン (rune)」型のスライスを使えば、文字数ごとに文字列をインデックス指定で取り出すことができます。（rune型文字とはUnicode文字のことを指しています）
+
+```Go:runeのスライスを使う
+package main
+import "fmt"
+
+func main() {
+    var str = "あいうえお"
+    rstr := []rune(str)
+	fmt.Println(string(rstr[:3]))  //-> あいう
+}
+```
+
+for文の条件文でのインデックス指定もバイト単位なので、マルチバイト文字を使っている場合はハマる危険性があり、注意が必要です。日本語を含む文字列の文字数を取得したい場合は**unicode/utf8**パッケージの**RuneCountInString**関数を使うこともできます。
+
+```Go:RuneCountInString関数によるカウント
+package main
+import (
+    "fmt"
+    "unicode/utf8"
+)
+
+func main() {
+    str := "ゼロから始めるGo言語生活"
+    fmt.Println(utf8.RuneCountInString(str))  //-> 13
+}
+```
+
+因みに、**rangeで取り出すとrune単位で取り出すことができます。**
+
+```Go:日本語文字列を1文字ずつ抜き出す
+package main
+import (
+    "fmt"
+)
+
+func main() {
+    str := "ゼロから始めるGo言語生活"
+    for _, letter := range str { // rune単位での切り出し
+        fmt.Println(string(letter))
+    }
+}
+```
+
+> 参考：
+「[**Go言語 - 日本語文字列の操作**](https://hake.hatenablog.com/entry/20150826/p1)」
+「[**Go で UTF-8 の文字列を扱う**](https://qiita.com/masakielastic/items/01a4fb691c572dd71a19)」
+「[**Goのruneを理解するためのUnicode知識**](https://qiita.com/seihmd/items/4a878e7fa340d7963fee)」
+
+
+### for文でのrangeの取り扱い（インデックスの値を逃がす）
+
+```Go:上手く動かないrange
+package main
+import "fmt"
+
+func main() {
+    words := []string{"ABC", "DEF", "abc", "def"}
+	for str := range words {
+    	fmt.Println(str)
+	}
+}
+/* 出力結果
+0
+1
+2
+3
+*/
+```
+
+こうなってしまう理由は、インデックスの値が `str` に代入されているためです。この問題は以下のようにダミーの使い捨て変数を用意することで解消可能です。
+
+```Go:意図した通りのrange
+package main
+import "fmt"
+
+func main() {
+    words := []string{"ABC", "DEF", "abc", "def"}
+	for _, str := range words { // <-- インデックスの値を変数 _ に逃がす
+    	fmt.Println(str)
+	}
+}
+```
+
+> 初心者のハマりやすいポイントみたいです。「[**Goのfor rangeで思った値が取れなかった話**](https://qiita.com/modal_soul/items/e49480e5692597fda975)」などをご参考に。
+
+
+### Goにおける整数＆小数の取り扱い
+「[**Better C - Goと整数**](https://qiita.com/sonatard/items/464a9d45c689386edfe1)」や「[**Better C - Goと小数**](https://qiita.com/sonatard/items/eac6fb35dcc8e052a293)」などの記事に詳しくまとめられていますので参考にして下さい。
+
+### 使用しない変数は宣言しないこと
+```Go:未使用変数がある場合
+package main
+import "fmt"
+
+func main() {
+    a := "apple"
+    b := "banana"
+    fmt.Println(a)
+}
+/* 出力結果（エラー）
+b declared but not used
+*/
+```
+> 変数の型によらず、使用されていない変数があると怒られます。importしたのに使っていないパッケージがある場合も怒られます。
+
+### `:=` による再代入は可能
+宣言済みの変数に再び値を代入する際は以下のようにします。
+
+```Go:varを用いた再代入の例
+package main
+import "fmt"
+
+func main() {
+    var str = "apple"
+    str = "banana"
+    fmt.Println(str)
+}
+/* 出力結果
+banana
+*/
+```
+
+しかし以下のように書くと `no new variables on left side of :=` などと怒られてコンパイルエラーとなります。
+
+```Go:ダメな代入例
+package main
+import "fmt"
+
+func main() {
+    str := "apple"
+    str := "banana"
+    fmt.Println(str)
+}
+```
+
+ただし、**新しい変数を含む複数の変数の宣言を同時に行えば、既存の変数への再代入が可能**です。
+
+```Go:許容される代入例
+package main
+import "fmt"
+
+func main() {
+    str1 := "apple"
+    fmt.Println(str1)
+    str1, str2 := "banana", "cherry"
+    fmt.Println(str1, str2)
+}
+/* 出力結果
+apple
+banana cherry
+*/
+```
+
+
+# Goで並列処理（GoroutineとChannelの取り扱い）
+
+Goのウリでもある並列処理は、大量のcsvファイルを同時に読み込んで処理するとか、大量のhtmlをダウンロードするとかいう場合に用いられます。Goではプログラマがスレッドやプロセスのことをあまり考えていなくても、自動でうまい具合に処理を振り分けてくれます。
+
+GoではGoroutineを使えば簡単に並列処理を書くことができます。
+
+```Go:Goroutineの使用例
+package main
+import (
+    "fmt"
+    "time"
+)
+
+func printnumbers() { // 100ミリ秒ごとに数字を表示
+    for i := 1; i <= 5; i++ {
+        time.Sleep(100 * time.Millisecond)
+        fmt.Printf("%d ", i)
+    }
+}
+
+func printletters() { // 140ミリ秒ごとにアルファベットを表示
+    for i := 'a'; i <= 'e'; i++ {
+        time.Sleep(140 * time.Millisecond)
+        fmt.Printf("%c ", i)
+    }
+}
+
+func main() {
+    go printnumbers() // goroutine その1
+    go printletters() // goroutine その2
+    time.Sleep(1000 * time.Millisecond) // 1秒待機する
+}
+/* 出力結果
+1 a 2 b 3 4 c 5 d e 
+*/
+```
+
+>このコードではGoroutineを２つ動かして同時並行で処理を行っています。プログラムの挙動は以下のようなイメージです。
+<img src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/044d6238-6b3e-26ae-7df1-7543cb1262c1.png", width="90%">
+赤色の打刻はprintnumbers関数が、青色の打刻はprintletters関数が、それぞれ行っています。これを並列で実行しているため `1 a 2 b 3 4 c 5 d e ` という順で出力されます。
+それから、最後に待ち時間を確保しているのはgoroutineが終わる前にmain関数自体が終わるのを防止するためです（この1行はChannelを利用すれば不要になります）。
+
+Goroutineの出力結果はChannelを介することで値をやり取りできます。
+
+```Go:Channelの使用例
+package main
+import (
+    "fmt"
+    "time"
+)
+
+func print1(ch chan bool) {
+	fmt.Println("print1")
+	ch <- true
+}
+
+func print2(ch chan bool) { // 時間が掛かる処理
+	time.Sleep(1000 * time.Millisecond)
+	fmt.Println("print2")
+	ch <- true
+}
+
+func main() {
+	ch1 := make(chan bool) // bool型のchannelその1を作成
+	ch2 := make(chan bool) // bool型のchannelその2を作成
+	go print1(ch1) // 並列処理
+	go print2(ch2)
+	<-ch1 // bool型の要素を受信するまで待機（順不同）
+	<-ch2
+	fmt.Println("処理終了")
+}
+```
+
+> 並列する処理ごとにChannelを用意しておけば処理が終わるまで待機してくれます。`<-ch1` と `<-ch2` で受信待ちをしていますが、これらを入れ替えても（どっちの処理の方が時間が掛かるか分からなくても）ちゃんと待ってくれます。意外と簡単に並列処理が書けるんですね。Goroutine(ゴルーチン)やChannel(チャネル)の使い方は公式には[**こちらのページ**](https://tour.golang.org/concurrency/1)で紹介されています。
+> 並列処理の例：
+「[**Goで実装する並列処理（Hello, world!を10000回出力してみる）**](https://qiita.com/h-nabata/items/854076d3437b70990cb3)」
+>参考：
+「[**並行処理、並列処理のあれこれ**](https://qiita.com/Kohei909Otsuka/items/26be74de803d195b37bd)」
+「[**GoのChannelを使いこなせるようになるための手引**](https://qiita.com/awakia/items/f8afa070c96d1c9a04c9)」
+「[**Goのgoroutine, channelをちょっと攻略！**](https://qiita.com/taigamikami/items/fc798cdd6a4eaf9a7d5e)」
+「[**Goのテストを並列で実行する**](https://qiita.com/marnie_ms4/items/8706f43591fb23dd4e64)」
+
+# Goは速い？
+
+当然ですが、PythonやRubyなどのインタプリタ型言語に比べて、コンパイラ型言語であるGoは数段速く動きます。探してみるとベンチマークの報告が色々とヒットします。
+
+>「[**RubyからGoの関数をつかう → はやい**](https://qiita.com/achm/items/679b3f3af2cf377f0f02)」
+「[**C++, Go, Julia, Kotlin, Rust, Swift5 で競争**](https://qiita.com/Nabetani/items/fc20e83405a2f9e7f4d6)」
+「[**言語別int64素因数分解（試し割り法）処理時間比較**](https://qiita.com/gx3n-inue/items/7b63a2101ea26d3d1a29)」
+などなど...
+
+ただ、下手に言語間のベンチマーク結果を公開すると宗教戦争に発展することが間々あります。どんな言語にも一長一短はありますので、少なくとも個人開発の範囲では目的・用途に応じて改宗？(良いトコ取り)すれば良いと思います。平和主義ですね。
+
+# リンク集
+
+>「[**Go 言語に関するブックマーク**](https://qiita.com/spiegel-im-spiegel/items/98d49ac456485b007a15)」（← Goを使うならブックマーク推奨です）
+「[**Go言語の初心者が見ると幸せになれる場所**](https://qiita.com/tenntenn/items/0e33a4959250d1a55045)」
+「[**他言語から来た人がGoを使い始めてすぐハマったこととその答え**](https://qiita.com/mumoshu/items/0d2f2a13c6e9fc8da2a4#comments)」
+「[**何故Go言語を私は使いたいのか？ 良い点と悪い点を雑にまとめる**](https://qiita.com/naka_kyon/items/3652550b5d5a7e579b61)」

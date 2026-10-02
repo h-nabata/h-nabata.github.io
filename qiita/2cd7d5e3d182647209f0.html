@@ -1,0 +1,871 @@
+---
+layout: "qiita-mirror"
+title: "GRRMのPython外部計算を常駐サーバー化して高速化する"
+qiita_id: "2cd7d5e3d182647209f0"
+qiita_url: "https://qiita.com/h-nabata/items/2cd7d5e3d182647209f0"
+qiita_created: "2026-09-13T20:05:12+09:00"
+qiita_updated: "2026-09-13T20:05:12+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "計算化学・分子構造"
+mirror_tags: ["化学", "計算化学", "ソケット通信", "Python", "高速化"]
+permalink: "/qiita/2cd7d5e3d182647209f0.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<h1 data-sourcepos="1:1-1:14">
+<span id="はじめに" class="fragment"></span><a href="#%E3%81%AF%E3%81%98%E3%82%81%E3%81%AB"><i class="fa fa-link"></i></a>はじめに</h1>
+<p data-sourcepos="3:1-3:480"><a href="https://afir.sci.hokudai.ac.jp/" rel="nofollow noopener" target="_blank">GRRMプログラム</a>などの反応経路自動探索ソフトウェアで網羅的な反応経路探索を行う場合、エネルギー・勾配計算の要求回数は非常に膨大です。大規模な反応経路探索の場合は数百万～数千万回以上の一点計算が要求されるため、一点あたりではごく僅かな時間短縮であっても、トータルでは大幅な計算コストの削減に繋がります。</p>
+<p data-sourcepos="5:1-5:332">外部計算エンジンをPythonで実装していると、一点計算そのものが軽い場合でも、毎回Pythonプロセスを立ち上げる必要が生じます。ここでNumPyなどのライブラリや機械学習モデルを読み込む処理が挟まると、無視できないオーバーヘッドになります。</p>
+<p data-sourcepos="7:1-7:311">特に、機械学習ポテンシャルのように「モデルのロード」「CUDAコンテキストの初期化」「各種ライブラリのimport」などが必要な計算エンジンでは、GRRMから一点計算を要求されるたびに同じ初期化を繰り返すのは極めて非効率です。</p>
+<p data-sourcepos="9:1-9:497">そのような場合、GRRMから毎回呼ばれる軽量なインターフェースと、Python環境を保持したまま待機する常駐サーバーを分離する方法が有効です。GRRMとの入出力は従来通りファイルI/Oで行い、インターフェースとサーバーの間だけUnix domain socketで通信するという方式は実装が簡便な割にオーバーヘッドの削減に有効です。これは基本的なPythonスクリプトのみで完結します。</p>
+<p data-sourcepos="11:1-11:590">本稿でのテスト系には50原子の<a href="https://doi.org/10.1021/acs.jctc.4c00135" rel="nofollow noopener" target="_blank">Lennard-Jones（LJ）クラスター</a>を用い、適当に配置した初期構造からGRRMで構造最適化を実行します。結論としては、この単純な（比較的オーバーヘッドの小さい）系であっても、計算時間は約10%程度も短縮されました。例えば機械学習ポテンシャルのようにモデルの読み込みに時間がかかる計算では、この方式によるオーバーヘッドの削減が計算時間の劇的な短縮に繋がります。</p>
+<h1 data-sourcepos="14:1-14:41">
+<span id="何がボトルネックになるのか" class="fragment"></span><a href="#%E4%BD%95%E3%81%8C%E3%83%9C%E3%83%88%E3%83%AB%E3%83%8D%E3%83%83%E3%82%AF%E3%81%AB%E3%81%AA%E3%82%8B%E3%81%AE%E3%81%8B"><i class="fa fa-link"></i></a>何がボトルネックになるのか</h1>
+<p data-sourcepos="16:1-16:72">一点計算のボトルネックを分かりやすく図解します。</p>
+<p data-sourcepos="18:1-18:112">GRRMから外部エンジンを呼び出す処理を単純化すると、通常は次のようになります。</p>
+<pre class="mermaid">sequenceDiagram
+ participant G as GRRM
+ participant P as Python外部プログラム&lt;br/&gt;（general interface）
+
+ Note over G,P: 一点計算のたびに実行
+ G-&gt;&gt;P: argnameを指定して&lt;br/&gt;外部プログラムを呼び出す
+ P-&gt;&gt;P: Pythonプロセスを起動
+ P-&gt;&gt;P: ライブラリ・モデルの読み込み
+ Note over P: ここが重い！
+ P-&gt;&gt;P: argname_INP4GEN.rrmを読み込む
+ P-&gt;&gt;P: エネルギー / 勾配を計算
+ P-&gt;&gt;P: argname_OUT4GEN.rrmを書き出す
+ P--&gt;&gt;G: 計算終了
+ P-&gt;&gt;P: Pythonプロセスを終了</pre>
+
+<p data-sourcepos="37:1-37:291">これを一点計算のたびに繰り返すと、エネルギー・勾配計算のプロセスを起動するコストが計算回数に比例して積み上がります。これを、Pythonサーバーを常駐させて初回のみの起動で済ませることにより解決します。</p>
+<pre class="mermaid">sequenceDiagram
+ participant G as GRRM
+ participant I as LJ_interface
+ participant S as LJ_server
+
+ Note over S: Pythonプロセスを常駐&lt;br/&gt;（起動は初回のみ）
+ S-&gt;&gt;S: Pythonプロセスを起動
+ S-&gt;&gt;S: ライブラリ・モデルの読み込み
+ Note over S: 重い処理は初回のみ！
+ Note over G,S: 一点計算のたびに実行
+ G-&gt;&gt;I: argnameを指定して&lt;br/&gt;外部プログラムを呼び出す
+ I-&gt;&gt;I: argname_FIN4GEN.rrmが&lt;br/&gt;存在していたら削除する
+ I-&gt;&gt;I: .socketfileを読み込む
+ I-&gt;&gt;S: Unixソケット経由で&lt;br/&gt;argnameを送信
+ S-&gt;&gt;S: argname_INP4GEN.rrmを読み込む
+ S-&gt;&gt;S: エネルギー / 勾配を計算
+ S-&gt;&gt;S: argname_OUT4GEN.rrmを書き出す
+ S-&gt;&gt;S: argname_FIN4GEN.rrmを書き出す&lt;br/&gt;（独自実装）
+ S--&gt;&gt;I: 計算結果を返す
+ I-&gt;&gt;I: argname_FIN4GEN.rrmの存在を確認&lt;br/&gt;（独自実装）
+ I--&gt;&gt;G: 計算終了</pre>
+
+<p data-sourcepos="63:1-63:201">GRRMが直接読み書きするのは <code>*_INP4GEN.rrm</code>、<code>*_OUT4GEN.rrm</code>のみで、<code>*_FIN4GEN.rrm</code> はインターフェースが計算の終了を判定するためだけの独自ファイルです。</p>
+<blockquote data-sourcepos="65:1-65:386">
+<p data-sourcepos="65:3-65:386"><code>*_FIN4GEN.rrm</code> を挟む理由としては、サーバーがOUT4GENへの書き込みを完了していない段階で、インターフェースがGRRMにレスポンスしてしまう事故を防止するためです。数百以上の原子数からなる系では、インターフェースの待ち時間間隔が短いとこうした事故が発生する場合があります。</p>
+</blockquote>
+<p data-sourcepos="67:1-67:382">ここでのsocket通信で送っている情報は計算データそのものではなく、GRRMから渡された <code>argname</code> （ジョブ名）だけで、xyz座標などの情報のやり取りはファイルI/O経由で行っています。この設計にしておくと、GRRM側のファイルI/O仕様を維持したまま、計算エンジンだけを常駐化できます。</p>
+<p data-sourcepos="69:1-69:355">なお、今回のGRRM用インターフェース <code>LJ_interface</code> 自体もPythonスクリプトなので、Pythonインタープリタの起動コストが完全になくなるわけではありません。削減されている主なコストは、NumPyや将来的な機械学習モデルなど、重い計算環境を毎回ロードする処理です。</p>
+<blockquote data-sourcepos="71:1-73:451">
+<p data-sourcepos="71:3-71:284">インターフェースをより軽量な実装に置き換えれば、さらにオーバーヘッドを削減できる可能性があります。例えば、Pythonランタイムを起動するのではなく bash などのスクリプトで完結させることも可能です。</p>
+<p data-sourcepos="73:3-73:451">しかし、シェルスクリプトからUnix domain socketを扱うために <code>socat</code> などの外部コマンドを毎回起動する場合、そのプロセスを起動するコストが加わるため、必ずしも高速化するとは限りません。起動コストを最小化するという観点では、CやRustなどで小さなインターフェースプログラムとして実装する方が適している可能性があります。</p>
+</blockquote>
+<h1 data-sourcepos="75:1-75:54">
+<span id="テストに用いたlennard-jonesポテンシャル" class="fragment"></span><a href="#%E3%83%86%E3%82%B9%E3%83%88%E3%81%AB%E7%94%A8%E3%81%84%E3%81%9Flennard-jones%E3%83%9D%E3%83%86%E3%83%B3%E3%82%B7%E3%83%A3%E3%83%AB"><i class="fa fa-link"></i></a>テストに用いたLennard-Jonesポテンシャル</h1>
+<p data-sourcepos="77:1-77:58">テストでは、単純なLennard-Jonesポテンシャル</p>
+<p data-sourcepos="79:1-81:2">$$<br>
+V(r)=4\epsilon\left[\left(\frac{\sigma}{r}\right)^{12}-\left(\frac{\sigma}{r}\right)^6\right]<br>
+$$</p>
+<p data-sourcepos="83:1-83:21">を用いました。</p>
+<div class="code-frame" data-lang="python" data-sourcepos="85:1-88:3">
+<div class="code-lang"><span class="bold">今回のパラメータ</span></div>
+<div class="highlight"><pre><code><span class="n">EPSILON</span> <span class="o">=</span> <span class="mf">0.001</span>
+<span class="n">SIGMA</span> <span class="o">=</span> <span class="mf">1.6</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="90:1-90:262">
+<p data-sourcepos="90:3-90:262">LJポテンシャルの計算そのものは非常に軽いため、このテストは「一点計算が軽い場合に、Python環境の初期化オーバーヘッドがどの程度削減されるか」を調べるケーススタディになっています。</p>
+</blockquote>
+<h1 data-sourcepos="92:1-92:17">
+<span id="実装の概要" class="fragment"></span><a href="#%E5%AE%9F%E8%A3%85%E3%81%AE%E6%A6%82%E8%A6%81"><i class="fa fa-link"></i></a>実装の概要</h1>
+<p data-sourcepos="94:1-94:107">実装はGRRM用インターフェースと常駐サーバー2つのスクリプトに分けています。</p>
+<h2 data-sourcepos="96:1-96:78">
+<span id="lj_interfacegrrmと常駐サーバーを繋ぐインターフェース" class="fragment"></span><a href="#lj_interfacegrrm%E3%81%A8%E5%B8%B8%E9%A7%90%E3%82%B5%E3%83%BC%E3%83%90%E3%83%BC%E3%82%92%E7%B9%8B%E3%81%90%E3%82%A4%E3%83%B3%E3%82%BF%E3%83%BC%E3%83%95%E3%82%A7%E3%83%BC%E3%82%B9"><i class="fa fa-link"></i></a><code>LJ_interface</code>：GRRMと常駐サーバーを繋ぐインターフェース</h2>
+<p data-sourcepos="98:1-98:74">まず、GRRMから直接呼び出されるのが <code>LJ_interface</code> です。</p>
+<p data-sourcepos="100:1-100:301">今回の構成では、エネルギー・勾配計算そのものを <code>LJ_interface</code> の中では行いません。<code>LJ_interface</code> の役割は、GRRMから一点計算の要求を受け取ったことを常駐中の <code>LJ_server</code> に伝え、計算終了までGRRMとの間を仲介することです。</p>
+<p data-sourcepos="102:1-102:48"><code>LJ_interface</code> の仕事を簡略化すると、</p>
+<ol data-sourcepos="104:1-109:0">
+<li data-sourcepos="104:1-104:39">GRRMから <code>argname</code> を受け取る</li>
+<li data-sourcepos="105:1-105:47">
+<code>.socketfile</code> から接続先を取得する</li>
+<li data-sourcepos="106:1-106:38">
+<code>LJ_server</code> に <code>argname</code> を送る</li>
+<li data-sourcepos="107:1-107:24">計算終了を待つ</li>
+<li data-sourcepos="108:1-109:0">正常終了したことを確認してGRRMへ制御を返す</li>
+</ol>
+<p data-sourcepos="110:1-110:33">という流れになります。</p>
+<p data-sourcepos="112:1-112:328">ここで重要なのは、<code>LJ_interface</code> 自体にはNumPyやLennard-Jonesポテンシャルの計算処理を持たせていないことです。GRRMから一点計算のたびに起動される部分をできるだけ軽量にし、重い計算環境を常駐server側へ移すことが今回の実装の基本方針です。</p>
+<details><summary>インターフェースの詳細</summary>
+GRRMから外部プログラムが呼び出される際には、計算ごとに識別子として `argname` が引数で渡されます。この `argname` は、
+<p data-sourcepos="117:1-117:21"><code>argname_INP4GEN.rrm</code></p>
+<p data-sourcepos="119:1-119:21"><code>argname_OUT4GEN.rrm</code></p>
+<p data-sourcepos="121:1-121:21"><code>argname_FIN4GEN.rrm</code></p>
+<p data-sourcepos="123:1-123:99">のように、各計算に対応するファイル名を特定するために用いています。</p>
+<p data-sourcepos="125:1-125:260"><code>LJ_interface</code> が起動すると、最初にカレントディレクトリの <code>.socketfile</code> を読み込みます。このファイルには、対応する <code>LJ_server</code> が待ち受けているUnixドメインソケットのパスが記録されています。</p>
+<p data-sourcepos="127:1-127:9">次に、</p>
+<p data-sourcepos="129:1-129:21"><code>argname_INP4GEN.rrm</code></p>
+<p data-sourcepos="131:1-131:187">が存在することを確認します。このファイルはGRRMが生成する入力ファイルであり、原子座標や要求する計算の種類などが含まれています。</p>
+<p data-sourcepos="133:1-133:347">入力ファイルの存在を確認した後、<code>LJ_interface</code> はUnixドメインソケットを介して <code>LJ_server</code> に接続します。ただし、ここでsocket経由で送っているのは原子座標や勾配などの計算データそのものではありません。送信するのはGRRMから受け取った <code>argname</code> のみです。</p>
+<p data-sourcepos="135:1-135:30">つまり、socket通信は、</p>
+<p data-sourcepos="137:1-137:77">「この <code>argname</code> に対応する一点計算を実行してください」</p>
+<p data-sourcepos="139:1-139:66">と常駐サーバーへ通知するために使っています。</p>
+<p data-sourcepos="141:1-141:271"><code>LJ_server</code> 側で計算が終了すると、interfaceには完了を示すステータスが返されます。正常終了の場合は <code>OK</code>、同じ計算がすでに実行中であれば <code>AL</code>、server内部でエラーが生じた場合は <code>ER</code> を返す構成です。</p>
+<p data-sourcepos="143:1-143:82">正常終了の応答を受け取った <code>LJ_interface</code> は、計算終了を示す</p>
+<p data-sourcepos="145:1-145:21"><code>argname_FIN4GEN.rrm</code></p>
+<p data-sourcepos="147:1-147:229">の存在を確認します。このファイルはGRRMが直接読み込む計算結果ではなく、今回のinterfaceとserverの間で計算終了を判定するためのフラグファイルとして使用しています。</p>
+<p data-sourcepos="149:1-149:251"><code>FIN4GEN.rrm</code> を確認すると、interfaceはこれを削除して正常終了します。GRRMから見れば、外部プログラムである <code>LJ_interface</code> が終了した時点で一点計算が完了したことになり、その後GRRM自身が</p>
+<p data-sourcepos="151:1-151:21"><code>argname_OUT4GEN.rrm</code></p>
+<p data-sourcepos="153:1-153:42">から計算結果を読み込みます。</p>
+</details>
+<details><summary>スクリプトの実装例</summary>
+<div class="code-frame" data-lang="py" data-sourcepos="159:1-288:3">
+<div class="code-lang"><span class="bold">LJ_interface</span></div>
+<div class="highlight"><pre><code><span class="c1">#!/usr/bin/python3
+</span>
+<span class="sh">"""</span><span class="s">Lightweight GRRM-to-server bridge.
+
+The GRRM-facing file names and the two-byte server protocol are intentionally
+kept identical to the original implementation.
+</span><span class="sh">"""</span>
+
+<span class="kn">import</span> <span class="n">os</span>
+<span class="kn">import</span> <span class="n">socket</span>
+<span class="kn">import</span> <span class="n">struct</span>
+<span class="kn">import</span> <span class="n">sys</span>
+<span class="kn">import</span> <span class="n">time</span>
+
+<span class="n">SOCKET_POINTER_FILE</span> <span class="o">=</span> <span class="sh">"</span><span class="s">.socketfile</span><span class="sh">"</span>
+<span class="n">RESPONSE_SIZE</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="n">CONNECT_TIMEOUT_SECONDS</span> <span class="o">=</span> <span class="mf">30.0</span>
+<span class="n">CONNECT_RETRY_INTERVAL_SECONDS</span> <span class="o">=</span> <span class="mf">0.1</span>
+<span class="n">FIN_TIMEOUT_SECONDS</span> <span class="o">=</span> <span class="mf">1000.0</span>
+<span class="n">POLL_INTERVAL_SECONDS</span> <span class="o">=</span> <span class="mf">0.1</span>
+
+
+<span class="k">def</span> <span class="nf">get_socket_file</span><span class="p">():</span>
+    <span class="sh">"""</span><span class="s">Read the Unix-domain socket path used by the persistent server.</span><span class="sh">"""</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="nf">exists</span><span class="p">(</span><span class="n">SOCKET_POINTER_FILE</span><span class="p">):</span>
+        <span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">ERROR: .socketfile not found</span><span class="sh">"</span><span class="p">,</span> <span class="nb">file</span><span class="o">=</span><span class="n">sys</span><span class="p">.</span><span class="n">stderr</span><span class="p">)</span>
+        <span class="n">sys</span><span class="p">.</span><span class="nf">exit</span><span class="p">(</span><span class="mi">8</span><span class="p">)</span>
+
+    <span class="k">with</span> <span class="nf">open</span><span class="p">(</span><span class="n">SOCKET_POINTER_FILE</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="sh">"</span><span class="s">utf-8</span><span class="sh">"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">f</span><span class="p">.</span><span class="nf">read</span><span class="p">().</span><span class="nf">strip</span><span class="p">()</span>
+
+
+<span class="k">def</span> <span class="nf">recv_exact</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+    <span class="sh">"""</span><span class="s">Receive exactly *size* bytes or raise if the connection closes early.</span><span class="sh">"""</span>
+    <span class="n">chunks</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">remaining</span> <span class="o">=</span> <span class="n">size</span>
+    <span class="k">while</span> <span class="n">remaining</span><span class="p">:</span>
+        <span class="n">chunk</span> <span class="o">=</span> <span class="n">sock</span><span class="p">.</span><span class="nf">recv</span><span class="p">(</span><span class="n">remaining</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">chunk</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="nc">ConnectionError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="sh">"</span><span class="s">Connection closed while receiving </span><span class="si">{</span><span class="n">size</span><span class="si">}</span><span class="s"> bytes</span><span class="sh">"</span>
+            <span class="p">)</span>
+        <span class="n">chunks</span><span class="p">.</span><span class="nf">append</span><span class="p">(</span><span class="n">chunk</span><span class="p">)</span>
+        <span class="n">remaining</span> <span class="o">-=</span> <span class="nf">len</span><span class="p">(</span><span class="n">chunk</span><span class="p">)</span>
+    <span class="k">return</span> <span class="sa">b</span><span class="sh">""</span><span class="p">.</span><span class="nf">join</span><span class="p">(</span><span class="n">chunks</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">connect_with_retry</span><span class="p">(</span><span class="n">socket_file</span><span class="p">):</span>
+    <span class="sh">"""</span><span class="s">Connect to the Unix-domain server, retrying transient startup errors.</span><span class="sh">"""</span>
+    <span class="n">deadline</span> <span class="o">=</span> <span class="n">time</span><span class="p">.</span><span class="nf">monotonic</span><span class="p">()</span> <span class="o">+</span> <span class="n">CONNECT_TIMEOUT_SECONDS</span>
+    <span class="n">last_error</span> <span class="o">=</span> <span class="bp">None</span>
+
+    <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+        <span class="n">sock</span> <span class="o">=</span> <span class="n">socket</span><span class="p">.</span><span class="nf">socket</span><span class="p">(</span><span class="n">socket</span><span class="p">.</span><span class="n">AF_UNIX</span><span class="p">,</span> <span class="n">socket</span><span class="p">.</span><span class="n">SOCK_STREAM</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">sock</span><span class="p">.</span><span class="nf">connect</span><span class="p">(</span><span class="n">socket_file</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">sock</span>
+        <span class="nf">except </span><span class="p">(</span><span class="nb">FileNotFoundError</span><span class="p">,</span> <span class="nb">ConnectionRefusedError</span><span class="p">)</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="n">sock</span><span class="p">.</span><span class="nf">close</span><span class="p">()</span>
+            <span class="n">last_error</span> <span class="o">=</span> <span class="n">exc</span>
+            <span class="k">if</span> <span class="n">time</span><span class="p">.</span><span class="nf">monotonic</span><span class="p">()</span> <span class="o">&gt;=</span> <span class="n">deadline</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="nc">TimeoutError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="sh">"</span><span class="s">Server did not become ready within </span><span class="sh">"</span>
+                    <span class="sa">f</span><span class="sh">"</span><span class="si">{</span><span class="n">CONNECT_TIMEOUT_SECONDS</span><span class="si">:</span><span class="p">.</span><span class="mi">1</span><span class="n">f</span><span class="si">}</span><span class="s"> s: </span><span class="si">{</span><span class="n">last_error</span><span class="si">}</span><span class="sh">"</span>
+                <span class="p">)</span> <span class="k">from</span> <span class="n">exc</span>
+            <span class="n">time</span><span class="p">.</span><span class="nf">sleep</span><span class="p">(</span><span class="n">CONNECT_RETRY_INTERVAL_SECONDS</span><span class="p">)</span>
+        <span class="k">except</span> <span class="nb">Exception</span><span class="p">:</span>
+            <span class="n">sock</span><span class="p">.</span><span class="nf">close</span><span class="p">()</span>
+            <span class="k">raise</span>
+
+
+<span class="k">def</span> <span class="nf">wait_for_and_remove_fin</span><span class="p">(</span><span class="n">finfile</span><span class="p">):</span>
+    <span class="sh">"""</span><span class="s">Wait for GRRM</span><span class="sh">'</span><span class="s">s FIN4GEN flag file and remove it once observed.</span><span class="sh">"""</span>
+    <span class="n">deadline</span> <span class="o">=</span> <span class="n">time</span><span class="p">.</span><span class="nf">monotonic</span><span class="p">()</span> <span class="o">+</span> <span class="n">FIN_TIMEOUT_SECONDS</span>
+    <span class="k">while</span> <span class="n">time</span><span class="p">.</span><span class="nf">monotonic</span><span class="p">()</span> <span class="o">&lt;</span> <span class="n">deadline</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="nf">exists</span><span class="p">(</span><span class="n">finfile</span><span class="p">):</span>
+            <span class="n">os</span><span class="p">.</span><span class="nf">remove</span><span class="p">(</span><span class="n">finfile</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">True</span>
+        <span class="n">time</span><span class="p">.</span><span class="nf">sleep</span><span class="p">(</span><span class="n">POLL_INTERVAL_SECONDS</span><span class="p">)</span>
+    <span class="k">return</span> <span class="bp">False</span>
+
+
+<span class="k">def</span> <span class="nf">main</span><span class="p">():</span>
+    <span class="k">if</span> <span class="nf">len</span><span class="p">(</span><span class="n">sys</span><span class="p">.</span><span class="n">argv</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">2</span><span class="p">:</span>
+        <span class="nf">print</span><span class="p">(</span><span class="sa">f</span><span class="sh">"</span><span class="s">Usage: </span><span class="si">{</span><span class="n">sys</span><span class="p">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s"> ARGNAME</span><span class="sh">"</span><span class="p">,</span> <span class="nb">file</span><span class="o">=</span><span class="n">sys</span><span class="p">.</span><span class="n">stderr</span><span class="p">)</span>
+        <span class="n">sys</span><span class="p">.</span><span class="nf">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="n">argname</span> <span class="o">=</span> <span class="n">sys</span><span class="p">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">socket_file</span> <span class="o">=</span> <span class="nf">get_socket_file</span><span class="p">()</span>
+
+    <span class="n">inpfile</span> <span class="o">=</span> <span class="sa">f</span><span class="sh">"</span><span class="si">{</span><span class="n">argname</span><span class="si">}</span><span class="s">_INP4GEN.rrm</span><span class="sh">"</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="nf">exists</span><span class="p">(</span><span class="n">inpfile</span><span class="p">):</span>
+        <span class="nf">print</span><span class="p">(</span><span class="sa">f</span><span class="sh">"</span><span class="s">Input file </span><span class="si">{</span><span class="n">inpfile</span><span class="si">}</span><span class="s"> not found.</span><span class="sh">"</span><span class="p">,</span> <span class="nb">file</span><span class="o">=</span><span class="n">sys</span><span class="p">.</span><span class="n">stderr</span><span class="p">)</span>
+        <span class="n">sys</span><span class="p">.</span><span class="nf">exit</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">with</span> <span class="nf">connect_with_retry</span><span class="p">(</span><span class="n">socket_file</span><span class="p">)</span> <span class="k">as</span> <span class="n">sock</span><span class="p">:</span>
+            <span class="n">msg</span> <span class="o">=</span> <span class="n">argname</span><span class="p">.</span><span class="nf">encode</span><span class="p">()</span>
+            <span class="n">sock</span><span class="p">.</span><span class="nf">sendall</span><span class="p">(</span><span class="n">struct</span><span class="p">.</span><span class="nf">pack</span><span class="p">(</span><span class="sh">"</span><span class="s">&gt;H</span><span class="sh">"</span><span class="p">,</span> <span class="nf">len</span><span class="p">(</span><span class="n">msg</span><span class="p">))</span> <span class="o">+</span> <span class="n">msg</span><span class="p">)</span>
+            <span class="n">resp</span> <span class="o">=</span> <span class="nf">recv_exact</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="n">RESPONSE_SIZE</span><span class="p">)</span>
+    <span class="k">except</span> <span class="nb">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+        <span class="nf">print</span><span class="p">(</span><span class="sa">f</span><span class="sh">"</span><span class="s">ERROR: Could not connect to server: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="sh">"</span><span class="p">,</span> <span class="nb">file</span><span class="o">=</span><span class="n">sys</span><span class="p">.</span><span class="n">stderr</span><span class="p">)</span>
+        <span class="n">sys</span><span class="p">.</span><span class="nf">exit</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">resp</span> <span class="o">==</span> <span class="sa">b</span><span class="sh">"</span><span class="s">OK</span><span class="sh">"</span><span class="p">:</span>
+        <span class="n">finfile</span> <span class="o">=</span> <span class="sa">f</span><span class="sh">"</span><span class="si">{</span><span class="n">argname</span><span class="si">}</span><span class="s">_FIN4GEN.rrm</span><span class="sh">"</span>
+        <span class="k">if</span> <span class="nf">wait_for_and_remove_fin</span><span class="p">(</span><span class="n">finfile</span><span class="p">):</span>
+            <span class="n">sys</span><span class="p">.</span><span class="nf">exit</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+        <span class="nf">print</span><span class="p">(</span>
+            <span class="sh">"</span><span class="s">ERROR: Server responded OK but output file not found after waiting.</span><span class="sh">"</span><span class="p">,</span>
+            <span class="nb">file</span><span class="o">=</span><span class="n">sys</span><span class="p">.</span><span class="n">stderr</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">sys</span><span class="p">.</span><span class="nf">exit</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">resp</span> <span class="o">==</span> <span class="sa">b</span><span class="sh">"</span><span class="s">AL</span><span class="sh">"</span><span class="p">:</span>
+        <span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">ERROR: Job already in progress.</span><span class="sh">"</span><span class="p">,</span> <span class="nb">file</span><span class="o">=</span><span class="n">sys</span><span class="p">.</span><span class="n">stderr</span><span class="p">)</span>
+        <span class="n">sys</span><span class="p">.</span><span class="nf">exit</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">resp</span> <span class="o">==</span> <span class="sa">b</span><span class="sh">"</span><span class="s">ER</span><span class="sh">"</span><span class="p">:</span>
+        <span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">ERROR: Server error.</span><span class="sh">"</span><span class="p">,</span> <span class="nb">file</span><span class="o">=</span><span class="n">sys</span><span class="p">.</span><span class="n">stderr</span><span class="p">)</span>
+        <span class="n">sys</span><span class="p">.</span><span class="nf">exit</span><span class="p">(</span><span class="mi">6</span><span class="p">)</span>
+
+    <span class="nf">print</span><span class="p">(</span><span class="sa">f</span><span class="sh">"</span><span class="s">ERROR: Unexpected server response: </span><span class="si">{</span><span class="n">resp</span><span class="si">}</span><span class="sh">"</span><span class="p">,</span> <span class="nb">file</span><span class="o">=</span><span class="n">sys</span><span class="p">.</span><span class="n">stderr</span><span class="p">)</span>
+    <span class="n">sys</span><span class="p">.</span><span class="nf">exit</span><span class="p">(</span><span class="mi">7</span><span class="p">)</span>
+
+
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="sh">"</span><span class="s">__main__</span><span class="sh">"</span><span class="p">:</span>
+    <span class="nf">main</span><span class="p">()</span>
+
+</code></pre></div>
+</div>
+</details>
+<h2 data-sourcepos="293:1-293:80">
+<span id="lj_server計算環境を保持したまま待機する常駐プロセス" class="fragment"></span><a href="#lj_server%E8%A8%88%E7%AE%97%E7%92%B0%E5%A2%83%E3%82%92%E4%BF%9D%E6%8C%81%E3%81%97%E3%81%9F%E3%81%BE%E3%81%BE%E5%BE%85%E6%A9%9F%E3%81%99%E3%82%8B%E5%B8%B8%E9%A7%90%E3%83%97%E3%83%AD%E3%82%BB%E3%82%B9"><i class="fa fa-link"></i></a><code>LJ_server</code>：計算環境を保持したまま待機する常駐プロセス</h2>
+<p data-sourcepos="295:1-295:82">実際のエネルギー・勾配計算を担当するのが <code>LJ_server</code> です。</p>
+<p data-sourcepos="297:1-297:254"><code>LJ_server</code> はGRRMから一点計算を要求されるたびに起動するのではなく、GRRMによる構造最適化や反応経路探索を開始する前に一度だけ起動し、その後はPythonプロセスを終了せずに待機します。</p>
+<p data-sourcepos="299:1-299:75">この部分が今回の高速化の重要なポイントとなります。</p>
+<details><summary>サーバーの詳細</summary>
+<p data-sourcepos="303:1-303:66">通常の外部計算スクリプトでは、一点計算ごとに</p>
+<p data-sourcepos="305:1-308:31">Pythonプロセスの起動<br>
+→ ライブラリのimport<br>
+→ 計算<br>
+→ Pythonプロセスの終了</p>
+<p data-sourcepos="310:1-310:39">という処理を繰り返します。</p>
+<p data-sourcepos="312:1-312:503">これに対して <code>LJ_server</code> では、NumPyなどのライブラリを最初の起動時に一度だけ読み込み、その状態を保ったまま次の計算要求を待ち続けます。今回のLennard-Jones計算ではNumPyの読み込みが主な対象ですが、機械学習ポテンシャルへ応用する場合には、PyTorchなどのライブラリ、学習済みモデル、場合によってはGPU上のモデルやCUDA関連の初期化状態も同じ考え方で保持できます。</p>
+<p data-sourcepos="314:1-314:33">serverを起動する際には、</p>
+<ul data-sourcepos="316:1-318:0">
+<li data-sourcepos="316:1-316:76">GRRMの計算ファイルが置かれる作業ディレクトリ <code>WORKDIR</code>
+</li>
+<li data-sourcepos="317:1-318:0">通信に使用するUnixドメインソケットのパス <code>SOCKET_FILE</code>
+</li>
+</ul>
+<p data-sourcepos="319:1-319:21">を指定します。</p>
+<p data-sourcepos="321:1-321:212">起動後、<code>LJ_server</code> は指定されたパスにUnixドメインソケットを作成し、clientからの接続を待ち受けます。ここでいうclientが、先ほど説明した <code>LJ_interface</code> です。</p>
+<p data-sourcepos="323:1-323:211"><code>LJ_interface</code> から接続を受けると、serverはsocket経由で送られてきた <code>argname</code> を取得します。そして、この名前とあらかじめ指定された <code>WORKDIR</code> を組み合わせて、</p>
+<p data-sourcepos="325:1-325:21"><code>argname_INP4GEN.rrm</code></p>
+<p data-sourcepos="327:1-327:21"><code>argname_OUT4GEN.rrm</code></p>
+<p data-sourcepos="329:1-329:21"><code>argname_FIN4GEN.rrm</code></p>
+<p data-sourcepos="331:1-331:30">のパスを決定します。</p>
+<p data-sourcepos="333:1-333:231">したがって、現在の実装では原子座標そのものをsocketから受け取っているわけではありません。serverが <code>INP4GEN.rrm</code> を直接読み込み、そこから座標や計算条件を取得します。</p>
+<h3 data-sourcepos="335:1-335:41">
+<span id="grrm入力ファイルの読み込み" class="fragment"></span><a href="#grrm%E5%85%A5%E5%8A%9B%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E3%81%AE%E8%AA%AD%E3%81%BF%E8%BE%BC%E3%81%BF"><i class="fa fa-link"></i></a>GRRM入力ファイルの読み込み</h3>
+<p data-sourcepos="337:1-337:99">一点計算を担当する <code>run_lj_model()</code> では、まず <code>INP4GEN.rrm</code> を読み込みます。</p>
+<p data-sourcepos="339:1-339:33">入力中の <code>TASK:</code> を調べ、</p>
+<ul data-sourcepos="341:1-344:0">
+<li data-sourcepos="341:1-341:10"><code>ENERGY</code></li>
+<li data-sourcepos="342:1-342:12"><code>GRADIENT</code></li>
+<li data-sourcepos="343:1-344:0"><code>HESSIAN</code></li>
+</ul>
+<p data-sourcepos="345:1-345:63">のどの計算が要求されているかを判定します。</p>
+<p data-sourcepos="347:1-347:147">さらに <code>NACTIVEATOM / NATOM:</code> の情報から原子数を取得し、後続する各行から原子名とCartesian座標を読み込みます。</p>
+<p data-sourcepos="349:1-349:159">今回のテストではLennard-Jonesクラスターを対象としているため、この座標から全原子対の距離行列をNumPyで計算します。</p>
+<h3 data-sourcepos="351:1-351:50">
+<span id="lennard-jonesエネルギー勾配の計算" class="fragment"></span><a href="#lennard-jones%E3%82%A8%E3%83%8D%E3%83%AB%E3%82%AE%E3%83%BC%E5%8B%BE%E9%85%8D%E3%81%AE%E8%A8%88%E7%AE%97"><i class="fa fa-link"></i></a>Lennard-Jonesエネルギー・勾配の計算</h3>
+<p data-sourcepos="353:1-353:259">エネルギー計算が要求されている場合には、各原子対についてLennard-Jonesポテンシャルを評価し、二重カウントを避けるため距離行列の上三角部分について和を取って全エネルギーを求めます。</p>
+<p data-sourcepos="355:1-355:253">勾配が要求されている場合には、Lennard-Jonesポテンシャルを原子間距離について微分し、その値を各原子間の方向ベクトルへ分配することでCartesian座標に対する勾配ベクトルを計算します。</p>
+<p data-sourcepos="357:1-357:327">ここではLennard-Jonesポテンシャルを使用していますが、常駐serverという仕組みそのものはこの計算式には依存しません。<code>run_lj_model()</code> に相当する部分を別の計算エンジンへ置き換えれば、機械学習ポテンシャルなどにも同じ構成を利用できます。</p>
+<h3 data-sourcepos="359:1-359:41">
+<span id="grrm形式での結果の書き出し" class="fragment"></span><a href="#grrm%E5%BD%A2%E5%BC%8F%E3%81%A7%E3%81%AE%E7%B5%90%E6%9E%9C%E3%81%AE%E6%9B%B8%E3%81%8D%E5%87%BA%E3%81%97"><i class="fa fa-link"></i></a>GRRM形式での結果の書き出し</h3>
+<p data-sourcepos="361:1-361:58">計算終了後は、GRRMが要求する形式に従って</p>
+<p data-sourcepos="363:1-363:21"><code>argname_OUT4GEN.rrm</code></p>
+<p data-sourcepos="365:1-365:24">を書き出します。</p>
+<p data-sourcepos="367:1-367:330">このファイルには、現在の原子座標、エネルギー、勾配などを所定の形式で記録します。今回のLJテストでは使用していないHessian、dipole、polarizabilityなどの項目についても、GRRM側の入出力形式を維持するため必要なフィールドを出力しています。</p>
+<p data-sourcepos="369:1-369:60">そして <code>OUT4GEN.rrm</code> の生成が終了した後、空の</p>
+<p data-sourcepos="371:1-371:21"><code>argname_FIN4GEN.rrm</code></p>
+<p data-sourcepos="373:1-373:21">を作成します。</p>
+<p data-sourcepos="375:1-375:244">前述のとおり、<code>FIN4GEN.rrm</code> はGRRMへエネルギーや勾配を渡すためのファイルではなく、server側の計算処理が終了したことを <code>LJ_interface</code> が判定するためのフラグとして利用しています。</p>
+<h3 data-sourcepos="377:1-377:52">
+<span id="複数の要求を処理するための仕組み" class="fragment"></span><a href="#%E8%A4%87%E6%95%B0%E3%81%AE%E8%A6%81%E6%B1%82%E3%82%92%E5%87%A6%E7%90%86%E3%81%99%E3%82%8B%E3%81%9F%E3%82%81%E3%81%AE%E4%BB%95%E7%B5%84%E3%81%BF"><i class="fa fa-link"></i></a>複数の要求を処理するための仕組み</h3>
+<p data-sourcepos="379:1-379:120"><code>LJ_server</code> は一度計算したら終了するプログラムではなく、socketへの接続を待ち続けます。</p>
+<p data-sourcepos="381:1-381:287">新しいconnectionを受けるたびにclient処理を開始し、実際の一点計算は <code>ThreadPoolExecutor</code> に渡す構成としています。このため、serverプロセスそのものを再起動することなく、順次送られてくる計算要求を処理できます。</p>
+<p data-sourcepos="383:1-383:281">また、現在計算中の入力ファイルを <code>jobs_in_progress</code> に記録しています。同じ入力ファイルに対する要求が重複して到着した場合には、新たな計算を開始せず、すでに計算中であることをinterface側へ通知します。</p>
+<p data-sourcepos="385:1-385:54">以上をまとめると、<code>LJ_server</code> の役割は、</p>
+<ol data-sourcepos="387:1-395:0">
+<li data-sourcepos="387:1-387:69">Pythonおよび計算ライブラリを一度だけ初期化する</li>
+<li data-sourcepos="388:1-388:55">Unixドメインソケットで計算要求を待つ</li>
+<li data-sourcepos="389:1-389:44">interfaceから <code>argname</code> を受け取る</li>
+<li data-sourcepos="390:1-390:45">対応する <code>INP4GEN.rrm</code> を読み込む</li>
+<li data-sourcepos="391:1-391:42">エネルギー・勾配を計算する</li>
+<li data-sourcepos="392:1-392:32">
+<code>OUT4GEN.rrm</code> を生成する</li>
+<li data-sourcepos="393:1-393:54">計算終了を示す <code>FIN4GEN.rrm</code> を生成する</li>
+<li data-sourcepos="394:1-395:0">次の計算要求を待つ</li>
+</ol>
+<p data-sourcepos="396:1-396:24">というものです。</p>
+<p data-sourcepos="398:1-398:345">このように、GRRMが要求するファイルI/O形式そのものには手を加えず、計算を実行するPythonプロセスだけをGRRMの外側で常駐化しています。そのため、GRRMとの互換性を保ちながら、反復されるPython環境の初期化処理を削減できることが、この構成の特徴です。</p>
+</details>
+<details><summary>スクリプトの実装例</summary>
+<div class="code-frame" data-lang="py" data-sourcepos="404:1-713:3">
+<div class="code-lang"><span class="bold">LJ_server</span></div>
+<div class="highlight"><pre><code><span class="c1">#!/usr/bin/python3
+</span>
+<span class="sh">"""</span><span class="s">Persistent Lennard-Jones backend for GRRM external calculations.
+
+GRRM-facing input/output file names and output formatting are intentionally
+kept identical to the original implementation.  The server keeps Python and
+NumPy resident and receives lightweight requests over a Unix-domain socket.
+</span><span class="sh">"""</span>
+
+<span class="kn">import</span> <span class="n">os</span>
+<span class="kn">import</span> <span class="n">socket</span>
+<span class="kn">import</span> <span class="n">struct</span>
+<span class="kn">import</span> <span class="n">sys</span>
+<span class="kn">import</span> <span class="n">threading</span>
+<span class="kn">from</span> <span class="n">concurrent.futures</span> <span class="kn">import</span> <span class="n">ThreadPoolExecutor</span>
+
+<span class="kn">import</span> <span class="n">numpy</span> <span class="k">as</span> <span class="n">np</span>
+
+<span class="c1"># Lennard-Jones parameters
+</span><span class="n">EPSILON</span> <span class="o">=</span> <span class="mf">0.001</span>
+<span class="n">SIGMA</span> <span class="o">=</span> <span class="mf">1.6</span>
+<span class="n">BOHR_PER_ANGSTROM</span> <span class="o">=</span> <span class="mf">1.8897259886</span>
+<span class="n">REQUEST_LENGTH_BYTES</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="n">DEFAULT_MAX_WORKERS</span> <span class="o">=</span> <span class="mi">40</span>
+
+
+<span class="c1"># --- Lennard-Jones calculation functions ---
+</span><span class="k">def</span> <span class="nf">lj_potential_energy</span><span class="p">(</span><span class="n">r</span><span class="p">):</span>
+    <span class="k">with</span> <span class="n">np</span><span class="p">.</span><span class="nf">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="sh">"</span><span class="s">ignore</span><span class="sh">"</span><span class="p">,</span> <span class="n">invalid</span><span class="o">=</span><span class="sh">"</span><span class="s">ignore</span><span class="sh">"</span><span class="p">,</span> <span class="n">over</span><span class="o">=</span><span class="sh">"</span><span class="s">ignore</span><span class="sh">"</span><span class="p">):</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="mf">4.0</span> <span class="o">*</span> <span class="n">EPSILON</span> <span class="o">*</span> <span class="p">((</span><span class="n">SIGMA</span> <span class="o">/</span> <span class="n">r</span><span class="p">)</span> <span class="o">**</span> <span class="mi">12</span> <span class="o">-</span> <span class="p">(</span><span class="n">SIGMA</span> <span class="o">/</span> <span class="n">r</span><span class="p">)</span> <span class="o">**</span> <span class="mi">6</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">np</span><span class="p">.</span><span class="nf">nan_to_num</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">nan</span><span class="o">=</span><span class="mf">0.0</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">lj_potential_gradient</span><span class="p">(</span><span class="n">r</span><span class="p">):</span>
+    <span class="k">with</span> <span class="n">np</span><span class="p">.</span><span class="nf">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="sh">"</span><span class="s">ignore</span><span class="sh">"</span><span class="p">,</span> <span class="n">invalid</span><span class="o">=</span><span class="sh">"</span><span class="s">ignore</span><span class="sh">"</span><span class="p">,</span> <span class="n">over</span><span class="o">=</span><span class="sh">"</span><span class="s">ignore</span><span class="sh">"</span><span class="p">):</span>
+        <span class="n">value</span> <span class="o">=</span> <span class="o">-</span><span class="mf">4.0</span> <span class="o">*</span> <span class="n">EPSILON</span> <span class="o">*</span> <span class="p">(</span>
+            <span class="mi">12</span> <span class="o">*</span> <span class="p">(</span><span class="n">SIGMA</span><span class="o">**</span><span class="mi">12</span> <span class="o">/</span> <span class="n">r</span><span class="o">**</span><span class="mi">13</span><span class="p">)</span> <span class="o">-</span> <span class="mi">6</span> <span class="o">*</span> <span class="p">(</span><span class="n">SIGMA</span><span class="o">**</span><span class="mi">6</span> <span class="o">/</span> <span class="n">r</span><span class="o">**</span><span class="mi">7</span><span class="p">)</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">np</span><span class="p">.</span><span class="nf">nan_to_num</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">nan</span><span class="o">=</span><span class="mf">0.0</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">distance_matrix_np</span><span class="p">(</span><span class="n">coords</span><span class="p">):</span>
+    <span class="n">coords</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nf">asarray</span><span class="p">(</span><span class="n">coords</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+    <span class="n">diff</span> <span class="o">=</span> <span class="n">coords</span><span class="p">[:,</span> <span class="bp">None</span><span class="p">,</span> <span class="p">:]</span> <span class="o">-</span> <span class="n">coords</span><span class="p">[</span><span class="bp">None</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span>
+    <span class="k">return</span> <span class="n">np</span><span class="p">.</span><span class="nf">sqrt</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="nf">sum</span><span class="p">(</span><span class="n">diff</span><span class="o">**</span><span class="mi">2</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">))</span>
+
+
+<span class="k">def</span> <span class="nf">calc_gradient_vectors</span><span class="p">(</span><span class="n">distance_list</span><span class="p">,</span> <span class="n">coord_list</span><span class="p">,</span> <span class="n">grad_matrix</span><span class="p">):</span>
+    <span class="n">coords</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nf">asarray</span><span class="p">(</span><span class="n">coord_list</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+    <span class="n">vector_list</span> <span class="o">=</span> <span class="n">coords</span><span class="p">[:,</span> <span class="bp">None</span><span class="p">,</span> <span class="p">:]</span> <span class="o">-</span> <span class="n">coords</span><span class="p">[</span><span class="bp">None</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span>
+    <span class="n">distance_array</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nf">asarray</span><span class="p">(</span><span class="n">distance_list</span><span class="p">)</span>
+    <span class="n">mask</span> <span class="o">=</span> <span class="n">distance_array</span> <span class="o">&gt;</span> <span class="mf">1e-4</span>
+    <span class="n">grad</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nf">asarray</span><span class="p">(</span><span class="n">grad_matrix</span><span class="p">)</span>
+
+    <span class="k">with</span> <span class="n">np</span><span class="p">.</span><span class="nf">errstate</span><span class="p">(</span><span class="n">divide</span><span class="o">=</span><span class="sh">"</span><span class="s">ignore</span><span class="sh">"</span><span class="p">,</span> <span class="n">invalid</span><span class="o">=</span><span class="sh">"</span><span class="s">ignore</span><span class="sh">"</span><span class="p">):</span>
+        <span class="n">gradient_contrib</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nf">where</span><span class="p">(</span>
+            <span class="n">mask</span><span class="p">[:,</span> <span class="p">:,</span> <span class="bp">None</span><span class="p">],</span>
+            <span class="n">vector_list</span> <span class="o">*</span> <span class="n">grad</span><span class="p">[:,</span> <span class="p">:,</span> <span class="bp">None</span><span class="p">]</span> <span class="o">/</span> <span class="n">distance_array</span><span class="p">[:,</span> <span class="p">:,</span> <span class="bp">None</span><span class="p">],</span>
+            <span class="mf">0.0</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">np</span><span class="p">.</span><span class="nf">sum</span><span class="p">(</span><span class="n">gradient_contrib</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">read_grrm_input</span><span class="p">(</span><span class="n">inp_filename</span><span class="p">):</span>
+    <span class="sh">"""</span><span class="s">Parse only the fields required by the LJ test backend.</span><span class="sh">"""</span>
+    <span class="n">ene_mode</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">grad_mode</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">hess_mode</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">atomnum</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="n">coord_list</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">atomname_list</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="k">with</span> <span class="nf">open</span><span class="p">(</span><span class="n">inp_filename</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="sh">"</span><span class="s">utf-8</span><span class="sh">"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+        <span class="n">lines</span> <span class="o">=</span> <span class="n">f</span><span class="p">.</span><span class="nf">readlines</span><span class="p">()</span>
+
+    <span class="k">for</span> <span class="n">idx</span><span class="p">,</span> <span class="n">line</span> <span class="ow">in</span> <span class="nf">enumerate</span><span class="p">(</span><span class="n">lines</span><span class="p">):</span>
+        <span class="k">if</span> <span class="sh">"</span><span class="s">TASK:</span><span class="sh">"</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+            <span class="k">if</span> <span class="sh">"</span><span class="s">ENERGY</span><span class="sh">"</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+                <span class="n">ene_mode</span> <span class="o">=</span> <span class="mi">1</span>
+            <span class="k">if</span> <span class="sh">"</span><span class="s">GRADIENT</span><span class="sh">"</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+                <span class="n">grad_mode</span> <span class="o">=</span> <span class="mi">1</span>
+            <span class="k">if</span> <span class="sh">"</span><span class="s">HESSIAN</span><span class="sh">"</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+                <span class="n">hess_mode</span> <span class="o">=</span> <span class="mi">1</span>
+
+        <span class="k">if</span> <span class="sh">"</span><span class="s">NACTIVEATOM / NATOM:</span><span class="sh">"</span> <span class="ow">in</span> <span class="n">line</span><span class="p">:</span>
+            <span class="n">elem</span> <span class="o">=</span> <span class="n">line</span><span class="p">.</span><span class="nf">split</span><span class="p">()</span>
+            <span class="n">atomnum</span> <span class="o">=</span> <span class="nf">int</span><span class="p">(</span><span class="n">elem</span><span class="p">[</span><span class="mi">3</span><span class="p">])</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nf">range</span><span class="p">(</span><span class="n">atomnum</span><span class="p">):</span>
+                <span class="n">atomline</span> <span class="o">=</span> <span class="n">lines</span><span class="p">[</span><span class="n">idx</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">+</span> <span class="n">j</span><span class="p">]</span>
+                <span class="n">elems</span> <span class="o">=</span> <span class="n">atomline</span><span class="p">.</span><span class="nf">split</span><span class="p">()</span>
+                <span class="n">atomname_list</span><span class="p">.</span><span class="nf">append</span><span class="p">(</span><span class="n">elems</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+                <span class="n">coord_list</span><span class="p">.</span><span class="nf">append</span><span class="p">(</span>
+                    <span class="p">[</span><span class="nf">float</span><span class="p">(</span><span class="n">elems</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span> <span class="nf">float</span><span class="p">(</span><span class="n">elems</span><span class="p">[</span><span class="mi">2</span><span class="p">]),</span> <span class="nf">float</span><span class="p">(</span><span class="n">elems</span><span class="p">[</span><span class="mi">3</span><span class="p">])]</span>
+                <span class="p">)</span>
+            <span class="k">break</span>
+
+    <span class="k">return</span> <span class="n">ene_mode</span><span class="p">,</span> <span class="n">grad_mode</span><span class="p">,</span> <span class="n">hess_mode</span><span class="p">,</span> <span class="n">atomnum</span><span class="p">,</span> <span class="n">coord_list</span><span class="p">,</span> <span class="n">atomname_list</span>
+
+
+<span class="k">def</span> <span class="nf">write_grrm_output</span><span class="p">(</span>
+    <span class="n">out_filename</span><span class="p">,</span>
+    <span class="n">atomnum</span><span class="p">,</span>
+    <span class="n">coord_list</span><span class="p">,</span>
+    <span class="n">atomname_list</span><span class="p">,</span>
+    <span class="n">optene</span><span class="p">,</span>
+    <span class="n">gradient_vector_list</span><span class="p">,</span>
+<span class="p">):</span>
+    <span class="sh">"""</span><span class="s">Write the GRRM output in exactly the same format as the original.</span><span class="sh">"""</span>
+    <span class="k">with</span> <span class="nf">open</span><span class="p">(</span><span class="n">out_filename</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="sh">"</span><span class="s">w</span><span class="sh">"</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="sh">"</span><span class="s">utf-8</span><span class="sh">"</span><span class="p">)</span> <span class="k">as</span> <span class="n">fout</span><span class="p">:</span>
+        <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sh">"</span><span class="s">RESULTS</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span>
+        <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sh">"</span><span class="s">CURRENT COORDINATE</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nf">range</span><span class="p">(</span><span class="n">atomnum</span><span class="p">):</span>
+            <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span>
+                <span class="sa">f</span><span class="sh">"</span><span class="si">{</span><span class="n">atomname_list</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="si">:</span><span class="mi">2</span><span class="n">s</span><span class="si">}</span><span class="s"> </span><span class="si">{</span><span class="n">coord_list</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span><span class="si">:</span><span class="mf">22.12</span><span class="n">f</span><span class="si">}</span><span class="s"> </span><span class="sh">"</span>
+                <span class="sa">f</span><span class="sh">"</span><span class="si">{</span><span class="n">coord_list</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span><span class="si">:</span><span class="mf">22.12</span><span class="n">f</span><span class="si">}</span><span class="s"> </span><span class="si">{</span><span class="n">coord_list</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span><span class="si">:</span><span class="mf">22.12</span><span class="n">f</span><span class="si">}</span><span class="se">\n</span><span class="sh">"</span>
+            <span class="p">)</span>
+        <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span>
+            <span class="sa">f</span><span class="sh">"</span><span class="s">ENERGY = </span><span class="si">{</span><span class="n">optene</span><span class="si">:</span><span class="mf">17.12</span><span class="n">f</span><span class="si">}</span><span class="s">    0.000000000000    0.000000000000</span><span class="se">\n</span><span class="sh">"</span>
+        <span class="p">)</span>
+        <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span>
+            <span class="sh">"</span><span class="s">       =    0.000000000000    0.000000000000    0.000000000000</span><span class="se">\n</span><span class="sh">"</span>
+            <span class="sh">"</span><span class="s">S**2   =    0.000000000000</span><span class="se">\n</span><span class="sh">"</span>
+        <span class="p">)</span>
+        <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sh">"</span><span class="s">GRADIENT</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">gradient_vector_list</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">vec</span> <span class="ow">in</span> <span class="n">gradient_vector_list</span><span class="p">:</span>
+                <span class="k">for</span> <span class="n">val</span> <span class="ow">in</span> <span class="n">vec</span><span class="p">:</span>
+                    <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sa">f</span><span class="sh">"</span><span class="s">  </span><span class="si">{</span><span class="n">val</span> <span class="o">/</span> <span class="n">BOHR_PER_ANGSTROM</span><span class="si">:</span><span class="mf">17.12</span><span class="n">f</span><span class="si">}</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nf">range</span><span class="p">(</span><span class="n">atomnum</span> <span class="o">*</span> <span class="mi">3</span><span class="p">):</span>
+                <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sh">"</span><span class="s">  0.000000000000</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span>
+        <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span>
+            <span class="sh">"</span><span class="s">DIPOLE =    0.000000000000         0.000000000000          </span><span class="sh">"</span>
+            <span class="sh">"</span><span class="s">0.000000000000</span><span class="se">\n</span><span class="sh">"</span>
+        <span class="p">)</span>
+        <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sh">"</span><span class="s">HESSIAN</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nf">range</span><span class="p">((</span><span class="mi">3</span> <span class="o">*</span> <span class="n">atomnum</span><span class="p">)</span> <span class="o">//</span> <span class="mi">5</span> <span class="o">+</span> <span class="mi">1</span><span class="p">):</span>
+            <span class="n">tmp_linenum</span> <span class="o">=</span> <span class="p">(</span><span class="mi">3</span> <span class="o">*</span> <span class="n">atomnum</span><span class="p">)</span> <span class="o">-</span> <span class="n">i</span> <span class="o">*</span> <span class="mi">5</span>
+            <span class="k">if</span> <span class="n">tmp_linenum</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">tmp_linenum</span> <span class="o">=</span> <span class="p">(</span><span class="mi">3</span> <span class="o">*</span> <span class="n">atomnum</span><span class="p">)</span> <span class="o">%</span> <span class="mi">5</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nf">range</span><span class="p">(</span><span class="n">tmp_linenum</span><span class="p">):</span>
+                <span class="k">if</span> <span class="n">j</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sh">"</span><span class="s">  0.000000000</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">j</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sh">"</span><span class="s">  0.000000000   0.000000000</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">j</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                    <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span>
+                        <span class="sh">"</span><span class="s">  0.000000000   0.000000000   0.000000000</span><span class="se">\n</span><span class="sh">"</span>
+                    <span class="p">)</span>
+                <span class="k">if</span> <span class="n">j</span> <span class="o">==</span> <span class="mi">3</span><span class="p">:</span>
+                    <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span>
+                        <span class="sh">"</span><span class="s">  0.000000000   0.000000000   0.000000000   </span><span class="sh">"</span>
+                        <span class="sh">"</span><span class="s">0.000000000</span><span class="se">\n</span><span class="sh">"</span>
+                    <span class="p">)</span>
+                <span class="k">if</span> <span class="n">j</span> <span class="o">&gt;=</span> <span class="mi">4</span><span class="p">:</span>
+                    <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span>
+                        <span class="sh">"</span><span class="s">  0.000000000   0.000000000   0.000000000   </span><span class="sh">"</span>
+                        <span class="sh">"</span><span class="s">0.000000000   0.000000000</span><span class="se">\n</span><span class="sh">"</span>
+                    <span class="p">)</span>
+        <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sh">"</span><span class="s">DIPOLE DERIVATIVES</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nf">range</span><span class="p">(</span><span class="mi">3</span> <span class="o">*</span> <span class="n">atomnum</span><span class="p">):</span>
+            <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span>
+                <span class="sh">"</span><span class="s">   0.000000000000          0.000000000000          </span><span class="sh">"</span>
+                <span class="sh">"</span><span class="s">0.000000000000</span><span class="se">\n</span><span class="sh">"</span>
+            <span class="p">)</span>
+        <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sh">"</span><span class="s">POLARIZABILITY</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span>
+        <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sh">"</span><span class="s">   0.000000000000</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span>
+        <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sh">"</span><span class="s">   0.000000000000          0.000000000000</span><span class="se">\n</span><span class="sh">"</span><span class="p">)</span>
+        <span class="n">fout</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span>
+            <span class="sh">"</span><span class="s">   0.000000000000          0.000000000000          </span><span class="sh">"</span>
+            <span class="sh">"</span><span class="s">0.000000000000</span><span class="se">\n</span><span class="sh">"</span>
+        <span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">run_lj_model</span><span class="p">(</span><span class="n">inp_filename</span><span class="p">,</span> <span class="n">out_filename</span><span class="p">,</span> <span class="n">fin_filename</span><span class="p">):</span>
+    <span class="p">(</span>
+        <span class="n">ene_mode</span><span class="p">,</span>
+        <span class="n">grad_mode</span><span class="p">,</span>
+        <span class="n">_hess_mode</span><span class="p">,</span>
+        <span class="n">atomnum</span><span class="p">,</span>
+        <span class="n">coord_list</span><span class="p">,</span>
+        <span class="n">atomname_list</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">=</span> <span class="nf">read_grrm_input</span><span class="p">(</span><span class="n">inp_filename</span><span class="p">)</span>
+
+    <span class="n">coord_np</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nf">asarray</span><span class="p">(</span><span class="n">coord_list</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+    <span class="n">distance_list</span> <span class="o">=</span> <span class="nf">distance_matrix_np</span><span class="p">(</span><span class="n">coord_np</span><span class="p">)</span>
+
+    <span class="n">optene</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="k">if</span> <span class="n">ene_mode</span><span class="p">:</span>
+        <span class="n">ene_matrix</span> <span class="o">=</span> <span class="nf">lj_potential_energy</span><span class="p">(</span><span class="n">distance_list</span><span class="p">)</span>
+        <span class="n">optene</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nf">triu</span><span class="p">(</span><span class="n">ene_matrix</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">).</span><span class="nf">sum</span><span class="p">()</span>
+
+    <span class="n">gradient_vector_list</span> <span class="o">=</span> <span class="bp">None</span>
+    <span class="k">if</span> <span class="n">grad_mode</span><span class="p">:</span>
+        <span class="n">grad_matrix</span> <span class="o">=</span> <span class="nf">lj_potential_gradient</span><span class="p">(</span><span class="n">distance_list</span><span class="p">)</span>
+        <span class="n">gradient_vector_list</span> <span class="o">=</span> <span class="nf">calc_gradient_vectors</span><span class="p">(</span>
+            <span class="n">distance_list</span><span class="p">,</span> <span class="n">coord_np</span><span class="p">,</span> <span class="n">grad_matrix</span>
+        <span class="p">)</span>
+
+    <span class="nf">write_grrm_output</span><span class="p">(</span>
+        <span class="n">out_filename</span><span class="p">,</span>
+        <span class="n">atomnum</span><span class="p">,</span>
+        <span class="n">coord_list</span><span class="p">,</span>
+        <span class="n">atomname_list</span><span class="p">,</span>
+        <span class="n">optene</span><span class="p">,</span>
+        <span class="n">gradient_vector_list</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="k">with</span> <span class="nf">open</span><span class="p">(</span><span class="n">fin_filename</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="sh">"</span><span class="s">w</span><span class="sh">"</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="sh">"</span><span class="s">utf-8</span><span class="sh">"</span><span class="p">)</span> <span class="k">as</span> <span class="n">ffin</span><span class="p">:</span>
+        <span class="n">ffin</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sh">""</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">recv_exact</span><span class="p">(</span><span class="n">sock</span><span class="p">,</span> <span class="n">size</span><span class="p">):</span>
+    <span class="sh">"""</span><span class="s">Receive exactly *size* bytes or raise if the peer closes early.</span><span class="sh">"""</span>
+    <span class="n">chunks</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="n">remaining</span> <span class="o">=</span> <span class="n">size</span>
+    <span class="k">while</span> <span class="n">remaining</span><span class="p">:</span>
+        <span class="n">chunk</span> <span class="o">=</span> <span class="n">sock</span><span class="p">.</span><span class="nf">recv</span><span class="p">(</span><span class="n">remaining</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">chunk</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="nc">ConnectionError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="sh">"</span><span class="s">Connection closed while receiving </span><span class="si">{</span><span class="n">size</span><span class="si">}</span><span class="s"> bytes</span><span class="sh">"</span>
+            <span class="p">)</span>
+        <span class="n">chunks</span><span class="p">.</span><span class="nf">append</span><span class="p">(</span><span class="n">chunk</span><span class="p">)</span>
+        <span class="n">remaining</span> <span class="o">-=</span> <span class="nf">len</span><span class="p">(</span><span class="n">chunk</span><span class="p">)</span>
+    <span class="k">return</span> <span class="sa">b</span><span class="sh">""</span><span class="p">.</span><span class="nf">join</span><span class="p">(</span><span class="n">chunks</span><span class="p">)</span>
+
+
+<span class="c1"># --- Server class ---
+</span><span class="k">class</span> <span class="nc">RRMServer</span><span class="p">:</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="n">self</span><span class="p">,</span> <span class="n">workdir</span><span class="p">,</span> <span class="n">socket_file</span><span class="p">,</span> <span class="n">max_workers</span><span class="o">=</span><span class="n">DEFAULT_MAX_WORKERS</span><span class="p">):</span>
+        <span class="n">self</span><span class="p">.</span><span class="n">workdir</span> <span class="o">=</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="nf">abspath</span><span class="p">(</span><span class="n">workdir</span><span class="p">)</span>
+        <span class="n">self</span><span class="p">.</span><span class="n">socket_file</span> <span class="o">=</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="nf">abspath</span><span class="p">(</span><span class="n">socket_file</span><span class="p">)</span>
+        <span class="n">self</span><span class="p">.</span><span class="n">executor</span> <span class="o">=</span> <span class="nc">ThreadPoolExecutor</span><span class="p">(</span><span class="n">max_workers</span><span class="o">=</span><span class="n">max_workers</span><span class="p">)</span>
+        <span class="n">self</span><span class="p">.</span><span class="n">jobs_in_progress</span> <span class="o">=</span> <span class="nf">set</span><span class="p">()</span>
+        <span class="n">self</span><span class="p">.</span><span class="n">lock</span> <span class="o">=</span> <span class="n">threading</span><span class="p">.</span><span class="nc">Lock</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">serve</span><span class="p">(</span><span class="n">self</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="nf">exists</span><span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">socket_file</span><span class="p">):</span>
+            <span class="n">os</span><span class="p">.</span><span class="nf">unlink</span><span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">socket_file</span><span class="p">)</span>
+
+        <span class="k">with</span> <span class="n">socket</span><span class="p">.</span><span class="nf">socket</span><span class="p">(</span><span class="n">socket</span><span class="p">.</span><span class="n">AF_UNIX</span><span class="p">,</span> <span class="n">socket</span><span class="p">.</span><span class="n">SOCK_STREAM</span><span class="p">)</span> <span class="k">as</span> <span class="n">serversock</span><span class="p">:</span>
+            <span class="n">serversock</span><span class="p">.</span><span class="nf">bind</span><span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">socket_file</span><span class="p">)</span>
+            <span class="n">serversock</span><span class="p">.</span><span class="nf">listen</span><span class="p">(</span><span class="mi">8</span><span class="p">)</span>
+            <span class="nf">print</span><span class="p">(</span><span class="sa">f</span><span class="sh">"</span><span class="s">Listening on </span><span class="si">{</span><span class="n">self</span><span class="p">.</span><span class="n">socket_file</span><span class="si">}</span><span class="sh">"</span><span class="p">,</span> <span class="n">flush</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">while</span> <span class="bp">True</span><span class="p">:</span>
+                    <span class="n">conn</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">serversock</span><span class="p">.</span><span class="nf">accept</span><span class="p">()</span>
+                    <span class="n">threading</span><span class="p">.</span><span class="nc">Thread</span><span class="p">(</span>
+                        <span class="n">target</span><span class="o">=</span><span class="n">self</span><span class="p">.</span><span class="n">handle_client</span><span class="p">,</span>
+                        <span class="n">args</span><span class="o">=</span><span class="p">(</span><span class="n">conn</span><span class="p">,),</span>
+                        <span class="n">daemon</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+                    <span class="p">).</span><span class="nf">start</span><span class="p">()</span>
+            <span class="k">finally</span><span class="p">:</span>
+                <span class="n">self</span><span class="p">.</span><span class="n">executor</span><span class="p">.</span><span class="nf">shutdown</span><span class="p">(</span><span class="n">wait</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+                <span class="k">if</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="nf">exists</span><span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">socket_file</span><span class="p">):</span>
+                    <span class="n">os</span><span class="p">.</span><span class="nf">unlink</span><span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">socket_file</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">handle_client</span><span class="p">(</span><span class="n">self</span><span class="p">,</span> <span class="n">conn</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">length</span> <span class="o">=</span> <span class="n">struct</span><span class="p">.</span><span class="nf">unpack</span><span class="p">(</span><span class="sh">"</span><span class="s">&gt;H</span><span class="sh">"</span><span class="p">,</span> <span class="nf">recv_exact</span><span class="p">(</span><span class="n">conn</span><span class="p">,</span> <span class="n">REQUEST_LENGTH_BYTES</span><span class="p">))[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">argname</span> <span class="o">=</span> <span class="nf">recv_exact</span><span class="p">(</span><span class="n">conn</span><span class="p">,</span> <span class="n">length</span><span class="p">).</span><span class="nf">decode</span><span class="p">()</span>
+
+            <span class="n">inp</span> <span class="o">=</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="nf">join</span><span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">workdir</span><span class="p">,</span> <span class="sa">f</span><span class="sh">"</span><span class="si">{</span><span class="n">argname</span><span class="si">}</span><span class="s">_INP4GEN.rrm</span><span class="sh">"</span><span class="p">)</span>
+            <span class="n">out</span> <span class="o">=</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="nf">join</span><span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">workdir</span><span class="p">,</span> <span class="sa">f</span><span class="sh">"</span><span class="si">{</span><span class="n">argname</span><span class="si">}</span><span class="s">_OUT4GEN.rrm</span><span class="sh">"</span><span class="p">)</span>
+            <span class="n">fin</span> <span class="o">=</span> <span class="n">os</span><span class="p">.</span><span class="n">path</span><span class="p">.</span><span class="nf">join</span><span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">workdir</span><span class="p">,</span> <span class="sa">f</span><span class="sh">"</span><span class="si">{</span><span class="n">argname</span><span class="si">}</span><span class="s">_FIN4GEN.rrm</span><span class="sh">"</span><span class="p">)</span>
+
+            <span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">filepath:</span><span class="sh">"</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">flush</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+
+            <span class="k">with</span> <span class="n">self</span><span class="p">.</span><span class="n">lock</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">inp</span> <span class="ow">in</span> <span class="n">self</span><span class="p">.</span><span class="n">jobs_in_progress</span><span class="p">:</span>
+                    <span class="n">conn</span><span class="p">.</span><span class="nf">sendall</span><span class="p">(</span><span class="sa">b</span><span class="sh">"</span><span class="s">AL</span><span class="sh">"</span><span class="p">)</span>
+                    <span class="k">return</span>
+                <span class="n">self</span><span class="p">.</span><span class="n">jobs_in_progress</span><span class="p">.</span><span class="nf">add</span><span class="p">(</span><span class="n">inp</span><span class="p">)</span>
+
+            <span class="c1"># Wait on the Future rather than polling FIN.  This preserves the
+</span>            <span class="c1"># external protocol while correctly propagating backend failures.
+</span>            <span class="n">future</span> <span class="o">=</span> <span class="n">self</span><span class="p">.</span><span class="n">executor</span><span class="p">.</span><span class="nf">submit</span><span class="p">(</span><span class="n">self</span><span class="p">.</span><span class="n">do_job</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">fin</span><span class="p">)</span>
+            <span class="n">future</span><span class="p">.</span><span class="nf">result</span><span class="p">()</span>
+            <span class="n">conn</span><span class="p">.</span><span class="nf">sendall</span><span class="p">(</span><span class="sa">b</span><span class="sh">"</span><span class="s">OK</span><span class="sh">"</span><span class="p">)</span>
+
+        <span class="k">except</span> <span class="nb">Exception</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">ERROR:</span><span class="sh">"</span><span class="p">,</span> <span class="n">exc</span><span class="p">,</span> <span class="n">flush</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">conn</span><span class="p">.</span><span class="nf">sendall</span><span class="p">(</span><span class="sa">b</span><span class="sh">"</span><span class="s">ER</span><span class="sh">"</span><span class="p">)</span>
+            <span class="k">except</span> <span class="nb">Exception</span><span class="p">:</span>
+                <span class="k">pass</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="n">conn</span><span class="p">.</span><span class="nf">close</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">do_job</span><span class="p">(</span><span class="n">self</span><span class="p">,</span> <span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">fin</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="nf">run_lj_model</span><span class="p">(</span><span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">fin</span><span class="p">)</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="k">with</span> <span class="n">self</span><span class="p">.</span><span class="n">lock</span><span class="p">:</span>
+                <span class="n">self</span><span class="p">.</span><span class="n">jobs_in_progress</span><span class="p">.</span><span class="nf">discard</span><span class="p">(</span><span class="n">inp</span><span class="p">)</span>
+
+
+<span class="k">if</span> <span class="n">__name__</span> <span class="o">==</span> <span class="sh">"</span><span class="s">__main__</span><span class="sh">"</span><span class="p">:</span>
+    <span class="k">if</span> <span class="nf">len</span><span class="p">(</span><span class="n">sys</span><span class="p">.</span><span class="n">argv</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">3</span><span class="p">:</span>
+        <span class="nf">print</span><span class="p">(</span><span class="sa">f</span><span class="sh">"</span><span class="s">Usage: </span><span class="si">{</span><span class="n">sys</span><span class="p">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s"> WORKDIR SOCKET_FILE</span><span class="sh">"</span><span class="p">,</span> <span class="nb">file</span><span class="o">=</span><span class="n">sys</span><span class="p">.</span><span class="n">stderr</span><span class="p">)</span>
+        <span class="n">sys</span><span class="p">.</span><span class="nf">exit</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+    <span class="n">workdir</span> <span class="o">=</span> <span class="n">sys</span><span class="p">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+    <span class="n">socket_file</span> <span class="o">=</span> <span class="n">sys</span><span class="p">.</span><span class="n">argv</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+    <span class="nc">RRMServer</span><span class="p">(</span><span class="n">workdir</span><span class="p">,</span> <span class="n">socket_file</span><span class="p">,</span> <span class="n">max_workers</span><span class="o">=</span><span class="n">DEFAULT_MAX_WORKERS</span><span class="p">).</span><span class="nf">serve</span><span class="p">()</span>
+
+</code></pre></div>
+</div>
+</details>
+<h2 data-sourcepos="718:1-718:15">
+<span id="起動方法" class="fragment"></span><a href="#%E8%B5%B7%E5%8B%95%E6%96%B9%E6%B3%95"><i class="fa fa-link"></i></a>起動方法</h2>
+<p data-sourcepos="720:1-720:379">サーバーは例えば次のように起動します。これはユーザーが手動で立ち上げても良いですし、ジョブ投入用シェルスクリプトの中でGRRMを実行する前に立ち上げさせても良いでしょう。GPUの確保が他プロセスと競合するなどの場合を除き、基本的には後者の方法がラクだと思います。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="722:1-724:3"><div class="highlight"><pre><code>./LJ_server /path/to/WORKDIR /path/to/grrm_lj.sock
+</code></pre></div></div>
+<p data-sourcepos="726:1-726:190">その後、GRRMから呼ばれるディレクトリに <code>.socketfile</code> を用意し、socketのパスを書いておきます。（これもシェルスクリプト内で実行して良い）</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="728:1-730:3"><div class="highlight"><pre><code><span class="nb">printf</span> <span class="s1">'%s\n'</span> <span class="s1">'/path/to/grrm_lj.sock'</span> <span class="o">&gt;</span> .socketfile
+</code></pre></div></div>
+<p data-sourcepos="732:1-732:254">GRRM側からは従来の外部計算と同様に <code>LJ_interface</code> が呼ばれるように設定します。インターフェースのパスはGRRMのインプットファイル（ .com ファイル）内の <code>sublink</code> オプションで指定します。</p>
+<p data-sourcepos="734:1-734:572">ここで、サーバーが正常にlisten状態になっているかを確認する処理をインターフェース側に実装しています。これが無いと、（特に初回の一点計算において）サーバーがまだ立ち上がっていない段階にもかかわらず、ソケットファイルが存在した時点で直ちにサーバーに接続しようとしてコネクションエラーになる恐れがあるためです。上記の実装例では、0.1秒間隔で最大30秒まで再接続を試みます（最大約300回の再試行）。</p>
+<h1 data-sourcepos="736:1-736:45">
+<span id="lj50クラスターでのベンチマーク" class="fragment"></span><a href="#lj50%E3%82%AF%E3%83%A9%E3%82%B9%E3%82%BF%E3%83%BC%E3%81%A7%E3%81%AE%E3%83%99%E3%83%B3%E3%83%81%E3%83%9E%E3%83%BC%E3%82%AF"><i class="fa fa-link"></i></a>LJ50クラスターでのベンチマーク</h1>
+<p data-sourcepos="738:1-738:222">50原子のLJクラスターを適当に配置した構造から構造最適化し、従来方式と常駐サーバー方式を比較ました。2 runだけですが、結果を整理すると次のようになります。</p>
+<table data-sourcepos="740:1-744:87">
+<thead>
+<tr data-sourcepos="740:1-740:109">
+<th data-sourcepos="740:2-740:6">run</th>
+<th style="text-align: right" data-sourcepos="740:8-740:27">勾配計算回数</th>
+<th style="text-align: right" data-sourcepos="740:29-740:46">従来方式 [s]</th>
+<th style="text-align: right" data-sourcepos="740:48-740:65">常駐方式 [s]</th>
+<th style="text-align: right" data-sourcepos="740:67-740:78">短縮 [s]</th>
+<th style="text-align: right" data-sourcepos="740:80-740:96">時間短縮率</th>
+<th style="text-align: right" data-sourcepos="740:98-740:108">加速率</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="742:1-742:83">
+<td data-sourcepos="742:2-742:7">1</td>
+<td style="text-align: right" data-sourcepos="742:9-742:28">1820</td>
+<td style="text-align: right" data-sourcepos="742:30-742:39">363</td>
+<td style="text-align: right" data-sourcepos="742:41-742:54">332</td>
+<td style="text-align: right" data-sourcepos="742:56-742:63">31</td>
+<td style="text-align: right" data-sourcepos="742:65-742:71">8.54%</td>
+<td style="text-align: right" data-sourcepos="742:73-742:82">1.093×</td>
+</tr>
+<tr data-sourcepos="743:1-743:83">
+<td data-sourcepos="743:2-743:7">2</td>
+<td style="text-align: right" data-sourcepos="743:9-743:28">2023</td>
+<td style="text-align: right" data-sourcepos="743:30-743:39">407</td>
+<td style="text-align: right" data-sourcepos="743:41-743:54">370</td>
+<td style="text-align: right" data-sourcepos="743:56-743:63">37</td>
+<td style="text-align: right" data-sourcepos="743:65-743:71">9.09%</td>
+<td style="text-align: right" data-sourcepos="743:73-743:82">1.100×</td>
+</tr>
+<tr data-sourcepos="744:1-744:87">
+<td data-sourcepos="744:2-744:11">合計</td>
+<td style="text-align: right" data-sourcepos="744:13-744:32">3843</td>
+<td style="text-align: right" data-sourcepos="744:34-744:43">770</td>
+<td style="text-align: right" data-sourcepos="744:45-744:58">702</td>
+<td style="text-align: right" data-sourcepos="744:60-744:67">68</td>
+<td style="text-align: right" data-sourcepos="744:69-744:75">8.83%</td>
+<td style="text-align: right" data-sourcepos="744:77-744:86">1.097×</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="746:1-746:82">2試行を合計すると、3843回の勾配計算で68秒短縮されました。</p>
+<p data-sourcepos="748:1-748:140">単純に差分を勾配計算回数で割ると、1回あたり約17.7 msのオーバーヘッドが削減された計算になります。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="750:1-754:3"><div class="highlight"><pre><code>従来方式:     770 / 3843 ≈ 200.4 ms / force call
+常駐server:   702 / 3843 ≈ 182.7 ms / force call
+差分:                         ≈ 17.7 ms / force call
+</code></pre></div></div>
+<p data-sourcepos="756:1-756:400">GRRMの <code>TOTAL ELAPSED TIME</code> には外部エンジン以外の処理も含まれるため、この17.7 msのすべてが「Python起動時間」というわけではありません。ですが、勾配計算回数が同一の対応する2組の最適化において、計算時間が約10%短縮されていることから、プロセス常駐化の効果が明瞭に現れていると言えます。</p>
+<h1 data-sourcepos="759:1-759:59">
+<span id="この方式は他のpython外部計算にも応用可能" class="fragment"></span><a href="#%E3%81%93%E3%81%AE%E6%96%B9%E5%BC%8F%E3%81%AF%E4%BB%96%E3%81%AEpython%E5%A4%96%E9%83%A8%E8%A8%88%E7%AE%97%E3%81%AB%E3%82%82%E5%BF%9C%E7%94%A8%E5%8F%AF%E8%83%BD"><i class="fa fa-link"></i></a>この方式は他のPython外部計算にも応用可能</h1>
+<p data-sourcepos="761:1-761:282">今回LJポテンシャルを用いたのは、動作を簡単に観察するためです。常駐サーバーが行う計算部分を置き換えれば、原理上はGRRMから利用できる任意のエネルギー・勾配計算エンジンに同じ構成を適用できます。</p>
+<p data-sourcepos="763:1-763:129">特に効果が期待できるのは、次のような初期化コストの大きいPythonベースの計算エンジンです。</p>
+<ul data-sourcepos="765:1-769:0">
+<li data-sourcepos="765:1-765:54">PyTorch等を用いる機械学習ポテンシャル</li>
+<li data-sourcepos="766:1-766:77">GPUモデルでCUDA contextやモデルweightのロードが必要なもの</li>
+<li data-sourcepos="767:1-767:63">大きなdescriptorやlookup tableを初期化するモデル</li>
+<li data-sourcepos="768:1-769:0">Pythonラッパー経由で呼び出す外部ライブラリ</li>
+</ul>
+<p data-sourcepos="770:1-770:207">特に機械学習ポテンシャルの場合、モデルをGPUメモリ上に保持したまま次のGRRM要求を待てるため、単なるNumPyのimport削減より大きな効果が期待できます。</p>
+<p data-sourcepos="772:1-772:190">例えば、エネルギー・勾配の推論が0.1秒で済む機械学習ポテンシャルの場合、逐一モデルをロードするのに約3秒かかっていると仮定すると、</p>
+<div class="code-frame" data-lang="text" data-sourcepos="774:1-776:3"><div class="highlight"><pre><code>3.1 秒 -&gt; 0.1 秒
+</code></pre></div></div>
+<p data-sourcepos="778:1-778:173">に削減されるので計算時間はおよそ 1/30 になります。これは1週間要していた反応経路探索が5時間半程度で済む計算になります。</p>
+<blockquote data-sourcepos="780:1-780:404">
+<p data-sourcepos="780:3-780:404">一方で、1回の電子状態計算が数十秒〜数時間かかるような量子化学計算では、数十ms程度の起動オーバーヘッドは全体に対して小さくなります。その場合でも、Pythonラッパーやモデル初期化が重い構成では常駐化に意味がありますが、期待される相対的な高速化率は計算エンジンごとに異なります。</p>
+</blockquote>
+<div data-sourcepos="782:1-794:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<h3 data-sourcepos="784:1-784:28">
+<span id="並列実行時の注意" class="fragment"></span><a href="#%E4%B8%A6%E5%88%97%E5%AE%9F%E8%A1%8C%E6%99%82%E3%81%AE%E6%B3%A8%E6%84%8F"><i class="fa fa-link"></i></a>並列実行時の注意</h3>
+<p data-sourcepos="786:1-786:86">今回のserverでは <code>ThreadPoolExecutor(max_workers=40)</code> を使用しています。</p>
+<p data-sourcepos="788:1-788:202">LJ計算では大きな問題になりませんが、実際の外部エンジンへ置き換える場合には、計算エンジン自体がthread-safeかどうかを確認する必要があります。</p>
+<p data-sourcepos="790:1-790:323">特にGPUを使う機械学習ポテンシャルでは、「40 requestを同時にGPUへ流せば速い」とは限りません。GPUメモリ使用量、CUDA stream、モデル側のbatching、GRRM側の並列度などを考慮し、<code>max_workers</code> は実際の計算環境に合わせて調整する必要があります。</p>
+<blockquote data-sourcepos="792:1-792:414">
+<p data-sourcepos="792:3-792:414">GPUが複数デバイス存在する場合や、容量の大きいVRAMのために複数のプロセスを常駐できる場合はリクエストを捌くためのサーバー（APIエンドポイント）の運用も視野に入ります。こうなると、今回のようなプロセスごとにサーバーを起動する方式では計算資源を効率的に利用できない可能性も出てきます。</p>
+</blockquote>
+</div>
+</div>
+<h1 data-sourcepos="797:1-797:11">
+<span id="まとめ" class="fragment"></span><a href="#%E3%81%BE%E3%81%A8%E3%82%81"><i class="fa fa-link"></i></a>まとめ</h1>
+<p data-sourcepos="799:1-799:238">GRRMからPythonベースの外部エネルギー・勾配計算を多数回呼び出す場合、計算そのものだけでなく、Python環境やライブラリ、モデルの初期化コストが積み上がることがあります。</p>
+<p data-sourcepos="801:1-801:313">今回は、GRRMから毎回呼ぶ軽量なインターフェースと、Python環境を保持する常駐サーバーをUnix domain socketで接続する構成を試しました。LJ50クラスターの構造最適化のような単純な系でも、合計で9%程度の実行時間短縮を確認しました。</p>
+<p data-sourcepos="805:1-805:209">GRRM側の <code>INP4GEN/OUT4GEN</code> 形式を維持したままバックエンドを常駐化できるため、既存の外部計算インターフェースを大きく変えずに適用できる点も利点です。</p>
+<p data-sourcepos="807:1-807:224">LJ計算は極端に軽い系でのテストでしたが、この方式の本命の対象としては、モデルロードやGPU初期化のコストが大きい機械学習ポテンシャルを利用するケースです。</p>
+<div data-sourcepos="809:1-834:3" class="note warn">
+<span class="fa fa-fw fa-exclamation-circle"></span><div>
+<h3 data-sourcepos="811:1-811:31">
+<span id="未対応事項について" class="fragment"></span><a href="#%E6%9C%AA%E5%AF%BE%E5%BF%9C%E4%BA%8B%E9%A0%85%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6"><i class="fa fa-link"></i></a>未対応事項について</h3>
+<p data-sourcepos="813:1-813:415">本稿のサンプルスクリプトはあくまでサンプルであり、実用上はもう少しエラーハンドリングや実装を精緻化すべき部分が残っています。例えばGRRMが <code>TASK: HESSIAN</code> を要求してきた場合にゼロ埋めのヘシアン行列を返すので、<code>derivative=force</code> のオプションを付けないと構造最適化において異常な挙動を示します。</p>
+<p data-sourcepos="815:1-815:171">以下の点は今回の実装では不十分な場合に改修を検討すべき事項です。本稿のスクリプトを流用する際は参考にしてください。</p>
+<table data-sourcepos="817:1-832:146">
+<thead>
+<tr data-sourcepos="817:1-817:44">
+<th style="text-align: left" data-sourcepos="817:2-817:7">箇所</th>
+<th style="text-align: left" data-sourcepos="817:9-817:14">現状</th>
+<th style="text-align: left" data-sourcepos="817:16-817:36">起こり得る問題</th>
+<th style="text-align: left" data-sourcepos="817:38-817:43">推奨</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="819:1-819:132">
+<td style="text-align: left" data-sourcepos="819:2-819:19">socket応答待ち</td>
+<td style="text-align: left" data-sourcepos="819:21-819:58">接続後の <code>recv()</code> にtimeoutなし</td>
+<td style="text-align: left" data-sourcepos="819:60-819:106">backendがhangするとinterfaceも永久待機</td>
+<td style="text-align: left" data-sourcepos="819:108-819:131">request timeoutを追加</td>
+</tr>
+<tr data-sourcepos="820:1-820:138">
+<td style="text-align: left" data-sourcepos="820:2-820:10"><code>HESSIAN</code></td>
+<td style="text-align: left" data-sourcepos="820:12-820:54">認識するが計算せず0を書き出す</td>
+<td style="text-align: left" data-sourcepos="820:56-820:105"><strong>誤ったHessianを正常結果として返す</strong></td>
+<td style="text-align: left" data-sourcepos="820:107-820:137">未対応なら明示的に<code>ER</code>
+</td>
+</tr>
+<tr data-sourcepos="821:1-821:138">
+<td style="text-align: left" data-sourcepos="821:2-821:19">server終了処理</td>
+<td style="text-align: left" data-sourcepos="821:21-821:50">serverは自動終了しない</td>
+<td style="text-align: left" data-sourcepos="821:52-821:97">GRRM終了後も孤児serverが残り続ける</td>
+<td style="text-align: left" data-sourcepos="821:99-821:137">launcherでkill、またはidle timeout</td>
+</tr>
+<tr data-sourcepos="822:1-822:144">
+<td style="text-align: left" data-sourcepos="822:2-822:13">socket起動</td>
+<td style="text-align: left" data-sourcepos="822:15-822:51">既存socket pathを無条件<code>unlink</code>
+</td>
+<td style="text-align: left" data-sourcepos="822:53-822:100">別の生きたserverのsocketを破壊し得る</td>
+<td style="text-align: left" data-sourcepos="822:102-822:143">生存確認後にstale socketだけ削除</td>
+</tr>
+<tr data-sourcepos="823:1-823:141">
+<td style="text-align: left" data-sourcepos="823:2-823:19">server取り違え</td>
+<td style="text-align: left" data-sourcepos="823:21-823:54">
+<code>.socketfile</code> はsocket pathだけ</td>
+<td style="text-align: left" data-sourcepos="823:56-823:116">別ジョブのserverに誤接続すると別WORKDIRを参照</td>
+<td style="text-align: left" data-sourcepos="823:118-823:140">job/server ID handshake</td>
+</tr>
+<tr data-sourcepos="824:1-824:138">
+<td style="text-align: left" data-sourcepos="824:2-824:19">出力ファイル</td>
+<td style="text-align: left" data-sourcepos="824:21-824:48">
+<code>OUT4GEN.rrm</code>へ直接書込</td>
+<td style="text-align: left" data-sourcepos="824:50-824:103">強制終了時に途中までのファイルが残る</td>
+<td style="text-align: left" data-sourcepos="824:105-824:137">temporary file → <code>os.replace()</code>
+</td>
+</tr>
+<tr data-sourcepos="825:1-825:123">
+<td style="text-align: left" data-sourcepos="825:2-825:10">並列数</td>
+<td style="text-align: left" data-sourcepos="825:12-825:33">
+<code>max_workers=40</code>固定</td>
+<td style="text-align: left" data-sourcepos="825:35-825:87">NNP/GPUではOOMや性能低下、thread safety問題</td>
+<td style="text-align: left" data-sourcepos="825:89-825:122">backend別に設定可能にする</td>
+</tr>
+<tr data-sourcepos="826:1-826:105">
+<td style="text-align: left" data-sourcepos="826:2-826:14">client thread</td>
+<td style="text-align: left" data-sourcepos="826:16-826:42">接続ごとにthread生成</td>
+<td style="text-align: left" data-sourcepos="826:44-826:85">大量接続時にthreadが増え続ける</td>
+<td style="text-align: left" data-sourcepos="826:87-826:104">worker数を制限</td>
+</tr>
+<tr data-sourcepos="827:1-827:115">
+<td style="text-align: left" data-sourcepos="827:2-827:14"><code>.socketfile</code></td>
+<td style="text-align: left" data-sourcepos="827:16-827:54">設定ファイル自体は待たない</td>
+<td style="text-align: left" data-sourcepos="827:56-827:83">launcherとGRRMの起動race</td>
+<td style="text-align: left" data-sourcepos="827:85-827:114">
+<code>.socketfile</code>にも短いretry</td>
+</tr>
+<tr data-sourcepos="828:1-828:128">
+<td style="text-align: left" data-sourcepos="828:2-828:8">logging</td>
+<td style="text-align: left" data-sourcepos="828:10-828:47">一点計算ごとに<code>print(filepath)</code>
+</td>
+<td style="text-align: left" data-sourcepos="828:49-828:99">数万〜数十万点ではI/Oが無視できない</td>
+<td style="text-align: left" data-sourcepos="828:101-828:127">verbose mode時のみ出力</td>
+</tr>
+<tr data-sourcepos="829:1-829:104">
+<td style="text-align: left" data-sourcepos="829:2-829:16">FINファイル</td>
+<td style="text-align: left" data-sourcepos="829:18-829:50">
+<code>OK</code>後さらに最大1000秒poll</td>
+<td style="text-align: left" data-sourcepos="829:52-829:75">現実にはほぼ冗長</td>
+<td style="text-align: left" data-sourcepos="829:77-829:103">短縮または設計整理</td>
+</tr>
+<tr data-sourcepos="830:1-830:101">
+<td style="text-align: left" data-sourcepos="830:2-830:17">Unix socket path</td>
+<td style="text-align: left" data-sourcepos="830:19-830:43">path長チェックなし</td>
+<td style="text-align: left" data-sourcepos="830:45-830:74">深いWORKDIRで<code>bind()</code>失敗</td>
+<td style="text-align: left" data-sourcepos="830:76-830:100">
+<code>$TMPDIR</code>等の短いpath</td>
+</tr>
+<tr data-sourcepos="831:1-831:112">
+<td style="text-align: left" data-sourcepos="831:2-831:13">socket権限</td>
+<td style="text-align: left" data-sourcepos="831:15-831:32">明示設定なし</td>
+<td style="text-align: left" data-sourcepos="831:34-831:96">共有計算機上で他ユーザーから接続可能な場合</td>
+<td style="text-align: left" data-sourcepos="831:98-831:111">
+<code>chmod 600</code>等</td>
+</tr>
+<tr data-sourcepos="832:1-832:146">
+<td style="text-align: left" data-sourcepos="832:2-832:9">LJ特有</td>
+<td style="text-align: left" data-sourcepos="832:11-832:40">原子重複時の<code>nan</code>を0化</td>
+<td style="text-align: left" data-sourcepos="832:42-832:101">異常構造が低エネルギーのように扱われ得る</td>
+<td style="text-align: left" data-sourcepos="832:103-832:145">diagonalだけ除外し重複原子はerror</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+
+</div>
+
+
+{% endraw %}

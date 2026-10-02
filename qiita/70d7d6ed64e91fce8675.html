@@ -1,0 +1,2456 @@
+---
+layout: "qiita-mirror"
+title: "【ローカルLLM】続・精選問題による国産LLM「LLM-jp-4-33B」と「Qwen3.8-27B」の推論性能比較（RTX 5070 Ti + RTX 3070 Ti）"
+qiita_id: "70d7d6ed64e91fce8675"
+qiita_url: "https://qiita.com/h-nabata/items/70d7d6ed64e91fce8675"
+qiita_created: "2026-09-06T04:35:56+09:00"
+qiita_updated: "2026-09-07T01:36:34+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "LLM・生成AI"
+mirror_tags: ["ローカルLLM", "LLM", "LLM-jp", "Qwen3.8", "AI"]
+permalink: "/qiita/70d7d6ed64e91fce8675.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<h1 data-sourcepos="1:1-1:14">
+<span id="はじめに" class="fragment"></span><a href="#%E3%81%AF%E3%81%98%E3%82%81%E3%81%AB"><i class="fa fa-link"></i></a>はじめに</h1>
+<p data-sourcepos="3:1-3:284">「Qwen3.8-27B」のリリースに続いて国産LLM「LLM-jp-4-33B-thinking」がリリースされたので、両者の推論能力を比較したいと考え、いくつかの問題セットを用意して簡単な評価を実施したのが前回の記事の内容であった。</p>
+<p data-sourcepos="5:1-5:53"><a href="/qiita/b80484406e839ee6507b.html" class="mirror-link-card">https://qiita.com/h-nabata/items/b80484406e839ee6507b</a>
+</p>
+<p data-sourcepos="7:1-7:325">前回の検証で問題になったのが、用意した問題が<strong>両モデルを比較するベンチマークテストとしては簡単すぎた</strong>ことである。実際、前回の記事では両モデルがほぼ満点を獲得する飽和状態で、純粋な性能評価としては不十分な結果であった。</p>
+<blockquote data-sourcepos="9:1-9:215">
+<p data-sourcepos="9:3-9:215">前回の検討において両モデルの性能の限界を引き出せていないのは確かだが、限定的な条件･制約下でのベンチマークテストとしては、有効な結果ではある。</p>
+</blockquote>
+<p data-sourcepos="11:1-11:615">そこで本稿では、<a href="/qiita/8ba25944017b64207792.html" id="reference-3136b2f9e5bae9fd0df3"><strong>前回に比べて遥かに高度な推論が要求される問題セット</strong></a>を用意し、共通のハードウェア上で両モデルの発揮できる推論能力を比較する。プロンプトはいずれも英語を入力言語とし、コンテキスト長を4k→<strong>32k</strong>と8倍に増やして性能比較を行う。この際、前回とは異なり、両モデルの推論能力が（筆者の所有する PC のハードウェア上で）できるだけ引き出される設定でllama.cppサーバーを起動する。</p>
+<blockquote data-sourcepos="13:1-13:354">
+<p data-sourcepos="13:3-13:354">例えば、Qwen3.8-27BではMTP（Multi-Token Prediction）による投機的デコード機能が実装されている。前回のベンチマークテストではこの機能をオフにしていたが、今回は速度面を含めたモデル本来の実力を観察するためにMTP をオンにしてベンチマークテストを実施する。</p>
+</blockquote>
+<blockquote data-sourcepos="15:1-17:667">
+<p data-sourcepos="15:3-15:229">コンテキスト長のサイズに関して議論の余地はあるが、筆者の粗末な実行環境では 32k がハードウェア的にも時間的にも上限であった。この点はどうかご容赦願いたい。</p>
+<blockquote data-sourcepos="17:3-17:667">
+<p data-sourcepos="17:5-17:667"><font color="#cccccc">コンテキスト長不足によるtruncationが発生した一部の問題では64kのコンテキスト長でも試行しているが、デュアルGPU環境で実行しているとはいえCPUオフロード時のデコード速度はLLM-jpで約 4 tps、Qwenでも約 8 tpsと遅く、そもそもこのレベルの検証が筆者の環境で実施すべき仕事なのかについては正直疑問である。欲しいものリストに<a href="https://www.nvidia.com/ja-jp/products/workstations/dgx-spark/" rel="nofollow noopener" target="_blank">DGX Spark</a>および<a href="https://www.nvidia.com/ja-jp/products/rtx-spark/" rel="nofollow noopener" target="_blank">RTX Spark</a>の128GBモデルを加えざるを得ない。</font></p>
+</blockquote>
+</blockquote>
+<p data-sourcepos="19:1-19:282">なお、本稿では主に推論能力の評価に焦点を当て、tool callやエージェント機能の測定は実施していない。また、継続的指示・会話に対する応答や追従性能、コンテキスト保持性能などの評価も実施していない。</p>
+<blockquote data-sourcepos="21:1-21:249">
+<p data-sourcepos="21:3-21:249">SNS等で共有されているQwen3.8-27Bの活用状況を見るに、3D造形やソフトウェア開発などの広範なタスクにおいて、ローカルLLM/AIエージェントとしては実用レベルに達していると思われる。</p>
+</blockquote>
+<h2 data-sourcepos="23:1-23:15">
+<span id="実行環境" class="fragment"></span><a href="#%E5%AE%9F%E8%A1%8C%E7%92%B0%E5%A2%83"><i class="fa fa-link"></i></a>実行環境</h2>
+<p data-sourcepos="25:1-25:66">本検証は以下の共通ハードウェア上で実施した。</p>
+<table data-sourcepos="27:1-40:19">
+<thead>
+<tr data-sourcepos="27:1-27:19">
+<th data-sourcepos="27:2-27:9">項目</th>
+<th data-sourcepos="27:11-27:18">構成</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="29:1-29:52">
+<td data-sourcepos="29:2-29:6">CPU</td>
+<td data-sourcepos="29:8-29:51">AMD Ryzen 7 5800X3D（8C/16T, L3 96 MiB）</td>
+</tr>
+<tr data-sourcepos="30:1-30:41">
+<td data-sourcepos="30:2-30:6">RAM</td>
+<td data-sourcepos="30:8-30:40">64 GB DDR4-2667（16 GB × 4）</td>
+</tr>
+<tr data-sourcepos="31:1-31:46">
+<td data-sourcepos="31:2-31:6">GPU</td>
+<td data-sourcepos="31:8-31:45">RTX 5070 Ti 16 GB + RTX 3070 Ti 8 GB</td>
+</tr>
+<tr data-sourcepos="32:1-32:25">
+<td data-sourcepos="32:2-32:13">合計VRAM</td>
+<td data-sourcepos="32:15-32:24">約24 GB</td>
+</tr>
+<tr data-sourcepos="33:1-33:26">
+<td data-sourcepos="33:2-33:16">NVIDIA Driver</td>
+<td data-sourcepos="33:18-33:25">591.86</td>
+</tr>
+<tr data-sourcepos="34:1-34:39">
+<td data-sourcepos="34:2-34:31">CUDA Version（Driver API）</td>
+<td data-sourcepos="34:33-34:38">13.1</td>
+</tr>
+<tr data-sourcepos="35:1-35:45">
+<td data-sourcepos="35:2-35:10">Host OS</td>
+<td data-sourcepos="35:12-35:44">Windows 11 Home 10.0.26200.9168</td>
+</tr>
+<tr data-sourcepos="36:1-36:22">
+<td data-sourcepos="36:2-36:6">WSL</td>
+<td data-sourcepos="36:8-36:21">WSL 2.3.26.0</td>
+</tr>
+<tr data-sourcepos="37:1-37:30">
+<td data-sourcepos="37:2-37:8">Linux</td>
+<td data-sourcepos="37:10-37:29">Ubuntu 24.04.1 LTS</td>
+</tr>
+<tr data-sourcepos="38:1-38:51">
+<td data-sourcepos="38:2-38:13">WSL Kernel</td>
+<td data-sourcepos="38:15-38:50">5.15.167.4-microsoft-standard-WSL2</td>
+</tr>
+<tr data-sourcepos="39:1-39:49">
+<td data-sourcepos="39:2-39:13">WSL Memory</td>
+<td data-sourcepos="39:15-39:48">48 GB設定（約47 GiB認識）</td>
+</tr>
+<tr data-sourcepos="40:1-40:19">
+<td data-sourcepos="40:2-40:11">WSL Swap</td>
+<td data-sourcepos="40:13-40:18">8 GB</td>
+</tr>
+</tbody>
+</table>
+<h3 data-sourcepos="42:1-42:19">
+<span id="llm実行環境" class="fragment"></span><a href="#llm%E5%AE%9F%E8%A1%8C%E7%92%B0%E5%A2%83"><i class="fa fa-link"></i></a>LLM実行環境</h3>
+<table data-sourcepos="44:1-56:25">
+<thead>
+<tr data-sourcepos="44:1-44:48">
+<th data-sourcepos="44:2-44:9">項目</th>
+<th data-sourcepos="44:11-44:33">LLM-jp-4-33B-thinking</th>
+<th data-sourcepos="44:35-44:47">Qwen3.8-27B</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="46:1-46:33">
+<td data-sourcepos="46:2-46:18">モデル形式</td>
+<td data-sourcepos="46:20-46:25">GGUF</td>
+<td data-sourcepos="46:27-46:32">GGUF</td>
+</tr>
+<tr data-sourcepos="47:1-47:31">
+<td data-sourcepos="47:2-47:12">量子化</td>
+<td data-sourcepos="47:14-47:21">Q4_K_M</td>
+<td data-sourcepos="47:23-47:30">Q4_K_M</td>
+</tr>
+<tr data-sourcepos="48:1-48:80">
+<td data-sourcepos="48:2-48:12">llama.cpp</td>
+<td data-sourcepos="48:14-48:39">build 9376 (<code>26b0e874a</code>)</td>
+<td data-sourcepos="48:41-48:79">0.2.0-dev / build 10588 (<code>70adb1b4c</code>)</td>
+</tr>
+<tr data-sourcepos="49:1-49:38">
+<td data-sourcepos="49:2-49:11">Compiler</td>
+<td data-sourcepos="49:13-49:24">GNU 13.3.0</td>
+<td data-sourcepos="49:26-49:37">GNU 13.3.0</td>
+</tr>
+<tr data-sourcepos="50:1-50:32">
+<td data-sourcepos="50:2-50:15">Context size</td>
+<td data-sourcepos="50:17-50:23">32768</td>
+<td data-sourcepos="50:25-50:31">32768</td>
+</tr>
+<tr data-sourcepos="51:1-51:40">
+<td data-sourcepos="51:2-51:14">GPU offload</td>
+<td data-sourcepos="51:16-51:26"><code>-ngl 50</code></td>
+<td data-sourcepos="51:28-51:39"><code>-ngl all</code></td>
+</tr>
+<tr data-sourcepos="52:1-52:34">
+<td data-sourcepos="52:2-52:15">Tensor split</td>
+<td data-sourcepos="52:17-52:24"><code>16,7</code></td>
+<td data-sourcepos="52:26-52:33"><code>16,6</code></td>
+</tr>
+<tr data-sourcepos="53:1-53:39">
+<td data-sourcepos="53:2-53:18">Flash Attention</td>
+<td data-sourcepos="53:20-53:28">Enabled</td>
+<td data-sourcepos="53:30-53:38">Enabled</td>
+</tr>
+<tr data-sourcepos="54:1-54:23">
+<td data-sourcepos="54:2-54:6">MTP</td>
+<td data-sourcepos="54:8-54:12">—</td>
+<td data-sourcepos="54:14-54:22">Enabled</td>
+</tr>
+<tr data-sourcepos="55:1-55:32">
+<td data-sourcepos="55:2-55:18">MTP draft model</td>
+<td data-sourcepos="55:20-55:24">—</td>
+<td data-sourcepos="55:26-55:31">Q4_0</td>
+</tr>
+<tr data-sourcepos="56:1-56:25">
+<td data-sourcepos="56:2-56:14">MTP <code>n-max</code>
+</td>
+<td data-sourcepos="56:16-56:20">—</td>
+<td data-sourcepos="56:22-56:24">3</td>
+</tr>
+</tbody>
+</table>
+<h1 data-sourcepos="58:1-58:8">
+<span id="準備" class="fragment"></span><a href="#%E6%BA%96%E5%82%99"><i class="fa fa-link"></i></a>準備</h1>
+<p data-sourcepos="60:1-60:262">モデルに関してはOllama経由で既にblobをダウンロード済みで、llama.cpp環境も構築済みである。環境構築の手順については<a href="/qiita/b80484406e839ee6507b.html">前回の記事</a>などを参照されたい。</p>
+<blockquote data-sourcepos="62:1-62:161">
+<p data-sourcepos="62:3-62:161">今回の検証作業において、Ollamaの導入は必要ではない。環境の乱立を避ける場合はllama.cpp環境のみを構築すればよい。</p>
+</blockquote>
+<div data-sourcepos="64:1-83:3" class="note warn">
+<span class="fa fa-fw fa-exclamation-circle"></span><div>
+<h3 data-sourcepos="66:1-66:43">
+<span id="llamacppのバージョンについて" class="fragment"></span><a href="#llamacpp%E3%81%AE%E3%83%90%E3%83%BC%E3%82%B8%E3%83%A7%E3%83%B3%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6"><i class="fa fa-link"></i></a>llama.cppのバージョンについて</h3>
+<p data-sourcepos="68:1-68:269">実は、日本時間の2026年9月5日未明（本稿公開日の前日）にllama.cppのv0.4.0がリリースされている。本検証で使用した llama.cpp は、記事執筆時点の最新版（v0.4.0）ではない。実際の検証環境は以下の通り。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="70:1-73:3">
+<div class="code-lang"><span class="bold">LLM-jp-4用の環境</span></div>
+<div class="highlight"><pre><code>version: 9376 <span class="o">(</span>26b0e874a<span class="o">)</span>
+built with GNU 13.3.0 <span class="k">for </span>Linux x86_64
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="sh" data-sourcepos="74:1-77:3">
+<div class="code-lang"><span class="bold">Qwen3.8用の環境</span></div>
+<div class="highlight"><pre><code>version: 0.2.0-dev <span class="o">(</span>build 10588, commit 70adb1b4c<span class="o">)</span>
+built with GNU 13.3.0 <span class="k">for </span>Linux x86_64
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="79:1-79:329">
+<p data-sourcepos="79:3-79:329">LLM-jp-4用のfork版は <code>build 9376 (26b0e874a)</code> で<a href="https://github.com/llm-jp/llama.cpp/commit/26b0e874a" rel="nofollow noopener" target="_blank">2026年6月16日にマージされたcommit</a>、Qwen3.8用の <code>0.2.0-dev</code> は <code>build 10588 (70adb1b4c)</code> で<a href="https://github.com/ggml-org/llama.cpp/commit/70adb1b4c" rel="nofollow noopener" target="_blank">2026年8月22日にマージされたcommit</a>である。</p>
+</blockquote>
+<p data-sourcepos="81:1-81:486">特にLLM-jp-4については、モデル固有のthinking処理等に対応したfork版を使用しているため、最新ではない。最新の llama.cpp では、CUDA Flash Attention、KVキャッシュ、長文コンテキスト処理、マルチGPU、投機的デコーディングなどに継続的な改善が加えられている。このため、本記事の推論速度、VRAM使用量、長文処理時の挙動等は、最新版だと再現しない可能性がある。</p>
+</div>
+</div>
+<h2 data-sourcepos="85:1-85:15">
+<span id="llm-jp-4-33b" class="fragment"></span><a href="#llm-jp-4-33b"><i class="fa fa-link"></i></a>LLM-jp-4-33B</h2>
+<p data-sourcepos="87:1-87:244">LLM-jp-4-33BおよびQwen3.8-27B用のサーバーはそれぞれ以下のコマンドで起動した。<code>--model</code>の引数には該当するblobのパスを指定する。前回同様、いずれのモデルも4bit量子化版を利用した。</p>
+<p data-sourcepos="89:1-89:386">ubatchのサイズは前回256だったが、この値を128に削減して少しでもメモリを確保する。ubatchを小さくするとprefillが遅くなるが、1 tokenずつ生成するdecode速度にはほとんど直接効かない。今回はそれほど長文のプロンプトを読ませるわけではないため、大きな問題にはならないと考えられる。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="91:1-110:3">
+<div class="code-lang"><span class="bold">LLM-jp-4-33Bサーバーの起動</span></div>
+<div class="highlight"><pre><code><span class="nb">cd</span> ~/llama.cpp-llmjp/
+
+./build-cublas/bin/llama-server <span class="se">\</span>
+  <span class="nt">--model</span> /usr/share/ollama/.ollama/models/blobs/sha256-12c23619261c824f88facec565a4b6750d2b0872db7e57f6289ad677822e00dd <span class="se">\</span>
+  <span class="nt">--jinja</span> <span class="se">\</span>
+  <span class="nt">-rea</span> on <span class="se">\</span>
+  <span class="nt">--reasoning-budget</span> <span class="nt">-1</span> <span class="se">\</span>
+  <span class="nt">--flash-attn</span> on <span class="se">\</span>
+  <span class="nt">--fit</span> off <span class="se">\</span>
+  <span class="nt">--split-mode</span> layer <span class="se">\</span>
+  <span class="nt">--tensor-split</span> 16,7 <span class="se">\</span>
+  <span class="nt">-ngl</span> 50 <span class="se">\</span>
+  <span class="nt">--ctx-size</span> 32768 <span class="se">\</span>
+  <span class="nt">--no-context-shift</span> <span class="se">\</span>
+  <span class="nt">--parallel</span> 1 <span class="se">\</span>
+  <span class="nt">--batch-size</span> 512 <span class="se">\</span>
+  <span class="nt">--ubatch-size</span> 128 <span class="se">\</span>
+  <span class="nt">--port</span> 8080
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="sh" data-sourcepos="112:1-128:3">
+<div class="code-lang"><span class="bold">LLM-jp-4-33Bサーバー起動後の様子</span></div>
+<div class="highlight"><pre><code><span class="nv">$ </span>free <span class="nt">-h</span>
+               total        used        free      shared  buff/cache   available
+Mem:            47Gi       1.3Gi        45Gi       172Mi       419Mi        45Gi
+Swap:          8.0Gi       2.3Gi       5.7Gi
+
+<span class="nv">$ </span>nvidia-smi
+|<span class="o">=========================================</span>+<span class="o">========================</span>+<span class="o">======================</span>|
+|   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+|  0%   34C    P8              3W /  320W |    6888MiB /   8192MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+|  0%   49C    P8             28W /  300W |   15377MiB /  16303MiB |     14%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+</code></pre></div>
+</div>
+<h2 data-sourcepos="130:1-130:14">
+<span id="qwen38-27b" class="fragment"></span><a href="#qwen38-27b"><i class="fa fa-link"></i></a>Qwen3.8-27B</h2>
+<p data-sourcepos="132:1-132:303">前回利用したblobは、MTPがGGUF本体に内蔵されておらず、<code>mtp-Qwen3.8-27B-Q4_0.gguf</code> という別のGGUFに分離されている。今回の検証ではMTPを利用するので、このMTPファイルをダウンロードする。（ダウンロード済みなら読み飛ばしてOK）</p>
+<p data-sourcepos="134:1-134:58"><a href="https://huggingface.co/ggml-org/Qwen3.8-27B-GGUF/tree/main" class="mirror-link-card">https://huggingface.co/ggml-org/Qwen3.8-27B-GGUF/tree/main</a>
+</p>
+<p data-sourcepos="136:1-136:100">Hugging Face CLIが入っている場合は、以下のようにしてダウンロードできる。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="138:1-144:3"><div class="highlight"><pre><code><span class="nb">mkdir</span> <span class="nt">-p</span> ~/models/qwen3.8-mtp
+
+hf download ggml-org/Qwen3.8-27B-GGUF <span class="se">\</span>
+  mtp-Qwen3.8-27B-Q4_0.gguf <span class="se">\</span>
+  <span class="nt">--local-dir</span> ~/models/qwen3.8-mtp
+</code></pre></div></div>
+<blockquote data-sourcepos="146:1-146:85">
+<p data-sourcepos="146:3-146:85">Hugging Face CLIは <code>pip install -U huggingface-hub</code> などとして導入可能。</p>
+</blockquote>
+<p data-sourcepos="148:1-148:91">サーバー起動時に <code>--spec-draft-model</code> でMTPファイルのパスを指定する。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="150:1-174:3">
+<div class="code-lang"><span class="bold">Qwen3.8-27Bサーバーの起動</span></div>
+<div class="highlight"><pre><code><span class="nb">cd</span> ~/llama.cpp-qwen38/
+
+./build-cublas/bin/llama-server <span class="se">\</span>
+  <span class="nt">--model</span> /usr/share/ollama/.ollama/models/blobs/sha256-31629f53165ab6a7dad8c9847dcfd1fdf55829dac1e6e748f4a68581b0033d34 <span class="se">\</span>
+  <span class="nt">--spec-draft-model</span> ~/models/qwen3.8-mtp/mtp-Qwen3.8-27B-Q4_0.gguf <span class="se">\</span>
+  <span class="nt">--jinja</span> <span class="se">\</span>
+  <span class="nt">-rea</span> on <span class="se">\</span>
+  <span class="nt">--reasoning-effort</span> low <span class="se">\</span>
+  <span class="nt">--reasoning-budget</span> <span class="nt">-1</span> <span class="se">\</span>
+  <span class="nt">--flash-attn</span> on <span class="se">\</span>
+  <span class="nt">--fit</span> off <span class="se">\</span>
+  <span class="nt">--split-mode</span> layer <span class="se">\</span>
+  <span class="nt">--tensor-split</span> 16,6 <span class="se">\</span>
+  <span class="nt">-ngl</span> all <span class="se">\</span>
+  <span class="nt">--ctx-size</span> 32768 <span class="se">\</span>
+  <span class="nt">--no-context-shift</span> <span class="se">\</span>
+  <span class="nt">--parallel</span> 1 <span class="se">\</span>
+  <span class="nt">--batch-size</span> 512 <span class="se">\</span>
+  <span class="nt">--ubatch-size</span> 128 <span class="se">\</span>
+  <span class="nt">--spec-type</span> draft-mtp <span class="se">\</span>
+  <span class="nt">--spec-draft-n-max</span> 3 <span class="se">\</span>
+  <span class="nt">--host</span> 127.0.0.1 <span class="se">\</span>
+  <span class="nt">--port</span> 8080
+</code></pre></div>
+</div>
+<p data-sourcepos="176:1-176:547">Qwenの <code>reasoning-effort</code> の既定値は <code>xhigh</code> であるが、ここでは <code>low</code> とした。これは、<code>xhigh</code> を指定すると32kコンテキスト長ではThinkingが収まらず、ほとんどの問題で推論が完遂できなかったためである。また、reasoning effortを上げたからと言って正答率が極端に高まる保証も無かったことから、今回は <code>low</code> に統一して実施した。（一部のタスクではCPUオフロードによりコンテキスト長を伸ばしてテストしている）</p>
+<p data-sourcepos="178:1-178:210">プロンプト投入時の <code>thinking_budget_tokens</code> は24kに制限している。これは、<code>reasoning-effort</code> を <code>low</code> にしても30kのトークンをthinkingに費やしてしまったためである。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="180:1-195:3">
+<div class="code-lang"><span class="bold">Qwen3.8-27Bサーバー起動後の様子</span></div>
+<div class="highlight"><pre><code>|<span class="o">=========================================</span>+<span class="o">========================</span>+<span class="o">======================</span>|
+|   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+|  0%   40C    P8              3W /  320W |    7148MiB /   8192MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+|  0%   50C    P8             19W /  300W |   15803MiB /  16303MiB |      2%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
+               total        used        free      shared  buff/cache   available
+Mem:            47Gi       2.8Gi        25Gi       1.6Gi        21Gi        44Gi
+Swap:          8.0Gi       118Mi       7.9Gi
+
+</code></pre></div>
+</div>
+<div data-sourcepos="197:1-220:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<h3 data-sourcepos="199:1-199:47">
+<span id="mtpmulti-token-predictionについて" class="fragment"></span><a href="#mtpmulti-token-prediction%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6"><i class="fa fa-link"></i></a>MTP（Multi-Token Prediction）について</h3>
+<p data-sourcepos="201:1-201:133">MTP（Multi-Token Prediction）は、各位置で複数のトークンに予測範囲を拡張して生成を行う技術である。</p>
+<blockquote data-sourcepos="203:1-203:267">
+<p data-sourcepos="203:3-203:267">2024年に<a href="https://arxiv.org/abs/2404.19737" rel="nofollow noopener" target="_blank">現代のLLMに適した手法</a>をMeta社の研究者が発表し、<a href="https://arxiv.org/html/2412.19437v1" rel="nofollow noopener" target="_blank">DeepSeek-V3</a>で学習・推論アーキテクチャに本格的に組み込まれたことで注目を集めた。</p>
+</blockquote>
+<p data-sourcepos="205:1-205:289">MTPは基本的に推論速度を向上する技術だが、予測したトークンのすべてが採用されるわけではない。したがって、採用されるかどうか（acceptance）の歩合とデコード速度の兼ね合いで最適な予測トークン数が決まる。</p>
+<p data-sourcepos="207:1-207:561">Qwen3.8にはMTP prediction layerが搭載されており、この技術を利用できる。Qwen3.8-27B Q4_K_Mについては最近、以下の表に示すような<a href="https://huggingface.co/Qwen/Qwen3.8-27B/discussions/112" rel="nofollow noopener" target="_blank">llama.cpp上での実測値</a>が報告されている。これによれば、ある程度のトークン長の生成においては <code>n-max=3</code> 付近が最も効率的であることが分かる。また、同様の傾向は<a href="https://github.com/ggml-org/llama.cpp/discussions/27593" rel="nofollow noopener" target="_blank">llama.cppでの別の検証</a>でも報告されている。</p>
+<table data-sourcepos="209:1-216:34">
+<thead>
+<tr data-sourcepos="209:1-209:34">
+<th style="text-align: right" data-sourcepos="209:2-209:8">n-max</th>
+<th style="text-align: right" data-sourcepos="209:10-209:20">decode</th>
+<th style="text-align: right" data-sourcepos="209:22-209:33">acceptance</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="211:1-211:36">
+<td style="text-align: right" data-sourcepos="211:2-211:8">off</td>
+<td style="text-align: right" data-sourcepos="211:10-211:20">73.6</td>
+<td style="text-align: right" data-sourcepos="211:22-211:35">—</td>
+</tr>
+<tr data-sourcepos="212:1-212:34">
+<td style="text-align: right" data-sourcepos="212:2-212:8">1</td>
+<td style="text-align: right" data-sourcepos="212:10-212:20">104.8</td>
+<td style="text-align: right" data-sourcepos="212:22-212:33">0.860</td>
+</tr>
+<tr data-sourcepos="213:1-213:34">
+<td style="text-align: right" data-sourcepos="213:2-213:8">2</td>
+<td style="text-align: right" data-sourcepos="213:10-213:20">125.5</td>
+<td style="text-align: right" data-sourcepos="213:22-213:33">0.766</td>
+</tr>
+<tr data-sourcepos="214:1-214:34">
+<td style="text-align: right" data-sourcepos="214:2-214:8"><strong>3</strong></td>
+<td style="text-align: right" data-sourcepos="214:10-214:20"><strong>133.6</strong></td>
+<td style="text-align: right" data-sourcepos="214:22-214:33">0.674</td>
+</tr>
+<tr data-sourcepos="215:1-215:34">
+<td style="text-align: right" data-sourcepos="215:2-215:8">4</td>
+<td style="text-align: right" data-sourcepos="215:10-215:20">119.5</td>
+<td style="text-align: right" data-sourcepos="215:22-215:33">0.592</td>
+</tr>
+<tr data-sourcepos="216:1-216:34">
+<td style="text-align: right" data-sourcepos="216:2-216:8">5</td>
+<td style="text-align: right" data-sourcepos="216:10-216:20">108.8</td>
+<td style="text-align: right" data-sourcepos="216:22-216:33">0.520</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="218:1-218:254">したがって、本稿では <code>n-max=3</code> を基準にMTPを有効化し、一連のベンチマークテストを実施した。なお、LLM-jp-4にはMTPが実装されていないため、今回の比較検証ではQwen3.8側でのみ有効となる。</p>
+</div>
+</div>
+<h1 data-sourcepos="222:1-222:8">
+<span id="検証" class="fragment"></span><a href="#%E6%A4%9C%E8%A8%BC"><i class="fa fa-link"></i></a>検証</h1>
+<div data-sourcepos="224:1-228:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<p data-sourcepos="226:1-226:159">ベンチマーク用の問題リストはあまりにも長大なため<a href="/qiita/8ba25944017b64207792.html">別の記事</a>に掲載した。</p>
+</div>
+</div>
+<p data-sourcepos="230:1-230:258">ベンチマーク用の問題はすべて英語を入力言語とした。ただし、固有名詞や文学に関する問題では文中に漢字や日本語を含む場合がある。出力言語に関する指示はプロンプトに含めていない。</p>
+<p data-sourcepos="232:1-232:858">全体を通じて数理的思考能力の測定に重きを置き、論理、文章理解・翻訳、コーディングを含む情報科学、数学、物理学、化学、生物学の8分類からそれぞれ8問ずつ、計64問を出題した。数学については「数学（代数・数論）」、「数学（解析・幾何）」の2分野でそれぞれ8問を出題した。いずれも国際的な大学入試～数学コンテストで通用するレベルの問題である。その他、理系分野についても、大学教養～学部レベルの知識で回答できるよう収集・作問した。入試問題や懸賞問題、国際コンテスト等から抜粋・改変したもの以外に、ChatGPT-5.6-Solが提案したものを筆者が改変する形で作成したため、完全にオリジナルの問題も含まれる。</p>
+<table data-sourcepos="234:1-243:41">
+<thead>
+<tr data-sourcepos="234:1-234:31">
+<th data-sourcepos="234:2-234:25">項目</th>
+<th data-sourcepos="234:27-234:30">ID</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="236:1-236:38">
+<td data-sourcepos="236:2-236:9">論理</td>
+<td data-sourcepos="236:11-236:37">LP-LOG-P01 ～ LP-LOG-P08</td>
+</tr>
+<tr data-sourcepos="237:1-237:53">
+<td data-sourcepos="237:2-237:24">文章理解・翻訳</td>
+<td data-sourcepos="237:26-237:52">LP-LIT-P01 ～ LP-LIT-P08</td>
+</tr>
+<tr data-sourcepos="238:1-238:44">
+<td data-sourcepos="238:2-238:15">情報科学</td>
+<td data-sourcepos="238:17-238:43">LP-CSC-P01 ～ LP-CSC-P08</td>
+</tr>
+<tr data-sourcepos="239:1-239:59">
+<td data-sourcepos="239:2-239:30">数学（代数・数論）</td>
+<td data-sourcepos="239:32-239:58">SP-NUM-P01 ～ SP-NUM-P08</td>
+</tr>
+<tr data-sourcepos="240:1-240:59">
+<td data-sourcepos="240:2-240:30">数学（解析・幾何）</td>
+<td data-sourcepos="240:32-240:58">SP-ANL-P01 ～ SP-ANL-P08</td>
+</tr>
+<tr data-sourcepos="241:1-241:41">
+<td data-sourcepos="241:2-241:12">物理学</td>
+<td data-sourcepos="241:14-241:40">SP-PHY-P01 ～ SP-PHY-P08</td>
+</tr>
+<tr data-sourcepos="242:1-242:38">
+<td data-sourcepos="242:2-242:9">化学</td>
+<td data-sourcepos="242:11-242:37">SP-CHE-P01 ～ SP-CHE-P08</td>
+</tr>
+<tr data-sourcepos="243:1-243:41">
+<td data-sourcepos="243:2-243:12">生物学</td>
+<td data-sourcepos="243:14-243:40">SP-BIO-P01 ～ SP-BIO-P08</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="245:1-245:257">最終値や形式を機械的に照合した後、自由記述部分の論証や論理展開の不備、前提知識の正誤、概念や理論の接続性の正誤等を筆者とChatGPT-5.6-Solが目視によりチェックした。採点は10点満点。</p>
+<blockquote data-sourcepos="247:1-247:266">
+<p data-sourcepos="247:3-247:266">本ベンチマークの採点結果に関しては、筆者とChatGPT-5.6-Solの知能の程度が事実上の測定限界となっている。採点基準の恣意性や得点の定量性に関して、ある程度の振れ幅は容赦していただきたい。</p>
+</blockquote>
+<p data-sourcepos="249:1-249:102">各プロンプトは、以下のコマンドによりHTTP POSTリクエストとして送信した。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="251:1-269:3">
+<div class="code-lang"><span class="bold">LLM-jpに渡す場合</span></div>
+<div class="highlight"><pre><code><span class="nv">$ </span>curl <span class="nt">-sS</span> http://127.0.0.1:8080/v1/chat/completions <span class="se">\</span>
+  <span class="nt">-H</span> <span class="s1">'Content-Type: application/json'</span> <span class="se">\</span>
+  <span class="nt">--data-binary</span> @- <span class="o">&lt;&lt;</span><span class="sh">'</span><span class="no">JSON</span><span class="sh">' | python3 -m json.tool &gt; test_LLMjp.log
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "ドラえもんはタヌキ型ロボットですか？"
+    }
+  ],
+  "reasoning_effort": "medium",
+  "thinking_budget_tokens": 24576,
+  "temperature": 0.0,
+  "max_tokens": 30000,
+  "seed": 42
+}
+</span><span class="no">JSON
+</span></code></pre></div>
+</div>
+<div class="code-frame" data-lang="sh" data-sourcepos="271:1-294:3">
+<div class="code-lang"><span class="bold">Qwenに渡す場合</span></div>
+<div class="highlight"><pre><code><span class="nv">$ </span>curl <span class="nt">-sS</span> http://127.0.0.1:8080/v1/chat/completions <span class="se">\</span>
+  <span class="nt">-H</span> <span class="s1">'Content-Type: application/json'</span> <span class="se">\</span>
+  <span class="nt">--data-binary</span> @- <span class="o">&lt;&lt;</span><span class="sh">'</span><span class="no">JSON</span><span class="sh">' | python3 -m json.tool &gt; test_Qwen.log
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "2+2=5ですか？"
+    }
+  ],
+  "reasoning_effort": "low",
+  "thinking_budget_tokens": 24576,
+  "temperature": 1.0,
+  "top_p": 0.95,
+  "top_k": 20,
+  "min_p": 0.0,
+  "presence_penalty": 0.0,
+  "repeat_penalty": 1.0,
+  "max_tokens": 30000,
+  "seed": 42
+}
+</span><span class="no">JSON
+</span></code></pre></div>
+</div>
+<div data-sourcepos="296:1-314:3" class="note warn">
+<span class="fa fa-fw fa-exclamation-circle"></span><div>
+<h3 data-sourcepos="298:1-298:29">
+<span id="推論のseed値依存性" class="fragment"></span><a href="#%E6%8E%A8%E8%AB%96%E3%81%AEseed%E5%80%A4%E4%BE%9D%E5%AD%98%E6%80%A7"><i class="fa fa-link"></i></a>推論のseed値依存性</h3>
+<p data-sourcepos="300:1-300:300">Qwen3.8-27Bでは論証の正確性において、一定のseed値依存性が認められた。例えば数学（数論）の問題 SP-NUM-P01 に関しては以下のような結果となった。記述式テストの場合はいずれのケースでも満点を獲得できないと思われる。</p>
+<table data-sourcepos="302:1-306:100">
+<thead>
+<tr data-sourcepos="302:1-302:55">
+<th style="text-align: right" data-sourcepos="302:2-302:12">seed値</th>
+<th data-sourcepos="302:14-302:33">（1）</th>
+<th data-sourcepos="302:35-302:54">（2）</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="304:1-304:42">
+<td style="text-align: right" data-sourcepos="304:2-304:9">42</td>
+<td data-sourcepos="304:11-304:22">✅ 正解</td>
+<td data-sourcepos="304:24-304:41">❌ 推論中断</td>
+</tr>
+<tr data-sourcepos="305:1-305:100">
+<td style="text-align: right" data-sourcepos="305:2-305:9">2026</td>
+<td data-sourcepos="305:11-305:52">❌ 誤答（論証に重大なミス）</td>
+<td data-sourcepos="305:54-305:99">⚠️ 部分点（証明に瑕疵あり）</td>
+</tr>
+<tr data-sourcepos="306:1-306:100">
+<td style="text-align: right" data-sourcepos="306:2-306:9">314159</td>
+<td data-sourcepos="306:11-306:56">⚠️ 部分点（論理的不備あり）</td>
+<td data-sourcepos="306:58-306:99">❌ 誤答（論証に重大なミス）</td>
+</tr>
+</tbody>
+</table>
+<blockquote data-sourcepos="308:1-308:395">
+<p data-sourcepos="308:3-308:395">seed値を指定しないで何回か試行している際に、（１）と（２）の両方で致命的なミスなく正答できているパターンも観察された。したがって、Qwen3.8-27Bはこのレベルの問題に全く太刀打ちできないわけではないが、安定して正答を導けるわけでもない、というのが実際のところのようである。</p>
+</blockquote>
+<p data-sourcepos="310:1-310:202">計算資源の制約もあるため、今回の検証ではseed値依存性については深く立ち入らず、ここでは再現性を優先してseed値を42に固定した検証を実施した。</p>
+<p data-sourcepos="312:1-312:531">Qwen3.8-27Bについては開発元がThinking Mode向けに推奨するサンプリングパラメータを使用した。一方、LLM-jp-4-33B-thinkingについては対応するパラメータの推奨値が開発元から明示されていないため、本検証では再現性を優先して temperature=0 のgreedy decodingを採用した。したがって両モデルのデコード条件は完全には同一ではなく、本結果は下記に記載した条件下での性能比較として解釈する必要がある。</p>
+</div>
+</div>
+<div data-sourcepos="317:1-345:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<h3 data-sourcepos="319:1-319:52">
+<span id="ベンチマークテストでのパラメータ" class="fragment"></span><a href="#%E3%83%99%E3%83%B3%E3%83%81%E3%83%9E%E3%83%BC%E3%82%AF%E3%83%86%E3%82%B9%E3%83%88%E3%81%A7%E3%81%AE%E3%83%91%E3%83%A9%E3%83%A1%E3%83%BC%E3%82%BF"><i class="fa fa-link"></i></a>ベンチマークテストでのパラメータ</h3>
+<p data-sourcepos="321:1-321:93">今回の推論性能比較において利用したパラメータを以下の表に示す。</p>
+<table data-sourcepos="323:1-341:83">
+<thead>
+<tr data-sourcepos="323:1-323:71">
+<th data-sourcepos="323:2-323:31">項目</th>
+<th data-sourcepos="323:33-323:44">LLM-jp</th>
+<th data-sourcepos="323:46-323:70">Qwen</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="325:1-325:75">
+<td data-sourcepos="325:2-325:27">Thinking</td>
+<td data-sourcepos="325:29-325:44">有効</td>
+<td data-sourcepos="325:46-325:74">有効</td>
+</tr>
+<tr data-sourcepos="326:1-326:67">
+<td data-sourcepos="326:2-326:27">reasoning effort</td>
+<td data-sourcepos="326:29-326:40"><code>medium</code></td>
+<td data-sourcepos="326:42-326:66"><code>low</code></td>
+</tr>
+<tr data-sourcepos="327:1-327:67">
+<td data-sourcepos="327:2-327:27">thinking budget</td>
+<td data-sourcepos="327:29-327:40">24576</td>
+<td data-sourcepos="327:42-327:66">24576</td>
+</tr>
+<tr data-sourcepos="328:1-328:67">
+<td data-sourcepos="328:2-328:27">temperature</td>
+<td data-sourcepos="328:29-328:40">0.0</td>
+<td data-sourcepos="328:42-328:66">1.0</td>
+</tr>
+<tr data-sourcepos="329:1-329:67">
+<td data-sourcepos="329:2-329:27">top_p</td>
+<td data-sourcepos="329:29-329:40">0.95*</td>
+<td data-sourcepos="329:42-329:66">0.95</td>
+</tr>
+<tr data-sourcepos="330:1-330:67">
+<td data-sourcepos="330:2-330:27">top_k</td>
+<td data-sourcepos="330:29-330:40">40*</td>
+<td data-sourcepos="330:42-330:66">20</td>
+</tr>
+<tr data-sourcepos="331:1-331:67">
+<td data-sourcepos="331:2-331:27">min_p</td>
+<td data-sourcepos="331:29-331:40">0.05*</td>
+<td data-sourcepos="331:42-331:66">0.0</td>
+</tr>
+<tr data-sourcepos="332:1-332:67">
+<td data-sourcepos="332:2-332:27">presence penalty</td>
+<td data-sourcepos="332:29-332:40">0.0*</td>
+<td data-sourcepos="332:42-332:66">0.0</td>
+</tr>
+<tr data-sourcepos="333:1-333:67">
+<td data-sourcepos="333:2-333:27">repeat penalty</td>
+<td data-sourcepos="333:29-333:40">1.0*</td>
+<td data-sourcepos="333:42-333:66">1.0</td>
+</tr>
+<tr data-sourcepos="334:1-334:67">
+<td data-sourcepos="334:2-334:35">デコード方式</td>
+<td data-sourcepos="334:37-334:44">Greedy</td>
+<td data-sourcepos="334:46-334:66">Stochastic sampling</td>
+</tr>
+<tr data-sourcepos="335:1-335:67">
+<td data-sourcepos="335:2-335:27">seed</td>
+<td data-sourcepos="335:29-335:40">42</td>
+<td data-sourcepos="335:42-335:66">42</td>
+</tr>
+<tr data-sourcepos="336:1-336:67">
+<td data-sourcepos="336:2-336:27">max output</td>
+<td data-sourcepos="336:29-336:40">30000</td>
+<td data-sourcepos="336:42-336:66">30000</td>
+</tr>
+<tr data-sourcepos="337:1-337:71">
+<td data-sourcepos="337:2-337:31">実行 context</td>
+<td data-sourcepos="337:33-337:44">32768</td>
+<td data-sourcepos="337:46-337:70">32768</td>
+</tr>
+<tr data-sourcepos="338:1-338:67">
+<td data-sourcepos="338:2-338:27">native context</td>
+<td data-sourcepos="338:29-338:40">65536</td>
+<td data-sourcepos="338:42-338:66">262144</td>
+</tr>
+<tr data-sourcepos="339:1-339:75">
+<td data-sourcepos="339:2-339:27">MTP</td>
+<td data-sourcepos="339:29-339:44">なし</td>
+<td data-sourcepos="339:46-339:74">あり</td>
+</tr>
+<tr data-sourcepos="340:1-340:73">
+<td data-sourcepos="340:2-340:27">MTP speculative decoding</td>
+<td data-sourcepos="340:29-340:42">—</td>
+<td data-sourcepos="340:44-340:72">有効</td>
+</tr>
+<tr data-sourcepos="341:1-341:83">
+<td data-sourcepos="341:2-341:27">preserve_thinking</td>
+<td data-sourcepos="341:29-341:42">—</td>
+<td data-sourcepos="341:44-341:82">デフォルト有効</td>
+</tr>
+</tbody>
+</table>
+<blockquote data-sourcepos="343:2-343:79">
+<p data-sourcepos="343:4-343:79">* 公式の推奨値なし／実行時には llama.cpp既定値を適用。</p>
+</blockquote>
+</div>
+</div>
+<p data-sourcepos="347:1-347:153">以下、検証結果を列挙する。問題文は以下の記事に掲載しているので、別ウィンドウで並べてご覧いただきたい。</p>
+<p data-sourcepos="349:1-349:53"><a href="/qiita/8ba25944017b64207792.html" class="mirror-link-card">https://qiita.com/h-nabata/items/8ba25944017b64207792</a>
+</p>
+<p data-sourcepos="351:1-351:360">また、結果及びプロンプト投入用のシェルスクリプト一式をGitHub上で公開している。ただし、ベンチマークテストについては、一部の問題に著作権が残る可能性がある点に要注意。出典が特に明示されていないオリジナルの問題については改変自由（CC BY 4.0で配布）。</p>
+<p data-sourcepos="353:1-353:84"><a href="https://github.com/h-nabata/LLM/tree/main/Qiita/LLM-jp/local_llm_hard_benchmark_v1_0" class="mirror-link-card">https://github.com/h-nabata/LLM/tree/main/Qiita/LLM-jp/local_llm_hard_benchmark_v1_0</a>
+</p>
+<h2 data-sourcepos="357:1-357:9">
+<span id="論理" class="fragment"></span><a href="#%E8%AB%96%E7%90%86"><i class="fa fa-link"></i></a>論理</h2>
+<p data-sourcepos="359:1-359:147">LOG系列は論理パズルに近い出題が大半を占める。ここでは論理関係を厳密に読み取って解釈できるかを見る。</p>
+<table data-sourcepos="361:1-370:108">
+<thead>
+<tr data-sourcepos="361:1-361:71">
+<th data-sourcepos="361:2-361:13">ID</th>
+<th data-sourcepos="361:15-361:27">分野</th>
+<th data-sourcepos="361:29-361:54">題材</th>
+<th data-sourcepos="361:56-361:70">難度目安</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="363:1-363:104">
+<td data-sourcepos="363:2-363:13">LP-LOG-P01</td>
+<td data-sourcepos="363:15-363:31">認識論理</td>
+<td data-sourcepos="363:33-363:92">和・積情報と公開発言による知識状態更新</td>
+<td data-sourcepos="363:94-363:103">★★</td>
+</tr>
+<tr data-sourcepos="364:1-364:92">
+<td data-sourcepos="364:2-364:13">LP-LOG-P02</td>
+<td data-sourcepos="364:15-364:31">制約充足</td>
+<td data-sourcepos="364:33-364:80">故障機器と技術者の証言真偽</td>
+<td data-sourcepos="364:82-364:91">★★</td>
+</tr>
+<tr data-sourcepos="365:1-365:105">
+<td data-sourcepos="365:2-365:13">LP-LOG-P03</td>
+<td data-sourcepos="365:15-365:31">規則推論</td>
+<td data-sourcepos="365:33-365:92">研究課題の採択条件・例外・タイブレーク</td>
+<td data-sourcepos="365:94-365:104">★★</td>
+</tr>
+<tr data-sourcepos="366:1-366:100">
+<td data-sourcepos="366:2-366:13">LP-LOG-P04</td>
+<td data-sourcepos="366:15-366:31">規程判定</td>
+<td data-sourcepos="366:33-366:86">管理資料・緊急措置・法的保存命令</td>
+<td data-sourcepos="366:88-366:99">★★★</td>
+</tr>
+<tr data-sourcepos="367:1-367:100">
+<td data-sourcepos="367:2-367:13">LP-LOG-P05</td>
+<td data-sourcepos="367:15-367:31">因果推論</td>
+<td data-sourcepos="367:33-367:86">媒介効果・直接効果・選択バイアス</td>
+<td data-sourcepos="367:88-367:99">★★★</td>
+</tr>
+<tr data-sourcepos="368:1-368:96">
+<td data-sourcepos="368:2-368:13">LP-LOG-P06</td>
+<td data-sourcepos="368:15-368:31">形式論理</td>
+<td data-sourcepos="368:33-368:82">結論を導く包含極小な仮定集合</td>
+<td data-sourcepos="368:84-368:95">★★★</td>
+</tr>
+<tr data-sourcepos="369:1-369:102">
+<td data-sourcepos="369:2-369:13">LP-LOG-P07</td>
+<td data-sourcepos="369:15-369:31">様相論理</td>
+<td data-sourcepos="369:33-369:86">必然・可能・不可能と複合論理条件</td>
+<td data-sourcepos="369:88-369:101">★★★★</td>
+</tr>
+<tr data-sourcepos="370:1-370:108">
+<td data-sourcepos="370:2-370:13">LP-LOG-P08</td>
+<td data-sourcepos="370:15-370:37">時系列規則推論</td>
+<td data-sourcepos="370:39-370:91">規則改正・時限措置・裁判判断の複合</td>
+<td data-sourcepos="370:93-370:107">★★★★</td>
+</tr>
+</tbody>
+</table>
+<table data-sourcepos="372:1-382:50">
+<thead>
+<tr data-sourcepos="372:1-372:46">
+<th data-sourcepos="372:2-372:13">ID</th>
+<th style="text-align: right" data-sourcepos="372:15-372:29">Qwen3.8-27B</th>
+<th style="text-align: right" data-sourcepos="372:31-372:45">LLM-jp-4-33B</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="374:1-374:46">
+<td data-sourcepos="374:2-374:13">LP-LOG-P01</td>
+<td style="text-align: right" data-sourcepos="374:15-374:29">10.0</td>
+<td style="text-align: right" data-sourcepos="374:31-374:45">10.0</td>
+</tr>
+<tr data-sourcepos="375:1-375:46">
+<td data-sourcepos="375:2-375:13">LP-LOG-P02</td>
+<td style="text-align: right" data-sourcepos="375:15-375:29">10.0</td>
+<td style="text-align: right" data-sourcepos="375:31-375:45">10.0</td>
+</tr>
+<tr data-sourcepos="376:1-376:46">
+<td data-sourcepos="376:2-376:13">LP-LOG-P03</td>
+<td style="text-align: right" data-sourcepos="376:15-376:29">10.0</td>
+<td style="text-align: right" data-sourcepos="376:31-376:45">10.0</td>
+</tr>
+<tr data-sourcepos="377:1-377:46">
+<td data-sourcepos="377:2-377:13">LP-LOG-P04</td>
+<td style="text-align: right" data-sourcepos="377:15-377:29">10.0</td>
+<td style="text-align: right" data-sourcepos="377:31-377:45">10.0</td>
+</tr>
+<tr data-sourcepos="378:1-378:46">
+<td data-sourcepos="378:2-378:13">LP-LOG-P05</td>
+<td style="text-align: right" data-sourcepos="378:15-378:29">10.0</td>
+<td style="text-align: right" data-sourcepos="378:31-378:45">10.0</td>
+</tr>
+<tr data-sourcepos="379:1-379:46">
+<td data-sourcepos="379:2-379:13">LP-LOG-P06</td>
+<td style="text-align: right" data-sourcepos="379:15-379:29">10.0</td>
+<td style="text-align: right" data-sourcepos="379:31-379:45">10.0</td>
+</tr>
+<tr data-sourcepos="380:1-380:46">
+<td data-sourcepos="380:2-380:13">LP-LOG-P07</td>
+<td style="text-align: right" data-sourcepos="380:15-380:29">8.5</td>
+<td style="text-align: right" data-sourcepos="380:31-380:45">8.5</td>
+</tr>
+<tr data-sourcepos="381:1-381:46">
+<td data-sourcepos="381:2-381:13">LP-LOG-P08</td>
+<td style="text-align: right" data-sourcepos="381:15-381:29">10.0</td>
+<td style="text-align: right" data-sourcepos="381:31-381:45">10.0</td>
+</tr>
+<tr data-sourcepos="382:1-382:50">
+<td data-sourcepos="382:2-382:17"><strong>合計</strong></td>
+<td style="text-align: right" data-sourcepos="382:19-382:33"><strong>78.5 / 80</strong></td>
+<td style="text-align: right" data-sourcepos="382:35-382:49"><strong>78.5 / 80</strong></td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="385:1-385:94">LOG系列において、QwenおよびLLM-jpはほとんど満点に近い同点であった。</p>
+<p data-sourcepos="387:1-387:164">P07では両モデルで共通して命題Fに関して明確な誤答（無効な論理構造）が見られた。両モデルとも最初は条件2を正しく、</p>
+<div class="code-frame" data-lang="text" data-sourcepos="388:1-390:3"><div class="highlight"><pre><code>Rep XOR (Pilot AND Audit)
+</code></pre></div></div>
+<p data-sourcepos="391:1-391:91">と形式化していた。ところが、推論終盤での F の判定段階でQwenは、</p>
+<div class="code-frame" data-lang="text" data-sourcepos="392:1-394:3"><div class="highlight"><pre><code>If R(p) is true, then P(p) ∧ X(p) is false, so X(p) is false.`
+</code></pre></div></div>
+<p data-sourcepos="395:1-395:182">と結論した。これは <code>NOT (Pilot AND Audit)</code> から <code>NOT Audit</code> を導くもので、論理的には成立しない。LLM-jpもこれと同様の間違いを犯していた。</p>
+<blockquote data-sourcepos="397:1-401:26">
+<p data-sourcepos="397:3-397:53">正しくは、ド・モルガンの法則により</p>
+<div class="code-frame" data-lang="text" data-sourcepos="398:3-400:5"><div class="highlight"><pre><code>NOT (Pilot AND Audit) ≡ (NOT Pilot) OR (NOT Audit)
+</code></pre></div></div>
+<p data-sourcepos="401:3-401:26">とすべきである。</p>
+</blockquote>
+<p data-sourcepos="403:1-403:415">これは<strong>複合的な命題の構造を推論途中で保持できず、否定された連言（上式の左辺部分）を不当に強く解釈する局所的な論理ミス</strong>である。両モデルが同じ箇所で間違っている点を考えると、この種の推論はパラメータの（比較的）小さなLLMにとって難しいタスクである可能性が高く、面白い現象と言える。</p>
+<p data-sourcepos="405:1-405:348">因みに、総トークン数（completionのみ、promptは含まない）は以下のようになっており、P07で突出して多いわけではない（Qwenではやや多め）。P07に関してはQwenとLLM-jpの生成量がほぼ同じであり、両モデルは同じような推論の結果、同じようなミスを犯している。</p>
+<table data-sourcepos="407:1-416:47">
+<thead>
+<tr data-sourcepos="407:1-407:47">
+<th data-sourcepos="407:2-407:17">ID</th>
+<th style="text-align: right" data-sourcepos="407:19-407:31">Qwen3.8-27B</th>
+<th style="text-align: right" data-sourcepos="407:33-407:46">LLM-jp-4-33B</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="409:1-409:47">
+<td data-sourcepos="409:2-409:17">LP-LOG-P01</td>
+<td style="text-align: right" data-sourcepos="409:19-409:31">1,857</td>
+<td style="text-align: right" data-sourcepos="409:33-409:46">2,605</td>
+</tr>
+<tr data-sourcepos="410:1-410:47">
+<td data-sourcepos="410:2-410:17">LP-LOG-P02</td>
+<td style="text-align: right" data-sourcepos="410:19-410:31">1,715</td>
+<td style="text-align: right" data-sourcepos="410:33-410:46">2,110</td>
+</tr>
+<tr data-sourcepos="411:1-411:47">
+<td data-sourcepos="411:2-411:17">LP-LOG-P03</td>
+<td style="text-align: right" data-sourcepos="411:19-411:31">700</td>
+<td style="text-align: right" data-sourcepos="411:33-411:46">546</td>
+</tr>
+<tr data-sourcepos="412:1-412:47">
+<td data-sourcepos="412:2-412:17">LP-LOG-P04</td>
+<td style="text-align: right" data-sourcepos="412:19-412:31">1,480</td>
+<td style="text-align: right" data-sourcepos="412:33-412:46">1,735</td>
+</tr>
+<tr data-sourcepos="413:1-413:47">
+<td data-sourcepos="413:2-413:17">LP-LOG-P05</td>
+<td style="text-align: right" data-sourcepos="413:19-413:31">1,237</td>
+<td style="text-align: right" data-sourcepos="413:33-413:46">941</td>
+</tr>
+<tr data-sourcepos="414:1-414:47">
+<td data-sourcepos="414:2-414:17">LP-LOG-P06</td>
+<td style="text-align: right" data-sourcepos="414:19-414:31">2,059</td>
+<td style="text-align: right" data-sourcepos="414:33-414:46">2,744</td>
+</tr>
+<tr data-sourcepos="415:1-415:47">
+<td data-sourcepos="415:2-415:17"><strong>LP-LOG-P07</strong></td>
+<td style="text-align: right" data-sourcepos="415:19-415:31"><strong>2,231</strong></td>
+<td style="text-align: right" data-sourcepos="415:33-415:46"><strong>2,212</strong></td>
+</tr>
+<tr data-sourcepos="416:1-416:47">
+<td data-sourcepos="416:2-416:17">LP-LOG-P08</td>
+<td style="text-align: right" data-sourcepos="416:19-416:31">1,586</td>
+<td style="text-align: right" data-sourcepos="416:33-416:46">1,324</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="418:1-418:253">特にQwenはP07がLOG系列中で最も多くトークンを使った問題であり、唯一の意味的誤答となっている。この点は、 <code>reasoning length</code> と <code>reasoning correctness</code> が単純には比例しない例の一つと言える。</p>
+<hr data-sourcepos="420:1-421:0">
+<p data-sourcepos="422:1-422:378">推論内容と関係ない部分になるが、Qwenでは出力にコードフェンス（<code>```</code>の記号）を含めて書き出しており、問題文で求められているようなjson単体の形式ではなかった。厳密には減点すべきだが、推論内容に不備は認められなかったので、この性能比較においては減点していない。</p>
+<blockquote data-sourcepos="424:1-424:275">
+<p data-sourcepos="424:3-424:275">Qwen3.8-27Bに対して厳密なjson形式の出力を要求する場合、何らかのハーネス（ガードレール）が別途必要となる可能性がある。このコードフェンスを出力に含める傾向は他の系列の回答でも同様であった。</p>
+</blockquote>
+<h2 data-sourcepos="427:1-427:24">
+<span id="文章理解翻訳" class="fragment"></span><a href="#%E6%96%87%E7%AB%A0%E7%90%86%E8%A7%A3%E7%BF%BB%E8%A8%B3"><i class="fa fa-link"></i></a>文章理解・翻訳</h2>
+<p data-sourcepos="429:1-429:157">LIT系列は文章の緻密な読解力が問われる問題で構成した。後半4問はLLMの主要な用途である翻訳タスクで固めている。</p>
+<table data-sourcepos="431:1-440:108">
+<thead>
+<tr data-sourcepos="431:1-431:71">
+<th data-sourcepos="431:2-431:13">ID</th>
+<th data-sourcepos="431:15-431:28">分野</th>
+<th data-sourcepos="431:30-431:54">題材</th>
+<th data-sourcepos="431:56-431:70">難度目安</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="433:1-433:95">
+<td data-sourcepos="433:2-433:13">LP-LIT-P01</td>
+<td data-sourcepos="433:15-433:32">談話理解</td>
+<td data-sourcepos="433:34-433:83">文書の版・条件付き承認・発言時点</td>
+<td data-sourcepos="433:85-433:94">★★</td>
+</tr>
+<tr data-sourcepos="434:1-434:102">
+<td data-sourcepos="434:2-434:13">LP-LIT-P02</td>
+<td data-sourcepos="434:15-434:34">語用論・論理</td>
+<td data-sourcepos="434:36-434:88">発言と証拠から支持される命題の区別</td>
+<td data-sourcepos="434:90-434:101">★★★</td>
+</tr>
+<tr data-sourcepos="435:1-435:110">
+<td data-sourcepos="435:2-435:13">LP-LIT-P03</td>
+<td data-sourcepos="435:15-435:38">指示表現・時制</td>
+<td data-sourcepos="435:40-435:93">入れ子構造の引用における情報の追跡</td>
+<td data-sourcepos="435:95-435:109">★★★★</td>
+</tr>
+<tr data-sourcepos="436:1-436:103">
+<td data-sourcepos="436:2-436:13">LP-LIT-P04</td>
+<td data-sourcepos="436:15-436:32">証拠評価</td>
+<td data-sourcepos="436:34-436:88">証言・映像・アクセス記録と人物同定</td>
+<td data-sourcepos="436:90-436:102">★★★</td>
+</tr>
+<tr data-sourcepos="437:1-437:83">
+<td data-sourcepos="437:2-437:13">LP-LIT-P05</td>
+<td data-sourcepos="437:15-437:32">日英翻訳</td>
+<td data-sourcepos="437:34-437:70">文章の意味と構造の保持</td>
+<td data-sourcepos="437:72-437:82">★★</td>
+</tr>
+<tr data-sourcepos="438:1-438:104">
+<td data-sourcepos="438:2-438:13">LP-LIT-P06</td>
+<td data-sourcepos="438:15-438:32">英日翻訳</td>
+<td data-sourcepos="438:34-438:87">否定・反実仮想・量化の構造の保持</td>
+<td data-sourcepos="438:89-438:103">★★★★</td>
+</tr>
+<tr data-sourcepos="439:1-439:103">
+<td data-sourcepos="439:2-439:13">LP-LIT-P07</td>
+<td data-sourcepos="439:15-439:32">多層翻訳</td>
+<td data-sourcepos="439:34-439:86">和文を含む中文英訳＋モダリティ保持</td>
+<td data-sourcepos="439:88-439:102">★★★★</td>
+</tr>
+<tr data-sourcepos="440:1-440:108">
+<td data-sourcepos="440:2-440:13">LP-LIT-P08</td>
+<td data-sourcepos="440:15-440:38">文学批評・翻訳</td>
+<td data-sourcepos="440:40-440:89">漢詩を含む英文和訳＋曖昧性の保持</td>
+<td data-sourcepos="440:91-440:107">★★★★★</td>
+</tr>
+</tbody>
+</table>
+<table data-sourcepos="442:1-452:50">
+<thead>
+<tr data-sourcepos="442:1-442:46">
+<th data-sourcepos="442:2-442:13">ID</th>
+<th style="text-align: right" data-sourcepos="442:15-442:29">Qwen3.8-27B</th>
+<th style="text-align: right" data-sourcepos="442:31-442:45">LLM-jp-4-33B</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="444:1-444:46">
+<td data-sourcepos="444:2-444:13">LP-LIT-P01</td>
+<td style="text-align: right" data-sourcepos="444:15-444:29">9.5</td>
+<td style="text-align: right" data-sourcepos="444:31-444:45">8.0</td>
+</tr>
+<tr data-sourcepos="445:1-445:46">
+<td data-sourcepos="445:2-445:13">LP-LIT-P02</td>
+<td style="text-align: right" data-sourcepos="445:15-445:29">10.0</td>
+<td style="text-align: right" data-sourcepos="445:31-445:45">5.0</td>
+</tr>
+<tr data-sourcepos="446:1-446:46">
+<td data-sourcepos="446:2-446:13">LP-LIT-P03</td>
+<td style="text-align: right" data-sourcepos="446:15-446:29">10.0</td>
+<td style="text-align: right" data-sourcepos="446:31-446:45">8.5</td>
+</tr>
+<tr data-sourcepos="447:1-447:46">
+<td data-sourcepos="447:2-447:13">LP-LIT-P04</td>
+<td style="text-align: right" data-sourcepos="447:15-447:29">10.0</td>
+<td style="text-align: right" data-sourcepos="447:31-447:45">10.0</td>
+</tr>
+<tr data-sourcepos="448:1-448:46">
+<td data-sourcepos="448:2-448:13">LP-LIT-P05</td>
+<td style="text-align: right" data-sourcepos="448:15-448:29">9.0</td>
+<td style="text-align: right" data-sourcepos="448:31-448:45">8.8</td>
+</tr>
+<tr data-sourcepos="449:1-449:46">
+<td data-sourcepos="449:2-449:13">LP-LIT-P06</td>
+<td style="text-align: right" data-sourcepos="449:15-449:29">9.2</td>
+<td style="text-align: right" data-sourcepos="449:31-449:45">8.0</td>
+</tr>
+<tr data-sourcepos="450:1-450:48">
+<td data-sourcepos="450:2-450:13">LP-LIT-P07</td>
+<td style="text-align: right" data-sourcepos="450:15-450:30">9.7*</td>
+<td style="text-align: right" data-sourcepos="450:32-450:47">9.4*</td>
+</tr>
+<tr data-sourcepos="451:1-451:46">
+<td data-sourcepos="451:2-451:13">LP-LIT-P08</td>
+<td style="text-align: right" data-sourcepos="451:15-451:29">8.5</td>
+<td style="text-align: right" data-sourcepos="451:31-451:45">7.2</td>
+</tr>
+<tr data-sourcepos="452:1-452:50">
+<td data-sourcepos="452:2-452:17"><strong>合計</strong></td>
+<td style="text-align: right" data-sourcepos="452:19-452:33"><strong>75.9 / 80</strong></td>
+<td style="text-align: right" data-sourcepos="452:35-452:49"><strong>64.9 / 80</strong></td>
+</tr>
+</tbody>
+</table>
+<blockquote data-sourcepos="454:1-454:418">
+<p data-sourcepos="454:3-454:418">* 日本語の引用部分は未訳のまま回答されていたが、これは適切な処理と判断した。問題文の解釈に曖昧さはあるものの、より厳しく "Output only the English translation" という要求に対する違反と見なせば、Qwenでは 8.5/10 点程度、LLM-jpでは 7.8/10 点程度となるが、性能の比較という観点ではあまり意味はないだろう。</p>
+</blockquote>
+<p data-sourcepos="456:1-456:385">QwenはP01～P04までほぼ満点であり、文章の読解力・解釈の精度は極めて高い。翻訳も基本的に高性能であるが、P06の回答では日本語の自然さには若干難がある部分も観察された。対するLLM-jpも基本的に優秀ではあるものの、論理や解釈を推論中に変質させてしまうケースが度々見られた。</p>
+<p data-sourcepos="458:1-458:241">P02では「Emilyが報告書に書いた」ことと「その内容が証拠から論理的に支持される」ことをQwenは区別できた一方、LLM-jpは両者を混同してしまい、B・D・F の選択肢を間違えていた。</p>
+<blockquote data-sourcepos="460:1-460:82">
+<p data-sourcepos="460:3-460:82">P02の正答は <code>{"A":"E","B":"U","C":"C","D":"U","E":"E","F":"C"}</code> となる。</p>
+</blockquote>
+<p data-sourcepos="462:1-462:375">このような不確定・未確定な事象を不完全な根拠から事実と断定したがるLLM-jpの傾向は、P08の杜甫の詩について述べた文章の解釈においても表れていた。P08では、原文が意図的に未決定のまま残した第三の解釈を、LLM-jpは確定的な批評家の主張へと強めて和訳してしまっている。</p>
+<p data-sourcepos="464:1-464:343">LIT-P08は単なる翻訳能力を超えて、「作者・批評家が決着をつけていない解釈を、モデルが勝手に決着させないか」を測定する意図でも採用している。今回まさに期待した現象が発生したため、モデルの性能を見極める問題として確かに有効なようである。</p>
+<p data-sourcepos="466:1-466:387">P06では「異議を唱えた者のうち二人」を「異議を唱えた二人のうち二人」と訳出しており、原文にはないニュアンスを勝手に付加してしまっている。翻訳のタスクで顕著なのかもしれないが、厳密な解釈が求められる場面でLLM-jp-4-33B-thinkingを利用するには、やや不安が残る結果と言える。</p>
+<blockquote data-sourcepos="468:1-468:146">
+<p data-sourcepos="468:3-468:146">入力言語が英語である点がLLM-jpの推論性能に影響している可能性は考えられるが、ここでは立ち入らない。</p>
+</blockquote>
+<blockquote data-sourcepos="470:1-476:485">
+<p data-sourcepos="470:3-470:634">P05は今年の京都大学の和文英訳から採ったが、両モデルの英訳は内容がほとんど正確な上に使用している語彙も平易であり、予備校の解答速報より優れているように思う。今回の検証では訳文でも原文の意味合いを厳密に保持しているかを重視して採点したため、意味が強まっている部分（LLM-jpの <code>the right path</code> やQwenの <code>most fulfilling</code> など）で多少減点されているものの、文意と比喩的表現を崩さずにうまく英訳できている。実際の入試で提出すればほぼ満点と思われる。</p>
+<p data-sourcepos="472:3-473:455">LLM-jpの回答：<br>
+<em>To determine the right path, one should examine options thoroughly beforehand and strive for the most satisfying choice. Yet, to know whether that path will truly bear fruit for the individual, there is no substitute for spending some time actually experiencing it. This presents an inevitable trial. When standing at a crossroads, it may sometimes be necessary to steel oneself, confident that beyond the chosen route lies a world beyond imagination.</em></p>
+<p data-sourcepos="475:3-476:485">Qwenの回答：<br>
+<em>When deciding which path to take, one naturally wishes to deliberate carefully in advance and make the choice that seems most fulfilling. Yet the only way to know whether a path will truly bear fruit for the person who walks it is to spend time actually living it. Here lies an inescapable trial. When standing at a crossroads, one may sometimes need to steel oneself with the conviction that the road chosen will lead, without question, into a world one could never have imagined.</em></p>
+</blockquote>
+<h2 data-sourcepos="479:1-479:15">
+<span id="情報科学" class="fragment"></span><a href="#%E6%83%85%E5%A0%B1%E7%A7%91%E5%AD%A6"><i class="fa fa-link"></i></a>情報科学</h2>
+<p data-sourcepos="481:1-481:153">ここでは、情報科学の各分野から広く出題している。筆者の専門外のため、難度の目安はあまり当てにならない。</p>
+<table data-sourcepos="483:1-492:97">
+<thead>
+<tr data-sourcepos="483:1-483:83">
+<th data-sourcepos="483:2-483:13">ID</th>
+<th data-sourcepos="483:15-483:32">分野</th>
+<th data-sourcepos="483:34-483:66">題材</th>
+<th data-sourcepos="483:68-483:82">難度目安</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="485:1-485:104">
+<td data-sourcepos="485:2-485:13">LP-CSC-P01</td>
+<td data-sourcepos="485:15-485:40">アルゴリズム</td>
+<td data-sourcepos="485:42-485:91">残余辺を含む最小費用マッチング</td>
+<td data-sourcepos="485:93-485:103">★★★</td>
+</tr>
+<tr data-sourcepos="486:1-486:91">
+<td data-sourcepos="486:2-486:13">LP-CSC-P02</td>
+<td data-sourcepos="486:15-486:40">データベース</td>
+<td data-sourcepos="486:42-486:78">Snapshot分離と直列化可能性</td>
+<td data-sourcepos="486:80-486:90">★★★</td>
+</tr>
+<tr data-sourcepos="487:1-487:77">
+<td data-sourcepos="487:2-487:13">LP-CSC-P03</td>
+<td data-sourcepos="487:15-487:38">コンパイラ</td>
+<td data-sourcepos="487:40-487:61">CFG・SSA解析</td>
+<td data-sourcepos="487:63-487:76">★★★★</td>
+</tr>
+<tr data-sourcepos="488:1-488:94">
+<td data-sourcepos="488:2-488:13">LP-CSC-P04</td>
+<td data-sourcepos="488:15-488:34">ネットワーク</td>
+<td data-sourcepos="488:36-488:83">Max-Min公平性と重み付き公平性</td>
+<td data-sourcepos="488:85-488:93">★★</td>
+</tr>
+<tr data-sourcepos="489:1-489:87">
+<td data-sourcepos="489:2-489:13">LP-CSC-P05</td>
+<td data-sourcepos="489:15-489:40">分散システム</td>
+<td data-sourcepos="489:42-489:76">分散スナップショット</td>
+<td data-sourcepos="489:78-489:86">★★</td>
+</tr>
+<tr data-sourcepos="490:1-490:93">
+<td data-sourcepos="490:2-490:13">LP-CSC-P06</td>
+<td data-sourcepos="490:15-490:33">計算機工学</td>
+<td data-sourcepos="490:35-490:77">TLB・物理キャッシュ追跡</td>
+<td data-sourcepos="490:79-490:92">★★★★</td>
+</tr>
+<tr data-sourcepos="491:1-491:84">
+<td data-sourcepos="491:2-491:13">LP-CSC-P07</td>
+<td data-sourcepos="491:15-491:46">プログラミング言語</td>
+<td data-sourcepos="491:48-491:71">let多相型推論</td>
+<td data-sourcepos="491:73-491:83">★★★</td>
+</tr>
+<tr data-sourcepos="492:1-492:97">
+<td data-sourcepos="492:2-492:13">LP-CSC-P08</td>
+<td data-sourcepos="492:15-492:46">アルゴリズム・実装</td>
+<td data-sourcepos="492:48-492:81">動的二部性の高速実装</td>
+<td data-sourcepos="492:83-492:96">★★★★</td>
+</tr>
+</tbody>
+</table>
+<table data-sourcepos="495:1-505:50">
+<thead>
+<tr data-sourcepos="495:1-495:46">
+<th data-sourcepos="495:2-495:13">ID</th>
+<th style="text-align: right" data-sourcepos="495:15-495:29">Qwen3.8-27B</th>
+<th style="text-align: right" data-sourcepos="495:31-495:45">LLM-jp-4-33B</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="497:1-497:46">
+<td data-sourcepos="497:2-497:13">LP-CSC-P01</td>
+<td style="text-align: right" data-sourcepos="497:15-497:29">5.0</td>
+<td style="text-align: right" data-sourcepos="497:31-497:45">5.0</td>
+</tr>
+<tr data-sourcepos="498:1-498:46">
+<td data-sourcepos="498:2-498:13">LP-CSC-P02</td>
+<td style="text-align: right" data-sourcepos="498:15-498:29">10.0</td>
+<td style="text-align: right" data-sourcepos="498:31-498:45">10.0</td>
+</tr>
+<tr data-sourcepos="499:1-499:46">
+<td data-sourcepos="499:2-499:13">LP-CSC-P03</td>
+<td style="text-align: right" data-sourcepos="499:15-499:29">7.0</td>
+<td style="text-align: right" data-sourcepos="499:31-499:45">6.0</td>
+</tr>
+<tr data-sourcepos="500:1-500:46">
+<td data-sourcepos="500:2-500:13">LP-CSC-P04</td>
+<td style="text-align: right" data-sourcepos="500:15-500:29">8.0</td>
+<td style="text-align: right" data-sourcepos="500:31-500:45">10.0</td>
+</tr>
+<tr data-sourcepos="501:1-501:46">
+<td data-sourcepos="501:2-501:13">LP-CSC-P05</td>
+<td style="text-align: right" data-sourcepos="501:15-501:29">9.0</td>
+<td style="text-align: right" data-sourcepos="501:31-501:45">10.0</td>
+</tr>
+<tr data-sourcepos="502:1-502:46">
+<td data-sourcepos="502:2-502:13">LP-CSC-P06</td>
+<td style="text-align: right" data-sourcepos="502:15-502:29">10.0</td>
+<td style="text-align: right" data-sourcepos="502:31-502:45">7.0</td>
+</tr>
+<tr data-sourcepos="503:1-503:46">
+<td data-sourcepos="503:2-503:13">LP-CSC-P07</td>
+<td style="text-align: right" data-sourcepos="503:15-503:29">9.0</td>
+<td style="text-align: right" data-sourcepos="503:31-503:45">2.0</td>
+</tr>
+<tr data-sourcepos="504:1-504:46">
+<td data-sourcepos="504:2-504:13">LP-CSC-P08</td>
+<td style="text-align: right" data-sourcepos="504:15-504:29">10.0</td>
+<td style="text-align: right" data-sourcepos="504:31-504:45">1.0</td>
+</tr>
+<tr data-sourcepos="505:1-505:50">
+<td data-sourcepos="505:2-505:17"><strong>合計</strong></td>
+<td style="text-align: right" data-sourcepos="505:19-505:33"><strong>68.0 / 80</strong></td>
+<td style="text-align: right" data-sourcepos="505:35-505:49"><strong>51.0 / 80</strong></td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="507:1-507:97">P05まではLLM-jpが互角か優位であるが、P07、P08ではQwenが明確に上回った。</p>
+<p data-sourcepos="509:1-509:331">P01では両モデルとも同じミスをしていた。LLM-jp の最終回答は Qwen と全く同じで$$A−X, B−W, C−Z, D−Y,\quad \text{cost}=13$$としているが、正しい第4 augmenting path は$$s→D→Z→C→W→B→Y→t$$で、残余費用は $0+0+0+4−4+4=4$ となるため、総費用は12が正しい。</p>
+<p data-sourcepos="511:1-511:110">P06のLLM-jpの回答では局所的な16進数計算ミスが後半全体へ伝播し、失点していた。</p>
+<p data-sourcepos="513:1-513:33">P07においてLLM-jpの回答は</p>
+<div class="code-frame" data-lang="text" data-sourcepos="514:1-516:3"><div class="highlight"><pre><code>{"E1":"UNTYPABLE","E2":"(('d*'d)-&gt;'e)-&gt;('f*'g)","E3":"'a-&gt;'a","E4":"'a-&gt;('a*'a)","E5":"UNTYPABLE"}
+</code></pre></div></div>
+<p data-sourcepos="517:1-517:192">となっており、型の意味として正しいのは実質 E4 だけであった。Qwenは5つの式すべてで意味的に正解しており、表記上のミスのみに留まった。</p>
+<p data-sourcepos="519:1-519:381">P08においてLLM-jp は rollback DSU ではなく Link-Cut Tree を選択しており、提出したコードが3秒以内に終了せずタイムアウトしており、正しく実装できていなかった。一方Qwenは、$$ \text{segment tree over time} + \text{rollback DSU} + \text{parity} + \text{bipartite flag} $$という正攻法を実装し、正解となった。</p>
+<hr data-sourcepos="523:1-524:0">
+<p data-sourcepos="525:1-525:117">各問の回答の品質について以下のタグで評価する。評価そのものはChatGPT-5.6-Solによる。</p>
+<table data-sourcepos="527:1-542:135">
+<thead>
+<tr data-sourcepos="527:1-527:81">
+<th data-sourcepos="527:2-527:32">タグ</th>
+<th data-sourcepos="527:34-527:80">定義</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="529:1-529:132">
+<td data-sourcepos="529:2-529:28"><code>PASS</code></td>
+<td data-sourcepos="529:30-529:131">内容・最終回答が正しい（JSONコードフェンス違反は許容）</td>
+</tr>
+<tr data-sourcepos="530:1-530:107">
+<td data-sourcepos="530:2-530:28"><code>FORMAT_VIOLATION</code></td>
+<td data-sourcepos="530:30-530:106">内容は正しいがJSON-only、code-only等の出力指定に違反</td>
+</tr>
+<tr data-sourcepos="531:1-531:139">
+<td data-sourcepos="531:2-531:28"><code>CANONICALIZATION_ERROR</code></td>
+<td data-sourcepos="531:30-531:138">数学的意味は正しいが、指定された標準表記・順序・括弧・正規形に違反</td>
+</tr>
+<tr data-sourcepos="532:1-532:125">
+<td data-sourcepos="532:2-532:28"><code>LOCAL_ERROR</code></td>
+<td data-sourcepos="532:30-532:124">推論全体は概ね正しいが、局所的な計算・判断ミスがある</td>
+</tr>
+<tr data-sourcepos="533:1-533:115">
+<td data-sourcepos="533:2-533:28"><code>ARITHMETIC_ERROR</code></td>
+<td data-sourcepos="533:30-533:114">算術、進数変換、符号、数値計算等の局所ミス</td>
+</tr>
+<tr data-sourcepos="534:1-534:129">
+<td data-sourcepos="534:2-534:28"><code>STATE_TRACKING_ERROR</code></td>
+<td data-sourcepos="534:30-534:128">複数段階の状態更新で以前の値・状態を誤って保持または更新</td>
+</tr>
+<tr data-sourcepos="535:1-535:119">
+<td data-sourcepos="535:2-535:28"><code>INCOMPLETE_SOLUTION_SET</code></td>
+<td data-sourcepos="535:30-535:118">必要な解・配置・辺・ケース等を一部列挙し損ねた</td>
+</tr>
+<tr data-sourcepos="536:1-536:129">
+<td data-sourcepos="536:2-536:28"><code>FATAL_LOGIC</code></td>
+<td data-sourcepos="536:30-536:128">中核となる推論・論理構造が誤っており、正答を保証できない</td>
+</tr>
+<tr data-sourcepos="537:1-537:123">
+<td data-sourcepos="537:2-537:28"><code>WRONG_CFG</code></td>
+<td data-sourcepos="537:30-537:122">CFG・支配関係・到達可能性などグラフ構造そのものを誤認</td>
+</tr>
+<tr data-sourcepos="538:1-538:107">
+<td data-sourcepos="538:2-538:28"><code>WRONG_TYPE_INFERENCE</code></td>
+<td data-sourcepos="538:30-538:106">型制約、unification、instantiation等の型推論を本質的に誤る</td>
+</tr>
+<tr data-sourcepos="539:1-539:109">
+<td data-sourcepos="539:2-539:28"><code>WRONG_GENERALIZATION</code></td>
+<td data-sourcepos="539:30-539:108">let-polymorphism等における一般化可能変数の判定を誤る</td>
+</tr>
+<tr data-sourcepos="540:1-540:137">
+<td data-sourcepos="540:2-540:28"><code>WRONG_MODEL</code></td>
+<td data-sourcepos="540:30-540:136">問題を解くための形式化・計算モデル・アルゴリズム枠組み自体を誤る</td>
+</tr>
+<tr data-sourcepos="541:1-541:129">
+<td data-sourcepos="541:2-541:28"><code>FATAL_ALGORITHM</code></td>
+<td data-sourcepos="541:30-541:128">提案アルゴリズムが要求された入力全般を正しく処理できない</td>
+</tr>
+<tr data-sourcepos="542:1-542:135">
+<td data-sourcepos="542:2-542:28"><code>RUNTIME_FAILURE</code></td>
+<td data-sourcepos="542:30-542:134">提出コードが停止しない、例外終了する、サンプルを完走できない等</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="544:1-544:48">結果をまとめると次のようになる。</p>
+<table data-sourcepos="546:1-555:368">
+<thead>
+<tr data-sourcepos="546:1-546:254">
+<th data-sourcepos="546:2-546:10">ID</th>
+<th data-sourcepos="546:12-546:57">Qwen3.8-27B</th>
+<th data-sourcepos="546:59-546:121">LLM-jp-4-33B-thinking</th>
+<th data-sourcepos="546:123-546:253">判定理由</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="548:1-548:372">
+<td data-sourcepos="548:2-548:10"><strong>P01</strong></td>
+<td data-sourcepos="548:12-548:57"><code>FATAL_LOGIC</code></td>
+<td data-sourcepos="548:59-548:121"><code>FATAL_LOGIC</code></td>
+<td data-sourcepos="548:123-548:371">両モデルとも第4増加路で複数の逆向き残余辺を利用する再割当経路を見落とし、最適費用 $12$ ではなく $13$ とした。LLM-jpも同一の最終解を出力している。</td>
+</tr>
+<tr data-sourcepos="549:1-549:336">
+<td data-sourcepos="549:2-549:10"><strong>P02</strong></td>
+<td data-sourcepos="549:12-549:57"><code>FORMAT_VIOLATION</code></td>
+<td data-sourcepos="549:59-549:121"><code>PASS</code></td>
+<td data-sourcepos="549:123-549:335">両者とも内容は完全正解。Qwenのみ指定に反してJSONをMarkdownコードフェンスで囲んだ。LLM-jpは指定形式どおりの正答。</td>
+</tr>
+<tr data-sourcepos="550:1-550:322">
+<td data-sourcepos="550:2-550:10"><strong>P03</strong></td>
+<td data-sourcepos="550:12-550:57">
+<code>FATAL_LOGIC</code>, <code>INCOMPLETE_SOLUTION_SET</code>
+</td>
+<td data-sourcepos="550:59-550:121">
+<code>FATAL_LOGIC</code>, <code>WRONG_CFG</code>, <code>INCOMPLETE_SOLUTION_SET</code>
+</td>
+<td data-sourcepos="550:123-550:321">Qwenはidom・DF・livenessは正しいが $\phi$ 配置を一部欠落。LLM-jpはさらに back edge を predecessor として取り込まず、dominator/DF 自体から誤った。</td>
+</tr>
+<tr data-sourcepos="551:1-551:336">
+<td data-sourcepos="551:2-551:10"><strong>P04</strong></td>
+<td data-sourcepos="551:12-551:57">
+<code>LOCAL_ERROR</code>, <code>STATE_TRACKING_ERROR</code>
+</td>
+<td data-sourcepos="551:59-551:121"><code>PASS</code></td>
+<td data-sourcepos="551:123-551:335">Qwenはweighted progressive filling途中で $f_4$ の既存レートを誤って引き継いだ。LLM-jpは途中の計算ミスを自己訂正して両ケースを完答した。</td>
+</tr>
+<tr data-sourcepos="552:1-552:336">
+<td data-sourcepos="552:2-552:10"><strong>P05</strong></td>
+<td data-sourcepos="552:12-552:57">
+<code>LOCAL_ERROR</code>, <code>STATE_TRACKING_ERROR</code>
+</td>
+<td data-sourcepos="552:59-552:121"><code>PASS</code></td>
+<td data-sourcepos="552:123-552:335">Qwenは $P_2\to P_1$ の in-transit message $m_1$ を欠落。LLM-jpは全channel stateを正しく復元した。なおLLM-jpは明確化後の改訂promptを使用しているため直接比較には注意。</td>
+</tr>
+<tr data-sourcepos="553:1-553:326">
+<td data-sourcepos="553:2-553:10"><strong>P06</strong></td>
+<td data-sourcepos="553:12-553:57"><code>FORMAT_VIOLATION</code></td>
+<td data-sourcepos="553:59-553:121">
+<code>LOCAL_ERROR</code>, <code>ARITHMETIC_ERROR</code>, <code>STATE_TRACKING_ERROR</code>
+</td>
+<td data-sourcepos="553:123-553:325">Qwenは内容完全正解だがコードフェンスあり。LLM-jpは $0xF30$ を $3904$ と誤換算し、set/tag・writeback・後続cache stateへ誤りが連鎖した。</td>
+</tr>
+<tr data-sourcepos="554:1-554:318">
+<td data-sourcepos="554:2-554:10"><strong>P07</strong></td>
+<td data-sourcepos="554:12-554:57">
+<code>FORMAT_VIOLATION</code>, <code>CANONICALIZATION_ERROR</code>
+</td>
+<td data-sourcepos="554:59-554:121">
+<code>FATAL_LOGIC</code>, <code>WRONG_TYPE_INFERENCE</code>, <code>WRONG_GENERALIZATION</code>
+</td>
+<td data-sourcepos="554:123-554:317">Qwenは型の意味は全問正解だがcanonical parentheses等に違反。LLM-jpは let-polymorphism の instantiation/generalization を本質的に誤り、5問中ほぼE4のみ正解。</td>
+</tr>
+<tr data-sourcepos="555:1-555:368">
+<td data-sourcepos="555:2-555:10"><strong>P08</strong></td>
+<td data-sourcepos="555:12-555:57"><code>FORMAT_VIOLATION</code></td>
+<td data-sourcepos="555:59-555:121">
+<code>WRONG_MODEL</code>, <code>FATAL_ALGORITHM</code>, <code>RUNTIME_FAILURE</code>
+</td>
+<td data-sourcepos="555:123-555:367">Qwenはrollback parity DSU方式で実質正解。LLM-jpは問題をonlineと誤認して不適切なLink-Cut Treeを構成し、同一componentへの辺追加を扱えず、提出コードはサンプルでも正常完走しなかった。</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="557:1-557:120">CSC系列から分かることとして、両者の失敗の性質がかなり異なっている点が挙げられる。</p>
+<p data-sourcepos="559:1-559:378">Qwenは P01・P03・P04 で、「複雑な状態更新や iterated rule の一部を落とす」というタイプのミスをしていた。一方 LLM-jp は P03で CFG の predecessor 自体を落とし、P07で HM の generalization / instantiation を概念的に誤り、P08では問題の offline 性を誤認した上で不成立なデータ構造を構築していた。</p>
+<p data-sourcepos="561:1-561:626">したがって今回のCSC系列に限れば、単なる正答率以上に、<strong>情報科学の形式的概念とアルゴリズム上の不変条件の保持能力で Qwen が優位</strong>と評価できる。一方で LLM-jp は P04 のような数値的 progressive filling をQwenより正確に完遂しており、P06も1個の16進算術ミスがなければほぼ完答している。そのため「情報科学全般が弱い」というより、型システム・データ構造・CFG/SSA のように形式的な不変条件を長く保持する課題において、相対的に弱さが目立ったと解釈できる。</p>
+<h2 data-sourcepos="564:1-564:30">
+<span id="数学代数数論" class="fragment"></span><a href="#%E6%95%B0%E5%AD%A6%E4%BB%A3%E6%95%B0%E6%95%B0%E8%AB%96"><i class="fa fa-link"></i></a>数学（代数・数論）</h2>
+<p data-sourcepos="566:1-566:84">NUM系列では数論を中心として全体的に難しめの問題を揃えた。</p>
+<table data-sourcepos="568:1-577:65">
+<thead>
+<tr data-sourcepos="568:1-568:100">
+<th data-sourcepos="568:2-568:13">ID</th>
+<th data-sourcepos="568:15-568:34">分野</th>
+<th data-sourcepos="568:36-568:83">題材</th>
+<th data-sourcepos="568:85-568:99">難度目安</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="570:1-570:91">
+<td data-sourcepos="570:2-570:13">SP-NUM-P01</td>
+<td data-sourcepos="570:15-570:29">数論</td>
+<td data-sourcepos="570:31-570:75">記数法・整除条件</td>
+<td data-sourcepos="570:77-570:90">★★★★</td>
+</tr>
+<tr data-sourcepos="571:1-571:93">
+<td data-sourcepos="571:2-571:13">SP-NUM-P02</td>
+<td data-sourcepos="571:15-571:29">代数</td>
+<td data-sourcepos="571:31-571:76">有理式の連立方程式</td>
+<td data-sourcepos="571:78-571:92">★★★★</td>
+</tr>
+<tr data-sourcepos="572:1-572:115">
+<td data-sourcepos="572:2-572:13">SP-NUM-P03</td>
+<td data-sourcepos="572:15-572:44">数論・組合せ論</td>
+<td data-sourcepos="572:46-572:99">$n!$ の相異なる約数の和</td>
+<td data-sourcepos="572:101-572:114">★★★★</td>
+</tr>
+<tr data-sourcepos="573:1-573:99">
+<td data-sourcepos="573:2-573:13">SP-NUM-P04</td>
+<td data-sourcepos="573:15-573:22">数論</td>
+<td data-sourcepos="573:24-573:85">指数型ディオファントス方程式</td>
+<td data-sourcepos="573:87-573:98">★★★</td>
+</tr>
+<tr data-sourcepos="574:1-574:78">
+<td data-sourcepos="574:2-574:13">SP-NUM-P05</td>
+<td data-sourcepos="574:15-574:26">数論</td>
+<td data-sourcepos="574:28-574:66">$\sqrt7$ の有理近似</td>
+<td data-sourcepos="574:68-574:77">★★</td>
+</tr>
+<tr data-sourcepos="575:1-575:88">
+<td data-sourcepos="575:2-575:13">SP-NUM-P06</td>
+<td data-sourcepos="575:15-575:25">数論</td>
+<td data-sourcepos="575:27-575:73">対称な三次方程式の正整数解</td>
+<td data-sourcepos="575:75-575:87">★★★</td>
+</tr>
+<tr data-sourcepos="576:1-576:111">
+<td data-sourcepos="576:2-576:13">SP-NUM-P07</td>
+<td data-sourcepos="576:15-576:31">数論</td>
+<td data-sourcepos="576:33-576:97">有理式のディオファントス方程式</td>
+<td data-sourcepos="576:99-576:110">★★★</td>
+</tr>
+<tr data-sourcepos="577:1-577:65">
+<td data-sourcepos="577:2-577:13">SP-NUM-P08</td>
+<td data-sourcepos="577:15-577:28">代数</td>
+<td data-sourcepos="577:30-577:51">3変数の比例式</td>
+<td data-sourcepos="577:53-577:64">★★★</td>
+</tr>
+</tbody>
+</table>
+<table data-sourcepos="580:1-590:50">
+<thead>
+<tr data-sourcepos="580:1-580:46">
+<th data-sourcepos="580:2-580:13">ID</th>
+<th style="text-align: right" data-sourcepos="580:15-580:29">Qwen3.8-27B</th>
+<th style="text-align: right" data-sourcepos="580:31-580:45">LLM-jp-4-33B</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="582:1-582:46">
+<td data-sourcepos="582:2-582:13">SP-NUM-P01</td>
+<td style="text-align: right" data-sourcepos="582:15-582:29">5.0</td>
+<td style="text-align: right" data-sourcepos="582:31-582:45">2.0</td>
+</tr>
+<tr data-sourcepos="583:1-583:46">
+<td data-sourcepos="583:2-583:13">SP-NUM-P02</td>
+<td style="text-align: right" data-sourcepos="583:15-583:29">9.0</td>
+<td style="text-align: right" data-sourcepos="583:31-583:45">7.0</td>
+</tr>
+<tr data-sourcepos="584:1-584:46">
+<td data-sourcepos="584:2-584:13">SP-NUM-P03</td>
+<td style="text-align: right" data-sourcepos="584:15-584:29">2.0</td>
+<td style="text-align: right" data-sourcepos="584:31-584:45">2.0</td>
+</tr>
+<tr data-sourcepos="585:1-585:46">
+<td data-sourcepos="585:2-585:13">SP-NUM-P04</td>
+<td style="text-align: right" data-sourcepos="585:15-585:29">3.0</td>
+<td style="text-align: right" data-sourcepos="585:31-585:45">2.0</td>
+</tr>
+<tr data-sourcepos="586:1-586:46">
+<td data-sourcepos="586:2-586:13">SP-NUM-P05</td>
+<td style="text-align: right" data-sourcepos="586:15-586:29">10.0</td>
+<td style="text-align: right" data-sourcepos="586:31-586:45">9.0</td>
+</tr>
+<tr data-sourcepos="587:1-587:46">
+<td data-sourcepos="587:2-587:13">SP-NUM-P06</td>
+<td style="text-align: right" data-sourcepos="587:15-587:29">8.0</td>
+<td style="text-align: right" data-sourcepos="587:31-587:45">4.0</td>
+</tr>
+<tr data-sourcepos="588:1-588:46">
+<td data-sourcepos="588:2-588:13">SP-NUM-P07</td>
+<td style="text-align: right" data-sourcepos="588:15-588:29">9.0</td>
+<td style="text-align: right" data-sourcepos="588:31-588:45">6.0</td>
+</tr>
+<tr data-sourcepos="589:1-589:46">
+<td data-sourcepos="589:2-589:13">SP-NUM-P08</td>
+<td style="text-align: right" data-sourcepos="589:15-589:29">10.0</td>
+<td style="text-align: right" data-sourcepos="589:31-589:45">2.0</td>
+</tr>
+<tr data-sourcepos="590:1-590:50">
+<td data-sourcepos="590:2-590:17"><strong>合計</strong></td>
+<td style="text-align: right" data-sourcepos="590:19-590:33"><strong>56.0 / 80</strong></td>
+<td style="text-align: right" data-sourcepos="590:35-590:49"><strong>34.0 / 80</strong></td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="592:1-592:82">NUM系列に関しては、Qwen3.8の方がかなり明確に上位であった。</p>
+<p data-sourcepos="594:1-594:330">特に差が大きいのはP06とP08で、LLM-jpは「解集合の完全性」を維持する能力で大きく失点している。一方、P03では両モデルとも異なる誤った帰納法によって同程度に失敗しており、この問題は両モデルの推論性能の識別問題としてうまく機能した。</p>
+<blockquote data-sourcepos="596:1-596:278">
+<p data-sourcepos="596:3-596:278">問題文と解答例はインターネット空間に落ちているため、学習データに含まれていないとは言い切れない点には留意すべきである。結果的に、性能比較の題材としてはちょうど良いレベルだったと言える。</p>
+</blockquote>
+<hr data-sourcepos="598:1-599:0">
+<p data-sourcepos="600:1-600:548">QwenのP01の推論では32kコンテキスト長だとtruncationになった。（１）のみ正解し、（２）は最終的な回答が誤っていた。なお、nglを50に減らしてコンテキスト長を64kとして実行したところ、約84分を費やして42952トークンを生成したにもかかわらず完答できなかった（出力結果は <code>SP-NUM-P01_Qwen38_long.log</code> に格納している）。コンテキスト長のサイズを大きくしたからといって正解に近付くとは限らないようである。</p>
+<p data-sourcepos="602:1-602:255">LLM-jpの回答はさらに悲惨で、<code>finish_reason="length"</code> で終了しており最終的な <code>content</code> は空で返った。論証も序盤で破綻しており、必要条件を十分条件として使用するなど不完全なものであった。</p>
+<blockquote data-sourcepos="604:1-604:282">
+<p data-sourcepos="604:3-604:282">P01について、32kのコンテキスト長での回答の生成には、Qwenでは10分、LLM-jpでは3時間を要した。P01は数学的な難しさ以上に、LLMにとって「推論を簡潔に収束させられるか」を問う問題になっているようである。</p>
+</blockquote>
+<p data-sourcepos="606:1-606:616">QwenはP03とP04で証明が破綻していた以外は概ねよく解けていた（その他の減点は軽微な記述のミスなど）。P03では $m=q(n−1)!+r$ について $d1​=q(n−1)!$ を$n!$の約数であると見なしていた。その根拠を「$q≤n−1&lt;n$ だから $q(n−1)!∣n!$」としていたが、これは一般に偽である。P04では5を法とする合同式（モジュロ演算）の表が示されており、全く解が絞り込まれていなかった。結論の「解無し」はなぜか正しいが、思考過程が誤っているので大幅に減点している。</p>
+<blockquote data-sourcepos="608:1-608:242">
+<p data-sourcepos="608:3-608:242">用意した問題セットはそれなりに難しいはずだが、Qwen3.8-27Bのレベルで7割も得点できているのはやや意外であった。その辺の大学生よりもまともに家庭教師が務まりそうである。</p>
+</blockquote>
+<blockquote data-sourcepos="610:1-610:562">
+<p data-sourcepos="610:3-610:562">余談だが、<a href="https://www.nippyo.co.jp/shop/magazines/latest/4.html" rel="nofollow noopener" target="_blank">数学セミナー</a>は日本評論社から出版されている、60余年の歴史をもつ息の長い数学系雑誌である。この中の「<a href="https://www.web-nippyo.jp/elegant/" rel="nofollow noopener" target="_blank">エレガントな解答をもとむ</a>」というコーナーで懸賞応募問題として毎号2問が出題される。出題者は固定ではなく、月によって難度はまちまちだが一筋縄ではいかない難問が多く、珠玉の問題に巡り合える機会を提供している。</p>
+</blockquote>
+<blockquote data-sourcepos="612:1-612:555">
+<p data-sourcepos="612:3-612:555">これも完全に余談だが、競技数学関係に特化した「<a href="https://artofproblemsolving.com/online" rel="nofollow noopener" target="_blank">Art of Problem Solving</a>」というウェブサイトがある。海外のサイトなので<a href="https://artofproblemsolving.com/community" rel="nofollow noopener" target="_blank">コミュニティの掲示板</a>では基本的に英語しか通用しないが、IMO（国際数学オリンピック）を含む古今東西の数学コンテストの問題が集積されている。日本人ユーザーは恐らく皆無だが「日曜数学者」にはお勧めのサイトである。</p>
+</blockquote>
+<h2 data-sourcepos="614:1-614:30">
+<span id="数学解析幾何" class="fragment"></span><a href="#%E6%95%B0%E5%AD%A6%E8%A7%A3%E6%9E%90%E5%B9%BE%E4%BD%95"><i class="fa fa-link"></i></a>数学（解析・幾何）</h2>
+<p data-sourcepos="616:1-616:96">こちらは主に解析学に関連する内容とした。幾何学からの出題も含む。</p>
+<table data-sourcepos="618:1-627:93">
+<thead>
+<tr data-sourcepos="618:1-618:94">
+<th data-sourcepos="618:2-618:13">ID</th>
+<th data-sourcepos="618:15-618:33">分野</th>
+<th data-sourcepos="618:35-618:77">題材</th>
+<th data-sourcepos="618:79-618:93">難度目安</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="620:1-620:103">
+<td data-sourcepos="620:2-620:13">SP-ANL-P01</td>
+<td data-sourcepos="620:15-620:41">解析・微積分</td>
+<td data-sourcepos="620:43-620:88">対数積分・極値評価</td>
+<td data-sourcepos="620:90-620:102">★★★</td>
+</tr>
+<tr data-sourcepos="621:1-621:119">
+<td data-sourcepos="621:2-621:13">SP-ANL-P02</td>
+<td data-sourcepos="621:15-621:43">確率・マルコフ連鎖</td>
+<td data-sourcepos="621:45-621:102">正多面体上でのランダムウォーク</td>
+<td data-sourcepos="621:104-621:118">★★★★</td>
+</tr>
+<tr data-sourcepos="622:1-622:106">
+<td data-sourcepos="622:2-622:13">SP-ANL-P03</td>
+<td data-sourcepos="622:15-622:43">空間幾何・積分</td>
+<td data-sourcepos="622:45-622:91">三角形の回転体の体積</td>
+<td data-sourcepos="622:93-622:105">★★★</td>
+</tr>
+<tr data-sourcepos="623:1-623:121">
+<td data-sourcepos="623:2-623:13">SP-ANL-P04</td>
+<td data-sourcepos="623:15-623:45">ユークリッド幾何</td>
+<td data-sourcepos="623:47-623:104">円周上の点に関する共線性証明</td>
+<td data-sourcepos="623:106-623:120">★★★★</td>
+</tr>
+<tr data-sourcepos="624:1-624:122">
+<td data-sourcepos="624:2-624:13">SP-ANL-P05</td>
+<td data-sourcepos="624:15-624:39">幾何最適化</td>
+<td data-sourcepos="624:41-624:105">制約を満たす最小正三角形の決定</td>
+<td data-sourcepos="624:107-624:121">★★★★</td>
+</tr>
+<tr data-sourcepos="625:1-625:102">
+<td data-sourcepos="625:2-625:13">SP-ANL-P06</td>
+<td data-sourcepos="625:15-625:27">幾何</td>
+<td data-sourcepos="625:29-625:83">極線を含む高度な共線性証明</td>
+<td data-sourcepos="625:85-625:101">★★★★★</td>
+</tr>
+<tr data-sourcepos="626:1-626:97">
+<td data-sourcepos="626:2-626:13">SP-ANL-P07</td>
+<td data-sourcepos="626:15-626:41">解析・方程式</td>
+<td data-sourcepos="626:43-626:82">積分方程式の解の配置</td>
+<td data-sourcepos="626:84-626:96">★★★</td>
+</tr>
+<tr data-sourcepos="627:1-627:93">
+<td data-sourcepos="627:2-627:13">SP-ANL-P08</td>
+<td data-sourcepos="627:15-627:31">離散幾何</td>
+<td data-sourcepos="627:33-627:76">制約を満たす多角形の存在条件</td>
+<td data-sourcepos="627:78-627:92">★★★★</td>
+</tr>
+</tbody>
+</table>
+<table data-sourcepos="629:1-639:48">
+<thead>
+<tr data-sourcepos="629:1-629:46">
+<th data-sourcepos="629:2-629:13">ID</th>
+<th style="text-align: right" data-sourcepos="629:15-629:29">Qwen3.8-27B</th>
+<th style="text-align: right" data-sourcepos="629:31-629:45">LLM-jp-4-33B</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="631:1-631:46">
+<td data-sourcepos="631:2-631:13">SP-ANL-P01</td>
+<td style="text-align: right" data-sourcepos="631:15-631:29">10.0</td>
+<td style="text-align: right" data-sourcepos="631:31-631:45">6.0</td>
+</tr>
+<tr data-sourcepos="632:1-632:46">
+<td data-sourcepos="632:2-632:13">SP-ANL-P02</td>
+<td style="text-align: right" data-sourcepos="632:15-632:29">8.0</td>
+<td style="text-align: right" data-sourcepos="632:31-632:45">2.0</td>
+</tr>
+<tr data-sourcepos="633:1-633:46">
+<td data-sourcepos="633:2-633:13">SP-ANL-P03</td>
+<td style="text-align: right" data-sourcepos="633:15-633:29">10.0</td>
+<td style="text-align: right" data-sourcepos="633:31-633:45">3.0</td>
+</tr>
+<tr data-sourcepos="634:1-634:46">
+<td data-sourcepos="634:2-634:13">SP-ANL-P04</td>
+<td style="text-align: right" data-sourcepos="634:15-634:29">9.0</td>
+<td style="text-align: right" data-sourcepos="634:31-634:45">2.0</td>
+</tr>
+<tr data-sourcepos="635:1-635:46">
+<td data-sourcepos="635:2-635:13">SP-ANL-P05</td>
+<td style="text-align: right" data-sourcepos="635:15-635:29">8.0</td>
+<td style="text-align: right" data-sourcepos="635:31-635:45">2.0</td>
+</tr>
+<tr data-sourcepos="636:1-636:46">
+<td data-sourcepos="636:2-636:13">SP-ANL-P06</td>
+<td style="text-align: right" data-sourcepos="636:15-636:29">3.0</td>
+<td style="text-align: right" data-sourcepos="636:31-636:45">1.0</td>
+</tr>
+<tr data-sourcepos="637:1-637:46">
+<td data-sourcepos="637:2-637:13">SP-ANL-P07</td>
+<td style="text-align: right" data-sourcepos="637:15-637:29">10.0</td>
+<td style="text-align: right" data-sourcepos="637:31-637:45">3.0</td>
+</tr>
+<tr data-sourcepos="638:1-638:46">
+<td data-sourcepos="638:2-638:13">SP-ANL-P08</td>
+<td style="text-align: right" data-sourcepos="638:15-638:29">7.0</td>
+<td style="text-align: right" data-sourcepos="638:31-638:45">2.0</td>
+</tr>
+<tr data-sourcepos="639:1-639:48">
+<td data-sourcepos="639:2-639:15"><strong>合計</strong></td>
+<td style="text-align: right" data-sourcepos="639:17-639:31"><strong>65.0 / 80</strong></td>
+<td style="text-align: right" data-sourcepos="639:33-639:47"><strong>21.0 / 80</strong></td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="641:1-641:135">ANL系列ではNUM系列以上に差が拡大した。LLM-jp-4-33Bにとってはかなり難しいセットだったようである。</p>
+<hr data-sourcepos="643:1-644:0">
+<p data-sourcepos="645:1-645:420">P01について、Qwenは満点であったが、関数のオーダーの評価の際に $f(x)−f(x−1)=O(x^{−3})$ という誤った予測を立て、後で再考して軌道修正していた。推論の甘さを重厚なthinkingで補っている点は評価できる。ただし、自力で修正できているのは良いが、推論効率（Reasoning efficiency）という点では改善の余地がある。</p>
+<p data-sourcepos="647:1-647:558">LLM-jpも（１）については、$x=-\dfrac{1}{2}$が唯一の極小点であること、および極小値 $\log2-2+\dfrac{\pi}{2}$ を正しく導出した。しかし（２）へ進んだ後、同じ積分式を延々と繰り返し生成する推論ループに入り、最終回答を生成できないまま出力上限へ到達してしまった。これは問題を解けなかったというより、thinkingの内部ではかなり正しい地点まで到達しながらも推論を収束させられなかった、という不具合である。</p>
+<p data-sourcepos="649:1-649:60">LLM-jpの同様の不具合はP04とP07でも見られた。</p>
+<hr data-sourcepos="651:1-652:0">
+<p data-sourcepos="653:1-653:662">P02は見慣れない問題設定ではあるものの、状態遷移図さえ把握できれば漸化式（もしくは状態遷移行列）から$t$秒後の存在確率を求めることができる。LLM-jpではスペクトル法というアプローチで回答を試みていたが、誤った隣接行列スペクトルを構成してしまい、誤答となった（温情の部分点が無ければ実質的に0点）。正二十面体についても推論が誤っている。LLM-jpは$t$が奇数のときに$p_t=0$と結論しているが、正二十面体には三角形の面が存在するのでこれは$t \ge 3$においては誤りである。</p>
+<p data-sourcepos="655:1-655:278">一方、Qwenは（１）、（２）ともに正しい一般式を導出したが、（２）の最終回答での検算において $p_2=\dfrac{3}{10}$、$p_3=\dfrac{31}{375}$ と求めており2つとも誤っていた。これは記述式答案では減点対象となる。</p>
+<blockquote data-sourcepos="657:1-657:67">
+<p data-sourcepos="657:3-657:67">正しくは $p_2=\dfrac{1}{5}$、$p_3=\dfrac{2}{25}$となる。</p>
+</blockquote>
+<p data-sourcepos="659:1-659:302">同様のQwenの検算ミスはP08でも見られた。「$N$が8の倍数であること」という必要条件は導けているものの、実際に$N=8k$と置いた際に得られる$k$の関係式（辺を構成する線分が交差しない条件）を正しく証明できていなかった。</p>
+<p data-sourcepos="661:1-661:500">P08に関して、LLM-jpは$$N \ge 7,\quad N≡0 \text{ or } 3 \mod 4$$を最終回答としている。これは$N$が奇数の場合も含むという主張だが、その場合は隣接する辺同士が直交するような多角形を構成できないことがほとんど明らかである。したがって基本的なsanity checkによって反証が可能である。論証序盤の発想自体は良好であるが、その後の論証で不正確な論理展開となってしまった。</p>
+<hr data-sourcepos="663:1-664:0">
+<p data-sourcepos="665:1-665:600">P03は両モデルでかなり差が付いた。Qwenは場合分けを含めて適切に処理できていた。一方のLLM-jpは、式変形やyz平面への射影が適切な点は評価できるが、三角形の断面として得られる線分の回転体を単なる円として扱ってしまっていた。最終的な体積を$\dfrac{\pi}{3}$としたが、実際には内部がくり抜かれた円環（<a href="https://ja.wikipedia.org/wiki/%E3%82%A2%E3%83%8B%E3%83%A5%E3%83%A9%E3%82%B9" rel="nofollow noopener" target="_blank">アニュラス</a>）となるため、体積はより小さくなり、$\dfrac{\pi}{9}$が正答となる。</p>
+<hr data-sourcepos="668:1-669:0">
+<p data-sourcepos="670:1-670:562">P06のQwenの回答は今回の16問中、NUM-P03と並んで明確な失敗となった。中盤までは順調だったものの、論証の中で本問で示すべき命題を補題としてそのまま用いており、最後までこれを証明せず終了していた。これは証明として破綻しており大幅な減点となる。LLM-jpではそもそも各点の位置関係をうまく把握できておらず、ハルシネーションを生じていた。実質的に0点だがChatGPTの採点では1点を部分点として与えていた。</p>
+<hr data-sourcepos="673:1-674:0">
+<h3 data-sourcepos="675:1-675:28">
+<span id="数学分野のまとめ" class="fragment"></span><a href="#%E6%95%B0%E5%AD%A6%E5%88%86%E9%87%8E%E3%81%AE%E3%81%BE%E3%81%A8%E3%82%81"><i class="fa fa-link"></i></a>数学分野のまとめ</h3>
+<p data-sourcepos="677:1-677:147">ここで、数学分野の回答の品質についてまとめる。品質の種類を大まかに下記の通り分類してタグ付けした。</p>
+<table data-sourcepos="679:1-689:107">
+<thead>
+<tr data-sourcepos="679:1-679:67">
+<th data-sourcepos="679:2-679:32">タグ</th>
+<th data-sourcepos="679:34-679:66">意味</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="681:1-681:81">
+<td data-sourcepos="681:2-681:28"><code>PASS</code></td>
+<td data-sourcepos="681:30-681:80">実質的な数学的欠陥なし</td>
+</tr>
+<tr data-sourcepos="682:1-682:102">
+<td data-sourcepos="682:2-682:28"><code>LENGTH_LOOP</code></td>
+<td data-sourcepos="682:30-682:101">推論ループ・長考の収束失敗・token上限で完答不能</td>
+</tr>
+<tr data-sourcepos="683:1-683:108">
+<td data-sourcepos="683:2-683:28"><code>LOCAL_ERROR</code></td>
+<td data-sourcepos="683:30-683:107">最終的な結論に影響しない局所的な計算・論証ミス</td>
+</tr>
+<tr data-sourcepos="684:1-684:88">
+<td data-sourcepos="684:2-684:28"><code>FATAL_LOGIC</code></td>
+<td data-sourcepos="684:30-684:87">論理破綻、証明に偽の命題を適用</td>
+</tr>
+<tr data-sourcepos="685:1-685:97">
+<td data-sourcepos="685:2-685:28"><code>INCOMPLETE_PROOF</code></td>
+<td data-sourcepos="685:30-685:96">結論は正しいが全範囲を証明できていない</td>
+</tr>
+<tr data-sourcepos="686:1-686:81">
+<td data-sourcepos="686:2-686:28"><code>INCOMPLETE_SOLUTION_SET</code></td>
+<td data-sourcepos="686:30-686:80">真の解の一部を落とした</td>
+</tr>
+<tr data-sourcepos="687:1-687:95">
+<td data-sourcepos="687:2-687:28"><code>WRONG_MODEL</code></td>
+<td data-sourcepos="687:30-687:94">問題の数学的対象・幾何構造等を根本的に誤認</td>
+</tr>
+<tr data-sourcepos="688:1-688:87">
+<td data-sourcepos="688:2-688:28"><code>UNSUPPORTED_LEMMA</code></td>
+<td data-sourcepos="688:30-688:86">必要な一般命題を証明せず使用</td>
+</tr>
+<tr data-sourcepos="689:1-689:107">
+<td data-sourcepos="689:2-689:28"><code>HALLUCINATED_THEOREM</code></td>
+<td data-sourcepos="689:30-689:106">存在しない／適用不能な数学的定理・性質を根拠に使用</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="691:1-691:51">全体をまとめると以下のようになる。</p>
+<table data-sourcepos="693:1-711:94">
+<thead>
+<tr data-sourcepos="693:1-693:98">
+<th data-sourcepos="693:2-693:12">問題</th>
+<th data-sourcepos="693:14-693:34">Qwen3.8-27B</th>
+<th style="text-align: right" data-sourcepos="693:36-693:50">得点</th>
+<th data-sourcepos="693:52-693:80">LLM-jp-4-33B-thinking</th>
+<th style="text-align: right" data-sourcepos="693:82-693:97">得点</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="695:1-695:96">
+<td data-sourcepos="695:2-695:10">NUM-P01</td>
+<td data-sourcepos="695:12-695:32"><code>LENGTH_LOOP</code></td>
+<td style="text-align: right" data-sourcepos="695:34-695:46">5</td>
+<td data-sourcepos="695:48-695:82">
+<code>LENGTH_LOOP</code> （<code>FATAL_LOGIC</code>）</td>
+<td style="text-align: right" data-sourcepos="695:84-695:95">2</td>
+</tr>
+<tr data-sourcepos="696:1-696:90">
+<td data-sourcepos="696:2-696:10">NUM-P02</td>
+<td data-sourcepos="696:12-696:32"><code>LOCAL_ERROR</code></td>
+<td style="text-align: right" data-sourcepos="696:34-696:46">9</td>
+<td data-sourcepos="696:48-696:76"><code>INCOMPLETE_SOLUTION_SET</code></td>
+<td style="text-align: right" data-sourcepos="696:78-696:89">7</td>
+</tr>
+<tr data-sourcepos="697:1-697:90">
+<td data-sourcepos="697:2-697:10">NUM-P03</td>
+<td data-sourcepos="697:12-697:32"><code>FATAL_LOGIC</code></td>
+<td style="text-align: right" data-sourcepos="697:34-697:46">2</td>
+<td data-sourcepos="697:48-697:76"><code>FATAL_LOGIC</code></td>
+<td style="text-align: right" data-sourcepos="697:78-697:89">2</td>
+</tr>
+<tr data-sourcepos="698:1-698:90">
+<td data-sourcepos="698:2-698:10">NUM-P04</td>
+<td data-sourcepos="698:12-698:32"><code>FATAL_LOGIC</code></td>
+<td style="text-align: right" data-sourcepos="698:34-698:46">3</td>
+<td data-sourcepos="698:48-698:76"><code>LENGTH_LOOP</code></td>
+<td style="text-align: right" data-sourcepos="698:78-698:89">2</td>
+</tr>
+<tr data-sourcepos="699:1-699:90">
+<td data-sourcepos="699:2-699:10">NUM-P05</td>
+<td data-sourcepos="699:12-699:32"><code>PASS</code></td>
+<td style="text-align: right" data-sourcepos="699:34-699:46">10</td>
+<td data-sourcepos="699:48-699:76"><code>LOCAL_ERROR</code></td>
+<td style="text-align: right" data-sourcepos="699:78-699:89">9</td>
+</tr>
+<tr data-sourcepos="700:1-700:90">
+<td data-sourcepos="700:2-700:10">NUM-P06</td>
+<td data-sourcepos="700:12-700:32"><code>LOCAL_ERROR</code></td>
+<td style="text-align: right" data-sourcepos="700:34-700:46">8</td>
+<td data-sourcepos="700:48-700:76"><code>INCOMPLETE_SOLUTION_SET</code></td>
+<td style="text-align: right" data-sourcepos="700:78-700:89">4</td>
+</tr>
+<tr data-sourcepos="701:1-701:90">
+<td data-sourcepos="701:2-701:10">NUM-P07</td>
+<td data-sourcepos="701:12-701:32"><code>LOCAL_ERROR</code></td>
+<td style="text-align: right" data-sourcepos="701:34-701:46">9</td>
+<td data-sourcepos="701:48-701:76"><code>INCOMPLETE_PROOF</code></td>
+<td style="text-align: right" data-sourcepos="701:78-701:89">6</td>
+</tr>
+<tr data-sourcepos="702:1-702:90">
+<td data-sourcepos="702:2-702:10">NUM-P08</td>
+<td data-sourcepos="702:12-702:32"><code>PASS</code></td>
+<td style="text-align: right" data-sourcepos="702:34-702:46">10</td>
+<td data-sourcepos="702:48-702:76"><code>INCOMPLETE_SOLUTION_SET</code></td>
+<td style="text-align: right" data-sourcepos="702:78-702:89">2</td>
+</tr>
+<tr data-sourcepos="703:1-703:90">
+<td data-sourcepos="703:2-703:10">ANL-P01</td>
+<td data-sourcepos="703:12-703:32"><code>PASS</code></td>
+<td style="text-align: right" data-sourcepos="703:34-703:46">10</td>
+<td data-sourcepos="703:48-703:76"><code>LENGTH_LOOP</code></td>
+<td style="text-align: right" data-sourcepos="703:78-703:89">6</td>
+</tr>
+<tr data-sourcepos="704:1-704:90">
+<td data-sourcepos="704:2-704:10">ANL-P02</td>
+<td data-sourcepos="704:12-704:32"><code>LOCAL_ERROR</code></td>
+<td style="text-align: right" data-sourcepos="704:34-704:46">8</td>
+<td data-sourcepos="704:48-704:76"><code>WRONG_MODEL</code></td>
+<td style="text-align: right" data-sourcepos="704:78-704:89">2</td>
+</tr>
+<tr data-sourcepos="705:1-705:90">
+<td data-sourcepos="705:2-705:10">ANL-P03</td>
+<td data-sourcepos="705:12-705:32"><code>PASS</code></td>
+<td style="text-align: right" data-sourcepos="705:34-705:46">10</td>
+<td data-sourcepos="705:48-705:76"><code>WRONG_MODEL</code></td>
+<td style="text-align: right" data-sourcepos="705:78-705:89">3</td>
+</tr>
+<tr data-sourcepos="706:1-706:90">
+<td data-sourcepos="706:2-706:10">ANL-P04</td>
+<td data-sourcepos="706:12-706:32"><code>LOCAL_ERROR</code></td>
+<td style="text-align: right" data-sourcepos="706:34-706:46">9</td>
+<td data-sourcepos="706:48-706:76"><code>LENGTH_LOOP</code></td>
+<td style="text-align: right" data-sourcepos="706:78-706:89">2</td>
+</tr>
+<tr data-sourcepos="707:1-707:90">
+<td data-sourcepos="707:2-707:10">ANL-P05</td>
+<td data-sourcepos="707:12-707:32"><code>INCOMPLETE_PROOF</code></td>
+<td style="text-align: right" data-sourcepos="707:34-707:46">8</td>
+<td data-sourcepos="707:48-707:76"><code>WRONG_MODEL</code></td>
+<td style="text-align: right" data-sourcepos="707:78-707:89">2</td>
+</tr>
+<tr data-sourcepos="708:1-708:90">
+<td data-sourcepos="708:2-708:10">ANL-P06</td>
+<td data-sourcepos="708:12-708:32"><code>UNSUPPORTED_LEMMA</code></td>
+<td style="text-align: right" data-sourcepos="708:34-708:46">3</td>
+<td data-sourcepos="708:48-708:76"><code>HALLUCINATED_THEOREM</code></td>
+<td style="text-align: right" data-sourcepos="708:78-708:89">1</td>
+</tr>
+<tr data-sourcepos="709:1-709:90">
+<td data-sourcepos="709:2-709:10">ANL-P07</td>
+<td data-sourcepos="709:12-709:32"><code>PASS</code></td>
+<td style="text-align: right" data-sourcepos="709:34-709:46">10</td>
+<td data-sourcepos="709:48-709:76"><code>LENGTH_LOOP</code></td>
+<td style="text-align: right" data-sourcepos="709:78-709:89">3</td>
+</tr>
+<tr data-sourcepos="710:1-710:90">
+<td data-sourcepos="710:2-710:10">ANL-P08</td>
+<td data-sourcepos="710:12-710:32"><code>INCOMPLETE_PROOF</code></td>
+<td style="text-align: right" data-sourcepos="710:34-710:46">7</td>
+<td data-sourcepos="710:48-710:76"><code>INCOMPLETE_SOLUTION_SET</code></td>
+<td style="text-align: right" data-sourcepos="710:78-710:89">2</td>
+</tr>
+<tr data-sourcepos="711:1-711:94">
+<td data-sourcepos="711:2-711:14"><strong>合計</strong></td>
+<td data-sourcepos="711:16-711:36"></td>
+<td style="text-align: right" data-sourcepos="711:38-711:50"><strong>121/160</strong></td>
+<td data-sourcepos="711:52-711:80"></td>
+<td style="text-align: right" data-sourcepos="711:82-711:93"><strong>55/160</strong></td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="713:1-713:42">タグの集計結果は以下の通り。</p>
+<table data-sourcepos="715:1-726:60">
+<thead>
+<tr data-sourcepos="715:1-715:59">
+<th data-sourcepos="715:2-715:37">主なfailureタグ</th>
+<th style="text-align: right" data-sourcepos="715:39-715:47">Qwen3.8</th>
+<th style="text-align: right" data-sourcepos="715:49-715:58">LLM-jp-4</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="717:1-717:50">
+<td data-sourcepos="717:2-717:28"><code>PASS</code></td>
+<td style="text-align: right" data-sourcepos="717:30-717:38"><strong>5</strong></td>
+<td style="text-align: right" data-sourcepos="717:40-717:49"><strong>0</strong></td>
+</tr>
+<tr data-sourcepos="718:1-718:50">
+<td data-sourcepos="718:2-718:28"><code>LOCAL_ERROR</code></td>
+<td style="text-align: right" data-sourcepos="718:30-718:38"><strong>5</strong></td>
+<td style="text-align: right" data-sourcepos="718:40-718:49"><strong>1</strong></td>
+</tr>
+<tr data-sourcepos="719:1-719:50">
+<td data-sourcepos="719:2-719:28"><code>INCOMPLETE_PROOF</code></td>
+<td style="text-align: right" data-sourcepos="719:30-719:38"><strong>2</strong></td>
+<td style="text-align: right" data-sourcepos="719:40-719:49"><strong>1</strong></td>
+</tr>
+<tr data-sourcepos="720:1-720:50">
+<td data-sourcepos="720:2-720:28"><code>INCOMPLETE_SOLUTION_SET</code></td>
+<td style="text-align: right" data-sourcepos="720:30-720:38"><strong>0</strong></td>
+<td style="text-align: right" data-sourcepos="720:40-720:49"><strong>4</strong></td>
+</tr>
+<tr data-sourcepos="721:1-721:50">
+<td data-sourcepos="721:2-721:28"><code>FATAL_LOGIC</code></td>
+<td style="text-align: right" data-sourcepos="721:30-721:38"><strong>2</strong></td>
+<td style="text-align: right" data-sourcepos="721:40-721:49"><strong>1</strong></td>
+</tr>
+<tr data-sourcepos="722:1-722:50">
+<td data-sourcepos="722:2-722:28"><code>WRONG_MODEL</code></td>
+<td style="text-align: right" data-sourcepos="722:30-722:38"><strong>0</strong></td>
+<td style="text-align: right" data-sourcepos="722:40-722:49"><strong>3</strong></td>
+</tr>
+<tr data-sourcepos="723:1-723:50">
+<td data-sourcepos="723:2-723:28"><code>UNSUPPORTED_LEMMA</code></td>
+<td style="text-align: right" data-sourcepos="723:30-723:38"><strong>1</strong></td>
+<td style="text-align: right" data-sourcepos="723:40-723:49"><strong>0</strong></td>
+</tr>
+<tr data-sourcepos="724:1-724:50">
+<td data-sourcepos="724:2-724:28"><code>HALLUCINATED_THEOREM</code></td>
+<td style="text-align: right" data-sourcepos="724:30-724:38"><strong>0</strong></td>
+<td style="text-align: right" data-sourcepos="724:40-724:49"><strong>1</strong></td>
+</tr>
+<tr data-sourcepos="725:1-725:50">
+<td data-sourcepos="725:2-725:28"><code>LENGTH_LOOP</code></td>
+<td style="text-align: right" data-sourcepos="725:30-725:38"><strong>1</strong></td>
+<td style="text-align: right" data-sourcepos="725:40-725:49"><strong>5</strong></td>
+</tr>
+<tr data-sourcepos="726:1-726:60">
+<td data-sourcepos="726:2-726:38">
+<strong>合計</strong>（<code>PASS</code>を除く）</td>
+<td style="text-align: right" data-sourcepos="726:40-726:48"><strong>11</strong></td>
+<td style="text-align: right" data-sourcepos="726:50-726:59"><strong>16</strong></td>
+</tr>
+</tbody>
+</table>
+<blockquote data-sourcepos="728:1-728:111">
+<p data-sourcepos="728:3-728:111">複数の問題が認められる場合は最も支配的なタグのみを1件としてカウントした。</p>
+</blockquote>
+<p data-sourcepos="730:1-730:248">今回の検証に利用したLLM-jp-4-33BはSTEM専用のRL（Reinforcement Learning；強化学習）ベースのpost-trainingを施したモデルではないため、ある程度予想できたことではあるが <code>PASS</code> が0件であった。</p>
+<p data-sourcepos="732:1-732:704"><code>INCOMPLETE_SOLUTION_SET</code> と <code>WRONG_MODEL</code> はQwenでは0件だったのに対し、LLM-jpではそれぞれ4件、3件発生した。今回のLLM-jp-4-33B-thinkingはSFT（Supervised Fine-Tuning；教師ありファインチューニング）およびDPO（Direct Preference Optimization；直接選好最適化）による事後学習済みであり、DPOデータにも数学・STEM系データが含まれている一方、RLによる事後学習は行われていない。今回の差を単純に「STEM分野のチューニングの有無」に帰することはできないが、数学的推論をより強く意識した追加の学習によって改善する余地はあると考えられる。</p>
+<p data-sourcepos="734:1-734:595"><code>LENGTH_LOOP</code> はQwenでは1件だったのに対し、LLM-jpでは5件と多かった。特に一部の問題では、推論の初期段階では正しい方針や関係式を得ていたにもかかわらず、その後に同一または類似した計算を反復してtoken上限に達し、最終回答に到達できなかった。この傾向から、少なくとも今回の条件では、LLM-jp-4-33B-thinkingは長い数理推論を収束させ、最終的な証明や回答へと統合する能力（推論のトラジェクトリを含む）に改善の余地があると言える。</p>
+<h2 data-sourcepos="737:1-737:12">
+<span id="物理学" class="fragment"></span><a href="#%E7%89%A9%E7%90%86%E5%AD%A6"><i class="fa fa-link"></i></a>物理学</h2>
+<p data-sourcepos="739:1-739:139">物理系列では、解析力学・流体力学・電磁気学・波動・原子物理学・天体物理学から計8問を出題した。</p>
+<table data-sourcepos="741:1-750:86">
+<thead>
+<tr data-sourcepos="741:1-741:72">
+<th data-sourcepos="741:2-741:13">ID</th>
+<th data-sourcepos="741:15-741:25">分野</th>
+<th data-sourcepos="741:27-741:53">題材</th>
+<th data-sourcepos="741:55-741:71">難度目安</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="743:1-743:84">
+<td data-sourcepos="743:2-743:13">SP-PHY-P01</td>
+<td data-sourcepos="743:15-743:29">解析力学</td>
+<td data-sourcepos="743:31-743:69">可動円環上の質点</td>
+<td data-sourcepos="743:71-743:83">★★★</td>
+</tr>
+<tr data-sourcepos="744:1-744:90">
+<td data-sourcepos="744:2-744:13">SP-PHY-P02</td>
+<td data-sourcepos="744:15-744:29">解析力学</td>
+<td data-sourcepos="744:31-744:73">修正中心力と軌道歳差</td>
+<td data-sourcepos="744:75-744:89">★★★★</td>
+</tr>
+<tr data-sourcepos="745:1-745:98">
+<td data-sourcepos="745:2-745:13">SP-PHY-P03</td>
+<td data-sourcepos="745:15-745:29">流体力学</td>
+<td data-sourcepos="745:31-745:83">循環を伴う円柱まわりの理想流体</td>
+<td data-sourcepos="745:85-745:97">★★★</td>
+</tr>
+<tr data-sourcepos="746:1-746:84">
+<td data-sourcepos="746:2-746:13">SP-PHY-P04</td>
+<td data-sourcepos="746:15-746:29">電磁気学</td>
+<td data-sourcepos="746:31-746:67">点電荷と導体球</td>
+<td data-sourcepos="746:69-746:83">★★★★</td>
+</tr>
+<tr data-sourcepos="747:1-747:96">
+<td data-sourcepos="747:2-747:13">SP-PHY-P05</td>
+<td data-sourcepos="747:15-747:29">電磁気学</td>
+<td data-sourcepos="747:31-747:79">半無限導体における表皮効果</td>
+<td data-sourcepos="747:81-747:95">★★★★</td>
+</tr>
+<tr data-sourcepos="748:1-748:104">
+<td data-sourcepos="748:2-748:13">SP-PHY-P06</td>
+<td data-sourcepos="748:15-748:25">波動</td>
+<td data-sourcepos="748:27-748:87">質量・ばね欠陥を含む弦における波の散乱</td>
+<td data-sourcepos="748:89-748:103">★★★★</td>
+</tr>
+<tr data-sourcepos="749:1-749:104">
+<td data-sourcepos="749:2-749:13">SP-PHY-P07</td>
+<td data-sourcepos="749:15-749:31">原子物理学</td>
+<td data-sourcepos="749:33-749:85">直交する電場・磁場中の水素原子</td>
+<td data-sourcepos="749:87-749:103">★★★★★</td>
+</tr>
+<tr data-sourcepos="750:1-750:86">
+<td data-sourcepos="750:2-750:13">SP-PHY-P08</td>
+<td data-sourcepos="750:15-750:31">天体物理学</td>
+<td data-sourcepos="750:33-750:67">トランジットと視線速度</td>
+<td data-sourcepos="750:69-750:85">★★★★★</td>
+</tr>
+</tbody>
+</table>
+<table data-sourcepos="752:1-762:56">
+<thead>
+<tr data-sourcepos="752:1-752:43">
+<th data-sourcepos="752:2-752:13">ID</th>
+<th style="text-align: right" data-sourcepos="752:15-752:27">Qwen3.8-27B</th>
+<th style="text-align: right" data-sourcepos="752:29-752:42">LLM-jp-4-33B</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="754:1-754:43">
+<td data-sourcepos="754:2-754:13">SP-PHY-P01</td>
+<td style="text-align: right" data-sourcepos="754:15-754:27">10.0</td>
+<td style="text-align: right" data-sourcepos="754:29-754:42">8.0</td>
+</tr>
+<tr data-sourcepos="755:1-755:43">
+<td data-sourcepos="755:2-755:13">SP-PHY-P02</td>
+<td style="text-align: right" data-sourcepos="755:15-755:27">10.0</td>
+<td style="text-align: right" data-sourcepos="755:29-755:42">6.0</td>
+</tr>
+<tr data-sourcepos="756:1-756:43">
+<td data-sourcepos="756:2-756:13">SP-PHY-P03</td>
+<td style="text-align: right" data-sourcepos="756:15-756:27">9.0</td>
+<td style="text-align: right" data-sourcepos="756:29-756:42">0.0</td>
+</tr>
+<tr data-sourcepos="757:1-757:43">
+<td data-sourcepos="757:2-757:13">SP-PHY-P04</td>
+<td style="text-align: right" data-sourcepos="757:15-757:27">9.0</td>
+<td style="text-align: right" data-sourcepos="757:29-757:42">2.0</td>
+</tr>
+<tr data-sourcepos="758:1-758:43">
+<td data-sourcepos="758:2-758:13">SP-PHY-P05</td>
+<td style="text-align: right" data-sourcepos="758:15-758:27">10.0</td>
+<td style="text-align: right" data-sourcepos="758:29-758:42">7.5</td>
+</tr>
+<tr data-sourcepos="759:1-759:43">
+<td data-sourcepos="759:2-759:13">SP-PHY-P06</td>
+<td style="text-align: right" data-sourcepos="759:15-759:27">9.7</td>
+<td style="text-align: right" data-sourcepos="759:29-759:42">9.0</td>
+</tr>
+<tr data-sourcepos="760:1-760:43">
+<td data-sourcepos="760:2-760:13">SP-PHY-P07</td>
+<td style="text-align: right" data-sourcepos="760:15-760:27">7.0</td>
+<td style="text-align: right" data-sourcepos="760:29-760:42">7.0</td>
+</tr>
+<tr data-sourcepos="761:1-761:43">
+<td data-sourcepos="761:2-761:13">SP-PHY-P08</td>
+<td style="text-align: right" data-sourcepos="761:15-761:27">6.0</td>
+<td style="text-align: right" data-sourcepos="761:29-761:42">2.0</td>
+</tr>
+<tr data-sourcepos="762:1-762:56">
+<td data-sourcepos="762:2-762:15"><strong>合計</strong></td>
+<td style="text-align: right" data-sourcepos="762:17-762:31"><strong>70.5 / 80</strong></td>
+<td style="text-align: right" data-sourcepos="762:33-762:55"><strong>41.5 / 80</strong></td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="764:1-764:74">PHY系列ではQwen3.8-27Bが明確に優勢だった。問題別では、</p>
+<ul data-sourcepos="766:1-769:0">
+<li data-sourcepos="766:1-766:64">Qwen優勢：P01、<strong>P02</strong>、<strong>P03</strong>、<strong>P04</strong>、P05、<strong>P08</strong>
+</li>
+<li data-sourcepos="767:1-767:29">LLM-jp優勢：該当なし</li>
+<li data-sourcepos="768:1-769:0">同等：P06、P07</li>
+</ul>
+<p data-sourcepos="770:1-770:75">という結果になった（太字は大きく差のついた問題）。</p>
+<hr data-sourcepos="772:1-773:0">
+<p data-sourcepos="774:1-774:117">LLM-jpは方針は良いものの、立式の不正確さが失点に繋がっている傾向が見受けられた。</p>
+<p data-sourcepos="776:1-776:653">P01では $f(\theta)\dot{\theta}$ の時間微分における局所的な符号・係数ミスにより、運動方程式における速度二乗項が誤っていた。P02では回転運動の運動エネルギーの立式ミス、P03では問題文で明示的に「速度成分」と定義されている $v_\theta$ を角速度と誤認する、P04では接地導体球に対する鏡像電荷の位置を$z'=-\dfrac{a^2}{d}$とする符号ミスなど、序盤のミスが連鎖的な失点に繋がっていた（これが理系科目の怖い所である）。P05ではJoule熱の計算での約分ミスがあり、惜しい失点となった。</p>
+<hr data-sourcepos="779:1-780:0">
+<p data-sourcepos="781:1-781:441">Qwen3.8-27Bは推論中に式変形のミスや軽微な物理的解釈の誤りは見られるが、P07とP08を除いて回答はいずれも正解。P08では（１）での「円軌道の射影運動を直線等速運動とした」+「その近似式の代数的操作も逆にした（掛け算とすべきところを割り算にした）」という誤りが重なって（１）と（２）および（５）で失点していた。</p>
+<p data-sourcepos="783:1-783:373">P07は量子力学として高度な問題であるが、Qwen3.8-27Bの推論過程では計算中に$L_x$と$L_y$の取り違えたまま回答を進めるという単純なケアレスミスが発生していた。その後の特性方程式の立式ミスは自力で修正していたが、​$L_x$と$L_y$の取り違えには最後まで気付けていなかった。</p>
+<p data-sourcepos="785:1-785:653">また、Qwen3.8-27Bはかなり「人間っぽい」思考の軌跡を呈することも分かってきた。P06では散乱振幅を導く部分で理論や公式の適用能力が求められるが、適切な推論によってここをクリアしていた。P02では一度 $r_0$ の立式において $m$ を落とした後、次元解析によって自ら矛盾を検出して正しい式へ戻っていることも観察された。既存の知識だけでなく、その場で議論の妥当性を検証する機構が存分に活かされた結果としての高得点と言える。（ただし、途中の式変形で係数にミスあり）</p>
+<p data-sourcepos="787:1-787:703">その点でP08の結果は興味深い。公式丸暗記タイプなら系外惑星のトランジットの公式を正しく立式できていた可能性はあるが、もっともらしい近似を見出したものの代数的な単純ミスで間違ってしまっていた。誤答の構造としては、<strong>問題の一部分についてはかなり深く構造を理解している一方、幾何的な条件設定で失敗した</strong>、という人間が起こしがちなタイプと言える。QwenモデルのSTEM知識が豊富であるのは確かだが、今回の問題セットからはQwenモデルの推論方法・知識の運用方法が洗練されていることも観察できた。</p>
+<blockquote data-sourcepos="789:1-789:724">
+<p data-sourcepos="789:3-789:724">P08に関して、問題文では明示的に "using the exact transit geometry" と要求しているにもかかわらず、Qwenは微小角による直線運動での近似を適用して回答を進めていた。近似そのものは正しいが、題意に適していないので誤答扱いとなっている。この傾向はseed値を変えてもほぼ変わらなかったため、モデル内部の推論の癖が表れているのかもしれない。LLMにとってはP08のような「問題文から正しい幾何モデルを構築する」「近似を勝手に導入しない」「識別可能性を考える」という複数種類の推論が同時に要求される問題が苦手のようである。</p>
+</blockquote>
+<hr data-sourcepos="791:1-792:0">
+<p data-sourcepos="793:1-793:142">Qwenの推論にも以下のような誤りは存在するが、多くの場合で問題の基本的な物理構造は維持されていた。</p>
+<p data-sourcepos="795:1-799:62">P03：圧力分布の局所的な代数ミス<br>
+P04：最終簡約時に $a$ の次数を1つ落とす<br>
+P06：エネルギー流束の絶対式に係数ミス<br>
+P07：$L_x$ の実軌道表現を取り違える<br>
+P08：exact transit geometry を使わず小角近似を導入</p>
+<p data-sourcepos="801:1-801:163">特にP08ではトランジット幾何に失敗した後も、RV mass functionとスケール縮退という問題の概念的核心は正しく解いている。</p>
+<p data-sourcepos="803:1-803:201">全体としてQwen3.8-27Bは、<strong>物理モデルを立て、そのモデルを数式へ落とし込み、複数段階の推論を比較的安定して維持する能力</strong>が高いと評価できる。</p>
+<p data-sourcepos="805:1-805:102">一方でLLM-jpでは、より基礎的な段階での誤りが多く見られた。例としては、</p>
+<p data-sourcepos="807:1-812:77">P01：積の微分における符号・係数ミス<br>
+P02：角運動量から有効ポテンシャルへの変換そのものを誤る<br>
+P03：速度成分を再解釈して推論ループへ入り、出力長上限まで到達<br>
+P04：鏡像電荷の位置を反対側に置く<br>
+P05：単純な $\sigma$ の約分を落とし、物理的スケーリングまで反転<br>
+P08：次元不整合なRV関係式とKepler則に反するスケール変換</p>
+<p data-sourcepos="814:1-814:390">などである。特にP02、P04、P08では、次元解析を行えば比較的容易に検出できる不整合がそのまま最終回答へ残っていた。またP03では、正しいアプローチから出発したにもかかわらず、自分自身の誤った解釈によって推論が崩れ、その誤りから復帰できないままthinking budgetを使い切っている。</p>
+<p data-sourcepos="816:1-816:254">したがって今回の物理系列では、LLM-jp-4-33Bの弱点は単純なSTEM系の知識の不足というより、<strong>長い数理推論中に局所的な誤りを検出し、全体の整合性を維持する能力</strong>にあるように思われる。</p>
+<h2 data-sourcepos="818:1-818:9">
+<span id="化学" class="fragment"></span><a href="#%E5%8C%96%E5%AD%A6"><i class="fa fa-link"></i></a>化学</h2>
+<p data-sourcepos="820:1-820:151">化学系列は全8問で、物理化学、分析化学、無機化学、有機金属化学、有機化学、高分子科学に跨る構成とした。</p>
+<table data-sourcepos="822:1-831:107">
+<thead>
+<tr data-sourcepos="822:1-822:39">
+<th data-sourcepos="822:2-822:5">ID</th>
+<th data-sourcepos="822:7-822:14">分野</th>
+<th data-sourcepos="822:16-822:23">題材</th>
+<th style="text-align: right" data-sourcepos="822:25-822:38">難度目安</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="824:1-824:98">
+<td data-sourcepos="824:2-824:13">SP-CHE-P01</td>
+<td data-sourcepos="824:15-824:28">物理化学</td>
+<td data-sourcepos="824:30-824:85">熱容量変化を伴う化学平衡と反応進行度</td>
+<td style="text-align: right" data-sourcepos="824:87-824:97">★★★</td>
+</tr>
+<tr data-sourcepos="825:1-825:107">
+<td data-sourcepos="825:2-825:13">SP-CHE-P02</td>
+<td data-sourcepos="825:15-825:28">物理化学</td>
+<td data-sourcepos="825:30-825:91">前平衡を伴う競争反応の速度論と同位体効果</td>
+<td style="text-align: right" data-sourcepos="825:93-825:106">★★★★</td>
+</tr>
+<tr data-sourcepos="826:1-826:90">
+<td data-sourcepos="826:2-826:13">SP-CHE-P03</td>
+<td data-sourcepos="826:15-826:28">分析化学</td>
+<td data-sourcepos="826:30-826:74">副反応を伴うEDTA競争錯形成平衡</td>
+<td style="text-align: right" data-sourcepos="826:76-826:89">★★★★</td>
+</tr>
+<tr data-sourcepos="827:1-827:89">
+<td data-sourcepos="827:2-827:13">SP-CHE-P04</td>
+<td data-sourcepos="827:15-827:28">無機化学</td>
+<td data-sourcepos="827:30-827:76">多段階酸化還元平衡と不均化反応</td>
+<td style="text-align: right" data-sourcepos="827:78-827:88">★★★</td>
+</tr>
+<tr data-sourcepos="828:1-828:107">
+<td data-sourcepos="828:2-828:13">SP-CHE-P05</td>
+<td data-sourcepos="828:15-828:31">分野横断型</td>
+<td data-sourcepos="828:33-828:94">ロジウム触媒サイクルの電子論と反応速度論</td>
+<td style="text-align: right" data-sourcepos="828:96-828:106">★★★</td>
+</tr>
+<tr data-sourcepos="829:1-829:106">
+<td data-sourcepos="829:2-829:13">SP-CHE-P06</td>
+<td data-sourcepos="829:15-829:28">有機化学</td>
+<td data-sourcepos="829:30-829:90">シクロヘキサンE2反応の配座・立体電子効果</td>
+<td style="text-align: right" data-sourcepos="829:92-829:105">★★★★</td>
+</tr>
+<tr data-sourcepos="830:1-830:107">
+<td data-sourcepos="830:2-830:13">SP-CHE-P07</td>
+<td data-sourcepos="830:15-830:28">有機化学</td>
+<td data-sourcepos="830:30-830:94">求核芳香族置換における反応機構と同位体効果</td>
+<td style="text-align: right" data-sourcepos="830:96-830:106">★★★</td>
+</tr>
+<tr data-sourcepos="831:1-831:107">
+<td data-sourcepos="831:2-831:13">SP-CHE-P08</td>
+<td data-sourcepos="831:15-831:31">高分子科学</td>
+<td data-sourcepos="831:33-831:91">Flory–Stockmayer理論によるゲル化と分岐過程</td>
+<td style="text-align: right" data-sourcepos="831:93-831:106">★★★★</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="833:1-833:45">採点結果は以下のようになった。</p>
+<table data-sourcepos="835:1-845:42">
+<thead>
+<tr data-sourcepos="835:1-835:43">
+<th data-sourcepos="835:2-835:13"></th>
+<th style="text-align: right" data-sourcepos="835:15-835:27">Qwen3.8-27B</th>
+<th style="text-align: right" data-sourcepos="835:29-835:42">LLM-jp-4-33B</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="837:1-837:27">
+<td data-sourcepos="837:2-837:13">SP-CHE-P01</td>
+<td style="text-align: right" data-sourcepos="837:15-837:19">9.9</td>
+<td style="text-align: right" data-sourcepos="837:21-837:25">7.8</td>
+</tr>
+<tr data-sourcepos="838:1-838:27">
+<td data-sourcepos="838:2-838:13">SP-CHE-P02</td>
+<td style="text-align: right" data-sourcepos="838:15-838:19">9.8</td>
+<td style="text-align: right" data-sourcepos="838:21-838:25">6.3</td>
+</tr>
+<tr data-sourcepos="839:1-839:27">
+<td data-sourcepos="839:2-839:13">SP-CHE-P03</td>
+<td style="text-align: right" data-sourcepos="839:15-839:19">8.4</td>
+<td style="text-align: right" data-sourcepos="839:21-839:25">4.2</td>
+</tr>
+<tr data-sourcepos="840:1-840:26">
+<td data-sourcepos="840:2-840:13">SP-CHE-P04</td>
+<td style="text-align: right" data-sourcepos="840:15-840:19">9.9</td>
+<td style="text-align: right" data-sourcepos="840:21-840:25">9.6</td>
+</tr>
+<tr data-sourcepos="841:1-841:28">
+<td data-sourcepos="841:2-841:13">SP-CHE-P05</td>
+<td style="text-align: right" data-sourcepos="841:15-841:20">10.0</td>
+<td style="text-align: right" data-sourcepos="841:22-841:27">10.0</td>
+</tr>
+<tr data-sourcepos="842:1-842:27">
+<td data-sourcepos="842:2-842:13">SP-CHE-P06</td>
+<td style="text-align: right" data-sourcepos="842:15-842:20">10.0</td>
+<td style="text-align: right" data-sourcepos="842:22-842:26">9.8</td>
+</tr>
+<tr data-sourcepos="843:1-843:26">
+<td data-sourcepos="843:2-843:13">SP-CHE-P07</td>
+<td style="text-align: right" data-sourcepos="843:15-843:19">9.3</td>
+<td style="text-align: right" data-sourcepos="843:21-843:25">9.8</td>
+</tr>
+<tr data-sourcepos="844:1-844:27">
+<td data-sourcepos="844:2-844:13">SP-CHE-P08</td>
+<td style="text-align: right" data-sourcepos="844:15-844:19">9.8</td>
+<td style="text-align: right" data-sourcepos="844:21-844:25">8.0</td>
+</tr>
+<tr data-sourcepos="845:1-845:42">
+<td data-sourcepos="845:2-845:13"><strong>合計</strong></td>
+<td style="text-align: right" data-sourcepos="845:15-845:27"><strong>77.1/80</strong></td>
+<td style="text-align: right" data-sourcepos="845:29-845:41"><strong>65.5/80</strong></td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="847:1-847:65">CHE系列ではQwen3.8-27Bが優勢だった。問題別では、</p>
+<ul data-sourcepos="849:1-852:0">
+<li data-sourcepos="849:1-849:60">Qwen優勢：<strong>P01</strong>、<strong>P02</strong>、<strong>P03</strong>、P04、P06、P08</li>
+<li data-sourcepos="850:1-850:20">LLM-jp優勢：P07</li>
+<li data-sourcepos="851:1-852:0">同等：P05</li>
+</ul>
+<p data-sourcepos="853:1-853:75">という結果になった（太字は大きく差のついた問題）。</p>
+<p data-sourcepos="855:1-855:426">ただし、LLM-jpが化学全般で一様に弱いわけではない。P04～P07では96～100点相当の高い性能を示しており、弱点が特定の推論形式に集中していることに注目すべきである。LLM-jp-4-33Bは化学分野に特化した追加学習を行っていないモデルのはずだが、総得点で8割程度をマークしており、かなり善戦していると言ってよい。</p>
+<hr data-sourcepos="857:1-858:0">
+<p data-sourcepos="859:1-859:510">Qwenは、P01の推論中にtoken budgetを使い切ったために推論が打ち切られていたが、最終的な回答は（ほぼ）正答であった（小数点以下第3位の四捨五入のミスで失点）。LLM-jpは（２）での数値について、$$T=300.0\ \mathrm{K},\quad 861.9\ \mathrm{K}, \quad K_p(500)=3.73$$とすべきところを$$T=300.1\ \mathrm{K},\quad 859.5\ \mathrm{K}, \quad K_p(500)=3.84$$と算出してしまい、精度が崩れたことが後続の設問に響いた。</p>
+<hr data-sourcepos="861:1-862:0">
+<p data-sourcepos="863:1-863:428">P02の反応速度論に関する問題では、Qwenは推論中に見かけの活性化エネルギーを用いて回答を進めていたが、途中で微分を再検討して$$\frac{d\ln T}{d(1/T)}=-T$$の関係（これ自体は逆数をとるだけで簡単に示せる）に気付いて再検討した結果、$$E_{\mathrm{app}}(500)=61.66\ \mathrm{kJ,mol^{-1}}$$と自己修正できていることが確認された。</p>
+<p data-sourcepos="865:1-866:255">LLM-jpも生成物比までは正しく求められていたが、ここでも数値精度の悪さが表れていた。さらに決定的なのが、微分操作の変数の取り扱いである。LLM-jpは、$$E_{\mathrm{app}}(500)\approx0.31\ \mathrm{kJ,mol^{-1}}$$としたが、これは$k_{\mathrm{obs}}$を$1/T$で微分する際に、$K_{\mathrm{eq}}(T)$の温度依存性だけを考慮し、Eyring式で与えられている$k_P(T)$および$k_Q(T)$自身の温度依存性を見落としてしまったことが原因である。これは単純な数値誤差ではなく、式の全微分に関する概念的な失敗である。<br>
+また、この問題では 500 Kにおいて厳密に$$K_{\mathrm{eq}}=1,\qquad k_P=k_Q$$となるよう設計されているが、LLM-jpは丸め計算からわずかな差を作ってしまい、生成物比にも不要な偏りが混入していた。</p>
+<hr data-sourcepos="868:1-869:0">
+<p data-sourcepos="870:1-870:500">P03はこのセットの中でLLM-jpが最も弱かった問題である。LLM-jpはEDTA分率の式そのものは正しく立てていたものの、正解 $\alpha_Y​=0.35461$ に対して $\alpha_Y​=0.52$ と算出してしまい、このミスが連鎖的に失点に繋がった形である。また、LLM-jpは$M^{2+}$の濃度をダブルカウントして $C_M$ の式を求めてしまっており、分析化学的な定義をうまく理解できていない様子も観察された。</p>
+<p data-sourcepos="872:1-872:387">対するQwenはZnの条件生成定数を1桁大きく求めてしまい、後続の回答にも影響して失点していた。ただし、それ以外の文字式の定義や立式に難は無かった。Qwenの誤りが「1カ所の計算ミスの伝播」なのに対し、LLM-jpは複数の独立した概念の誤解が表れていた。ここは大きな性能差と言える。</p>
+<p data-sourcepos="874:1-874:325">とはいえ、QwenもLLM-jpも、それ以外の問題には目立つような大きな失点は無く、推論中の数式の表記上の誤り等はあったものの、最終的な回答の精度には影響していないようだった。細かな失点は途中式の表記ミスや論理的な誤りに由来する。</p>
+<hr data-sourcepos="876:1-877:0">
+<p data-sourcepos="878:1-878:73">P04以降の問題について、Qwenはほぼ全問正解であった。</p>
+<p data-sourcepos="880:1-880:192">P04は酸化還元反応に関する問題だが、LLM-jpは半反応の向きを取り違えて考察していたものの、途中で自分の誤りに気付いて自己修正している。</p>
+<p data-sourcepos="882:1-882:342">また、P07の芳香族に関する問題ではLLM-jpの方がQwenより優れた推論の経過を見せた。Qwenは過剰な仮説に基づき、同位体パターンからベンザインを「linear C≡C」と記述してしまっていた。LLM-jpは「highly strained alkyne」と実際の構造に近い表現を採用していた。</p>
+<blockquote data-sourcepos="884:1-963:142">
+<p data-sourcepos="884:3-884:359">一方で、ベンザインが曲がったアルキン構造を有するという予備知識がLLM-jpの推論に影響した可能性は排除できない。そこで、LLM-jpに対して <code>"ベンザインはどのような構造を有していますか？"</code> と日本語で質問したところ、以下のような怪しい理解の回答が返った。</p>
+<details><summary>ベンザインに関するLLM-jpの回答</summary>
+<div class="code-frame" data-lang="" data-sourcepos="887:3-959:6">
+<div class="code-lang"><span class="bold">LLM-jpの回答</span></div>
+<div class="highlight"><pre><code># ベンザイン（benzyne）とは何か、そしてその構造について
+
+---
+
+## 1. ベンザインの概要
+
+* **定義**：ベンゼン環から隣接する二つの水素が除去され、炭素‐炭素三重結合（C≡C）を形成した非常に不安定な中間体。
+* **生成例**：ベンジルハロゲン（Ph‐CH₂‐X）やベンジルアルコール（Ph‐CH₂‐OH）を強塩基（NaH、KHMDS など）で脱プロトン化・脱離させると、ベンザインが瞬時に生じる。
+* **反応性**：求核付加、ジエノフィル付加、金属触媒によるカップリングなど、多様な有機変換の「鍵」になる。
+
+---
+
+## 2. 構造的特徴
+
+| 項目                 | 内容                                                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **骨格**             | ベンゼン環（6員環）のうち、隣接する2炭素が **sp‐混成** になり、**炭素–炭素三重結合（C≡C）** を形成する。残りの4炭素は従来通り **sp²** 混成で平面構造を保つ。                                                                |
+| **幾何形状**           | - **線形ベンザイン**（最も一般的に議論される形）：C≡C がほぼ直線（180°）で、環全体は平面。&lt;br&gt;- **曲げベンザイン**（実験的に観測されたケース）：C≡C の角度が約150°程度に曲がり、環がわずかに歪む。                                            |
+| **電子配置**           | - C≡C 部分は **2π結合 + 1σ結合**（sp‐sp 結合）。&lt;br&gt;- 環内の他の4炭素は **π共役系**（3本のπ結合）を保持し、部分的に芳香性が残存。&lt;br&gt;- 全体として **芳香性は失われる** が、局所的に **π‐π相互作用** が残るため、求核試薬が速やかに付加できる。        |
+| **対称性**            | D₂h（線形の場合）または C₂v（曲げの場合）に近い対称性。ベンゼンの D₆h 対称性は大幅に低下する。                                                                                                        |
+| **SMILES / InChI** | - SMILES（線形ベンザイン）: `c1ccc[n+]c1`（※実際には電荷表記は不要だが、三重結合を示すために `c1ccc#c1` と書くことも）&lt;br&gt;- InChI: `InChI=1S/C6H4/c1-2-3-4-5-6-1/h1-6H`（ただし、三重結合情報は省略されるので、構造式で確認が必要） |
+
+&gt; **注**：ベンザインは実在の分子として単離できないほど短命です。そのため、上記の「構造」は **計算化学（DFT、MP2 など）** や **X線結晶解析（低温条件下）** によって推測されたものです。
+
+---
+
+## 3. 代表的な構造モデル（図示）
+
+```text
+   線形ベンザイン（概念図）
+        C≡C
+      /     \
+   C—C—C—C—C
+   |   |   |   |
+   H   H   H   H
+
+   曲げベンザイン（概念図）
+        C≡C
+       /    \
+   C—C—C—C—C
+   |   |   |   |
+   H   H   H   H
+   (C≡C の角度 ≈ 150°)
+```
+
+*実際の平面構造はベンゼン環と同一平面にあり、C≡C の位置だけが sp‐混成になる点に注意してください。*
+
+---
+
+## 4. 重要なポイントまとめ
+
+1. **sp‐混成炭素が2つ** → 炭素‐炭素三重結合（C≡C）を形成。
+2. **芳香性は破壊** されるが、残りの4炭素は依然として π 共役系を保持。
+3. **線形 vs 曲げ**：理論的には線形が最も安定とされるが、実験的には曲げ構造が観測されることもある。
+4. **極めて不安定**：瞬時に求核付加や金属触媒反応へ移行するため、直接観測は困難。
+5. **合成戦略**：ベンジルハロゲン＋強塩基、またはベンジルアルコール＋酸/塩基の組み合わせで生成。
+
+---
+
+## 5. 参考文献（日本語・英語）
+
+1. **M. J. Frisch et al., “Benzyne: A Computational Study”, *J. Am. Chem. Soc.*, 1999, 121, 12345–12355.**
+2. **S. K. Lee, “Benzyne Intermediates in Organic Synthesis”, *Chem. Rev.*, 2018, 118, 10234–10300.**
+3. **大野　浩之, 「有機化学―反応機構と中間体」, 化学同人, 第3版, 2020.**（ベンザイン章参照）
+4. **R. B. Woodward, “The Structure of Benzyne”, *Nature*, 1967, 215, 115–117.**
+
+---
+
+### まとめ
+
+ベンザインはベンゼン環の隣接炭素が sp‐混成となり、炭素‐炭素三重結合（C≡C）を持つ特殊な中間体です。芳香性は失われますが、残りの炭素は依然として π 共役系を保持し、求核付加や金属触媒反応への入り口として重要です。線形構造が理論的に最も安定ですが、実際の反応過程では曲げ構造が観測されることもあります。これらの特徴を踏まえて、ベンザインを利用した合成設計や機構解析を行うことが、現代有機化学において広く行われています。
+</code></pre></div>
+</div>
+</details>
+<blockquote data-sourcepos="963:3-963:142">
+<p data-sourcepos="963:5-963:142">なお、ここで示されている参考文献はいずれもハルシネーションにより生成されたもので実在しない。</p>
+</blockquote>
+</blockquote>
+<p data-sourcepos="966:1-966:576">LLM-jpはP08の(6)の推論に粗があった。$x_A,x_B$ は問題文で "infinite gelに到達しない確率" として定義されている。ところがLLM-jpは途中でこれを "every chain certainly reaches the infinite gel" と全く逆の意味で捉えてしまっていた。興味深いことに、回答の後半の方では "unit root corresponds to a completely un-gelled system" という正しい説明も現れており、<strong>一つの回答内で定義を逆向きに解釈した上でさらに元に戻すという内部的な矛盾が生じていた</strong>。</p>
+<p data-sourcepos="968:1-968:323">LLM-jp側については、コンテキスト長やthinking budget不足による打ち切りが無く、純粋にモデルとしての性能で勝負できていた。トークン長が最大となったP03では、推論途中も含めて17454トークンを生成したが、これは24kを大きく下回っている。</p>
+<blockquote data-sourcepos="970:1-970:149">
+<p data-sourcepos="970:3-970:149">両モデルとも、それなりのGPUさえ与えれば、国立大学の大学院入試の筆記試験でもそこそこ戦えそうである。</p>
+</blockquote>
+<h2 data-sourcepos="972:1-972:12">
+<span id="生物学" class="fragment"></span><a href="#%E7%94%9F%E7%89%A9%E5%AD%A6"><i class="fa fa-link"></i></a>生物学</h2>
+<p data-sourcepos="974:1-974:375">BIO系列では、分子生物学、細胞生物学、遺伝学、発生生物学、生理学から幅広く出題した。単純な知識問題ではなく、問題文中で与えられた条件や機構を正確に追跡し、多段階の因果推論や計算を行えるかを重視した構成としている。難度の評価に関してはあくまで目安である。</p>
+<table data-sourcepos="976:1-985:77">
+<thead>
+<tr data-sourcepos="976:1-976:79">
+<th data-sourcepos="976:2-976:13">ID</th>
+<th data-sourcepos="976:15-976:25">分野</th>
+<th data-sourcepos="976:27-976:62">題材</th>
+<th data-sourcepos="976:64-976:78">難度目安</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="978:1-978:109">
+<td data-sourcepos="978:2-978:13">SP-BIO-P01</td>
+<td data-sourcepos="978:15-978:31">分子生物学</td>
+<td data-sourcepos="978:33-978:92">転写活性化とmRNA安定化の寄与分離</td>
+<td data-sourcepos="978:94-978:108">★★★★</td>
+</tr>
+<tr data-sourcepos="979:1-979:91">
+<td data-sourcepos="979:2-979:13">SP-BIO-P02</td>
+<td data-sourcepos="979:15-979:31">分子生物学</td>
+<td data-sourcepos="979:33-979:74">NMDと選択的スプライシング</td>
+<td data-sourcepos="979:76-979:90">★★★★</td>
+</tr>
+<tr data-sourcepos="980:1-980:98">
+<td data-sourcepos="980:2-980:13">SP-BIO-P03</td>
+<td data-sourcepos="980:15-980:31">分子生物学</td>
+<td data-sourcepos="980:33-980:82">転写減衰・RNA二次構造の連動</td>
+<td data-sourcepos="980:84-980:97">★★★★</td>
+</tr>
+<tr data-sourcepos="981:1-981:84">
+<td data-sourcepos="981:2-981:13">SP-BIO-P04</td>
+<td data-sourcepos="981:15-981:31">細胞生物学</td>
+<td data-sourcepos="981:33-981:67">膜タンパク質トポロジー</td>
+<td data-sourcepos="981:69-981:83">★★★★</td>
+</tr>
+<tr data-sourcepos="982:1-982:101">
+<td data-sourcepos="982:2-982:13">SP-BIO-P05</td>
+<td data-sourcepos="982:15-982:27">遺伝学</td>
+<td data-sourcepos="982:29-982:82">生存選択補正を伴う三点交雑</td>
+<td data-sourcepos="982:84-982:100">★★★★★</td>
+</tr>
+<tr data-sourcepos="983:1-983:103">
+<td data-sourcepos="983:2-983:13">SP-BIO-P06</td>
+<td data-sourcepos="983:15-983:31">発生生物学</td>
+<td data-sourcepos="983:33-983:89">Shh濃度・時間依存性とエピスタシス</td>
+<td data-sourcepos="983:91-983:102">★★★</td>
+</tr>
+<tr data-sourcepos="984:1-984:93">
+<td data-sourcepos="984:2-984:13">SP-BIO-P07</td>
+<td data-sourcepos="984:15-984:27">生理学</td>
+<td data-sourcepos="984:29-984:78">腎クリアランス・輸送最大</td>
+<td data-sourcepos="984:80-984:92">★★★</td>
+</tr>
+<tr data-sourcepos="985:1-985:77">
+<td data-sourcepos="985:2-985:13">SP-BIO-P08</td>
+<td data-sourcepos="985:15-985:27">生理学</td>
+<td data-sourcepos="985:29-985:63">Cl⁻恒常性とGABA作用</td>
+<td data-sourcepos="985:65-985:76">★★★</td>
+</tr>
+</tbody>
+</table>
+<table data-sourcepos="988:1-998:42">
+<thead>
+<tr data-sourcepos="988:1-988:43">
+<th data-sourcepos="988:2-988:13"></th>
+<th style="text-align: right" data-sourcepos="988:15-988:27">Qwen3.8-27B</th>
+<th style="text-align: right" data-sourcepos="988:29-988:42">LLM-jp-4-33B</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="990:1-990:43">
+<td data-sourcepos="990:2-990:13">SP-BIO-P01</td>
+<td style="text-align: right" data-sourcepos="990:15-990:24">9.6</td>
+<td style="text-align: right" data-sourcepos="990:26-990:42">9.8</td>
+</tr>
+<tr data-sourcepos="991:1-991:42">
+<td data-sourcepos="991:2-991:13">SP-BIO-P02</td>
+<td style="text-align: right" data-sourcepos="991:15-991:22">9.7</td>
+<td style="text-align: right" data-sourcepos="991:24-991:41">9.5</td>
+</tr>
+<tr data-sourcepos="992:1-992:42">
+<td data-sourcepos="992:2-992:13">SP-BIO-P03</td>
+<td style="text-align: right" data-sourcepos="992:15-992:22">9.8</td>
+<td style="text-align: right" data-sourcepos="992:24-992:41">4.0</td>
+</tr>
+<tr data-sourcepos="993:1-993:40">
+<td data-sourcepos="993:2-993:13">SP-BIO-P04</td>
+<td style="text-align: right" data-sourcepos="993:15-993:23">9.9</td>
+<td style="text-align: right" data-sourcepos="993:25-993:39">7.8</td>
+</tr>
+<tr data-sourcepos="994:1-994:41">
+<td data-sourcepos="994:2-994:13">SP-BIO-P05</td>
+<td style="text-align: right" data-sourcepos="994:15-994:24">5.2</td>
+<td style="text-align: right" data-sourcepos="994:26-994:40">9.2</td>
+</tr>
+<tr data-sourcepos="995:1-995:41">
+<td data-sourcepos="995:2-995:13">SP-BIO-P06</td>
+<td style="text-align: right" data-sourcepos="995:15-995:24">9.7</td>
+<td style="text-align: right" data-sourcepos="995:26-995:40">9.5</td>
+</tr>
+<tr data-sourcepos="996:1-996:41">
+<td data-sourcepos="996:2-996:13">SP-BIO-P07</td>
+<td style="text-align: right" data-sourcepos="996:15-996:24">9.9</td>
+<td style="text-align: right" data-sourcepos="996:26-996:40">9.6</td>
+</tr>
+<tr data-sourcepos="997:1-997:41">
+<td data-sourcepos="997:2-997:13">SP-BIO-P08</td>
+<td style="text-align: right" data-sourcepos="997:15-997:23">9.8</td>
+<td style="text-align: right" data-sourcepos="997:25-997:40">7.0</td>
+</tr>
+<tr data-sourcepos="998:1-998:42">
+<td data-sourcepos="998:2-998:13"><strong>合計</strong></td>
+<td style="text-align: right" data-sourcepos="998:15-998:27"><strong>73.6/80</strong></td>
+<td style="text-align: right" data-sourcepos="998:29-998:41"><strong>66.4/80</strong></td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="1000:1-1000:155">BIO系列全体では、Qwen3.8-27Bが平均点で上回った。ただし、平均点以上に注目すべきは失敗への至り方の違いである。</p>
+<p data-sourcepos="1002:1-1002:549">LLM-jpの回答では、P03とP08で純粋なミスにより失点していた。その他は数値の丸め誤差や記号の取り違えによる軽微な失点である。P03について、問題文では3–4のみが転写終結構造と定義されていたにもかかわらず、古典的トリプトファンオペロンの知識を持ち込んで1–2を終結構造として扱ったため、HIGH/LOWの判定が逆転していた。また、P08で塩化物イオンの移動方向を逆転させてしまう符号ミスが見られた。</p>
+<p data-sourcepos="1004:1-1004:844">P05では、LLM-jpがQwenを大きく上回った。Qwenは、生存率補正の対象を判定する段階で<code>Abc</code>の大文字<code>A</code>を小文字<code>a</code>として誤認し、本来は<code>abc</code>と<code>aBc</code>の2クラスのみを補正すべきところを<code>Abc</code>まで補正対象に含めてしまった。この序盤での記号の解釈ミスが後続の組換え率、二重交差、干渉率の計算全体へ波及した。一方、LLM-jpは補正対象を正しく特定し、主要な連鎖解析計算をほぼ正確に実行したが、最後の自然言語説明で一部の組換えクラスの分類を取り違える軽微な誤りが残った。したがって本問では、<strong>Qwenの失敗は連鎖解析そのものではなく文字列の識別・解釈ミス、LLM-jpの失敗は最終説明上の局所的な分類ミス</strong>と整理できる。</p>
+<blockquote data-sourcepos="1007:1-1007:361">
+<p data-sourcepos="1007:3-1007:361">余談だが、筆者の実行環境ではLLM-jpの P05 の推論に約24分程度（6435 tokens）を要した。一方で、Qwenでは3分半程度（13302 tokens）で済んだが結果的には誤った結論に陥っていた。また、P03についてはLLM-jpで <code>reasoning_effort = high</code> の条件でも回答させたが、結局失点していた。</p>
+</blockquote>
+<hr data-sourcepos="1009:1-1010:0">
+<p data-sourcepos="1011:1-1011:63">BIO系列の結果をまとめると以下のようになる。</p>
+<table data-sourcepos="1013:1-1022:97">
+<thead>
+<tr data-sourcepos="1013:1-1013:53">
+<th data-sourcepos="1013:2-1013:5">ID</th>
+<th data-sourcepos="1013:7-1013:28">Qwen3.8-27Bの評価</th>
+<th data-sourcepos="1013:30-1013:52">LLM-jp-4-33Bの評価</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="1015:1-1015:87">
+<td data-sourcepos="1015:2-1015:13">SP-BIO-P01</td>
+<td data-sourcepos="1015:15-1015:65">主要部分正解。若干のover-interpretation</td>
+<td data-sourcepos="1015:67-1015:86">ほぼ完全正答</td>
+</tr>
+<tr data-sourcepos="1016:1-1016:68">
+<td data-sourcepos="1016:2-1016:13">SP-BIO-P02</td>
+<td data-sourcepos="1016:15-1016:34">ほぼ完全正答</td>
+<td data-sourcepos="1016:36-1016:67">軽微な機構表現の問題</td>
+</tr>
+<tr data-sourcepos="1017:1-1017:114">
+<td data-sourcepos="1017:2-1017:13">SP-BIO-P03</td>
+<td data-sourcepos="1017:15-1017:52">prompt内ルールを正確に適用</td>
+<td data-sourcepos="1017:54-1017:113">既知のtrp operon知識を優先し主要判定を逆転</td>
+</tr>
+<tr data-sourcepos="1018:1-1018:105">
+<td data-sourcepos="1018:2-1018:13">SP-BIO-P04</td>
+<td data-sourcepos="1018:15-1018:58">topology・start/stop-transferとも正解</td>
+<td data-sourcepos="1018:60-1018:104">topologyは正しいがH1/H2機能を逆転</td>
+</tr>
+<tr data-sourcepos="1019:1-1019:129">
+<td data-sourcepos="1019:2-1019:13">SP-BIO-P05</td>
+<td data-sourcepos="1019:15-1019:66">
+<code>Abc</code>を誤読し誤補正が後続計算へ波及</td>
+<td data-sourcepos="1019:68-1019:128">計算はほぼ完全、最後のclass説明に局所ミス</td>
+</tr>
+<tr data-sourcepos="1020:1-1020:119">
+<td data-sourcepos="1020:2-1020:13">SP-BIO-P06</td>
+<td data-sourcepos="1020:15-1020:58">epistasis・underdeterminationとも良好</td>
+<td data-sourcepos="1020:60-1020:118">主要推論正解、モデル記述に軽微な不整合</td>
+</tr>
+<tr data-sourcepos="1021:1-1021:77">
+<td data-sourcepos="1021:2-1021:13">SP-BIO-P07</td>
+<td data-sourcepos="1021:15-1021:34">ほぼ完全正答</td>
+<td data-sourcepos="1021:36-1021:76">PAHのover/underestimate表現を逆転</td>
+</tr>
+<tr data-sourcepos="1022:1-1022:97">
+<td data-sourcepos="1022:2-1022:13">SP-BIO-P08</td>
+<td data-sourcepos="1022:15-1022:38">Cl⁻ fluxまで正確</td>
+<td data-sourcepos="1022:40-1022:96">Cl⁻ influx/effluxを逆転し後続説明にも波及</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="1024:1-1024:52">Qwenは以下の能力で特に安定していた。</p>
+<ul data-sourcepos="1026:1-1031:0">
+<li data-sourcepos="1026:1-1026:53">問題文で明示された局所ルールの追跡</li>
+<li data-sourcepos="1027:1-1027:44">複数の実験条件からの因果推論</li>
+<li data-sourcepos="1028:1-1028:37">membrane topologyの空間的推論</li>
+<li data-sourcepos="1029:1-1029:44">電気化学的な符号・方向の処理</li>
+<li data-sourcepos="1030:1-1031:0">「条件不足のため一意に決められない」という判断</li>
+</ul>
+<p data-sourcepos="1032:1-1032:241">P03では既知のtrp operonパターンよりもプロンプト内の規則を優先し、P04ではstart-/stop-transferを正確に区別し、P08では陰イオンであるCl$^-$の電流と物理的fluxの方向を正しく処理した。</p>
+<p data-sourcepos="1034:1-1034:463">一方で、P05では<code>Abc</code>と<code>abc</code>のような大文字・小文字のallele表記を一箇所読み違えただけで、多段の定量推論全体が崩壊した。したがってQwenの主要な失敗は、<strong>記号や文字列の識別・解釈ミス</strong>と整理できる。しかも<strong>一度誤った初期状態を採用すると、その後の計算は非常に論理的かつ整然としているため精密に間違える</strong>という特徴が見られた。</p>
+<p data-sourcepos="1036:1-1036:405">BIO系列のタスクにおいて、LLM-jpは数値計算そのものにはかなり強かった。P01、P02、P05、P07では、多段階の定量計算をほぼ正確に実行した。またP06では、情報不足の条件について無理に答えを作らずunderdeterminedと判断できた。一方、複数の問題で方向・符号・機能ラベルの反転が見られた。例としては、</p>
+<ul data-sourcepos="1038:1-1041:0">
+<li data-sourcepos="1038:1-1038:47">P04：start-transfer / stop-transferの逆転</li>
+<li data-sourcepos="1039:1-1039:61">P07：PAH clearanceのoverestimate / underestimateの逆転</li>
+<li data-sourcepos="1040:1-1041:0">P08：Cl$^-$ influx / effluxの逆転</li>
+</ul>
+<p data-sourcepos="1042:1-1042:42">である。したがってLLM-jpでは、</p>
+<ul data-sourcepos="1044:1-1046:0">
+<li data-sourcepos="1044:1-1044:60"><strong>増減や向き、符号などを逆に捉えるミス</strong></li>
+<li data-sourcepos="1045:1-1046:0"><strong>問題文で明示されたルールよりも、学習済みの一般的な知識を優先してしまうミス</strong></li>
+</ul>
+<p data-sourcepos="1047:1-1047:64">の2種類が、主な失敗パターンとして見られた。</p>
+<h1 data-sourcepos="1050:1-1050:11">
+<span id="まとめ" class="fragment"></span><a href="#%E3%81%BE%E3%81%A8%E3%82%81"><i class="fa fa-link"></i></a>まとめ</h1>
+<p data-sourcepos="1052:1-1052:226">今回、Qwen3.8-27B:Q4_K_MとLLM-jp-4-33B-thinking:Q4_K_Mに対し、論理、文章理解・翻訳、情報科学、数学、物理学、化学、生物学の8系列・計64問のベンチマークテストを実施した。</p>
+<p data-sourcepos="1054:1-1054:84">各系列の得点を単純に合算すると、結果は以下のようになる。</p>
+<table data-sourcepos="1056:1-1066:78">
+<thead>
+<tr data-sourcepos="1056:1-1056:48">
+<th data-sourcepos="1056:2-1056:9">系列</th>
+<th style="text-align: right" data-sourcepos="1056:11-1056:23">Qwen3.8-27B</th>
+<th style="text-align: right" data-sourcepos="1056:25-1056:47">LLM-jp-4-33B-thinking</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="1058:1-1058:34">
+<td data-sourcepos="1058:2-1058:9">論理</td>
+<td style="text-align: right" data-sourcepos="1058:11-1058:21">78.5 / 80</td>
+<td style="text-align: right" data-sourcepos="1058:23-1058:33">78.5 / 80</td>
+</tr>
+<tr data-sourcepos="1059:1-1059:49">
+<td data-sourcepos="1059:2-1059:24">文章理解・翻訳</td>
+<td style="text-align: right" data-sourcepos="1059:26-1059:36">75.9 / 80</td>
+<td style="text-align: right" data-sourcepos="1059:38-1059:48">64.9 / 80</td>
+</tr>
+<tr data-sourcepos="1060:1-1060:40">
+<td data-sourcepos="1060:2-1060:15">情報科学</td>
+<td style="text-align: right" data-sourcepos="1060:17-1060:27">68.0 / 80</td>
+<td style="text-align: right" data-sourcepos="1060:29-1060:39">51.0 / 80</td>
+</tr>
+<tr data-sourcepos="1061:1-1061:55">
+<td data-sourcepos="1061:2-1061:30">数学（代数・数論）</td>
+<td style="text-align: right" data-sourcepos="1061:32-1061:42">56.0 / 80</td>
+<td style="text-align: right" data-sourcepos="1061:44-1061:54">34.0 / 80</td>
+</tr>
+<tr data-sourcepos="1062:1-1062:55">
+<td data-sourcepos="1062:2-1062:30">数学（解析・幾何）</td>
+<td style="text-align: right" data-sourcepos="1062:32-1062:42">65.0 / 80</td>
+<td style="text-align: right" data-sourcepos="1062:44-1062:54">21.0 / 80</td>
+</tr>
+<tr data-sourcepos="1063:1-1063:37">
+<td data-sourcepos="1063:2-1063:12">物理学</td>
+<td style="text-align: right" data-sourcepos="1063:14-1063:24">70.5 / 80</td>
+<td style="text-align: right" data-sourcepos="1063:26-1063:36">41.5 / 80</td>
+</tr>
+<tr data-sourcepos="1064:1-1064:34">
+<td data-sourcepos="1064:2-1064:9">化学</td>
+<td style="text-align: right" data-sourcepos="1064:11-1064:21">77.1 / 80</td>
+<td style="text-align: right" data-sourcepos="1064:23-1064:33">65.5 / 80</td>
+</tr>
+<tr data-sourcepos="1065:1-1065:37">
+<td data-sourcepos="1065:2-1065:12">生物学</td>
+<td style="text-align: right" data-sourcepos="1065:14-1065:24">73.6 / 80</td>
+<td style="text-align: right" data-sourcepos="1065:26-1065:36">66.4 / 80</td>
+</tr>
+<tr data-sourcepos="1066:1-1066:78">
+<td data-sourcepos="1066:2-1066:19"><strong>総合得点</strong></td>
+<td style="text-align: right" data-sourcepos="1066:21-1066:48"><strong>564.6 / 640（88.2%）</strong></td>
+<td style="text-align: right" data-sourcepos="1066:50-1066:77"><strong>422.8 / 640（66.1%）</strong></td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="1068:1-1068:60">これをレーダーチャートとして可視化した。</p>
+<p data-sourcepos="1070:1-1070:138"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F317bdf23-4ed3-4375-a944-e195055fc9e5.png?ixlib=rb-4.1.1&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=b00544fd55f28cdd603c6882a598b129" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/61d5053a2ad07698e3cff8ba.png" alt="qwen_llmjp_radar_chart.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/317bdf23-4ed3-4375-a944-e195055fc9e5.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="1072:1-1072:347">得点には記述式回答の部分点も含まれており、問題ごとの難度も題材も均一ではないため、この総合得点を絶対的な性能指標と見なすことはできないが、今回用意した問題群に対してはQwen3.8-27Bが全体として明確に高い推論性能を示したと言ってよいだろう。</p>
+<p data-sourcepos="1074:1-1074:136">より興味深いのは単純な得点差よりも、<strong>両モデルの失敗の仕方がかなり異なっていたこと</strong>である。</p>
+<hr data-sourcepos="1076:1-1077:0">
+<p data-sourcepos="1078:1-1078:497"><strong>Qwen3.8-27Bは、複数段階にわたって数式・状態・論理条件を保持し、その場で構成したモデルを最後まで運用する能力が比較的高かった</strong>。数学、物理、情報科学ではこの差が特に顕著で、解析・幾何では65/80対21/80、物理では70.5/80対41.5/80となった。情報科学分野のタスクでも、型推論、CFG/SSA、rollback DSUなど、形式的な不変条件を長く維持する問題でQwenが優勢であった。</p>
+<p data-sourcepos="1080:1-1080:505">またQwenでは、<strong>推論途中で誤った式や仮説を立てても、次元解析や再計算によって自ら矛盾を検出して正しい軌道へ戻る</strong>、という例が複数観察された。これは物理・化学・数学の問題で特に目立った。必ずしも最初から正しく推論しているわけではないが、長めのthinkingを利用して探索と検算を繰り返すことで正答へ到達するタイプのモデルであることが実際に観察できた。</p>
+<p data-sourcepos="1082:1-1082:673">その反面、Qwenにも明確な弱点がある。局所的な記号の読み違え、複雑な状態更新の一部の脱落、不要な近似の導入などは繰り返し観察された。生物学P05では <code>Abc</code> と <code>abc</code> の区別を一度誤ったことで、その後の計算を非常に整然と、しかし誤った初期条件のまま進めてしまった。また、難しい数論問題ではseedによって正誤が大きく変化しており、長く考えさせれば単調に正答率が上がるわけでもなかった。今回の条件では推論を過剰に継続する傾向もあり、推論の効率や安定性には改善の余地がある。</p>
+<hr data-sourcepos="1084:1-1085:0">
+<p data-sourcepos="1086:1-1086:601">LLM-jp-4-33B-thinkingは、論理系列ではQwenと同じ78.5/80を獲得しており、比較的短い論理的推論や、規則の適用範囲の判定などが弱いモデルではない。また、化学では65.5/80、生物学では66.4/80を獲得しており、専門知識を利用した定量的アウトプットが求められるタスクでも高い性能を示すものが多かった。情報科学でもprogressive fillingや分散スナップショットではQwen以上に正確であり、生物学の三点交雑ではQwenが崩した多段階計算をほぼ完遂している。</p>
+<p data-sourcepos="1088:1-1088:362">したがって、今回の結果だけからLLM-jpを単純に「STEMに弱い」と評価するのは適切ではない。むしろ<strong>LLM-jpの弱点は、長い推論過程の中で複数の条件や数学的対象を一貫して保持し、局所的な誤りを検出しながら最終回答へ収束させる能力</strong>に集中していたように見える。</p>
+<p data-sourcepos="1090:1-1090:547">数学系列の16問では、LLM-jpで <code>INCOMPLETE_SOLUTION_SET</code>、<code>WRONG_MODEL</code>、<code>LENGTH_LOOP</code> が比較的多く発生した。特に、<strong>正しい方針や式を一度は得ているにもかかわらず、途中から同じ計算を反復してtoken上限に達するケース</strong>が複数存在した。物理でも、符号や係数、速度と角速度、鏡像電荷の位置などの局所的な誤認が後続の推論全体へ伝播し、その後の次元解析や検算によって十分に回復できないケースが見られた。</p>
+<p data-sourcepos="1092:1-1092:572">文章理解・翻訳および生物学では、別の特徴も観察された。<strong>LLM-jpは、不確定な記述をやや強く解釈する、方向・符号・機能ラベルを反転する、あるいはプロンプト内で明示された局所的な規則より学習済みの一般知識を優先することがある</strong>。LIT-P02、LIT-P08、BIO-P03、BIO-P08などはその典型例であった。この種の誤りは最終文だけを読むと自然に見えるため、厳密な文書解釈や科学的推論に利用する場合には注意が必要である。</p>
+<p data-sourcepos="1094:1-1094:356">これ対して（今回の問題セットにおいては）<strong>Qwenはプロンプト内で定義された局所ルールを既知の一般論より優先する能力が比較的安定していた</strong>。この差は、文章理解だけでなく、型システム、アルゴリズム、生物学的機構など複数の系列をまたいで観察された。</p>
+<hr data-sourcepos="1096:1-1097:0">
+<p data-sourcepos="1098:1-1098:130">以上の結果および考察を単純化して表現すると、今回の2モデルには次のような傾向が見られた。</p>
+<ul data-sourcepos="1100:1-1113:0">
+<li data-sourcepos="1100:1-1106:3">
+<strong>Qwen3.8-27B</strong>
+<ul data-sourcepos="1101:3-1106:3">
+<li data-sourcepos="1101:3-1101:103">多段階にわたる長い推論、数学的モデル化、形式的不変条件の保持に強い</li>
+<li data-sourcepos="1102:3-1102:88">推論途中の誤りを自己検出・自己修正できる場合が比較的多い</li>
+<li data-sourcepos="1103:3-1103:142">プロンプト内で与えられた局所的な規則への追従が安定している（既存の予備知識に惑わされにくい）</li>
+<li data-sourcepos="1104:3-1104:134">一方、局所的な情報の更新（または更新忘れ）、記号の読み違えや過剰な長考、seed依存性が残る</li>
+<li data-sourcepos="1105:3-1106:3">JSON-only等の厳密な出力への対応には別途ガードレールが必要となる可能性がある<br>
+　</li>
+</ul>
+</li>
+<li data-sourcepos="1107:1-1113:0">
+<strong>LLM-jp-4-33B-thinking</strong>
+<ul data-sourcepos="1108:3-1113:0">
+<li data-sourcepos="1108:3-1108:112">論理的思考、一般的な文章処理、化学・生物の一部の定量的問題では十分高性能</li>
+<li data-sourcepos="1109:3-1109:77">問題によってはQwenより簡潔かつ正確に計算を完遂する</li>
+<li data-sourcepos="1110:3-1110:124">一方、長い数理推論の収束、解集合の完全性、形式的不変条件の保持で弱さが表れやすい</li>
+<li data-sourcepos="1111:3-1111:109">推論中に生じた局所的な符号・方向・定義の反転が後続の推論へ伝播しやすい</li>
+<li data-sourcepos="1112:3-1113:0">正しい途中結果を得ていてもthinking loopに入り、最終回答に統合･収束できない場合がある</li>
+</ul>
+</li>
+</ul>
+<p data-sourcepos="1114:1-1114:469">少なくとも今回の条件では、<strong>総合的な推論性能、とりわけSTEM・情報科学系の高度なタスクではQwen3.8-27Bに明確な優位性があった</strong>。一方で、論理的思考能力を問う問題では差がほとんど認められず、化学・生物ではLLM-jpもかなり高い性能を発揮しているため、両モデルの差を単なる「知識量」や「パラメータ数」の差として説明することは難しい。</p>
+<p data-sourcepos="1116:1-1116:351">むしろ今回の結果からは、<strong>推論をどれだけ長く行えるかよりも、途中で構築した状態・定義・数式を壊さず、誤りを検出し、適切な地点で推論を収束させられるか</strong>が、現在の30B前後のthinkingモデルの良し悪しを分ける重要な能力の一つであるように思われる。</p>
+<blockquote data-sourcepos="1118:1-1122:35">
+<p data-sourcepos="1118:3-1118:77">LLM-jpの次世代バージョンで改善すべき点の優先度は概ね</p>
+<blockquote data-sourcepos="1120:3-1120:102">
+<p data-sourcepos="1120:5-1120:102"><strong>推論品質･収束性の改善 ＞ 事後学習の強化 ＞ MTP等によるdecode高速化</strong></p>
+</blockquote>
+<p data-sourcepos="1122:3-1122:35">の順となるように思う。</p>
+</blockquote>
+<hr data-sourcepos="1124:1-1125:0">
+<p data-sourcepos="1126:1-1126:613">なお、本稿の比較における幾つかの重要な制約については断っておく必要がある。Qwenでは開発元がThinkingモード向けに示している確率的サンプリングの条件を採用したのに対し、LLM-jpでは公式の対応するサンプリング推奨値が明示されていないため、再現性を優先して <code>temperature=0</code> のgreedy decodingを使用している。またQwenについてはseed依存性が実際に確認されている。したがって、本稿の得点差をモデル固有の能力差だけに厳密に分解することはできない。</p>
+<p data-sourcepos="1128:1-1128:521">さらに、量子化、llama.cppのバージョン、32kという実行コンテキスト、thinking budgetなどの制約も存在する。本結果はあくまで<strong>本稿に記載したローカル環境と生成条件の下で得られた一回のベンチマーク結果</strong>として解釈していただきたい。より厳密な比較には、複数seedでの反復試行、サンプリング条件の感度分析、より長いコンテキスト、異なる量子化精度での再評価などが必要になる。</p>
+<blockquote data-sourcepos="1130:1-1130:262">
+<p data-sourcepos="1130:3-1130:262">今回はハードウェア面での制約が大きかったため、特にLLM-jpについてはseed値依存性の評価まで踏み込めていない。厳密な評価を期待する場合、seed値を複数振って感度分析することが望ましい。</p>
+</blockquote>
+<hr data-sourcepos="1132:1-1133:0">
+<p data-sourcepos="1134:1-1134:345">とはいえ、前回のベンチマークでは両モデルがほぼ満点となり性能差を十分に観察できなかったのに対し、今回は問題をかなり難化させたことで、両モデルの得意・不得意だけでなく「どのように間違えるのか」という実用的な部分まで明瞭に観察できた。</p>
+<p data-sourcepos="1136:1-1136:285">30B前後のローカルLLMは今や相当高度な問題をこなせる一方で、長考させたからといって必ずしも正しい結論を導けるわけではないことも明らかになった。これは今回の検証で得られた興味深い知見の一つである。</p>
+
+</div>
+
+
+{% endraw %}

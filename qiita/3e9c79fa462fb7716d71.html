@@ -1,0 +1,199 @@
+---
+layout: "qiita-mirror"
+title: "【Python】4次ルンゲ＝クッタ法で化学反応速度論シミュレーション"
+qiita_id: "3e9c79fa462fb7716d71"
+qiita_url: "https://qiita.com/h-nabata/items/3e9c79fa462fb7716d71"
+qiita_created: "2023-06-19T19:34:25+09:00"
+qiita_updated: "2023-06-23T02:33:09+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "計算化学・分子構造"
+mirror_tags: ["Python", "数値計算", "シミュレーション", "ルンゲクッタ法", "化学"]
+permalink: "/qiita/3e9c79fa462fb7716d71.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<h1 data-sourcepos="1:1-1:26">
+<span id="ルンゲクッタ法" class="fragment"></span><a href="#%E3%83%AB%E3%83%B3%E3%82%B2%E3%82%AF%E3%83%83%E3%82%BF%E6%B3%95"><i class="fa fa-link"></i></a>ルンゲ＝クッタ法</h1>
+<p data-sourcepos="3:1-3:527"><a href="https://ja.wikipedia.org/wiki/%E3%83%AB%E3%83%B3%E3%82%B2%EF%BC%9D%E3%82%AF%E3%83%83%E3%82%BF%E6%B3%95" rel="nofollow noopener" target="_blank"><strong>ルンゲ＝クッタ法</strong></a>（runge kutta method）は微分方程式を数値的に解く手法の一つで、そのプログラムの実装の容易さから時間発展追跡の簡便法として知られています。特に4次のルンゲ＝クッタ法（RK4法）は計算コストと計算精度の兼ね合いから広く用いられています。RK4法は時刻 $t$ の関数 $x = x(t)$ の常微分方程式</p>
+<div class="code-frame" data-lang="math" data-sourcepos="4:1-6:3"><div class="highlight"><pre><code>\dfrac{dx}{dt}=f(x,t) \tag{1}
+</code></pre></div></div>
+<p data-sourcepos="7:1-7:138">について、以下の式を用いて時間 $\Delta t$ だけ進んだときの方程式$(1)$の解 $x=x(t+\Delta t)$ を求めます。</p>
+<div class="code-frame" data-lang="math" data-sourcepos="10:1-12:3"><div class="highlight"><pre><code>x_{n+1}=x_n+\frac{\Delta t}{6} k_1+\frac{\Delta t}{3} k_2+\frac{\Delta t}{3} k_3+\frac{\Delta t}{6} k_4 \tag{2}
+</code></pre></div></div>
+<p data-sourcepos="13:1-13:64">ここで、$k_1$～$k_4$は以下の式で与えられます。</p>
+<div class="code-frame" data-lang="math" data-sourcepos="14:1-21:3"><div class="highlight"><pre><code>\begin{cases}
+k_1 =f\left(x_n,\, t_n\right)\\
+k_2 =f\left(x_n+\dfrac{\Delta t}{2} k_1,\, t_n+\dfrac{\Delta t}{2}\right) \\
+k_3 =f\left(x_n+\dfrac{\Delta t}{2} k_2,\, t_n+\dfrac{\Delta t}{2}\right) \\
+k_4 =f\left(x_n+\Delta t \, k_3,\, t_n+\Delta t\right)
+\end{cases} \tag{3}
+</code></pre></div></div>
+<p data-sourcepos="23:1-23:87">この操作を繰り返すことで時間発展を追跡することができます。</p>
+<h1 data-sourcepos="25:1-25:26">
+<span id="化学反応の速度論" class="fragment"></span><a href="#%E5%8C%96%E5%AD%A6%E5%8F%8D%E5%BF%9C%E3%81%AE%E9%80%9F%E5%BA%A6%E8%AB%96"><i class="fa fa-link"></i></a>化学反応の速度論</h1>
+<p data-sourcepos="27:1-27:198">遷移状態理論の範囲では、反応速度定数はアイリングの式に基づいて温度$T$と活性化エネルギー$\Delta G^{\ddagger}$をパラメータとして与えられます。</p>
+<div class="code-frame" data-lang="math" data-sourcepos="29:1-31:3"><div class="highlight"><pre><code>k=\varGamma \dfrac{k_{\mathrm{B}}T}{h} \, \exp \left(-{\dfrac{\Delta G^{\ddagger}}{RT}}\right)
+</code></pre></div></div>
+<blockquote data-sourcepos="33:1-33:160">
+<p data-sourcepos="33:3-33:160">ここで$\varGamma$は透過係数を表し、トンネル効果の補正を考慮しない場合は $\varGamma=1$ として計算するのが通例です。</p>
+</blockquote>
+<p data-sourcepos="35:1-35:199">A、B、Cの3状態からなる1次の逐次反応モデルを考えます。正反応（forward reaction）には "f"、逆反応（reverse reaction）には "r" とラベリングしています。</p>
+<div class="code-frame" data-lang="math" data-sourcepos="37:1-39:3"><div class="highlight"><pre><code>\large [\mathrm{A}] \underset{k_{1r}}{\overset{k_{1f}}{\rightleftarrows}} [\mathrm{B}] \underset{k_{2r}}{\overset{k_{2f}}{\rightleftarrows}} [\mathrm{C}]
+</code></pre></div></div>
+<p data-sourcepos="41:1-41:153">この系が、例えば以下のようなエネルギーダイアグラム（縦軸は自由エネルギー）で表現される場合を考えます。</p>
+<p data-sourcepos="43:1-43:122"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F68bdba12-1f56-5c0b-0620-e169390010bb.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=c230e56be9207273112217b681a8a8dd" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/13c1727ebc66079895cf8101.png" alt="reac_a.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/68bdba12-1f56-5c0b-0620-e169390010bb.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="46:1-46:97">このとき反応速度定数は 300 K において、それぞれ次のようになります。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="48:1-53:3"><div class="highlight"><pre><code>k1f = 2.234724e+02
+k1r = 6.783680e+05
+k2f = 1.231245e+04
+k2r = 4.056047e+00
+</code></pre></div></div>
+<p data-sourcepos="55:1-55:93">これらの値の計算方法については以下の記事を参考にしてください。</p>
+<p data-sourcepos="57:1-57:53"><a href="/qiita/ada3098b933e17613dca.html" class="mirror-link-card">https://qiita.com/h-nabata/items/ada3098b933e17613dca</a>
+</p>
+<p data-sourcepos="59:1-59:103">したがって、この系のレート方程式は 300 K において以下のようになります。</p>
+<div class="code-frame" data-lang="math" data-sourcepos="61:1-67:3"><div class="highlight"><pre><code>\begin{aligned} 
+\dfrac{d[\mathrm{A}]}{dt} &amp;= − 2.23 \times 10^{2} [\mathrm{A}] + 6.78 \times 10^{5} [\mathrm{B}] \\
+\dfrac{d[\mathrm{B}]}{dt} &amp;= 2.23 \times 10^2 [\mathrm{A}] − 6.78 \times 10^5 [\mathrm{B}] − 1.23 \times 10^4 [\mathrm{B}] + 4.05 \times 10^0 [\mathrm{C}] \\
+\dfrac{d[\mathrm{C}]}{dt} &amp;= 1.23 \times 10^4 [\mathrm{B}] − 4.05 \times 10^0 [\mathrm{C}] 
+\end{aligned}
+</code></pre></div></div>
+<p data-sourcepos="69:1-69:171">この連立微分方程式をPythonのコードに起こすと次のような関数として表現できます。関数 <code>reaction_equations()</code> の引数は次の通り。</p>
+<ul data-sourcepos="70:1-71:0">
+<li data-sourcepos="70:1-71:0">各状態の濃度 <code>concentrations</code> (floatのlist)</li>
+</ul>
+<div class="code-frame" data-lang="py" data-sourcepos="72:1-81:3">
+<div class="code-lang"><span class="bold">rate equation</span></div>
+<div class="highlight"><pre><code><span class="k">def</span> <span class="nf">reaction_equations</span><span class="p">(</span><span class="n">concentrations</span><span class="p">):</span>
+    <span class="c1"># Define the system of ordinary differential equations
+</span>    <span class="c1"># Modify this function according to your specific reaction system
+</span>    <span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">,</span> <span class="n">C</span> <span class="o">=</span> <span class="n">concentrations</span>
+    <span class="n">dAdt</span> <span class="o">=</span> <span class="o">-</span> <span class="n">k1f</span> <span class="o">*</span> <span class="n">A</span> <span class="o">+</span> <span class="n">k1r</span> <span class="o">*</span> <span class="n">B</span>
+    <span class="n">dBdt</span> <span class="o">=</span> <span class="n">k1f</span> <span class="o">*</span> <span class="n">A</span> <span class="o">-</span> <span class="n">k1r</span> <span class="o">*</span> <span class="n">B</span> <span class="o">-</span> <span class="n">k2f</span> <span class="o">*</span> <span class="n">B</span> <span class="o">+</span> <span class="n">k2r</span> <span class="o">*</span> <span class="n">C</span>
+    <span class="n">dCdt</span> <span class="o">=</span> <span class="n">k2f</span> <span class="o">*</span> <span class="n">B</span> <span class="o">-</span> <span class="n">k2r</span> <span class="o">*</span> <span class="n">C</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">dAdt</span><span class="p">,</span> <span class="n">dBdt</span><span class="p">,</span> <span class="n">dCdt</span><span class="p">]</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="83:1-83:45">これにRK4法を適用していきます。</p>
+<h1 data-sourcepos="85:1-85:50">
+<span id="rk4法による速度論シミュレーション" class="fragment"></span><a href="#rk4%E6%B3%95%E3%81%AB%E3%82%88%E3%82%8B%E9%80%9F%E5%BA%A6%E8%AB%96%E3%82%B7%E3%83%9F%E3%83%A5%E3%83%AC%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3"><i class="fa fa-link"></i></a>RK4法による速度論シミュレーション</h1>
+<p data-sourcepos="87:1-87:143">RK4法をPythonのコードに起こすと次のような関数として表現できます。関数 <code>runge_kutta()</code> の引数は次の通り。</p>
+<ul data-sourcepos="88:1-91:0">
+<li data-sourcepos="88:1-88:33">時間の刻み幅 <code>dt</code> (float)</li>
+<li data-sourcepos="89:1-89:60">シミュレーション時間の最大値 <code>t_max</code> (float)</li>
+<li data-sourcepos="90:1-91:0">初期濃度 <code>initial_concentrations</code> (floatのlist)</li>
+</ul>
+<div class="code-frame" data-lang="py" data-sourcepos="92:1-113:3">
+<div class="code-lang"><span class="bold">RK4</span></div>
+<div class="highlight"><pre><code><span class="k">def</span> <span class="nf">runge_kutta</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">t_max</span><span class="p">,</span> <span class="n">initial_concentrations</span><span class="p">):</span>
+    <span class="c1"># Perform the simulation using the fourth-order Runge-Kutta method
+</span>    <span class="n">t</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">concentrations</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nf">array</span><span class="p">(</span><span class="n">initial_concentrations</span><span class="p">)</span>
+    <span class="n">time_points</span> <span class="o">=</span> <span class="p">[</span><span class="n">t</span><span class="p">]</span>
+    <span class="n">concentration_points</span> <span class="o">=</span> <span class="p">[</span><span class="n">concentrations</span><span class="p">]</span>
+
+    <span class="k">while</span> <span class="n">t</span> <span class="o">&lt;</span> <span class="n">t_max</span><span class="p">:</span>
+        <span class="c1"># Compute concentration changes using the fourth-order Runge-Kutta method
+</span>        <span class="n">k1</span> <span class="o">=</span> <span class="nf">reaction_equations</span><span class="p">(</span><span class="n">concentrations</span><span class="p">)</span>
+        <span class="n">k2</span> <span class="o">=</span> <span class="nf">reaction_equations</span><span class="p">(</span><span class="n">concentrations</span> <span class="o">+</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">*</span> <span class="n">np</span><span class="p">.</span><span class="nf">array</span><span class="p">(</span><span class="n">k1</span><span class="p">))</span>
+        <span class="n">k3</span> <span class="o">=</span> <span class="nf">reaction_equations</span><span class="p">(</span><span class="n">concentrations</span> <span class="o">+</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">*</span> <span class="n">np</span><span class="p">.</span><span class="nf">array</span><span class="p">(</span><span class="n">k2</span><span class="p">))</span>
+        <span class="n">k4</span> <span class="o">=</span> <span class="nf">reaction_equations</span><span class="p">(</span><span class="n">concentrations</span> <span class="o">+</span> <span class="n">dt</span> <span class="o">*</span> <span class="n">np</span><span class="p">.</span><span class="nf">array</span><span class="p">(</span><span class="n">k3</span><span class="p">))</span>
+        <span class="n">concentrations</span> <span class="o">+=</span> <span class="p">(</span><span class="n">dt</span> <span class="o">/</span> <span class="mf">6.0</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="nf">array</span><span class="p">(</span><span class="n">k1</span><span class="p">)</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="p">.</span><span class="nf">array</span><span class="p">(</span><span class="n">k2</span><span class="p">)</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="p">.</span><span class="nf">array</span><span class="p">(</span><span class="n">k3</span><span class="p">)</span> <span class="o">+</span> <span class="n">np</span><span class="p">.</span><span class="nf">array</span><span class="p">(</span><span class="n">k4</span><span class="p">))</span>
+        <span class="n">t</span> <span class="o">+=</span> <span class="n">dt</span>
+
+        <span class="n">time_points</span><span class="p">.</span><span class="nf">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+        <span class="n">concentration_points</span><span class="p">.</span><span class="nf">append</span><span class="p">(</span><span class="n">concentrations</span><span class="p">.</span><span class="nf">copy</span><span class="p">())</span>
+
+    <span class="k">return</span> <span class="n">time_points</span><span class="p">,</span> <span class="n">np</span><span class="p">.</span><span class="nf">array</span><span class="p">(</span><span class="n">concentration_points</span><span class="p">)</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="115:1-115:198">あとはこれらのコードを組み合わせるだけです。ついでに各濃度の時間発展の推移も描画してみましょう。スクリプト全体は次のようになります。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="117:1-172:3">
+<div class="code-lang"><span class="bold">solve the system of differential equations by RK4</span></div>
+<div class="highlight"><pre><code><span class="kn">import</span> <span class="n">numpy</span> <span class="k">as</span> <span class="n">np</span>
+<span class="kn">import</span> <span class="n">matplotlib.pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+<span class="kn">import</span> <span class="n">sys</span>
+
+<span class="n">k1f</span> <span class="o">=</span> <span class="mf">2.234724e+02</span>
+<span class="n">k1r</span> <span class="o">=</span> <span class="mf">6.783680e+05</span>
+<span class="n">k2f</span> <span class="o">=</span> <span class="mf">1.231245e+04</span>
+<span class="n">k2r</span> <span class="o">=</span> <span class="mf">4.056047e+00</span>
+
+<span class="k">def</span> <span class="nf">reaction_equations</span><span class="p">(</span><span class="n">concentrations</span><span class="p">):</span>
+    <span class="c1"># Define the system of ordinary differential equations
+</span>    <span class="c1"># Modify this function according to your specific reaction system
+</span>    <span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">,</span> <span class="n">C</span> <span class="o">=</span> <span class="n">concentrations</span>
+    <span class="n">dAdt</span> <span class="o">=</span> <span class="o">-</span> <span class="n">k1f</span> <span class="o">*</span> <span class="n">A</span> <span class="o">+</span> <span class="n">k1r</span> <span class="o">*</span> <span class="n">B</span>
+    <span class="n">dBdt</span> <span class="o">=</span> <span class="n">k1f</span> <span class="o">*</span> <span class="n">A</span> <span class="o">-</span> <span class="n">k1r</span> <span class="o">*</span> <span class="n">B</span> <span class="o">-</span> <span class="n">k2f</span> <span class="o">*</span> <span class="n">B</span> <span class="o">+</span> <span class="n">k2r</span> <span class="o">*</span> <span class="n">C</span>
+    <span class="n">dCdt</span> <span class="o">=</span> <span class="n">k2f</span> <span class="o">*</span> <span class="n">B</span> <span class="o">-</span> <span class="n">k2r</span> <span class="o">*</span> <span class="n">C</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">dAdt</span><span class="p">,</span> <span class="n">dBdt</span><span class="p">,</span> <span class="n">dCdt</span><span class="p">]</span>
+
+<span class="k">def</span> <span class="nf">runge_kutta</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">t_max</span><span class="p">,</span> <span class="n">initial_concentrations</span><span class="p">):</span>
+    <span class="c1"># Perform the simulation using the fourth-order Runge-Kutta method
+</span>    <span class="n">t</span> <span class="o">=</span> <span class="mf">0.0</span>
+    <span class="n">concentrations</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nf">array</span><span class="p">(</span><span class="n">initial_concentrations</span><span class="p">)</span>
+    <span class="n">time_points</span> <span class="o">=</span> <span class="p">[</span><span class="n">t</span><span class="p">]</span>
+    <span class="n">concentration_points</span> <span class="o">=</span> <span class="p">[</span><span class="n">concentrations</span><span class="p">]</span>
+
+    <span class="k">while</span> <span class="n">t</span> <span class="o">&lt;</span> <span class="n">t_max</span><span class="p">:</span>
+        <span class="c1"># Compute concentration changes using the fourth-order Runge-Kutta method
+</span>        <span class="n">k1</span> <span class="o">=</span> <span class="nf">reaction_equations</span><span class="p">(</span><span class="n">concentrations</span><span class="p">)</span>
+        <span class="n">k2</span> <span class="o">=</span> <span class="nf">reaction_equations</span><span class="p">(</span><span class="n">concentrations</span> <span class="o">+</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">*</span> <span class="n">np</span><span class="p">.</span><span class="nf">array</span><span class="p">(</span><span class="n">k1</span><span class="p">))</span>
+        <span class="n">k3</span> <span class="o">=</span> <span class="nf">reaction_equations</span><span class="p">(</span><span class="n">concentrations</span> <span class="o">+</span> <span class="mf">0.5</span> <span class="o">*</span> <span class="n">dt</span> <span class="o">*</span> <span class="n">np</span><span class="p">.</span><span class="nf">array</span><span class="p">(</span><span class="n">k2</span><span class="p">))</span>
+        <span class="n">k4</span> <span class="o">=</span> <span class="nf">reaction_equations</span><span class="p">(</span><span class="n">concentrations</span> <span class="o">+</span> <span class="n">dt</span> <span class="o">*</span> <span class="n">np</span><span class="p">.</span><span class="nf">array</span><span class="p">(</span><span class="n">k3</span><span class="p">))</span>
+        <span class="n">concentrations</span> <span class="o">+=</span> <span class="p">(</span><span class="n">dt</span> <span class="o">/</span> <span class="mf">6.0</span><span class="p">)</span> <span class="o">*</span> <span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="nf">array</span><span class="p">(</span><span class="n">k1</span><span class="p">)</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="p">.</span><span class="nf">array</span><span class="p">(</span><span class="n">k2</span><span class="p">)</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">np</span><span class="p">.</span><span class="nf">array</span><span class="p">(</span><span class="n">k3</span><span class="p">)</span> <span class="o">+</span> <span class="n">np</span><span class="p">.</span><span class="nf">array</span><span class="p">(</span><span class="n">k4</span><span class="p">))</span>
+        <span class="n">t</span> <span class="o">+=</span> <span class="n">dt</span>
+
+        <span class="n">time_points</span><span class="p">.</span><span class="nf">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+        <span class="n">concentration_points</span><span class="p">.</span><span class="nf">append</span><span class="p">(</span><span class="n">concentrations</span><span class="p">.</span><span class="nf">copy</span><span class="p">())</span>
+
+    <span class="k">return</span> <span class="n">time_points</span><span class="p">,</span> <span class="n">np</span><span class="p">.</span><span class="nf">array</span><span class="p">(</span><span class="n">concentration_points</span><span class="p">)</span>
+
+<span class="c1"># Example usage
+</span><span class="n">dt</span> <span class="o">=</span> <span class="mf">1e-6</span>  <span class="c1"># Time step size
+</span><span class="n">t_max</span> <span class="o">=</span> <span class="mf">1e+0</span>  <span class="c1"># Maximum simulation time
+</span><span class="n">initial_concentrations</span> <span class="o">=</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">,</span> <span class="mf">0.0</span><span class="p">]</span>  <span class="c1"># Initial concentrations of species A, B, C
+</span><span class="n">time_points</span><span class="p">,</span> <span class="n">concentration_points</span> <span class="o">=</span> <span class="nf">runge_kutta</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span> <span class="n">t_max</span><span class="p">,</span> <span class="n">initial_concentrations</span><span class="p">)</span>
+<span class="nf">print</span><span class="p">(</span><span class="n">concentration_points</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>  <span class="c1"># showing the result
+</span>
+<span class="c1"># Plotting the concentration curves
+</span><span class="n">plt</span><span class="p">.</span><span class="nf">plot</span><span class="p">(</span><span class="n">time_points</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">concentration_points</span><span class="p">[</span><span class="mi">1</span><span class="p">:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="sh">'</span><span class="s">A</span><span class="sh">'</span><span class="p">)</span>
+<span class="n">plt</span><span class="p">.</span><span class="nf">plot</span><span class="p">(</span><span class="n">time_points</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">concentration_points</span><span class="p">[</span><span class="mi">1</span><span class="p">:,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="sh">'</span><span class="s">B</span><span class="sh">'</span><span class="p">)</span>
+<span class="n">plt</span><span class="p">.</span><span class="nf">plot</span><span class="p">(</span><span class="n">time_points</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">concentration_points</span><span class="p">[</span><span class="mi">1</span><span class="p">:,</span> <span class="mi">2</span><span class="p">],</span> <span class="n">label</span><span class="o">=</span><span class="sh">'</span><span class="s">C</span><span class="sh">'</span><span class="p">)</span>
+<span class="n">plt</span><span class="p">.</span><span class="nf">xlabel</span><span class="p">(</span><span class="sh">'</span><span class="s">Time</span><span class="sh">'</span><span class="p">)</span>
+<span class="n">plt</span><span class="p">.</span><span class="nf">ylabel</span><span class="p">(</span><span class="sh">'</span><span class="s">Concentration</span><span class="sh">'</span><span class="p">)</span>
+<span class="n">plt</span><span class="p">.</span><span class="nf">legend</span><span class="p">()</span>
+<span class="n">plt</span><span class="p">.</span><span class="nf">show</span><span class="p">()</span>
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="py" data-sourcepos="174:1-176:3">
+<div class="code-lang"><span class="bold">出力</span></div>
+<div class="highlight"><pre><code><span class="p">[</span><span class="mf">5.00091038e-01</span> <span class="mf">1.64741207e-04</span> <span class="mf">4.99744221e-01</span><span class="p">]</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="178:1-178:136"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F8b055250-b85d-7fcf-ca2f-3862c5fcf51b.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=ba7a9cb7479181c3b0fb609d1e3e1f96" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/331477d77bdc83ac8d658c1e.png" alt="各濃度の時間発展" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/8b055250-b85d-7fcf-ca2f-3862c5fcf51b.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="181:1-181:88">この系では1秒後までに完全に熱平衡に達することが分かります。</p>
+<h1 data-sourcepos="183:1-183:13">
+<span id="stiff問題" class="fragment"></span><a href="#stiff%E5%95%8F%E9%A1%8C"><i class="fa fa-link"></i></a>Stiff問題</h1>
+<p data-sourcepos="185:1-185:102">最後に、化学反応の速度論解析における問題点について紹介しておきます。</p>
+<p data-sourcepos="187:1-187:365">解析学の分野では「<strong>Stiff問題</strong>」というシミュレーション上の問題が知られています。"stiff" は「固い」を意味する語で、係数のオーダーが極めて広い範囲にわたる微分方程式を数値的にシミュレーションする際に浮上する問題の原因が、方程式の "stiffness"（固さ）です。</p>
+<p data-sourcepos="189:1-189:326">化学反応の場合、メチル基の内部回転のような速い素過程（～$10^{-12}$秒に1回程度）と結合の組み換えのような遅い素過程（～$10^{3}$秒に1回程度）が混在しており、微分方程式の係数のレンジが$10^{15}$オーダーに亘ることがしばしばあります。</p>
+<p data-sourcepos="191:1-191:417">このような場合、刻み幅 $\Delta t$ を大きくすると数値解が不安定化し、速い素過程による数値誤差の蓄積（＝発散）が生じることが知られています。そのため刻み幅 $\Delta t$ は十分小さくする必要がありますが、そうすると今度は計算時間が増大するため長時間のシミュレーションが難しくなってしまいます。</p>
+<p data-sourcepos="193:1-193:545">解析学の分野ではこのような問題を「Stiff問題」と呼んでいます。実際に化学反応の濃度変化をシミュレーションしてみるとよく分かりますが、速度論シミュレーションにおいてstiff問題は頻繁に出現します。これを回避する速度論解析手法として「<strong>反応速度定数行列縮約法</strong>」などが知られています。この手法について本稿では詳しく立ち入りませんので、興味のある方は参考文献を参照してください。</p>
+<h1 data-sourcepos="195:1-195:14">
+<span id="参考文献" class="fragment"></span><a href="#%E5%8F%82%E8%80%83%E6%96%87%E7%8C%AE"><i class="fa fa-link"></i></a>参考文献</h1>
+<ul data-sourcepos="197:1-198:0">
+<li data-sourcepos="197:1-198:0">RK4法で用いる$k_1$～$k_4$の図形的な意味を解説した動画：</li>
+</ul>
+<p data-sourcepos="199:1-199:43"><a href="https://www.youtube.com/watch?v=1YZnic1Ug9g" class="mirror-link-card">https://www.youtube.com/watch?v=1YZnic1Ug9g</a>
+</p>
+<ul data-sourcepos="201:1-202:0">
+<li data-sourcepos="201:1-202:0">反応速度定数行列縮約法について：</li>
+</ul>
+<p data-sourcepos="203:1-203:72"><a href="https://www.jstage.jst.go.jp/article/mssj/21/2/21_151/_article/-char/ja/" class="mirror-link-card">https://www.jstage.jst.go.jp/article/mssj/21/2/21_151/_article/-char/ja/</a>
+</p>
+
+</div>
+
+
+{% endraw %}

@@ -1,0 +1,79 @@
+---
+layout: "qiita-mirror"
+title: "Juliaで3Dのgifアニメを作りたい！"
+qiita_id: "6bdf5972720154a2f271"
+qiita_url: "https://qiita.com/h-nabata/items/6bdf5972720154a2f271"
+qiita_created: "2020-09-24T18:35:11+09:00"
+qiita_updated: "2020-09-24T18:39:12+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "プログラミング・可視化"
+mirror_tags: ["3D", "GIF", "Julia", "GIFアニメ"]
+permalink: "/qiita/6bdf5972720154a2f271.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="1:1-2:129">Juliaで3Dのgifアニメを作るために格闘したのでメモ。<br>
+使用しているJuliaは<strong>v1.5.1</strong>で、エディタは<strong>Atom</strong>を使っています（筆者はWindowsユーザーです）。</p>
+<h1 data-sourcepos="4:1-4:40">
+<span id="3dのgifアニメを作りたい" class="fragment"></span><a href="#3d%E3%81%AEgif%E3%82%A2%E3%83%8B%E3%83%A1%E3%82%92%E4%BD%9C%E3%82%8A%E3%81%9F%E3%81%84"><i class="fa fa-link"></i></a>・3Dのgifアニメを作りたい！</h1>
+<p data-sourcepos="6:1-6:142"><a href="https://julialang.org/" rel="nofollow noopener" target="_blank"><strong>Julia</strong></a>で出力された3D画像について色々と調べていると次のページに巡り合いました。</p>
+<p data-sourcepos="9:1-10:66"><strong>"Depth" - cormullion’s blog</strong><br>
+<strong><a href="https://cormullion.github.io/pages/2020-09-22-depth/index.html" class="autolink" rel="nofollow noopener" target="_blank">https://cormullion.github.io/pages/2020-09-22-depth/index.html</a></strong></p>
+<p data-sourcepos="12:1-14:117">このページの一番下には以下のようなgifムービーが掲載されていました。これは冥王星の５つの衛星の周回軌道を、カロン(Charon)が公転する分だけ3Dプロットした動画です。<br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F02fa9986-b604-0b81-6aee-307b820e9cef.gif?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=f71dcd179eb2564cecb526e44e591f3b" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/b9238e8bc0d8daa6e094478e.gif" alt="plutoniansystem.gif" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/02fa9986-b604-0b81-6aee-307b820e9cef.gif" loading="lazy" decoding="async"></a><br>
+なかなか綺麗なので自分の環境でも出力してみようと思い立ち、色々やってみました。</p>
+<h1 data-sourcepos="17:1-17:11">
+<span id="準備" class="fragment"></span><a href="#%E6%BA%96%E5%82%99"><i class="fa fa-link"></i></a>・準備</h1>
+<p data-sourcepos="19:1-19:109">これを動かすには「<strong>Thebes</strong>」と「<strong>Luxor</strong>」という２つのパッケージが必要です。</p>
+<p data-sourcepos="21:1-21:352">パッケージのインストールは、JuliaのREPLを起動してパッケージモードで <code>add Thebes</code> などとすれば可能です。もしくは、コードの冒頭に <code>import Pkg; Pkg.add("Thebes")</code> などと書いておけばインストールできます（※一度インストールすればそれ以降は書かなくてOKです）。</p>
+<blockquote data-sourcepos="23:1-23:190">
+<p data-sourcepos="23:2-23:190">「PyPlot」が無くても出力されるかどうかについては、試していないので分かりませんが、併せてインストールしておくのが良いと思います。</p>
+</blockquote>
+<p data-sourcepos="25:1-25:261">また、Juliaとは別に「<strong>FFmpeg</strong>」というフリーソフトウェアが必要です。これは動画･音声を記録･変換･再生するためのソフトウェアで、以下のページからzipファイルがダウンロード可能です。</p>
+<p data-sourcepos="27:1-28:77"><a href="https://www.gyan.dev/ffmpeg/builds/" rel="nofollow noopener" target="_blank"><strong>FFmpeg Windows Builds</strong></a>（Windows環境の場合）<br>
+※ <a href="https://www.gyan.dev/ffmpeg/builds/ffmpeg-git-full.zip" class="autolink" rel="nofollow noopener" target="_blank">https://www.gyan.dev/ffmpeg/builds/ffmpeg-git-full.zip</a> を選びます。</p>
+<blockquote data-sourcepos="30:1-30:163">
+<p data-sourcepos="30:3-30:163">MacやLinuxをお使いの方は <a href="https://ffmpeg.org/download.html" rel="nofollow noopener" target="_blank"><strong>Download FFmpeg</strong></a> のページから適するものをダウンロードして下さい。</p>
+</blockquote>
+<p data-sourcepos="32:1-32:322">ダウンロードしたら展開し、<code>C:\Program Files</code> の下などに <code>FFmpeg</code> などと名前を変更しつつ移動します。その後、ユーザー環境変数のPathの中に <code>C:\Program Files\FFmpeg\bin</code> とパスを通してください。これでプログラムがFFmpegを使えるようになります。</p>
+<blockquote data-sourcepos="34:1-34:222">
+<p data-sourcepos="34:3-34:222">この辺りの操作は「<a href="https://qiita.com/STInverSpinel/items/94600300633a23512aa5" id="reference-fe7a0b8063a61962d0c9"><strong>Plots.jlで動画出力するにはffmpegまたはimagemagickが必要</strong></a>」の記事などを参考にさせて頂きました。</p>
+</blockquote>
+<h1 data-sourcepos="37:1-37:23">
+<span id="出力してみた" class="fragment"></span><a href="#%E5%87%BA%E5%8A%9B%E3%81%97%E3%81%A6%E3%81%BF%E3%81%9F"><i class="fa fa-link"></i></a>・出力してみた</h1>
+<p data-sourcepos="39:1-39:191"><a href="https://cormullion.github.io/pages/2020-09-22-depth/index.html#plutonian" rel="nofollow noopener" target="_blank"><strong>元コード</strong></a>をそのまま実行してもgifがうまく出力されないので、コードの最初の行に</p>
+<div class="code-frame" data-lang="Julia" data-sourcepos="41:1-43:3"><div class="highlight"><pre><code><span class="k">using</span> <span class="n">Thebes</span><span class="x">,</span> <span class="n">Luxor</span>
+</code></pre></div></div>
+<p data-sourcepos="45:1-45:51">を付け加え、最後の <code>pathname</code> の部分を</p>
+<div class="code-frame" data-lang="Julia" data-sourcepos="47:1-49:3"><div class="highlight"><pre><code><span class="n">pathname</span>  <span class="o">=</span> <span class="s">"C:/Users/user/AppData/Local/Temp/plutonian.gif"</span>
+</code></pre></div></div>
+<p data-sourcepos="50:1-50:444">などと書き替えます（場所は適当。<code>user</code> の部分は適宜書き換える）。これにより <code>C:/Users/user/AppData/Local/Temp/</code> の中に <code>plutonian.gif</code> が作成されます。他人様のコードを丸ごと載せる訳にはいかないので、コード全体については<a href="https://cormullion.github.io/pages/2020-09-22-depth/index.html#plutonian" rel="nofollow noopener" target="_blank"><strong>元ページのソースコード</strong></a>を適宜参照して下さい。</p>
+<p data-sourcepos="52:1-53:126">実際に自分で作成したgifも載せておきます。オリジナルとは少し配色を変えてみました。<br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F02a4ef02-01f1-3c9c-11b8-14d45ab0ee17.gif?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=a3c5b0fd13b42979eae352307e3c579e" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/30e7de70fd065a0ad88241cc.gif" alt="plutonian2.gif" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/02a4ef02-01f1-3c9c-11b8-14d45ab0ee17.gif" loading="lazy" decoding="async"></a></p>
+<h1 data-sourcepos="56:1-56:32">
+<span id="他にも出力してみた" class="fragment"></span><a href="#%E4%BB%96%E3%81%AB%E3%82%82%E5%87%BA%E5%8A%9B%E3%81%97%E3%81%A6%E3%81%BF%E3%81%9F"><i class="fa fa-link"></i></a>・他にも出力してみた</h1>
+<p data-sourcepos="57:1-59:122">いかにもJuliaのロゴマークっぽい配色です。<br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Fcd64f529-0f60-f8f6-2580-6319e91ee696.gif?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=7b0ec31d58aaeea87e947505b3dc22f7" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/cfaa94f8832e72ccb04980c0.gif" alt="ferriswheel.gif" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/cd64f529-0f60-f8f6-2580-6319e91ee696.gif" loading="lazy" decoding="async"></a><br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F0b3158af-6f39-9636-134e-502055859797.gif?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=43b315fa958e130f358a91589091c794" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/dc481424eb1d4b8579f86632.gif" alt="amovie.gif" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/0b3158af-6f39-9636-134e-502055859797.gif" loading="lazy" decoding="async"></a></p>
+<blockquote data-sourcepos="61:1-61:168">
+<p data-sourcepos="61:3-61:168">コードは先ほどの <a href="https://cormullion.github.io/pages/2020-09-22-depth/index.html" rel="nofollow noopener" target="_blank"><strong>cormullion’s blog</strong></a> のページを参考にアレンジしました。</p>
+</blockquote>
+<h1 data-sourcepos="63:1-63:41">
+<span id="pyplotパッケージを使う場合" class="fragment"></span><a href="#pyplot%E3%83%91%E3%83%83%E3%82%B1%E3%83%BC%E3%82%B8%E3%82%92%E4%BD%BF%E3%81%86%E5%A0%B4%E5%90%88"><i class="fa fa-link"></i></a>・Pyplotパッケージを使う場合</h1>
+<p data-sourcepos="64:1-67:134">Pyplotパッケージを使うとPythonのmatplotlibが呼び出せます。これによりmatplotlibを用いた3Dグラフが出力可能になります。Pythonと同じ書き方ができるので非常にラクです。（ただし、使う場合はPyCall、PyPlot、matplotlib本体をインストールしておいて下さい）<br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Fd1280186-4739-7fc4-ecda-c68b7471b656.gif?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=3d737cec8f33cddd806954b4570cfe93" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/7676ce6e3f7d4eaf4b4c2166.gif" alt="PyPlot_plot_rwalk.gif" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/d1280186-4739-7fc4-ecda-c68b7471b656.gif" loading="lazy" decoding="async"></a><br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F108bdf45-b360-18be-c56e-a014e6d01be2.gif?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=eb79b7d8468f1fdd2c93603c2dc4e1de" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/ba57a5dc65f14998ace5afbe.gif" alt="PyPlot_plot_rwalk2.gif" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/108bdf45-b360-18be-c56e-a014e6d01be2.gif" loading="lazy" decoding="async"></a><br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Fbc94f1df-4f9a-20df-3cf7-76ff6f9f9dd9.gif?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=bfbfa8e4a8eba67d68c95d28e809cbec" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/7ad84054ca23ae5dd4badbf1.gif" alt="PyPlot_plot_rwalk3.gif" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/bc94f1df-4f9a-20df-3cf7-76ff6f9f9dd9.gif" loading="lazy" decoding="async"></a></p>
+<blockquote data-sourcepos="69:1-69:239">
+<p data-sourcepos="69:3-69:239">いずれも乱数により生成した点列をプロットしたものです。コードは<a href="https://nbviewer.jupyter.org/gist/genkuroki/0428f82e2291be95da7d037a8ff4e0a5" rel="nofollow noopener" target="_blank"><strong>こちらのページ</strong></a>を参考にアレンジしました。</p>
+</blockquote>
+<h1 data-sourcepos="71:1-71:17">
+<span id="あとがき" class="fragment"></span><a href="#%E3%81%82%E3%81%A8%E3%81%8C%E3%81%8D"><i class="fa fa-link"></i></a>・あとがき</h1>
+<p data-sourcepos="73:1-74:569">･･･という訳で、表題の通りJuliaで3Dのgifアニメを色々と作ってみました。<br>
+特にPythonユーザーからしてみると、<code>using PyCall, PyPlot</code> とすればPythonと同じ書き方ができるのは嬉しいですね。Plotsパッケージを使った2Dのgif画像については「<a href="https://qiita.com/MTNakata/items/0418ae3493a26ac44603" id="reference-561639b278151a72e3ba"><strong>JuliaでグラフのGIFアニメを作ってみた</strong></a>」や「<a href="https://optie.hatenablog.com/entry/2018/03/29/210619" rel="nofollow noopener" target="_blank"><strong>Julia言語と Plots + GR で複素関数のgifアニメーションを作る</strong></a>」などのページに色々な例が紹介されているので、参考にしてみて下さい。</p>
+<p data-sourcepos="76:1-76:217">その他のJuliaの基本的な部分については「<a href="/qiita/f2849d2d1b69f2415de3.html" id="reference-75f0e2465359e604a446"><strong>Julia初心者がJuliaをさわってみた</strong></a>」などのページを参考にしてみて下さい。</p>
+
+</div>
+
+
+{% endraw %}

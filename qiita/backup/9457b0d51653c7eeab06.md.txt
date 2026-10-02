@@ -1,0 +1,290 @@
+gccはC言語、C++言語、Fortran言語などの複数言語のコンパイラ群の総称である。
+
+> もともとは「GNU C Compiler」の略だったが、今は「GNU Compiler Collection」の意味で使われている。
+
+Red Hat Enterprise Linux などの長期サポートを意図した保守的なシステムでは、組み込みで利用できる gcc のバージョンは古い場合が多く、Pythonなどのパッケージ（特にC拡張を含むもの）を導入する際にgccが古すぎてコンパイルに失敗することがある。そのような場合、組み込みのgccとは別に、ユーザーローカルにバージョンの新しいgccをビルドする必要がある。
+
+* * *
+
+ここでは**gcc-4.8.5の環境で、ユーザーローカルにオフラインでgcc-14.3.0を入れる手順**をまとめる。
+
+> 2025年6月時点における最新のリリースはgcc-14.3.0である。
+> Cf. https://gcc.gnu.org/pub/gcc/releases/
+
+大まかな手順は以下の通り。所要時間（待ち時間）が長いため、計画的に実施したい。
+
+1. **依存ライブラリのインストール**（1時間程度）
+2. **中間バージョンのgccのインストール**（1～4時間）
+3. **目的のバージョンのgccのインストール**（1～4時間）
+
+gcc-4.8.5を使って一気にgcc-14.3.0を導入しようとすると、バージョンがかけ離れているためコンパイルに失敗することがある。そこで、中間バージョンを経由する必要がある。
+
+また、gccのコンパイルには依存ライブラリ（GMP、MPFR、MPC）が別途必要となるため、初めにインストールする必要がある。
+
+* * *
+
+<details><summary>【参考】ライブラリ不足時のエラー</summary>
+
+```sh:gcc-6.5.0の場合
+configure: error: Building GCC requires GMP 4.2+, MPFR 2.4.0+ and MPC 0.8.0+.
+Try the --with-gmp, --with-mpfr and/or --with-mpc options to specify
+their locations.  Source code for these libraries can be found at
+their respective hosting sites as well as at
+ftp://gcc.gnu.org/pub/gcc/infrastructure/.  See also
+http://gcc.gnu.org/install/prerequisites.html for additional info.  If
+you obtained GMP, MPFR and/or MPC from a vendor distribution package,
+make sure that you have installed both the libraries and the header
+files.  They may be located in separate packages.
+```
+
+</details>
+
+* * *
+
+# ①依存ライブラリのインストール
+
+MPFRはGMPに依存しており、MPCはGMPとMPFRの両方に依存しているため、
+```sh:
+GMP → MPFR → MPC
+```
+の順でインストールする。
+
+> ライブラリが不足していると `./configure` の時点で
+> ```sh:
+> configure: error: MPFR version >= 4.1.0 required
+> ```
+> などと怒られる。
+
+ソースコードは以下のページからダウンロードできる。以下の3つが必要最低限のライブラリである。
+
+https://gcc.gnu.org/pub/gcc/infrastructure/
+
+- gmp-6.2.1.tar.bz2
+- mpfr-4.1.0.tar.bz2
+- mpc-1.2.1.tar.gz
+
+> オンライン環境であれば
+`wget https://gcc.gnu.org/pub/gcc/infrastructure/gmp-6.2.1.tar.bz2`
+などとして取得できる。
+
+ここではさらに以下のものも追加でダウンロードしておく。これらは必ずしも要る訳ではないが、islに関してはgccの性能を上げることができるので、ついでに入れておく。
+
+- gettext-0.22.tar.gz
+- isl-0.24.tar.bz2
+- mpich-3.2.tar.gz
+- opencoarrays-1.9.0.tar.gz
+
+* * *
+
+<details><summary>【参考】依存パッケージについて</summary>
+
+最低限必要なライブラリは以下の通り。
+- GMP（GNU Multiple Precision arithmetic library）：
+多倍長整数演算ライブラリ
+- MPFR（Multiple Precision Floating-Point Reliable Library）：
+多倍長浮動小数点演算ライブラリ
+- MPC（Multiple Precision Complex Library）：
+多倍長複素数演算ライブラリ
+
+今回は追加で以下のものも利用する。
+- MPICH：
+並列計算用の標準的なMPI（Message Passing Interface）ライブラリ
+- opencoarrays：
+FortranのCo-array機能（分散メモリ並列化）を利用可能にするためのライブラリ
+- isl (integer set library)：
+GCCなどのループ最適化で使われる、多面体モデルに基づく整数集合操作ライブラリ
+- gettext：
+ソフトウェアの多言語対応（国際化/i18n）を実現するための文字列翻訳ライブラリ
+
+</details>
+
+* * *
+
+取得したすべてのソースコードを目的のサーバーにアップロードする。
+ここでは`$HOME/tmp/`にソースコードを置き、`$HOME/usr/local/`に展開することにする。
+
+> ソースコードのアップロード先およびインストール先は任意だが、今後のことを考えれば多少は手間でも系統的に整理できていた方がよい。
+
+`make`は必要に応じて並列して効率化を図る。例えば、4並列の場合は`make -j4`とすればよい。
+
+> さらに作業を加速したい場合、ビルドツリーの依存関係が存在しなければ、バックグラウンド処理にするなどしてパッケージを独立にインストールしてもよい。あるいは、複数のsshセッションを立ち上げて並行してインストールするのでもよい。（同じライブラリでない限り、基本的にはファイル名の衝突などは起こらないようになっている）
+
+```sh:インストールのための一連のコマンド
+# ソースコードをアップロードしたディレクトリへ移動
+cd $HOME/tmp/
+
+# gmpを最初にインストールする
+tar xf gmp-6.2.1.tar.bz2
+cd gmp-6.2.1
+./configure --prefix="$HOME/usr/local/"
+make
+make install
+cd ..
+
+# この段階で .bashrc などに以下の行を追加して $HOME/usr/local/ にパスを通しておく
+# export PATH=$HOME/usr/local/bin:$PATH
+# export CPATH=$HOME/usr/local/include:$CPATH
+# export LD_LIBRARY_PATH=$HOME/usr/local/lib:$HOME/usr/local/lib64:$LD_LIBRARY_PATH
+
+# gmpの後にインストールする
+tar xf mpfr-4.1.0.tar.bz2
+cd mpfr-4.1.0
+./configure --prefix="$HOME/usr/local/" --with-gmp="$HOME/usr/local/"
+make
+make install
+cd ..
+
+# gmpとmpfrの後にインストールする
+tar xf mpc-1.2.1.tar.gz
+cd mpc-1.2.1
+./configure --prefix="$HOME/usr/local/" --with-gmp="$HOME/usr/local/" --with-mpfr="$HOME/usr/local/"
+make
+make install
+
+### これ以降のライブラリはオプション
+
+# mpichは gfortran/gcc が優先される状態でインストールする
+# このときFortran用MPIラッパーもインストールするフラグを立てておく
+tar xf mpich-3.2.tar.gz
+cd mpich-3.2
+./configure --prefix="$HOME/usr/local/" CC=gcc CXX=g++ FC=gfortran F77=gfortran
+make
+make install
+
+# gmpの後にインストールする
+tar xf isl-0.24.tar.bz2
+cd isl-0.24
+./configure --prefix="$HOME/usr/local/"
+make
+make install
+
+tar xf gettext-0.22.tar.gz
+cd gettext-0.22
+./configure --prefix="$HOME/usr/local/"
+make
+make install
+
+# mpichの後にインストールする (gcc-5.1以降が必須なので中間バージョンへのアップグレード後に実施する)
+tar xf opencoarrays-1.9.0.tar.gz
+cd opencoarrays-1.9.0
+./configure --prefix="$HOME/usr/local/" CC=gcc CXX=g++ FC=gfortran F77=gfortran
+make
+make install
+```
+
+> gettextライブラリに加えてさらにlibiconvライブラリをインストールしても良いが、glibcのiconv互換機能で十分なのでここでは省略する。
+
+> 依存ライブラリを`$HOME/usr/local/`配下の個別ディレクトリにインストールした場合は、例えば以下のようにパスを通しておく。
+> ```
+> # GMP
+> export LD_LIBRARY_PATH="$HOME/usr/local/gmp-6.2.1/lib:$LD_LIBRARY_PATH"
+> export CPATH="$HOME/usr/local/gmp-6.2.1/include:$CPATH"
+> export LIBRARY_PATH="$HOME/usr/local/gmp-6.2.1/lib:$LIBRARY_PATH"
+> 
+> # MPFR
+> export LD_LIBRARY_PATH="$HOME/usr/local/mpfr-4.2.1/lib:$LD_LIBRARY_PATH"
+> export CPATH="$HOME/usr/local/mpfr-4.2.1/include:$CPATH"
+> export LIBRARY_PATH="$HOME/usr/local/mpfr-4.2.1/lib:$LIBRARY_PATH"
+> 
+> # MPC
+> export LD_LIBRARY_PATH="$HOME/usr/local/mpc-1.3.1/lib:$LD_LIBRARY_PATH"
+> export CPATH="$HOME/usr/local/mpc-1.3.1/include:$CPATH"
+> export LIBRARY_PATH="$HOME/usr/local/mpc-1.3.1/lib:$LIBRARY_PATH"
+> 
+> # ISL
+> export LD_LIBRARY_PATH="$HOME/usr/local/isl-0.24/lib:$LD_LIBRARY_PATH"
+> export CPATH="$HOME/usr/local/isl-0.24/include:$CPATH"
+> export LIBRARY_PATH="$HOME/usr/local/isl-0.24/lib:$LIBRARY_PATH"
+> ```
+
+# ②中間バージョンのgccのインストール
+
+ここではgcc-6.5.0を導入する。システム組み込みのgcc（ここではgcc-4.8.5）でコンパイルできるのであればバージョンは任意。ソースコードは以下のページから取得できる。
+
+https://gcc.gnu.org/pub/gcc/releases/
+
+新旧バージョンが混在することを避けるため、インストール先は `$HOME/usr/local/gcc-6.5.0` としている。
+
+```sh:インストール
+tar xf gcc-6.5.0.tar.gz
+cd gcc-6.5.0
+
+./configure --prefix="$HOME/usr/local/gcc-6.5.0" --enable-languages=c,c++,fortran \
+  --with-gmp="$HOME/usr/local" --with-mpfr="$HOME/usr/local" \
+  --with-mpc="$HOME/usr/local" --with-isl="$HOME/usr/local" \
+  --disable-multilib
+
+make           # -j オプションを用いて並列するのが望ましい
+make install
+```
+
+`make`だけで1時間以上を要するので、実行するタイミングは吟味しておきたい。先ほど同様、`make`は他のユーザーに影響しない範囲で並列するのがよい。
+
+> 参考までに、筆者の環境では`make -j4`に121分、`make install`に5分を要した。
+> > やむを得ない理由により時間不足で差し迫った状況なのであれば、`./configure` に `--disable-bootstrap` を付けてブートストラップモード（コンパイルされた自分自身を用いた再ビルドによる一貫性チェック）を無効にしてもよい。
+> デフォルトではブートストラップモードが有効となっており、3回目のビルドで得られたgcc（stage3）が最終的な出力となる。正確を期す方法ではあるものの一貫性チェックを行う手間があるため、ビルド時間は非ブートストラップ時の2～3倍となる。
+
+導入先（ここでは`$HOME/usr/local/gcc-6.5.0`）にパスが通っている場合、`gcc --version`とすれば新しいgccが導入出来ていることが確認できる。
+
+```sh:gccのバージョン確認
+$ gcc --version
+gcc (GCC) 6.5.0
+Copyright (C) 2017 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+```
+
+中間バージョンのgcc導入後は環境変数を更新しておく。
+
+```sh:環境変数の設定
+export CC=$HOME/usr/local/gcc-6.5.0/bin/gcc
+export CXX=$HOME/usr/local/gcc-6.5.0/bin/g++
+export FC=$HOME/usr/local/gcc-6.5.0/bin/gfortran
+export F77=$HOME/usr/local/gcc-6.5.0/bin/gfortran
+```
+
+# ③目的のバージョンのgccのインストール
+
+最後にgcc-14.3.0を導入する。手順は前段と同じ。ソースコードは先ほどと同じページから取得できる。
+
+https://gcc.gnu.org/pub/gcc/releases/
+
+```sh:インストール
+tar xf gcc-14.3.0.tar.gz
+cd gcc-14.3.0
+
+./configure --prefix="$HOME/usr/local/gcc-14.3.0" --enable-languages=c,c++,fortran \
+  --with-gmp="$HOME/usr/local" --with-mpfr="$HOME/usr/local" \
+  --with-mpc="$HOME/usr/local" --with-isl="$HOME/usr/local" \
+  --disable-multilib
+
+make           # -j オプションを用いて並列するのが望ましい
+make install
+```
+
+> 参考までに、筆者の環境では`make -j4`に181分、`make install`に5分を要した。
+
+最後に、展開先の `$HOME/usr/local/gcc-14.3.0` にパスを通しておく。中間バージョンのgcc導入後は環境変数を更新し、中間バージョンのgccのパスは必ず上書きする。
+
+```sh:環境変数の再設定
+export PATH=$HOME/usr/local/gcc-14.3.0/bin:$PATH
+export CPATH=$HOME/usr/local/gcc-14.3.0/include:$CPATH
+export LD_LIBRARY_PATH=$HOME/usr/local/gcc-14.3.0/lib:$HOME/usr/local/gcc-14.3.0/lib64:$LD_LIBRARY_PATH
+export CC=$HOME/usr/local/gcc-14.3.0/bin/gcc
+export CXX=$HOME/usr/local/gcc-14.3.0/bin/g++
+export FC=$HOME/usr/local/gcc-14.3.0/bin/gfortran
+export F77=$HOME/usr/local/gcc-14.3.0/bin/gfortran
+```
+
+上手く更新されていれば以下の出力が確認できる。
+
+```sh:gccのバージョン確認
+$ gcc --version
+gcc (GCC) 14.3.0
+Copyright (C) 2024 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+```
+
+以上の手順により、オフライン環境のユーザーローカルにgcc-14.3.0を導入することができる。

@@ -1,0 +1,101 @@
+---
+layout: "qiita-mirror"
+title: "mplfinanceでドル円（USDJPY）の年足チャートを描く"
+qiita_id: "844912c4cc1ab246d6a1"
+qiita_url: "https://qiita.com/h-nabata/items/844912c4cc1ab246d6a1"
+qiita_created: "2022-04-14T04:25:18+09:00"
+qiita_updated: "2022-04-19T10:08:48+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "プログラミング・可視化"
+mirror_tags: ["Python", "mplfinance"]
+permalink: "/qiita/844912c4cc1ab246d6a1.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="1:1-1:243">Pythonを使って以下のようなローソク足チャートを描画することができる。最近は円安が話題なので、このエントリではやや見慣れないドル円（USDJPY）の「年足」を描画してみよう。</p>
+<p data-sourcepos="3:1-3:138"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Fd7d595ba-4e07-e588-2b5b-d5766cf9a245.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=88f59a92f751931180ffeb041c7744b6" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/a8515e8ab134d2fd866e6137.png" alt="candlestick_mpf_candle.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/d7d595ba-4e07-e588-2b5b-d5766cf9a245.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="6:1-6:188">今回用いる「<a href="https://github.com/matplotlib/mplfinance" rel="nofollow noopener" target="_blank"><strong>mplfinance</strong></a>」は金融系の画像操作に特化したライブラリで、<code>pip install mplfinance</code> で導入できる。</p>
+<p data-sourcepos="8:1-8:170">ドル円の価格データ <code>USDJPY_1972_2022.csv</code> をpandasデータフレームとして読み込みmplfinanceのplot関数に渡す。（csvの中身は後で示す）</p>
+<div class="code-frame" data-lang="py" data-sourcepos="10:1-19:3">
+<div class="code-lang"><span class="bold">candlestick.py</span></div>
+<div class="highlight"><pre><code><span class="kn">import</span> <span class="n">pandas</span> <span class="k">as</span> <span class="n">pd</span>
+<span class="kn">import</span> <span class="n">mplfinance</span> <span class="k">as</span> <span class="n">mpf</span>
+
+<span class="n">df</span> <span class="o">=</span> <span class="n">pd</span><span class="p">.</span><span class="nf">read_csv</span><span class="p">(</span><span class="sh">'</span><span class="s">USDJPY_1972_2022.csv</span><span class="sh">'</span><span class="p">,</span>
+                 <span class="n">index_col</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">parse_dates</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="n">mpf</span><span class="p">.</span><span class="nf">plot</span><span class="p">(</span><span class="n">df</span><span class="p">,</span> <span class="nb">type</span><span class="o">=</span><span class="sh">'</span><span class="s">candle</span><span class="sh">'</span><span class="p">,</span> <span class="n">datetime_format</span><span class="o">=</span><span class="sh">'</span><span class="s">%Y/%m/%d</span><span class="sh">'</span><span class="p">,</span> <span class="n">ylim</span><span class="o">=</span><span class="p">((</span><span class="mi">0</span><span class="p">,</span> <span class="mi">350</span><span class="p">)),</span> <span class="n">figratio</span><span class="o">=</span><span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="n">mav</span><span class="o">=</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">25</span><span class="p">),</span> <span class="n">style</span><span class="o">=</span><span class="sh">'</span><span class="s">binance</span><span class="sh">'</span><span class="p">,</span>
+         <span class="n">savefig</span><span class="o">=</span><span class="sh">'</span><span class="s">candlestick_USDJPY_1972_2022.png</span><span class="sh">'</span><span class="p">)</span>
+
+</code></pre></div>
+</div>
+<p data-sourcepos="21:1-21:314">デフォルトではバー表示だが、<code>type</code>引数で "candle" を指定するとローソク足表示になる。<code>datetime_format</code>で横軸ラベルのフォーマットを、<code>ylim</code>でy軸（この場合は価格）の範囲を、<code>figratio</code>で出力画像のアスペクト比をそれぞれ指定できる。</p>
+<p data-sourcepos="23:1-25:159">mplfinanceはラベル名を大文字小文字で区別するので、頭文字が小文字の場合は<br>
+<code>df.columns = ['Open', 'High', 'Low', 'Close']</code><br>
+のようにしてcolumnの名前を変換しておく必要がある。また、四本値の並びは必ずこの順でなければならないので注意。</p>
+<p data-sourcepos="27:1-27:228">candlestickの<code>style</code>には幾つか種類があるので、気に入ったものを選べば良い。（参考：<a href="https://vucavucalife.com/python-mplfinance-candle-stick-style/" rel="nofollow noopener" target="_blank">Python mplfinanceのcandlestickのstyleの巻</a>）</p>
+<p data-sourcepos="29:1-29:148"><code>mav=(5, 25)</code>は5期間平均線と25期間平均線を表示するという意味。整数値のみ指定可能で、何本でも表示できる。</p>
+<p data-sourcepos="31:1-31:48"><code>savefig</code>で保存先のパスを指定する。</p>
+<hr data-sourcepos="33:1-34:0">
+<p data-sourcepos="35:1-36:95">四本値は<a href="https://www.macrotrends.net/2550/dollar-yen-exchange-rate-historical-chart" rel="nofollow noopener" target="_blank"><strong>macrotrendsのページ</strong></a>から取得した。<br>
+csv の中身は以下の通り。date 列データは便宜上1月1日に指定している。</p>
+<div class="code-frame" data-lang="" data-sourcepos="37:1-90:3">
+<div class="code-lang"><span class="bold">USDJPY_1972_2022.csv</span></div>
+<div class="highlight"><pre><code>,Open,High,Low,Close
+1972-01-01,314.86,314.96,294.12,301.66
+1973-01-01,301.39,302.57,254.45,280.27
+1974-01-01,280.82,305.34,274.42,301.02
+1975-01-01,300.66,306.84,284.66,305.16
+1976-01-01,305.06,306.00,286.04,293.08
+1977-01-01,292.48,292.91,237.81,239.98
+1978-01-01,237.59,242.42,177.05,194.30
+1979-01-01,194.58,250.85,194.58,240.30
+1980-01-01,238.45,261.40,203.10,203.10
+1981-01-01,202.50,246.10,199.05,219.80
+1982-01-01,218.75,277.65,218.75,234.70
+1983-01-01,232.00,247.05,226.75,231.70
+1984-01-01,232.45,251.60,222.70,251.60
+1985-01-01,251.80,262.80,200.25,200.25
+1986-01-01,199.15,202.70,152.00,158.30
+1987-01-01,158.25,159.40,121.25,121.25
+1988-01-01,122.70,136.52,121.10,125.05
+1989-01-01,123.60,149.62,123.60,143.80
+1990-01-01,146.25,159.90,125.05,135.75
+1991-01-01,134.60,141.90,124.90,124.90
+1992-01-01,124.50,134.53,119.35,124.85
+1993-01-01,125.40,126.10,101.10,111.70
+1994-01-01,112.50,113.10, 96.77, 99.60
+1995-01-01,100.52,104.20, 81.12,103.28
+1996-01-01,103.92,116.13,103.92,115.77
+1997-01-01,115.49,131.08,111.42,130.45
+1998-01-01,132.40,147.14,113.08,113.08
+1999-01-01,112.15,124.45,101.53,102.16
+2000-01-01,101.70,114.62,101.70,114.35
+2001-01-01,114.73,131.47,114.26,131.04
+2002-01-01,132.02,134.77,115.71,118.75
+2003-01-01,119.86,121.42,106.93,107.13
+2004-01-01,106.95,114.30,102.56,102.68
+2005-01-01,102.83,120.93,102.26,117.88
+2006-01-01,116.34,119.81,110.07,119.02
+2007-01-01,118.83,124.09,108.17,111.71
+2008-01-01,109.70,110.48, 87.84, 90.79
+2009-01-01, 91.12,100.71, 86.12, 93.08
+2010-01-01, 92.55, 94.68, 80.48, 81.67
+2011-01-01, 81.56, 85.26, 75.72, 76.98
+2012-01-01, 76.67, 86.64, 76.11, 86.64
+2013-01-01, 87.10,105.25, 86.92,105.25
+2014-01-01,104.84,121.38,101.11,119.85
+2015-01-01,120.20,125.58,116.78,120.27
+2016-01-01,119.30,121.06, 99.89,116.96
+2017-01-01,117.55,117.75,107.84,112.69
+2018-01-01,112.63,114.44,104.73,109.66
+2019-01-01,109.69,112.08,105.28,108.68
+2020-01-01,108.69,112.06,102.37,103.25
+2021-01-01,103.24,115.42,102.72,115.11
+2022-01-01,115.11,126.22,113.67,125.55
+</code></pre></div>
+</div>
+
+</div>
+
+
+{% endraw %}

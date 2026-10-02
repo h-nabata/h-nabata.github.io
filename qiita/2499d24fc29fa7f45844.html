@@ -1,0 +1,702 @@
+---
+layout: "qiita-mirror"
+title: "【ローカルLLM】LLM-jp-4.1-33Bの推論性能検証（RTX 5070 Ti + RTX 3070 Ti）"
+qiita_id: "2499d24fc29fa7f45844"
+qiita_url: "https://qiita.com/h-nabata/items/2499d24fc29fa7f45844"
+qiita_created: "2026-10-01T07:21:24+09:00"
+qiita_updated: "2026-10-01T07:37:10+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "LLM・生成AI"
+mirror_tags: ["ローカルLLM", "LLM", "LLM-jp", "生成AI", "性能評価"]
+permalink: "/qiita/2499d24fc29fa7f45844.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<h1 data-sourcepos="1:1-1:14">
+<span id="はじめに" class="fragment"></span><a href="#%E3%81%AF%E3%81%98%E3%82%81%E3%81%AB"><i class="fa fa-link"></i></a>はじめに</h1>
+<p data-sourcepos="3:1-3:127">9月28日にLLM-jpの新バージョン「<a href="https://llm-jp.nii.ac.jp/blog/llm-jp-4-1/" rel="nofollow noopener" target="_blank">LLM-jp-4.1</a>」がリリースされた。</p>
+<p data-sourcepos="5:1-5:41"><a href="https://llmc.nii.ac.jp/topics/llm-jp-4-1/" class="mirror-link-card">https://llmc.nii.ac.jp/topics/llm-jp-4-1/</a>
+</p>
+<p data-sourcepos="7:1-7:159">公開されたモデルは以下の通り。<a href="https://huggingface.co/llm-jp/llm-jp-4.1-33b-thinking-gguf" rel="nofollow noopener" target="_blank">公式のGGUFファイル</a>も提供されている。</p>
+<ul data-sourcepos="9:1-18:0">
+<li data-sourcepos="9:1-11:52">
+<strong>llm-jp-4.1-8b-thinking</strong><br>
+約86億パラメータのDenseモデル。<br>
+<a href="https://huggingface.co/llm-jp/llm-jp-4.1-8b-thinking" class="autolink" rel="nofollow noopener" target="_blank">https://huggingface.co/llm-jp/llm-jp-4.1-8b-thinking</a>
+</li>
+<li data-sourcepos="12:1-14:57">
+<strong>llm-jp-4.1-32b-a3b-thinking</strong><br>
+約320億パラメータのMixture of Experts（MoE）モデル。<br>
+<a href="https://huggingface.co/llm-jp/llm-jp-4.1-32b-a3b-thinking" class="autolink" rel="nofollow noopener" target="_blank">https://huggingface.co/llm-jp/llm-jp-4.1-32b-a3b-thinking</a>
+</li>
+<li data-sourcepos="15:1-18:0">
+<strong>llm-jp-4.1-33b-thinking（<font color="red">本稿で検証</font>）</strong><br>
+約332億パラメータのDenseモデル。<br>
+<a href="https://huggingface.co/llm-jp/llm-jp-4.1-33b-thinking" class="autolink" rel="nofollow noopener" target="_blank">https://huggingface.co/llm-jp/llm-jp-4.1-33b-thinking</a>
+</li>
+</ul>
+<p data-sourcepos="19:1-19:266">今回リリースされたLLM-jp-4.1では、STEM分野の性能向上、ツール呼び出しへの新規対応、回答の簡潔化が図られている。本稿ではLLM-jp-4.1-33B-thinkingについて、STEM分野を含む純粋な推論性能を検証する。</p>
+<p data-sourcepos="21:1-21:171">また、国産LLM「LLM-jp-4-33B-thinking」と「Qwen3.8-27B」の推論能力を比較した記事を2本公開しているので、そちらも参考にされたい。</p>
+<p data-sourcepos="23:1-23:53"><a href="/qiita/b80484406e839ee6507b.html" class="mirror-link-card">https://qiita.com/h-nabata/items/b80484406e839ee6507b</a>
+</p>
+<p data-sourcepos="25:1-25:53"><a href="/qiita/70d7d6ed64e91fce8675.html" class="mirror-link-card">https://qiita.com/h-nabata/items/70d7d6ed64e91fce8675</a>
+</p>
+<h1 data-sourcepos="27:1-27:49">
+<span id="llm-jp-41対応のfork版lammacpp環境構築" class="fragment"></span><a href="#llm-jp-41%E5%AF%BE%E5%BF%9C%E3%81%AEfork%E7%89%88lammacpp%E7%92%B0%E5%A2%83%E6%A7%8B%E7%AF%89"><i class="fa fa-link"></i></a>LLM-jp-4.1対応のFork版lamma.cpp環境構築</h1>
+<p data-sourcepos="29:1-29:311">ここでは以前作成したLLM-jp-4用のFork版lamma.cpp環境を流用せず、LLM-jp-4.1専用のFork版lamma.cpp環境を構築する。これは、<strong>従来のllama.cpp serverがLLM-jp-4.1固有のチャット／reasoning出力形式を正しくパースできないケースがあるため</strong>である。</p>
+<blockquote data-sourcepos="31:1-31:511">
+<p data-sourcepos="31:3-31:511">LLM-jp-4.1は、推論過程と最終回答を特殊なチャネル形式で区別して出力する。従来のllama.cppではこの出力形式を十分に解釈できず、OpenAI互換APIへの変換時に<code>content</code>が崩れたり、推論部分が<code>reasoning_content</code>として取得できない場合があった。そこで今回は、LLM-jp-4.1のHarmony形式に対応した専用ハンドラを含むforkを使用し、推論過程と最終回答を正しく分離して取得できるようにした。</p>
+</blockquote>
+<p data-sourcepos="33:1-33:60">やや面倒だが、以下の手順で環境構築する。</p>
+<h2 data-sourcepos="35:1-35:31">
+<span id="依存関係とcudaを確認" class="fragment"></span><a href="#%E4%BE%9D%E5%AD%98%E9%96%A2%E4%BF%82%E3%81%A8cuda%E3%82%92%E7%A2%BA%E8%AA%8D"><i class="fa fa-link"></i></a>依存関係とCUDAを確認</h2>
+<div class="code-frame" data-lang="sh" data-sourcepos="37:1-41:3">
+<div class="code-lang"><span class="bold">バージョン確認</span></div>
+<div class="highlight"><pre><code>cmake <span class="nt">--version</span>
+nvcc <span class="nt">--version</span>
+nvidia-smi <span class="nt">-L</span>
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="sh" data-sourcepos="43:1-55:3">
+<div class="code-lang"><span class="bold">結果</span></div>
+<div class="highlight"><pre><code>cmake version 3.28.3
+CMake suite maintained and supported by Kitware <span class="o">(</span>kitware.com/cmake<span class="o">)</span><span class="nb">.</span>
+
+nvcc: NVIDIA <span class="o">(</span>R<span class="o">)</span> Cuda compiler driver
+Copyright <span class="o">(</span>c<span class="o">)</span> 2005-2023 NVIDIA Corporation
+Built on Fri_Jan__6_16:45:21_PST_2023
+Cuda compilation tools, release 12.0, V12.0.140
+Build cuda_12.0.r12.0/compiler.32267302_0
+
+GPU 0: NVIDIA GeForce RTX 3070 Ti <span class="o">(</span>UUID: GPU-d41e4013-aaf1-3562-e8b4-2d7d3a6a5ef7<span class="o">)</span>
+GPU 1: NVIDIA GeForce RTX 5070 Ti <span class="o">(</span>UUID: GPU-926f28bc-9b44-7b7c-e063-2b12d76864d2<span class="o">)</span>
+</code></pre></div>
+</div>
+<h2 data-sourcepos="57:1-57:21">
+<span id="41用forkをclone" class="fragment"></span><a href="#41%E7%94%A8fork%E3%82%92clone"><i class="fa fa-link"></i></a>4.1用forkをclone</h2>
+<p data-sourcepos="59:1-59:105"><strong>本稿では <code>~/llama.cpp-llmjp41</code> というディレクトリ内でビルドすることにする。</strong></p>
+<div class="code-frame" data-lang="sh" data-sourcepos="61:1-71:3">
+<div class="code-lang"><span class="bold">4.1用forkを別ディレクトリへclone</span></div>
+<div class="highlight"><pre><code><span class="nb">cd</span> ~
+
+git clone <span class="se">\</span>
+  <span class="nt">--branch</span> llmjp-harmony-handler <span class="se">\</span>
+  <span class="nt">--single-branch</span> <span class="se">\</span>
+  https://github.com/e-mon/llama.cpp.git <span class="se">\</span>
+  llama.cpp-llmjp41
+
+<span class="nb">cd</span> ~/llama.cpp-llmjp41
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="73:1-80:5">
+<p data-sourcepos="73:3-73:32">必要なら以下を実行。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="74:3-77:5">
+<div class="code-lang"><span class="bold">現在のcommitを記録</span></div>
+<div class="highlight"><pre><code>git rev-parse HEAD
+git branch <span class="nt">--show-current</span>
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="sh" data-sourcepos="78:3-80:5">
+<div class="code-lang"><span class="bold">ベンチマークを完全に固定する</span></div>
+<div class="highlight"><pre><code>git checkout d71fd74e95fdd3873a87340cd96f4d12057940c9
+</code></pre></div>
+</div>
+</blockquote>
+<h2 data-sourcepos="82:1-82:31">
+<span id="cuda対応でビルドする" class="fragment"></span><a href="#cuda%E5%AF%BE%E5%BF%9C%E3%81%A7%E3%83%93%E3%83%AB%E3%83%89%E3%81%99%E3%82%8B"><i class="fa fa-link"></i></a>CUDA対応でビルドする</h2>
+<p data-sourcepos="84:1-84:123">llama.cppはBlackwell (<code>120</code>) についてCUDA 12.8以上を前提としているため、CUDA 13.2を明示している。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="86:1-99:3">
+<div class="code-lang"><span class="bold">CUDAバージョンを指定してビルド（CUDAアーキテクチャはGPUに合わせて適宜変更する）</span></div>
+<div class="highlight"><pre><code>cmake <span class="nt">-S</span> <span class="nb">.</span> <span class="nt">-B</span> build-cublas <span class="se">\</span>
+  <span class="nt">-DGGML_CUDA</span><span class="o">=</span>ON <span class="se">\</span>
+  <span class="nt">-DGGML_NATIVE</span><span class="o">=</span>OFF <span class="se">\</span>
+  <span class="nt">-DCMAKE_BUILD_TYPE</span><span class="o">=</span>Release <span class="se">\</span>
+  <span class="nt">-DCMAKE_CUDA_COMPILER</span><span class="o">=</span>/usr/local/cuda-13.2/bin/nvcc <span class="se">\</span>
+  <span class="nt">-DCUDAToolkit_ROOT</span><span class="o">=</span>/usr/local/cuda-13.2 <span class="se">\</span>
+  <span class="nt">-DCMAKE_CUDA_ARCHITECTURES</span><span class="o">=</span><span class="s2">"86-real;120a-real"</span>
+
+cmake <span class="nt">--build</span> build-cublas <span class="se">\</span>
+  <span class="nt">--config</span> Release <span class="se">\</span>
+  <span class="nt">--target</span> llama-server <span class="se">\</span>
+  <span class="nt">-j</span><span class="s2">"</span><span class="si">$(</span><span class="nb">nproc</span><span class="si">)</span><span class="s2">"</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="101:1-101:519">
+<p data-sourcepos="101:3-101:519">バージョン確認の際に見た通り、筆者の環境ではシステム既定の<code>nvcc</code>はCUDA 12.0を指しているが、RTX 5070 Ti（Compute Capability 12.0）向けのネイティブCUDAコードを生成するため、ビルド時にはCUDA 13.2の<code>nvcc</code>とToolkitを明示的に指定する。複数のCUDA Toolkitが共存する環境では、<code>CMAKE_CUDA_COMPILER</code>と<code>CUDAToolkit_ROOT</code>を指定しておくことで、意図しない旧バージョンのCUDAが使用されるのを防ぐのがよい。</p>
+</blockquote>
+<div data-sourcepos="103:1-156:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<h3 data-sourcepos="105:1-105:64">
+<span id="kv-cacheを量子化してcontext長を拡張するビルド" class="fragment"></span><a href="#kv-cache%E3%82%92%E9%87%8F%E5%AD%90%E5%8C%96%E3%81%97%E3%81%A6context%E9%95%B7%E3%82%92%E6%8B%A1%E5%BC%B5%E3%81%99%E3%82%8B%E3%83%93%E3%83%AB%E3%83%89"><i class="fa fa-link"></i></a>KV cacheを量子化してcontext長を拡張するビルド</h3>
+<p data-sourcepos="107:1-107:256">今回のベンチマークテストでは過度な性能劣化を避けるためにKV cacheには<code>q8_0/q8_0</code>を使用した。一方、VRAM容量をさらに節約したい場合は、モデル本体とは別にKV cacheをより強く量子化できる。</p>
+<p data-sourcepos="109:1-109:36">例えば、サーバー起動時に</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="111:1-114:3"><div class="highlight"><pre><code><span class="nt">--cache-type-k</span> q8_0 <span class="se">\</span>
+<span class="nt">--cache-type-v</span> q4_0
+</code></pre></div></div>
+<p data-sourcepos="116:1-116:250">とすると、Key cacheはQ8の精度を維持しつつ、Value cacheのみQ4へ圧縮できる。<code>q8_0/q8_0</code>と比べてKV cacheのVRAM使用量を概ね2割強削減できるため、同じGPU構成でもより長いcontextを確保しやすい。</p>
+<p data-sourcepos="118:1-118:259">ただし、CUDA版llama.cppの標準buildではFlash Attention用の<code>q8_0-q4_0</code> kernelはデフォルトではコンパイルされない。そのため、混合KVを使用する場合はbuild時に対応する組み合わせを追加する必要がある。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="120:1-134:3">
+<div class="code-lang"><span class="bold">混合KV対応でビルド（CUDAアーキテクチャはGPUに合わせて適宜変更する）</span></div>
+<div class="highlight"><pre><code>cmake <span class="nt">-S</span> <span class="nb">.</span> <span class="nt">-B</span> build-mmq-mixed <span class="se">\</span>
+  <span class="nt">-DGGML_CUDA</span><span class="o">=</span>ON <span class="se">\</span>
+  <span class="nt">-DGGML_NATIVE</span><span class="o">=</span>OFF <span class="se">\</span>
+  <span class="nt">-DCMAKE_BUILD_TYPE</span><span class="o">=</span>Release <span class="se">\</span>
+  <span class="nt">-DCMAKE_CUDA_COMPILER</span><span class="o">=</span>/usr/local/cuda-13.2/bin/nvcc <span class="se">\</span>
+  <span class="nt">-DCUDAToolkit_ROOT</span><span class="o">=</span>/usr/local/cuda-13.2 <span class="se">\</span>
+  <span class="nt">-DCMAKE_CUDA_ARCHITECTURES</span><span class="o">=</span><span class="s2">"86-real;120a-real"</span> <span class="se">\</span>
+  <span class="nt">-DGGML_CUDA_FA_QUANTS</span><span class="o">=</span><span class="s2">"q4_0-q4_0;q8_0-q8_0;q8_0-q4_0;f16-f16;bf16-bf16"</span>
+
+cmake <span class="nt">--build</span> build-mmq-mixed <span class="se">\</span>
+  <span class="nt">--config</span> Release <span class="se">\</span>
+  <span class="nt">--target</span> llama-server <span class="se">\</span>
+  <span class="nt">-j</span><span class="s2">"</span><span class="si">$(</span><span class="nb">nproc</span><span class="si">)</span><span class="s2">"</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="136:1-142:73">
+<p data-sourcepos="136:3-136:83">すべての対応組み合わせをまとめてコンパイルする場合は、</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="138:3-140:5"><div class="highlight"><pre><code><span class="nt">-DGGML_CUDA_FA_QUANTS</span><span class="o">=</span>all
+</code></pre></div></div>
+<p data-sourcepos="142:3-142:73">とすることもできるが、build時間は大幅に長くなる。</p>
+</blockquote>
+<p data-sourcepos="144:1-144:27">起動時には例えば、</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="146:1-150:3"><div class="highlight"><pre><code><span class="nt">--flash-attn</span> on <span class="se">\</span>
+<span class="nt">--cache-type-k</span> q8_0 <span class="se">\</span>
+<span class="nt">--cache-type-v</span> q4_0
+</code></pre></div></div>
+<p data-sourcepos="152:1-152:18">を指定する。</p>
+<p data-sourcepos="154:1-154:351">なお、KV cacheの量子化率を変更すると推論結果にもわずかな影響を与える可能性がある。そのため、本稿のベンチマークでは比較条件を統一する目的で<code>q8_0/q8_0</code>を採用し、<code>q8_0/q4_0</code>や<code>q4_0/q4_0</code>は使用していない。長contextを優先する実運用では有力な選択肢となる。</p>
+</div>
+</div>
+<div data-sourcepos="158:1-210:3" class="note warn">
+<span class="fa fa-fw fa-exclamation-circle"></span><div>
+<h3 data-sourcepos="160:1-160:63">
+<span id="llama-serverが即終了segmentation-faultする場合" class="fragment"></span><a href="#llama-server%E3%81%8C%E5%8D%B3%E7%B5%82%E4%BA%86segmentation-fault%E3%81%99%E3%82%8B%E5%A0%B4%E5%90%88"><i class="fa fa-link"></i></a><code>llama-server</code>が即終了／Segmentation faultする場合</h3>
+<p data-sourcepos="162:1-162:70">CUDA build自体は正常に完了しているにもかかわらず、</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="164:1-166:3"><div class="highlight"><pre><code>./build/bin/llama-server <span class="nt">--version</span>
+</code></pre></div></div>
+<p data-sourcepos="168:1-168:73">だけでも<code>Segmentation fault (core dumped)</code>となる場合がある。</p>
+<p data-sourcepos="170:1-170:399">今回の環境では、CUDA Toolkit側ではなく、<strong>WSL2が参照しているCUDA driver library（<code>libcuda.so</code>）の組み合わせ</strong>が原因だった。<code>ldd</code>ではすべてのライブラリが正常に解決されていても、<code>/usr/lib/wsl/lib/libcuda.so.1</code>経由ではCUDA初期化時に落ちる場合がある。同様の事例はBlackwell GPU＋WSL2環境でも報告されている。</p>
+<blockquote data-sourcepos="172:1-172:63">
+<p data-sourcepos="172:2-172:63">（参考）<a href="https://github.com/ggml-org/llama.cpp/issues/20631" class="autolink" rel="nofollow noopener" target="_blank">https://github.com/ggml-org/llama.cpp/issues/20631</a></p>
+</blockquote>
+<p data-sourcepos="174:1-174:85">まず、実際にリンクされているCUDA関連ライブラリを確認する。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="176:1-179:3">
+<div class="code-lang"><span class="bold">リンクされたライブラリの確認</span></div>
+<div class="highlight"><pre><code>ldd ./build/bin/llama-server | <span class="se">\</span>
+<span class="nb">grep</span> <span class="nt">-Ei</span> <span class="s1">'cuda|cublas|ggml|nvidia|not found'</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="181:1-181:101">Windows側NVIDIA driverからWSLへ公開されている実体は、次のように確認できる。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="183:1-188:3"><div class="highlight"><pre><code>find /usr/lib/wsl/drivers <span class="se">\</span>
+  <span class="nt">-maxdepth</span> 2 <span class="se">\</span>
+  <span class="nt">-name</span> <span class="s1">'libcuda.so.1.1'</span> <span class="se">\</span>
+  <span class="nt">-printf</span> <span class="s1">'%h\n'</span>
+</code></pre></div></div>
+<p data-sourcepos="190:1-190:184">今回の環境では、<code>/usr/lib/wsl/lib/libcuda.so.1</code>ではなく、<code>nv_dispig.inf_amd64_*</code>以下の<code>libcuda.so.1.1</code>を優先して読み込ませることで正常に起動した。</p>
+<p data-sourcepos="192:1-192:102">例えば、次のようにllama.cpp実行時だけ一時的にlibrary pathを切り替えられる。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="194:1-204:3"><div class="highlight"><pre><code><span class="nv">DRV</span><span class="o">=</span>/usr/lib/wsl/drivers/nv_dispig.inf_amd64_XXXXXXXX
+<span class="nv">TMP</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/.wsl-cuda-llama"</span>
+
+<span class="nb">mkdir</span> <span class="nt">-p</span> <span class="s2">"</span><span class="nv">$TMP</span><span class="s2">"</span>
+<span class="nb">ln</span> <span class="nt">-sfn</span> <span class="s2">"</span><span class="nv">$DRV</span><span class="s2">/libcuda.so.1.1"</span> <span class="s2">"</span><span class="nv">$TMP</span><span class="s2">/libcuda.so.1"</span>
+<span class="nb">ln</span> <span class="nt">-sfn</span> <span class="s2">"</span><span class="nv">$DRV</span><span class="s2">/libcuda.so.1.1"</span> <span class="s2">"</span><span class="nv">$TMP</span><span class="s2">/libcuda.so"</span>
+
+<span class="nv">LD_LIBRARY_PATH</span><span class="o">=</span><span class="s2">"</span><span class="nv">$TMP</span><span class="s2">:</span><span class="nv">$DRV</span><span class="s2">:/usr/local/cuda-13.2/lib64:</span><span class="nv">$LD_LIBRARY_PATH</span><span class="s2">"</span> <span class="se">\</span>
+./build/bin/llama-server <span class="nt">--version</span>
+</code></pre></div></div>
+<p data-sourcepos="206:1-206:141"><code>XXXXXXXX</code>の部分は環境・driver versionによって異なるため、上記<code>find</code>コマンドなどで実際のパスを確認する。</p>
+<p data-sourcepos="208:1-208:405">この問題はCUDA kernelそのものではなく、<strong>WSL2のCUDA driver/runtime interop層でCUDA初期化時に不整合が生じる問題</strong>である。CUDA環境やNVIDIA driver／WSLを更新・再構築することでも解消する場合があるが、既存環境を大きく変更したくない場合は、llama.cpp起動時だけ正しいdriver libraryを優先する方法が扱いやすい。</p>
+</div>
+</div>
+<div data-sourcepos="212:1-261:3" class="note warn">
+<span class="fa fa-fw fa-exclamation-circle"></span><div>
+<h3 data-sourcepos="214:1-214:61">
+<span id="mmq-kernelでmmq_x_best0等のエラーが出る場合" class="fragment"></span><a href="#mmq-kernel%E3%81%A7mmq_x_best0%E7%AD%89%E3%81%AE%E3%82%A8%E3%83%A9%E3%83%BC%E3%81%8C%E5%87%BA%E3%82%8B%E5%A0%B4%E5%90%88"><i class="fa fa-link"></i></a>MMQ kernelで<code>mmq_x_best=0</code>等のエラーが出る場合</h3>
+<p data-sourcepos="216:1-216:55">以前の記事では、Blackwell環境でMMQ kernelが</p>
+<div class="code-frame" data-lang="text" data-sourcepos="218:1-221:3"><div class="highlight"><pre><code>mmq_x_best=0
+mmq.cuh:...: fatal error
+</code></pre></div></div>
+<p data-sourcepos="223:1-223:51">として停止する問題を回避するため、</p>
+<div class="code-frame" data-lang="cmake" data-sourcepos="225:1-227:3"><div class="highlight"><pre><code>-DGGML_CUDA_FORCE_CUBLAS=ON
+</code></pre></div></div>
+<p data-sourcepos="229:1-229:54">を指定してcuBLASの利用を強制していた。</p>
+<p data-sourcepos="231:1-231:98">このMMQクラッシュについては、初期のBlackwell対応driverでCUDA device propertyの</p>
+<div class="code-frame" data-lang="text" data-sourcepos="233:1-235:3"><div class="highlight"><pre><code>sharedMemPerBlockOptin
+</code></pre></div></div>
+<p data-sourcepos="237:1-237:304">が<code>0</code>や異常に大きな値として返される問題が報告されている。MMQ側はこの値を使って利用可能なshared memory量とkernel configurationを決定するため、誤った値を受け取ると有効なMMQ tileを選択できず、<code>mmq_x_best=0</code>に至る場合があった。</p>
+<blockquote data-sourcepos="239:1-239:63">
+<p data-sourcepos="239:2-239:63">（参考）<a href="https://github.com/ggml-org/llama.cpp/issues/23385" class="autolink" rel="nofollow noopener" target="_blank">https://github.com/ggml-org/llama.cpp/issues/23385</a></p>
+</blockquote>
+<p data-sourcepos="241:1-241:58">今回の環境では、RTX 5070 Ti／RTX 3070 Tiともに</p>
+<div class="code-frame" data-lang="text" data-sourcepos="243:1-245:3"><div class="highlight"><pre><code>sharedMemPerBlockOptin = 101376
+</code></pre></div></div>
+<p data-sourcepos="247:1-247:301">と正常な値が取得できており、MMQ有効状態でも推論まで正常に完走した。また、現在使用しているllama.cpp系コードでは、MMQが必要とするshared memory量を事前に確認し、不足する場合はBLAS側へfallbackする処理も追加されている。</p>
+<p data-sourcepos="249:1-249:24">そのため、現在は</p>
+<div class="code-frame" data-lang="cmake" data-sourcepos="251:1-253:3"><div class="highlight"><pre><code>-DGGML_CUDA_FORCE_CUBLAS=ON
+</code></pre></div></div>
+<p data-sourcepos="255:1-255:119">を通常のbuild設定から外し、<strong>llama.cpp標準のCUDA kernel自動選択に任せる</strong>構成としている。</p>
+<blockquote data-sourcepos="257:1-257:218">
+<p data-sourcepos="257:3-257:218"><code>GGML_CUDA_FORCE_CUBLAS</code>を外すことは「すべての演算をMMQで強制する」という意味ではない。行列形状や量子化形式などに応じて、llama.cpp側がMMQやcuBLAS等を選択する。</p>
+</blockquote>
+<p data-sourcepos="259:1-259:265">Blackwell環境でMMQ関連のfatal errorが再現する場合は、まずNVIDIA driver、WSL2、CUDA Toolkitおよびllama.cppを更新する。それでも解消しない場合には、<code>GGML_CUDA_FORCE_CUBLAS=ON</code>を一時的な回避策として利用できる。</p>
+</div>
+</div>
+<blockquote data-sourcepos="263:1-263:313">
+<p data-sourcepos="263:3-263:313">llama.cppサーバーのSegmentation faultとMMQ kernelクラッシュはそれぞれ別個の問題である。前者は<code>--version</code>の段階でも発生するCUDA初期化・driver library参照の問題で、後者は推論時にMMQ kernelを選択する際のshared-memory情報に関する問題である。</p>
+</blockquote>
+<h2 data-sourcepos="265:1-265:33">
+<span id="llamacppサーバーの起動" class="fragment"></span><a href="#llamacpp%E3%82%B5%E3%83%BC%E3%83%90%E3%83%BC%E3%81%AE%E8%B5%B7%E5%8B%95"><i class="fa fa-link"></i></a>llama.cppサーバーの起動</h2>
+<p data-sourcepos="267:1-267:380">筆者の環境でGPU全層オフロードを実現するようなパラメータは以下のようになった。<code>--ctx-size 24000</code> としているが、以前のLLM-jp-4での検証結果を踏まえ、多くの設問で十分なコンテキスト長と判断した。（そもそも今回の環境でフルGPUオフロードする場合はctx 24k程度がVRAM限界である）</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="269:1-296:3">
+<div class="code-lang"><span class="bold">llama.cppサーバー立ち上げ</span></div>
+<div class="highlight"><pre><code><span class="nb">cd</span> ~/llama.cpp-llmjp41
+
+<span class="nv">DRV</span><span class="o">=</span>/usr/lib/wsl/drivers/nv_dispig.inf_amd64_f4c7a2fd13e0f763
+<span class="nv">TMP</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/.wsl-cuda-llama"</span>
+
+<span class="nv">LD_LIBRARY_PATH</span><span class="o">=</span><span class="s2">"</span><span class="nv">$TMP</span><span class="s2">:</span><span class="nv">$DRV</span><span class="s2">:/usr/local/cuda-13.2/lib64:</span><span class="nv">$LD_LIBRARY_PATH</span><span class="s2">"</span> <span class="se">\</span>
+./build-mmq-test/bin/llama-server <span class="se">\</span>
+  <span class="nt">--model</span> ~/models/llm-jp-4.1-33b-thinking-gguf/llm-jp-4.1-33b-thinking-Q4_K_M.gguf <span class="se">\</span>
+  <span class="nt">--jinja</span> <span class="se">\</span>
+  <span class="nt">-rea</span> on <span class="se">\</span>
+  <span class="nt">--reasoning-budget</span> <span class="nt">-1</span> <span class="se">\</span>
+  <span class="nt">--flash-attn</span> on <span class="se">\</span>
+  <span class="nt">--fit</span> off <span class="se">\</span>
+  <span class="nt">--split-mode</span> layer <span class="se">\</span>
+  <span class="nt">--tensor-split</span> 16,7 <span class="se">\</span>
+  <span class="nt">-ngl</span> all <span class="se">\</span>
+  <span class="nt">--ctx-size</span> 24000 <span class="se">\</span>
+  <span class="nt">--cache-type-k</span> q8_0 <span class="se">\</span>
+  <span class="nt">--cache-type-v</span> q8_0 <span class="se">\</span>
+  <span class="nt">--parallel</span> 1 <span class="se">\</span>
+  <span class="nt">--batch-size</span> 256 <span class="se">\</span>
+  <span class="nt">--ubatch-size</span> 64 <span class="se">\</span>
+  <span class="nt">--host</span> 127.0.0.1 <span class="se">\</span>
+  <span class="nt">--port</span> 8080 <span class="se">\</span>
+  <span class="nt">-lv</span> 4 <span class="se">\</span>
+  2&gt;&amp;1 | <span class="nb">tee</span> ~/llmjp41_mmq_test.log
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="298:1-298:367">
+<p data-sourcepos="298:3-298:367">GPUの認識される順序はllama.cppとシステムで逆転する可能性があるので注意。筆者の環境ではドライバー更新時に <code>nvidia-smi -L</code> の番号と今回のllama.cpp内部のCUDA番号が逆になったが、llama.cppで認識されている順序は同じだったため、結局前回同様 <code>--tensor-split 16,7</code> としている。</p>
+</blockquote>
+<p data-sourcepos="300:1-300:259">メモリ使用量からも分かる通り、5070Ti + 3070Ti のデュアルGPU環境（VRAM 24GB）でかなりギリギリの運用になっている。グラフィックボードに接続するモニターは極力減らしておくことが望ましい。</p>
+<div class="code-frame" data-lang="" data-sourcepos="302:1-331:3">
+<div class="code-lang"><span class="bold">モデルロード時のGPU</span></div>
+<div class="highlight"><pre><code>+-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.57                 Driver Version: 591.86         CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+|  0%   23C    P8              3W /  320W |    7366MiB /   8192MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+|  0%   27C    P8              9W /  300W |   15922MiB /  16303MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A              26      G   /Xwayland                             N/A      |
+|    0   N/A  N/A           31460      C   /llama-server                         N/A      |
+|    0   N/A  N/A           31460      C   /llama-server                         N/A      |
+|    1   N/A  N/A              26      G   /Xwayland                             N/A      |
+|    1   N/A  N/A           31460      C   /llama-server                         N/A      |
+|    1   N/A  N/A           31460      C   /llama-server                         N/A      |
++-----------------------------------------------------------------------------------------+
+</code></pre></div>
+</div>
+<div data-sourcepos="333:1-384:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<h3 data-sourcepos="335:1-335:72">
+<span id="kv-cacheをcpu側へ置いてコンテキスト長を増やす方法" class="fragment"></span><a href="#kv-cache%E3%82%92cpu%E5%81%B4%E3%81%B8%E7%BD%AE%E3%81%84%E3%81%A6%E3%82%B3%E3%83%B3%E3%83%86%E3%82%AD%E3%82%B9%E3%83%88%E9%95%B7%E3%82%92%E5%A2%97%E3%82%84%E3%81%99%E6%96%B9%E6%B3%95"><i class="fa fa-link"></i></a>KV cacheをCPU側へ置いてコンテキスト長を増やす方法</h3>
+<p data-sourcepos="337:1-337:110">context長を確保しようとするとVRAM容量が不足してしまう場合は、サーバー起動時に</p>
+<div class="code-frame" data-lang="sh id=" data-sourcepos="339:1-341:3"><div class="highlight"><pre><code>--no-kv-offload
+</code></pre></div></div>
+<p data-sourcepos="343:1-343:33">を指定する方法もある。</p>
+<p data-sourcepos="345:1-345:214">このオプションは、単にKV cacheだけをRAMへ移すというより、llama.cpp内部ではK/Q/V関連のattention処理をGPUへoffloadせず、KV cacheを含めてCPU側で処理する設定となる。</p>
+<p data-sourcepos="347:1-347:223">その代わり、モデル本体のweightはGPUに残すことができるため、VRAM不足を理由にTransformer layerそのものをCPUへoffloadする場合と比べると、大幅に高速になる場合がある。</p>
+<p data-sourcepos="349:1-349:24">今回の環境では、</p>
+<div class="code-frame" data-lang="text id=" data-sourcepos="351:1-359:3"><div class="highlight"><pre><code>部分的にモデルlayerをCPU offload (-ngl 50)
+ ↓
+低速（ ~ 4 tok/s）
+
+モデル65/65層をGPUへoffload + --no-kv-offload
+ ↓
+数倍高速（ ~ 13 tok/s）
+</code></pre></div></div>
+<p data-sourcepos="361:1-361:15">となった。</p>
+<p data-sourcepos="363:1-363:443">通常はKV cacheとattention処理もGPU上に置いた方が高速である。実際、KV cache含めフルGPUオフロードの場合は 30 tok/s 程度のデコード速度であった。<code>--no-kv-offload</code> 適用時にCPUオフロードの場合に比べて速度が向上するのは、KV cache用VRAMをホスト側へ移すことで計算量の大きいモデルの重みを全層GPU上に維持できたことが主な要因である。</p>
+<p data-sourcepos="365:1-365:118">また、KV cacheがVRAMを消費しなくなるため、同じGPU構成でもより長いcontextを確保できる。</p>
+<p data-sourcepos="367:1-367:167">一方で、contextが長くなるほどCPU側のattention処理量やRAM帯域、CPU-GPU間のデータ転送がボトルネックになりやすい。そのため、</p>
+<div class="code-frame" data-lang="text id=" data-sourcepos="369:1-379:3"><div class="highlight"><pre><code>速度優先：
+モデル + KV cacheともGPU
+
+VRAM不足時（コンテキスト長を増やしたい場合）の妥協：
+モデルは全層GPU
+KV/KQV処理のみCPU (--no-kv-offload)
+
+根本的にVRAMが不足している場合：
+モデルlayer自体をCPU offload
+</code></pre></div></div>
+<p data-sourcepos="381:1-381:48">という優先順位で考えるのがよい。</p>
+<p data-sourcepos="383:1-383:225">本稿のベンチマークでは実行条件を統一するためKV cacheもGPU上に配置したが、VRAM容量が厳しい環境で長contextを利用したい場合には<code>--no-kv-offload</code>は有力な選択肢となる。</p>
+</div>
+</div>
+<h1 data-sourcepos="387:1-387:29">
+<span id="ベンチマークテスト" class="fragment"></span><a href="#%E3%83%99%E3%83%B3%E3%83%81%E3%83%9E%E3%83%BC%E3%82%AF%E3%83%86%E3%82%B9%E3%83%88"><i class="fa fa-link"></i></a>ベンチマークテスト</h1>
+<p data-sourcepos="389:1-389:72">ベンチマークには前回同様に以下の問題を利用した。</p>
+<p data-sourcepos="391:1-391:53"><a href="/qiita/8ba25944017b64207792.html" class="mirror-link-card">https://qiita.com/h-nabata/items/8ba25944017b64207792</a>
+</p>
+<h1 data-sourcepos="394:1-394:8">
+<span id="結果" class="fragment"></span><a href="#%E7%B5%90%E6%9E%9C"><i class="fa fa-link"></i></a>結果</h1>
+<p data-sourcepos="396:1-396:409">全体の結果を以下の表に示す。LLM-jp-4-33Bからの差分Δはほとんどの分野で伸びている。特に物理学ではQwen3.8-27Bに匹敵する正答率を叩き出した。とはいえ、LLM-jp-4.1の総得点（66.1%）はQwen3.8-27B（88.2%）に及ばず、数学やコンピュータサイエンスは差が大きい。また、化学ではLLM-jp-4に比べて得点が低下した。</p>
+<table data-sourcepos="398:1-408:68">
+<thead>
+<tr data-sourcepos="398:1-398:75">
+<th data-sourcepos="398:2-398:9">系列</th>
+<th style="text-align: right" data-sourcepos="398:11-398:23">Qwen3.8-27B</th>
+<th style="text-align: right" data-sourcepos="398:25-398:38">LLM-jp-4-33B</th>
+<th style="text-align: right" data-sourcepos="398:40-398:59"><strong>LLM-jp-4.1-33B</strong></th>
+<th style="text-align: right" data-sourcepos="398:61-398:74">Δ (4→4.1)</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="400:1-400:39">
+<td data-sourcepos="400:2-400:6">LOG</td>
+<td style="text-align: right" data-sourcepos="400:8-400:13">78.5</td>
+<td style="text-align: right" data-sourcepos="400:15-400:20">78.5</td>
+<td style="text-align: right" data-sourcepos="400:22-400:31"><strong>80.0</strong></td>
+<td style="text-align: right" data-sourcepos="400:33-400:38">+1.5</td>
+</tr>
+<tr data-sourcepos="401:1-401:39">
+<td data-sourcepos="401:2-401:6">LIT</td>
+<td style="text-align: right" data-sourcepos="401:8-401:13">75.9</td>
+<td style="text-align: right" data-sourcepos="401:15-401:20">64.9</td>
+<td style="text-align: right" data-sourcepos="401:22-401:31"><strong>71.2</strong></td>
+<td style="text-align: right" data-sourcepos="401:33-401:38">+6.3</td>
+</tr>
+<tr data-sourcepos="402:1-402:39">
+<td data-sourcepos="402:2-402:6">CSC</td>
+<td style="text-align: right" data-sourcepos="402:8-402:13">68.0</td>
+<td style="text-align: right" data-sourcepos="402:15-402:20">51.0</td>
+<td style="text-align: right" data-sourcepos="402:22-402:31"><strong>52.0</strong></td>
+<td style="text-align: right" data-sourcepos="402:33-402:38">+1.0</td>
+</tr>
+<tr data-sourcepos="403:1-403:39">
+<td data-sourcepos="403:2-403:6">NUM</td>
+<td style="text-align: right" data-sourcepos="403:8-403:13">56.0</td>
+<td style="text-align: right" data-sourcepos="403:15-403:20">34.0</td>
+<td style="text-align: right" data-sourcepos="403:22-403:31"><strong>43.0</strong></td>
+<td style="text-align: right" data-sourcepos="403:33-403:38">+9.0</td>
+</tr>
+<tr data-sourcepos="404:1-404:40">
+<td data-sourcepos="404:2-404:6">ANL</td>
+<td style="text-align: right" data-sourcepos="404:8-404:13">65.0</td>
+<td style="text-align: right" data-sourcepos="404:15-404:20">21.0</td>
+<td style="text-align: right" data-sourcepos="404:22-404:31"><strong>35.0</strong></td>
+<td style="text-align: right" data-sourcepos="404:33-404:39">+14.0</td>
+</tr>
+<tr data-sourcepos="405:1-405:44">
+<td data-sourcepos="405:2-405:6">PHY</td>
+<td style="text-align: right" data-sourcepos="405:8-405:13">70.5</td>
+<td style="text-align: right" data-sourcepos="405:15-405:20">41.5</td>
+<td style="text-align: right" data-sourcepos="405:22-405:31"><strong>67.5</strong></td>
+<td style="text-align: right" data-sourcepos="405:33-405:43"><strong>+26.0</strong></td>
+</tr>
+<tr data-sourcepos="406:1-406:45">
+<td data-sourcepos="406:2-406:6">CHE</td>
+<td style="text-align: right" data-sourcepos="406:8-406:13">77.1</td>
+<td style="text-align: right" data-sourcepos="406:15-406:20">65.5</td>
+<td style="text-align: right" data-sourcepos="406:22-406:31"><strong>61.3</strong></td>
+<td style="text-align: right" data-sourcepos="406:33-406:44"><strong>−4.2</strong></td>
+</tr>
+<tr data-sourcepos="407:1-407:39">
+<td data-sourcepos="407:2-407:6">BIO</td>
+<td style="text-align: right" data-sourcepos="407:8-407:13">73.6</td>
+<td style="text-align: right" data-sourcepos="407:15-407:20">66.4</td>
+<td style="text-align: right" data-sourcepos="407:22-407:31"><strong>69.5</strong></td>
+<td style="text-align: right" data-sourcepos="407:33-407:38">+3.1</td>
+</tr>
+<tr data-sourcepos="408:1-408:68">
+<td data-sourcepos="408:2-408:19"><strong>総合得点</strong></td>
+<td style="text-align: right" data-sourcepos="408:21-408:31"><strong>564.6</strong></td>
+<td style="text-align: right" data-sourcepos="408:33-408:43"><strong>422.8</strong></td>
+<td style="text-align: right" data-sourcepos="408:45-408:55"><strong>479.5</strong></td>
+<td style="text-align: right" data-sourcepos="408:57-408:67"><strong>+56.7</strong></td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="410:1-410:526">改善が最も顕著だったのは物理学で、41.5/80点から67.5/80点へ大幅に上昇した。数学（解析・幾何）も21点から35点、数学（代数・数論）も34点から43点へ改善している。LLM-jp-4で頻発した長い推論ループは大幅に減少し、多くの問題で最終回答まで正常に到達できるようになった。この点から、LLM-jp-4.1では単純な正答率だけでなく、長い推論を収束させる能力そのものが改善したと考えられる。</p>
+<p data-sourcepos="412:1-412:464">一方で、改善はすべての分野について一様というわけではなかった。化学は65.5点から58.5点へ低下し、情報科学は51点から52点とほぼ横ばいだった。また、必要条件と十分条件の混同、特殊解や解集合の取りこぼし、問題文で明示された局所ルールより学習済みの一般知識を優先する挙動など、LLM-jp-4でも見られた失敗形式の一部は4.1でも残った。</p>
+<p data-sourcepos="414:1-414:482">興味深いのは論理系列で、LLM-jp-4.1は80/80点を獲得し、前回の検証でQwen3.8とLLM-jp-4の双方が誤った問題も正答していた。物理学でもQwen3.8の70.5点に対して67.5点まで接近している。したがって、<strong>LLM-jp-4.1はLLM-jp-4から確実に性能を伸ばしたモデルと評価できる一方、Qwen3.8に対しては高度な数学、情報科学、化学を中心に依然として差が残る</strong>という結果となった。</p>
+<blockquote data-sourcepos="417:1-417:327">
+<p data-sourcepos="417:3-417:327">Qwen3.8で複数回見られたJSON-only等の形式違反は、今回のLLM-jp-4.1では観察されなかった。LLM-jp-4系列はもともと形式追従が比較的良好だったが、4.1ではexact-formatタスクを意識したSFTやTool Callingデータも追加されており、この結果と整合的である。</p>
+</blockquote>
+<p data-sourcepos="419:1-419:36">各問の結果を以下に示す。</p>
+<table data-sourcepos="421:1-430:81">
+<thead>
+<tr data-sourcepos="421:1-421:71">
+<th data-sourcepos="421:2-421:9">系列</th>
+<th style="text-align: right" data-sourcepos="421:11-421:15">P01</th>
+<th style="text-align: right" data-sourcepos="421:17-421:21">P02</th>
+<th style="text-align: right" data-sourcepos="421:23-421:27">P03</th>
+<th style="text-align: right" data-sourcepos="421:29-421:33">P04</th>
+<th style="text-align: right" data-sourcepos="421:35-421:39">P05</th>
+<th style="text-align: right" data-sourcepos="421:41-421:45">P06</th>
+<th style="text-align: right" data-sourcepos="421:47-421:51">P07</th>
+<th style="text-align: right" data-sourcepos="421:53-421:57">P08</th>
+<th style="text-align: right" data-sourcepos="421:59-421:70"><strong>合計</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="423:1-423:87">
+<td data-sourcepos="423:2-423:19"><strong>LOG：論理</strong></td>
+<td style="text-align: right" data-sourcepos="423:21-423:26">10.0</td>
+<td style="text-align: right" data-sourcepos="423:28-423:33">10.0</td>
+<td style="text-align: right" data-sourcepos="423:35-423:40">10.0</td>
+<td style="text-align: right" data-sourcepos="423:42-423:47">10.0</td>
+<td style="text-align: right" data-sourcepos="423:49-423:54">10.0</td>
+<td style="text-align: right" data-sourcepos="423:56-423:61">10.0</td>
+<td style="text-align: right" data-sourcepos="423:63-423:68">10.0</td>
+<td style="text-align: right" data-sourcepos="423:70-423:75">10.0</td>
+<td style="text-align: right" data-sourcepos="423:77-423:86"><strong>80.0</strong></td>
+</tr>
+<tr data-sourcepos="424:1-424:97">
+<td data-sourcepos="424:2-424:34"><strong>LIT：文章理解・翻訳</strong></td>
+<td style="text-align: right" data-sourcepos="424:36-424:41">10.0</td>
+<td style="text-align: right" data-sourcepos="424:43-424:47">5.0</td>
+<td style="text-align: right" data-sourcepos="424:49-424:54">10.0</td>
+<td style="text-align: right" data-sourcepos="424:56-424:61">10.0</td>
+<td style="text-align: right" data-sourcepos="424:63-424:67">9.2</td>
+<td style="text-align: right" data-sourcepos="424:69-424:73">8.0</td>
+<td style="text-align: right" data-sourcepos="424:75-424:79">9.8</td>
+<td style="text-align: right" data-sourcepos="424:81-424:85">9.2</td>
+<td style="text-align: right" data-sourcepos="424:87-424:96"><strong>71.2</strong></td>
+</tr>
+<tr data-sourcepos="425:1-425:87">
+<td data-sourcepos="425:2-425:25"><strong>CSC：情報科学</strong></td>
+<td style="text-align: right" data-sourcepos="425:27-425:31">5.0</td>
+<td style="text-align: right" data-sourcepos="425:33-425:38">10.0</td>
+<td style="text-align: right" data-sourcepos="425:40-425:44">4.0</td>
+<td style="text-align: right" data-sourcepos="425:46-425:51">10.0</td>
+<td style="text-align: right" data-sourcepos="425:53-425:57">9.0</td>
+<td style="text-align: right" data-sourcepos="425:59-425:63">7.0</td>
+<td style="text-align: right" data-sourcepos="425:65-425:69">6.0</td>
+<td style="text-align: right" data-sourcepos="425:71-425:75">1.0</td>
+<td style="text-align: right" data-sourcepos="425:77-425:86"><strong>52.0</strong></td>
+</tr>
+<tr data-sourcepos="426:1-426:88">
+<td data-sourcepos="426:2-426:28"><strong>NUM：代数・数論</strong></td>
+<td style="text-align: right" data-sourcepos="426:30-426:34">5.0</td>
+<td style="text-align: right" data-sourcepos="426:36-426:40">7.0</td>
+<td style="text-align: right" data-sourcepos="426:42-426:46">2.0</td>
+<td style="text-align: right" data-sourcepos="426:48-426:52">3.0</td>
+<td style="text-align: right" data-sourcepos="426:54-426:58">8.0</td>
+<td style="text-align: right" data-sourcepos="426:60-426:64">8.0</td>
+<td style="text-align: right" data-sourcepos="426:66-426:70">6.0</td>
+<td style="text-align: right" data-sourcepos="426:72-426:76">4.0</td>
+<td style="text-align: right" data-sourcepos="426:78-426:87"><strong>43.0</strong></td>
+</tr>
+<tr data-sourcepos="427:1-427:89">
+<td data-sourcepos="427:2-427:28"><strong>ANL：解析・幾何</strong></td>
+<td style="text-align: right" data-sourcepos="427:30-427:34">6.0</td>
+<td style="text-align: right" data-sourcepos="427:36-427:41">10.0</td>
+<td style="text-align: right" data-sourcepos="427:43-427:47">1.0</td>
+<td style="text-align: right" data-sourcepos="427:49-427:53">2.0</td>
+<td style="text-align: right" data-sourcepos="427:55-427:59">8.0</td>
+<td style="text-align: right" data-sourcepos="427:61-427:65">2.0</td>
+<td style="text-align: right" data-sourcepos="427:67-427:71">2.0</td>
+<td style="text-align: right" data-sourcepos="427:73-427:77">4.0</td>
+<td style="text-align: right" data-sourcepos="427:79-427:88"><strong>35.0</strong></td>
+</tr>
+<tr data-sourcepos="428:1-428:81">
+<td data-sourcepos="428:2-428:19"><strong>PHY：物理</strong></td>
+<td style="text-align: right" data-sourcepos="428:21-428:26">10.0</td>
+<td style="text-align: right" data-sourcepos="428:28-428:32">7.0</td>
+<td style="text-align: right" data-sourcepos="428:34-428:39">10.0</td>
+<td style="text-align: right" data-sourcepos="428:41-428:45">9.0</td>
+<td style="text-align: right" data-sourcepos="428:47-428:51">8.5</td>
+<td style="text-align: right" data-sourcepos="428:53-428:57">9.0</td>
+<td style="text-align: right" data-sourcepos="428:59-428:63">8.0</td>
+<td style="text-align: right" data-sourcepos="428:65-428:69">6.0</td>
+<td style="text-align: right" data-sourcepos="428:71-428:80"><strong>67.5</strong></td>
+</tr>
+<tr data-sourcepos="429:1-429:80">
+<td data-sourcepos="429:2-429:19"><strong>CHE：化学</strong></td>
+<td style="text-align: right" data-sourcepos="429:21-429:25">8.0</td>
+<td style="text-align: right" data-sourcepos="429:27-429:31">7.5</td>
+<td style="text-align: right" data-sourcepos="429:33-429:37">3.0</td>
+<td style="text-align: right" data-sourcepos="429:39-429:43">4.0</td>
+<td style="text-align: right" data-sourcepos="429:45-429:50">10.0</td>
+<td style="text-align: right" data-sourcepos="429:52-429:56">9.2</td>
+<td style="text-align: right" data-sourcepos="429:58-429:62">9.8</td>
+<td style="text-align: right" data-sourcepos="429:64-429:68">9.8</td>
+<td style="text-align: right" data-sourcepos="429:70-429:79"><strong>61.3</strong></td>
+</tr>
+<tr data-sourcepos="430:1-430:81">
+<td data-sourcepos="430:2-430:19"><strong>BIO：生物</strong></td>
+<td style="text-align: right" data-sourcepos="430:21-430:25">9.5</td>
+<td style="text-align: right" data-sourcepos="430:27-430:31">9.0</td>
+<td style="text-align: right" data-sourcepos="430:33-430:37">4.0</td>
+<td style="text-align: right" data-sourcepos="430:39-430:44">10.0</td>
+<td style="text-align: right" data-sourcepos="430:46-430:50">8.0</td>
+<td style="text-align: right" data-sourcepos="430:52-430:56">9.5</td>
+<td style="text-align: right" data-sourcepos="430:58-430:63">10.0</td>
+<td style="text-align: right" data-sourcepos="430:65-430:69">9.5</td>
+<td style="text-align: right" data-sourcepos="430:71-430:80"><strong>69.5</strong></td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="432:1-432:297">ANL-P01については、Thinkingの無限ループが発生してしまったため <code>--no-kv-offload</code> を適用して再試行した結果を採用している。無限ループによる解答不能のケースを最終結果と見なす場合、ANL系列の得点は35.0→30.0に低下する。</p>
+<h2 data-sourcepos="434:1-434:27">
+<span id="temperature01の結果" class="fragment"></span><a href="#temperature01%E3%81%AE%E7%B5%90%E6%9E%9C"><i class="fa fa-link"></i></a>temperature=0.1の結果</h2>
+<p data-sourcepos="436:1-436:291">今回、設定によってはANL-01の推論中に無限ループに陥ってしまうパターンがあった（temperature=0.0で実施）。ループに陥るトラジェクトリからの脱出能力を見るため、全体をtemperature=0.1で実施した結果も掲載しておく。</p>
+<table data-sourcepos="438:1-447:68">
+<thead>
+<tr data-sourcepos="438:1-438:67">
+<th data-sourcepos="438:2-438:9">分野</th>
+<th style="text-align: right" data-sourcepos="438:11-438:15">P01</th>
+<th style="text-align: right" data-sourcepos="438:17-438:21">P02</th>
+<th style="text-align: right" data-sourcepos="438:23-438:27">P03</th>
+<th style="text-align: right" data-sourcepos="438:29-438:33">P04</th>
+<th style="text-align: right" data-sourcepos="438:35-438:39">P05</th>
+<th style="text-align: right" data-sourcepos="438:41-438:45">P06</th>
+<th style="text-align: right" data-sourcepos="438:47-438:51">P07</th>
+<th style="text-align: right" data-sourcepos="438:53-438:57">P08</th>
+<th style="text-align: right" data-sourcepos="438:59-438:66">合計</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="440:1-440:73">
+<td data-sourcepos="440:2-440:6">LOG</td>
+<td style="text-align: right" data-sourcepos="440:8-440:13">10.0</td>
+<td style="text-align: right" data-sourcepos="440:15-440:20">10.0</td>
+<td style="text-align: right" data-sourcepos="440:22-440:27">10.0</td>
+<td style="text-align: right" data-sourcepos="440:29-440:34">10.0</td>
+<td style="text-align: right" data-sourcepos="440:36-440:41">10.0</td>
+<td style="text-align: right" data-sourcepos="440:43-440:48">10.0</td>
+<td style="text-align: right" data-sourcepos="440:50-440:54">8.5</td>
+<td style="text-align: right" data-sourcepos="440:56-440:61">10.0</td>
+<td style="text-align: right" data-sourcepos="440:63-440:72"><strong>78.5</strong></td>
+</tr>
+<tr data-sourcepos="441:1-441:69">
+<td data-sourcepos="441:2-441:6">LIT</td>
+<td style="text-align: right" data-sourcepos="441:8-441:13">10.0</td>
+<td style="text-align: right" data-sourcepos="441:15-441:19">6.7</td>
+<td style="text-align: right" data-sourcepos="441:21-441:26">10.0</td>
+<td style="text-align: right" data-sourcepos="441:28-441:33">10.0</td>
+<td style="text-align: right" data-sourcepos="441:35-441:39">9.2</td>
+<td style="text-align: right" data-sourcepos="441:41-441:45">8.0</td>
+<td style="text-align: right" data-sourcepos="441:47-441:51">7.5</td>
+<td style="text-align: right" data-sourcepos="441:53-441:57">9.2</td>
+<td style="text-align: right" data-sourcepos="441:59-441:68"><strong>70.6</strong></td>
+</tr>
+<tr data-sourcepos="442:1-442:69">
+<td data-sourcepos="442:2-442:6">CSC</td>
+<td style="text-align: right" data-sourcepos="442:8-442:13">10.0</td>
+<td style="text-align: right" data-sourcepos="442:15-442:20">10.0</td>
+<td style="text-align: right" data-sourcepos="442:22-442:26">4.5</td>
+<td style="text-align: right" data-sourcepos="442:28-442:32">8.0</td>
+<td style="text-align: right" data-sourcepos="442:34-442:39">10.0</td>
+<td style="text-align: right" data-sourcepos="442:41-442:45">6.0</td>
+<td style="text-align: right" data-sourcepos="442:47-442:51">4.0</td>
+<td style="text-align: right" data-sourcepos="442:53-442:57">1.0</td>
+<td style="text-align: right" data-sourcepos="442:59-442:68"><strong>53.5</strong></td>
+</tr>
+<tr data-sourcepos="443:1-443:66">
+<td data-sourcepos="443:2-443:6">NUM</td>
+<td style="text-align: right" data-sourcepos="443:8-443:12">2.0</td>
+<td style="text-align: right" data-sourcepos="443:14-443:18">8.0</td>
+<td style="text-align: right" data-sourcepos="443:20-443:24">2.0</td>
+<td style="text-align: right" data-sourcepos="443:26-443:30">3.0</td>
+<td style="text-align: right" data-sourcepos="443:32-443:36">6.0</td>
+<td style="text-align: right" data-sourcepos="443:38-443:42">3.0</td>
+<td style="text-align: right" data-sourcepos="443:44-443:48">6.0</td>
+<td style="text-align: right" data-sourcepos="443:50-443:54">2.0</td>
+<td style="text-align: right" data-sourcepos="443:56-443:65"><strong>32.0</strong></td>
+</tr>
+<tr data-sourcepos="444:1-444:67">
+<td data-sourcepos="444:2-444:6">ANL</td>
+<td style="text-align: right" data-sourcepos="444:8-444:12">6.0</td>
+<td style="text-align: right" data-sourcepos="444:14-444:18">5.0</td>
+<td style="text-align: right" data-sourcepos="444:20-444:24">2.0</td>
+<td style="text-align: right" data-sourcepos="444:26-444:30">2.0</td>
+<td style="text-align: right" data-sourcepos="444:32-444:36">8.0</td>
+<td style="text-align: right" data-sourcepos="444:38-444:42">2.0</td>
+<td style="text-align: right" data-sourcepos="444:44-444:49">10.0</td>
+<td style="text-align: right" data-sourcepos="444:51-444:55">3.0</td>
+<td style="text-align: right" data-sourcepos="444:57-444:66"><strong>38.0</strong></td>
+</tr>
+<tr data-sourcepos="445:1-445:66">
+<td data-sourcepos="445:2-445:6">PHY</td>
+<td style="text-align: right" data-sourcepos="445:8-445:12">8.5</td>
+<td style="text-align: right" data-sourcepos="445:14-445:18">4.0</td>
+<td style="text-align: right" data-sourcepos="445:20-445:24">9.5</td>
+<td style="text-align: right" data-sourcepos="445:26-445:30">5.5</td>
+<td style="text-align: right" data-sourcepos="445:32-445:36">7.0</td>
+<td style="text-align: right" data-sourcepos="445:38-445:42">8.5</td>
+<td style="text-align: right" data-sourcepos="445:44-445:48">9.5</td>
+<td style="text-align: right" data-sourcepos="445:50-445:54">5.5</td>
+<td style="text-align: right" data-sourcepos="445:56-445:65"><strong>58.0</strong></td>
+</tr>
+<tr data-sourcepos="446:1-446:66">
+<td data-sourcepos="446:2-446:6">CHE</td>
+<td style="text-align: right" data-sourcepos="446:8-446:12">9.0</td>
+<td style="text-align: right" data-sourcepos="446:14-446:18">8.0</td>
+<td style="text-align: right" data-sourcepos="446:20-446:24">7.0</td>
+<td style="text-align: right" data-sourcepos="446:26-446:30">9.8</td>
+<td style="text-align: right" data-sourcepos="446:32-446:36">9.7</td>
+<td style="text-align: right" data-sourcepos="446:38-446:42">6.5</td>
+<td style="text-align: right" data-sourcepos="446:44-446:48">9.2</td>
+<td style="text-align: right" data-sourcepos="446:50-446:54">9.0</td>
+<td style="text-align: right" data-sourcepos="446:56-446:65"><strong>68.2</strong></td>
+</tr>
+<tr data-sourcepos="447:1-447:68">
+<td data-sourcepos="447:2-447:6">BIO</td>
+<td style="text-align: right" data-sourcepos="447:8-447:12">9.8</td>
+<td style="text-align: right" data-sourcepos="447:14-447:18">9.5</td>
+<td style="text-align: right" data-sourcepos="447:20-447:24">7.5</td>
+<td style="text-align: right" data-sourcepos="447:26-447:31">10.0</td>
+<td style="text-align: right" data-sourcepos="447:33-447:37">7.5</td>
+<td style="text-align: right" data-sourcepos="447:39-447:43">8.5</td>
+<td style="text-align: right" data-sourcepos="447:45-447:50">10.0</td>
+<td style="text-align: right" data-sourcepos="447:52-447:56">9.8</td>
+<td style="text-align: right" data-sourcepos="447:58-447:67"><strong>72.6</strong></td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="449:1-449:357">化学系列は改善が見られるものの、数論や物理系列では得点率が悪化した。このことから、別の生成経路が選ばれることで、正解になる問題も、逆に誤答になる問題も出ていることが分かる。したがって、temperature=0.1は推論時の最適な温度パラメータとは言えない。</p>
+<p data-sourcepos="451:1-451:228">以上の結果をレーダーチャートにプロットした。旧バージョンのLLM-jp-4に比べて全体的に面積が広がっていること、Qwen3.8の推論性能にはまだ及ばないことが見て取れる。</p>
+<p data-sourcepos="453:1-453:159"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F4309675b-3c74-4ba5-b192-6c0a19e2a50f.png?ixlib=rb-4.1.1&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=4cbecb43da9c617e0edc7a3e6fe4f368" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/558af4753b4362ce16f29352.png" alt="benchmark_radar_chart_llmjp41_legend_bottom.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/4309675b-3c74-4ba5-b192-6c0a19e2a50f.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="455:1-455:111">実行結果はGitHubにアップロードしている。（req：プロンプト等の情報、res：結果）</p>
+<p data-sourcepos="457:1-457:95"><a href="https://github.com/h-nabata/LLM/tree/main/Qiita/LLM-jp/local_llm_hard_benchmark_v1_0/LLM-jp-4.1" class="mirror-link-card">https://github.com/h-nabata/LLM/tree/main/Qiita/LLM-jp/local_llm_hard_benchmark_v1_0/LLM-jp-4.1</a>
+</p>
+<h1 data-sourcepos="459:1-459:11">
+<span id="まとめ" class="fragment"></span><a href="#%E3%81%BE%E3%81%A8%E3%82%81"><i class="fa fa-link"></i></a>まとめ</h1>
+<p data-sourcepos="461:1-461:244"><a href="/qiita/70d7d6ed64e91fce8675.html">前回の検証記事</a>の「まとめ」の部分で以下のように述べたが、今回LLM-jp-4.1で実際に長考の収束性に改善が見られたのは良い傾向と言える。</p>
+<blockquote data-sourcepos="463:1-465:37">
+<p data-sourcepos="463:3-465:37"><em>LLM-jpの次世代バージョンで改善すべき点の優先度は概ね</em><br>
+<em><strong>推論品質･収束性の改善 ＞ 事後学習の強化 ＞ MTP等によるdecode高速化</strong></em><br>
+<em>の順となるように思う。</em></p>
+</blockquote>
+<p data-sourcepos="467:1-467:441">LLM-jp-4では「完答できる知識は有するが、推論を終了できない」という部分で失点していたのに対し、LLM-jp-4.1では「最終回答には到達するものの、必要十分条件や例外などを見落とす」という形での失点に重心が移っている。モデルとしてはもう一歩というところだが、前バージョンに比べて確実に一段前進したと評価できる。</p>
+<p data-sourcepos="469:1-469:77">一方で、以下のようにLLM-jp-4と共通する失点も見られた。</p>
+<ul data-sourcepos="470:1-473:0">
+<li data-sourcepos="470:1-470:69">設問文中の強い命題を受け入れてしまう（LIT-P02）</li>
+<li data-sourcepos="471:1-471:159">問題文で明示的に与えられたattenuationの局所ルールよりも学習済みの一般的なtrp operon知識を優先してしまう（BIO-P03）</li>
+<li data-sourcepos="472:1-473:0">特殊解・連続解族の完全性を最後まで保てない（NUM-P02やNUM-P0）</li>
+</ul>
+<p data-sourcepos="474:1-474:418">LLM-jpの弱点は一貫して、<strong>局所的には正しい推論を生成できても、命題のscope・必要十分条件・例外集合・全解性を長い推論の最後まで保持することが苦手</strong>という点に集約される。この点でQwen3.8は高度なタスクであっても論理的一貫性を損なわずに長考できており、ここがLLM-jpとの得点差に大きく効いている。</p>
+
+</div>
+
+
+{% endraw %}

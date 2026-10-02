@@ -1,0 +1,185 @@
+# 現時点での結論
+#####PyTorchやAnaconda環境を使っていない人がseabornを使えるようにするのは面倒っぽい
+
+# 環境など
+Windows10；Python 3.7.9；パッケージはPyPIを経由して導入（condaではない）
+
+
+# seaborn使用時にエラー発生
+
+seabornをインストールし、いざ使おうと思ったら以下のエラーメッセージに遭遇。seabornのインポートに失敗しているようです。
+
+```py:エラーメッセージ
+Traceback (most recent call last):
+  File "C:\Users\[ユーザー名]\Desktop\python\seaborn_example1.py", line 3, in <module>
+    import seaborn as sns
+  File "C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\seaborn\__init__.py", line 2, in <module>
+    from .rcmod import *  # noqa: F401,F403
+  File "C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\seaborn\rcmod.py", line 7, in <module>
+    from . import palettes
+  File "C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\seaborn\palettes.py", line 9, in <module>
+    from .utils import desaturate, get_color_cycle
+  File "C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\seaborn\utils.py", line 10, in <module>
+    from scipy import stats
+  File "C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\scipy\__init__.py", line 130, in <module>
+    from . import _distributor_init
+  File "C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\scipy\_distributor_init.py", line 61, in <module>
+    WinDLL(os.path.abspath(filename))
+  File "C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.7_3.7.2544.0_x64__qbz5n2kfra8p0\lib\ctypes\__init__.py", line 364, in __init__
+    self._handle = _dlopen(self._name, mode)
+OSError: [WinError 126] 指定されたモジュールが見つかりません。
+```
+
+
+# 対処①モジュールのバージョン更新
+
+後から入れたseabornと他のモジュールとのバージョン不整合が原因か？と考えて、numpy、scipy、pandas、matplotlibのバージョンを更新しました。
+
+```:アップグレード@コマンドプロンプト
+pip install --upgrade numpy
+pip install --upgrade scipy
+pip install --upgrade matplotlib
+```
+
+```:バージョン変更
+seaborn     0.11.1
+numpy       1.18.0  -->  1.20.3
+scipy       1.4.1   -->  1.6.3
+pandas      0.25.3  -->  1.2.4
+matplotlib  3.1.2   -->  3.4.2
+```
+### 結果 ：　エラー解決せず 😓
+
+後から調べてみるとseabornのMETADATA（Metadata-Version: 2.1）には以下のようにあり、どうやらバージョンの問題ではなかったらしい。
+
+```:METADATA(抜粋)
+Requires-Python: >=3.6
+Requires-Dist: numpy (>=1.15)
+Requires-Dist: scipy (>=1.0)
+Requires-Dist: pandas (>=0.23)
+Requires-Dist: matplotlib (>=2.2)
+```
+
+
+# 対処②環境変数の確認
+
+システム環境変数が間違っているor正しく通っていない可能性があるのでは？と思って以下を実行。
+
+```py:Pathの確認
+import sys
+
+for i in sys.path:
+    print(i)
+```
+
+```:Pathの出力結果
+C:\Users\[ユーザー名]\Desktop\python
+C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.7_3.7.2544.0_x64__qbz5n2kfra8p0\python37.zip
+C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.7_3.7.2544.0_x64__qbz5n2kfra8p0\DLLs
+C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.7_3.7.2544.0_x64__qbz5n2kfra8p0\lib
+C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.7_3.7.2544.0_x64__qbz5n2kfra8p0
+C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages
+C:\Program Files\WindowsApps\PythonSoftwareFoundation.Python.3.7_3.7.2544.0_x64__qbz5n2kfra8p0\lib\site-packages
+```
+seabornの場所は　`C:\Users\●●●\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\seaborn`　なので、下から2番目のパスで正しく指定できているようです。
+
+ではPythonではなくWindows側の問題なのでは？と思い至り、「システム環境変数の編集」→「環境変数」→「システム環境変数」の「Path」を確認してみたところ、ちゃんと設定されていました。他のモジュールはちゃんと動くので当たり前と言えば当たり前ですが。
+### 結果 ：　エラー解決せず 😥
+
+
+# 対処③scipyとseabornの再インストール
+
+stackoverflowでScipyの互換性の問題が指摘されていました。
+
+https://stackoverflow.com/questions/51037949/seaborn-import-error
+
+https://stackoverflow.com/questions/46306266/error-import-seaborn-while-running-the-program-from-ufuncs-import-import
+
+https://stackoverflow.com/questions/31596125/python-dll-load-failed
+
+そこで `pip uninstall scipy` と `pip uninstall seaborn` でscipyとseabornをアンインストールしてから、もう一度インストールすることにしました。
+
+### 結果 ：　エラー解決せず 😖
+
+>モジュール間の問題ではない…？
+
+
+
+# 対処したこと④scipyのダウングレード
+
+scipyのバージョンを元の1.4.1にダウングレードしたところ、エラーメッセージがちょっと改善（？）しました。しかし使用できず。
+
+```py:エラーメッセージ
+Traceback (most recent call last):
+  File "C:\Users\[ユーザー名]\Desktop\python_lesson\seaborn_example1.py", line 4, in <module>
+    import seaborn as sns
+  File "C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\seaborn\__init__.py", line 6, in <module>
+    from .rcmod import *
+  File "C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\seaborn\rcmod.py", line 6, in <module>
+    from . import palettes, _orig_rc_params
+  File "C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\seaborn\palettes.py", line 12, in <module>
+    from .utils import desaturate, set_hls_values, get_color_cycle
+  File "C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\seaborn\utils.py", line 7, in <module>
+    from scipy import stats
+  File "C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\scipy\stats\__init__.py", line 384, in <module>
+    from .stats import *
+  File "C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\scipy\stats\stats.py", line 179, in <module>
+    from scipy.spatial.distance import cdist
+  File "C:\Users\[ユーザー名]\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.7_qbz5n2kfra8p0\LocalCache\local-packages\Python37\site-packages\scipy\spatial\__init__.py", line 99, in <module>
+    from .qhull import *
+ImportError: DLL load failed: 指定されたモジュールが見つかりません。
+```
+
+以下のteratailのスレッドで、最後の　`ImportError: DLL load failed`　は「MKL関連のライブラリがない」ことに原因があるとの指摘を見つけました。<sup id="fnref1"><a href="#fn1" title="MKLとはIntel®社の提供している数値演算ライブラリ「Math Kernel Library」の略">1</a></sup>
+
+https://teratail.com/questions/93662
+
+>ひょっとして、と思ってscikit-learnを導入しましたが相変わらずエラーのままでした<sup id="fnref2"><a href="#fn2" title="pipでscikit-learnをインストールしてもMKLは付いてきません。ただ、お陰様でscikit-learnは使えるようになりました。">2</a></sup>
+
+### 結果 ：　エラー解決せず 😫
+
+
+# 結局MKLが無いことが原因？
+
+Pytorch環境でstuckした方の記事です。こちらで発生していた問題は解決できたようです。
+
+https://qiita.com/kunishou/items/b1789c446770c8c97613
+
+PyTorchには元々MKLが梱包されていて、環境構築時に導入されるので不自由なく使えるようです。同様にAnaconda環境でも初めからMKLが入っているため、環境構築と同時にMKLが存在することになります。
+
+>Anaconda環境でのMKLのパフォーマンスについては以下の記事が参考になるかと思います。
+>「[**Anaconda の NumPy が高速みたいなので試してみた**](https://tech.morikatron.ai/entry/2020/03/27/100000)」
+>「[**conda Numpyのようにscikit-learnも高速化する方法**](https://qiita.com/sugulu_Ogawa_ISID/items/43efed6d8ccece677159)」
+
+結局、色々調べてみたところ、Pythonの環境がAnacondaではなくpipを使って構築されていてMKLが導入されていないことが、seabornを手軽に使えない原因のようでした（本当？）。私の勘違いならそれまでですが、seabornをインポートする過程でscipyの何かを動かそうとしたらMKLが無いため失敗した、というイメージでしょうか？（seabornがそんなに特殊なことをしているようには見えないのですが･･･）
+
+MKLはインテル社のページからダウンロードできますが、以下のページによると、.whlファイルからnumpyと一緒にMKLをまとめてインストールできるようです。
+
+https://stackoverflow.com/questions/37267399/importerror-cannot-import-name-numpy-mkl
+
+しかしここにきて最早私の食指が動かず、これ以上足掻くのは不毛な気がして結局seabornを使うのは諦めてしまいました。面倒くさいとか時間が無いとか理由は色々ありますが、一番大きな理由は、他にseabornを使える環境<sup id="fnref3"><a href="#fn3" title="この別の環境というのはAnacondaで構築した環境です。">3</a></sup>が別にあるので、自分のノートPCで頑張って使えるようにする必要性を感じなくなってきたためです。仮にMKLを正しくインストールできたとしても別の問題が発生するような気もしますし･･･。
+
+`PyTorchをインストールすれば良いのでは？` という指摘は尤もですが、今後PyTorchを使う予定は無く、たかが１モジュールのためにわざわざこのパソコンに入れなくても良いかなという気持ちが勝りました。
+
+<hr>
+
+･･･というわけで自分と似たような境遇にある人は、悪戦苦闘を始める前にこの記事に巡り合えると無駄な骨折りは多少軽減できるのではないかと思います。この辺りの事情に詳しい方は、ここに迷い込んだ方々にとって有益な情報をコメントして頂けますと大変有難いです･･･。
+
+<div class="footnotes">
+<hr>
+<ol>
+
+<li id="fn1">
+<p>MKLとはIntel®社の提供している数値演算ライブラリ「Math Kernel Library」の略。 <a href="#fnref1">↩</a></p>
+</li>
+
+<li id="fn2">
+<p>pipでscikit-learnをインストールしてもMKLは付いてきません。ただ、お陰様でscikit-learnは使えるようになりました。 <a href="#fnref2">↩</a></p>
+</li>
+
+<li id="fn3">
+<p>この別の環境というのはAnacondaで構築した環境です。 <a href="#fnref3">↩</a></p>
+</li>
+
+</ol>
+</div>

@@ -1,0 +1,131 @@
+### 【はじめに】
+本稿は**計算化学**に関する内容で、VESTAプログラムを利用し、結晶構造（この場合、特にcif形式のファイル）から特定の指数の面を切り出してスラブモデルを作成する手順の例を示すものです。細かい用語の解説は特にしていません。
+
+# (111)面を切り出す
+例えば「立方体の」ユニットセルをもつ結晶の$(111)$面は下図のようになっています。ここでは各頂点が$xyz$座標系において$\mathrm{A}(1,0,0)$、$\mathrm{B}(0,1,0)$、$\mathrm{C}(0,0,1)$と定義されているものとします。
+
+<img src=https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/355b1089-c5da-ec32-8e53-87fd6ddad030.png alt="(111)面" title="(111)面" width="50%">
+
+スラブモデルを作るにはこれに平行な面を面の一つにもつ直方体（より一般には平行六面体）を作成する必要があります。
+そのような直方体のうち、3辺が直角に交わるものには例えば下図のようなものがあります。
+
+<img src=https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/8252e023-2d3b-79d4-1fbb-407dcd8e327c.png alt="(111)面を面の一つにもつ直方体" title="(111)面を面の一つにもつ直方体" width="60%">
+
+つまり、新しい座標軸を図中の$\overrightarrow{\mathrm{OP}}$、$\overrightarrow{\mathrm{OQ}}$、$\overrightarrow{\mathrm{OR}}$の向きに取り直すことで、$(111)$面（に平行な面）を$XY$平面とする新たな$XYZ$座標系を定義することができます。
+
+このような座標変換を行うには、「[**VESTA**](https://jp-minerals.org/vesta/jp/)」のユニットセル変換機能を利用するのが手っ取り早いです。手順は次の通りです。
+
+- VESTAを起動して目当ての結晶のcifファイルを開く。
+- 次に [Edit] > [Edit Data] > [Unit Cell...] と進む。
+- 表示されるダイアログボックスの [Transform...] をクリック。
+- Rotation matrix P の成分を入力する。今回の場合は以下。
+
+```math
+\mathbf{P}=\begin{pmatrix} 
+2 & 1 & 1 \\ 
+-2 & 1 & 1 \\ 
+0 & -2 & 1 
+\end{pmatrix}
+```
+
+- [OK]を押下すると「セルの体積が変わるが良いか？」という警告が出るので「はい(Y)」を選択。
+- 「Additional lattice point(s)...」のラジオボタンは「Add new equivalent positions...」を選択して[OK]を押下。
+- [Apply] > [OK] の順で押下。
+
+以上の手順により$(111)$面を$XY$平面とする$XYZ$座標系に変換された結晶構造が得られます。
+
+> 例えば[**Pd結晶**](https://materialsproject.org/materials/mp-2)の場合、ユニットセルは次のようになっています。
+> <img src=https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/241b855f-1cd6-11db-de41-1c6cf12df3a5.png title="Pd結晶" alt="Pd結晶" width="50%">
+> これに対し上記の変換を施すと、次のようになります。
+> <img src=https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/e3fcffec-a486-9df5-64ca-0390e069bdb1.png title="Pd(111)面を切り出したセル" alt="Pd(111)面を切り出したセル" width="70%">
+> あとは適当に$(111)$方向（図中c軸の方向）に15~20Å程度の真空層を確保してやれば$(111)$面のスラブモデルの完成です。表面積が大きすぎる場合は、変換行列$\mathbf{P}$を上手く調節するか、変換後の結晶のサイズを削減してください。
+>> 単位格子が立方体でない場合、上記の変換行列では$XYZ$座標系の3軸が直交しません。そのままでもスラブモデルを作成することはできますが、色々な電子状態計算の都合上、できるだけ3軸の夾角が直角に近付くような軸の取り方を目指しましょう。
+
+
+# (101)面を切り出す
+切り出す手順は二元系でも変わりません。ここでは[**CuO結晶**](http://rruff.geo.arizona.edu/AMS/minerals/Tenorite)の$(101)$面を切り出してみます。
+<img src=https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/2bd47da5-8323-fcd9-bfb2-df4bb298e32f.png alt="CuO結晶" title="CuO結晶" width="50%">
+> CuO結晶の最安定相は単斜晶系のテノライトです。
+
+最も単純な変換は下図のようなセルの取り方になります。
+
+<img src=https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/52d07d3b-423d-13dd-72a7-8014dc95118c.png alt="(101)面を面の一つにもつ直方体" title="(101)面を面の一つにもつ直方体" width="60%">
+
+このときの変換行列$\mathbf{P}$は
+```math
+\mathbf{P}=\begin{pmatrix} 
+1 & 0 & 1 \\ 
+0 & 1 & 0 \\ 
+-1 & 0 & 1 
+\end{pmatrix}
+```
+となりますが、このままだと$Y$方向の辺が短くなってしまうので、新しい$b$軸方向を2倍した$\mathbf{P}^{\prime}$を用いることにします。
+```math
+\mathbf{P}^{\prime}=\begin{pmatrix} 
+1 & 0 & 1 \\ 
+0 & \color{red}{2} & 0 \\ 
+-1 & 0 & 1 
+\end{pmatrix}
+```
+
+これを用いると以下のように丁度良いサイズの結晶格子が得られます。このセルの$ab$平面は正しく$(101)$面に相当しています。
+
+<img src=https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/39111f2b-2283-ed0c-938b-37e5f4fe2083.png alt="CuO(101)面を切り出したセル" title="CuO(101)面を切り出したセル" width="50%">
+
+
+# 六方晶系の面を切り出す
+
+[**ZnO結晶**](https://materialsproject.org/materials/mp-2133/)は「ウルツ鉱型結晶構造」の名前の由来であるZnS結晶の類縁体で、下図のような六方晶系（Hexagonal crystal family）の結晶構造をとります。
+
+<img src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/35bea0df-47b2-92c2-2f92-36ea5d3ce848.png" alt="ZnO結晶" width="60%" title="ZnO結晶">
+
+> （画像の出典）B. Meyer, D. Marx, [“Density-functional study of the structure and stability of ZnO surfaces,”](https://journals.aps.org/prb/abstract/10.1103/PhysRevB.67.035403) *Phys. Rev. B* 2003, **67**, 035403.
+
+六方晶系の面指数は下図のように $\vec{a_1}$、$\vec{a_2}$、$\vec{a_3}$、$\vec{c_{}}$ の4つのベクトルによって定義されます。面指数の名付けは $(a_1 a_2 a_3 c)$ のようになります。例えば図中Aの面は$(11\bar{2}0)$面、Bの面は$(1\bar{1}00)$面、Cの面は$(0001)$面と表されます。
+
+<img src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/4357b2d4-0f27-4d66-8fc2-5719fa75204f.png" alt="六方晶" width="60%" title="六方晶">
+
+> （画像の出典）Aki Takigawa, S. Tachibana, H. Nagahara, K. Ozawa, [“EVAPORATION AND CONDENSATION KINETICS OF CORUNDUM: THE ORIGIN OF THE 13 μm FEATURE OF OXYGEN-RICH AGB STARS,”](https://iopscience.iop.org/article/10.1088/0067-0049/218/1/2) *ApJS* 2015, **218**, 2.
+
+六方晶の単位格子は基本的に、六角柱から $\vec{a_1}$、$\vec{a_2}$、$\vec{c_{}}$ を辺とする四角柱を切り出した構造で与えられます。[**ZnO**](https://materialsproject.org/materials/mp-2133/)の場合、単位格子をVESTAで表示すると次のようになります。図中$b$軸が上図の$a_2$軸に相当しています。
+
+<img src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/f74b420a-5a84-08c1-511d-d06cadc81328.png" alt="ZnOの単位格子" width="50%" title="ZnOの単位格子">
+
+ここで、ZnO$(10\bar{1}0)$面を切り出してみます。$(10\bar{1}0)$面は下図に示す面であり既に単位格子の面の一つとして露出しているので、並進ベクトル（TV）を新しく取り直すだけでOKです。
+
+<img src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/5cd70dac-5c2b-2474-9bd8-e36f876c3cf2.png" alt="ZnO(10-10)面" width="50%" title="ZnO(10-10)面">
+
+これをスラブモデルにする変換行列$\mathbf{P}$は、例えば
+```math
+\mathbf{P}=\begin{pmatrix} 
+0 & 0 & 2 \\ 
+2 & 0 & 1 \\ 
+0 & 1 & 0 
+\end{pmatrix}
+```
+となります。これを施してやると下図のように$ab$平面が$(10\bar{1}0)$面に平行な直方体のセルが得られます。この$c$軸方向は$(10\bar{1}0)$方向に相当するので、この軸方向に真空層を確保すれば$(10\bar{1}0)$面のスラブモデルになります。
+
+<img src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/8d522521-e094-2bf2-6780-3a91c3cd37eb.png" alt="ZnO(10-10)面を切り出したセル" width="50%" title="ZnO(10-10)面を切り出したセル">
+
+> 因みに、ZnO結晶のような3回対称性をもつ六方晶では、$(1\bar{1}00)$、$(10\bar{1}0)$、$(100\bar{1})$およびその面対称なファセットはすべて同一の面を指しています。文献によって表記が異なることがあるので要注意。
+
+# 変換行列の数学について
+最後に、変換行列の仕組みについて触れておきます。
+
+オリジナルの並進ベクトル（TV）である$(\boldsymbol{a}, \boldsymbol{b}, \boldsymbol{c})$に対して、変換行列$\mathbf{P}$は以下のように作用しています（VESTAが表示するダイアログボックスにも全く同じ記載があります）。
+```math
+\begin{aligned}
+\left(\begin{array}{c} \boldsymbol{a}^{\prime} \\ \boldsymbol{b}^{\prime} \\ \boldsymbol{c}^{\prime} \end{array}\right) 
+&= (\boldsymbol{a}, \boldsymbol{b}, \boldsymbol{c}) \mathbf{P} \\ 
+&= (\boldsymbol{a}, \boldsymbol{b}, \boldsymbol{c})\left(\begin{array}{lll}P_{11} & P_{12} & P_{13} \\ P_{21} & P_{22} & P_{23} \\ P_{31} & P_{32} & P_{33}\end{array}\right) \\ 
+&= \left(\begin{array}{c} P_{11} \boldsymbol{a}+P_{21} \boldsymbol{b}+P_{31} \boldsymbol{c} \\ P_{12} \boldsymbol{a}+P_{22} \boldsymbol{b}+P_{32} \boldsymbol{c} \\ P_{13} \boldsymbol{a}+P_{23} \boldsymbol{b}+P_{33} \boldsymbol{c} \end{array}\right)
+\end{aligned}
+```
+ここで行列$\mathbf{P}$の成分$P_{ij}$は実数（スカラー量）です。この座標変換を用いて、ユニットセルおよびその内部の原子の座標を丸ごと新たな座標系に変換することができます。
+
+ここまでの説明に登場してきた変換行列の成分は、既存のTV$(\boldsymbol{a}, \boldsymbol{b}, \boldsymbol{c})$から新規座標系の新しいTV$(\boldsymbol{a}^{\prime}, \boldsymbol{b}^{\prime}, \boldsymbol{c}^{\prime})$をどのように表現するかを決めてから逆算して求めています。$(\boldsymbol{a}^{\prime}, \boldsymbol{b}^{\prime}, \boldsymbol{c}^{\prime})$は一意には決まりませんが、$(\boldsymbol{a}, \boldsymbol{b}, \boldsymbol{c})$の線形結合で必ず表現できるので、変換行列$\mathbf{P}$は任意に与えることができます。
+
+> 文章で説明すると大仰な印象になってしまいますが、視覚的に捉えれば難しいことは言っていません。なお、$\boldsymbol{a}$、$\boldsymbol{b}$、$\boldsymbol{c}$ および $\boldsymbol{a}^{\prime}$、$\boldsymbol{b}^{\prime}$、$\boldsymbol{c}^{\prime}$ はいずれも空間ベクトルであることに注意。
+* * * 
+
+以上の手順により、自由自在にユニットセルのあらゆる面を切り出すことができます。空間ベクトルの認識能力がある程度要求されますが、ミラー指数はほとんどの場合で単純な整数となるので慣れれば難しくありません。

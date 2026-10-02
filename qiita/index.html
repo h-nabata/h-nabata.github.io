@@ -1,0 +1,36 @@
+---
+layout: default
+title: Qiita記事ミラー・バックアップ
+extra_head: |
+  <link rel="stylesheet" href="/assets/qiita-mirror.css?v=1">
+  <script defer src="/assets/qiita-mirror.js?v=1"></script>
+---
+<div class="top-wrapper"><div class="container"><h1>Qiita Articles</h1><p>公開記事のミラー・バックアップ</p></div></div>
+<main class="mirror-main mirror-index">
+  <nav class="mirror-breadcrumb" aria-label="パンくずリスト"><a href="/toc.html">目次</a> / Qiita記事ミラー</nav>
+  <h1>Qiita記事ミラー</h1>
+  <p>自分がQiitaで公開した記事を、分野別に整理して転載しています。本文・画像・原文Markdownを保存した、取得時点のバックアップです。元記事の変更は自動では反映されません。</p>
+  <p>{{ site.data.qiita_articles | size }}記事 · <a href="https://qiita.com/h-nabata">Qiitaプロフィール</a> · <a href="/qiita/backup/items.json.gz" download>全記事データを保存（JSON・gzip圧縮）</a></p>
+  <div class="mirror-filter"><label for="mirror-query">記事名・タグから探す</label><input id="mirror-query" type="search" placeholder="例: GRRM、LLM、RDKit" autocomplete="off"><p id="mirror-filter-status" role="status" aria-live="polite"></p></div>
+  <nav class="mirror-category-nav" aria-label="分野別目次">
+    {% assign categories = "LLM・生成AI|計算化学・分子構造|計算環境・Linux|プログラミング・可視化|研究・論文執筆" | split: "|" %}
+    {% for category in categories %}<a href="#category-{{ forloop.index }}">{{ category }}</a>{% endfor %}
+  </nav>
+  {% for category in categories %}
+  <section class="mirror-category-section" id="category-{{ forloop.index }}">
+    {% assign articles = site.data.qiita_articles | where: "mirror_category", category %}
+    <h2>{{ category }} <small>（{{ articles | size }}件）</small></h2>
+    <ul class="mirror-cards">
+      {% for item in articles %}
+      <li class="mirror-card" data-search="{{ item.title | escape }} {{ item.mirror_tags | join: ' ' | escape }}">
+        <h3><a href="{{ item.url }}">{{ item.title | escape }}</a></h3>
+        <p class="mirror-dates">公開 {{ item.qiita_created | date: "%Y/%m/%d" }} · 更新 {{ item.qiita_updated | date: "%Y/%m/%d" }}</p>
+        <ul class="mirror-tags">{% for tag in item.mirror_tags %}<li>{{ tag | escape }}</li>{% endfor %}</ul>
+        <p class="mirror-card-origin"><a href="{{ item.qiita_url }}">Qiitaの元記事</a></p>
+      </li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endfor %}
+  <footer class="mirror-footer"><p>一覧更新: <time datetime="2026-10-02">2026/10/02</time></p></footer>
+</main>

@@ -1,0 +1,137 @@
+---
+layout: "qiita-mirror"
+title: "【Python】sdf形式を経由してChemDrawの構造式からxyz座標を取得する"
+qiita_id: "a7a3cbcd1d8e6ecd04e2"
+qiita_url: "https://qiita.com/h-nabata/items/a7a3cbcd1d8e6ecd04e2"
+qiita_created: "2024-07-18T00:49:09+09:00"
+qiita_updated: "2024-07-18T00:49:09+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "計算化学・分子構造"
+mirror_tags: ["Python", "RDKit", "sdf", "化学", "chemdraw"]
+permalink: "/qiita/a7a3cbcd1d8e6ecd04e2.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="1:1-1:164">本稿では化学構造式エディタ「ChemDraw」上で描画された複数の構造式を一括でxyzデータに変換する方法の例を紹介します。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="3:1-6:3">
+<div class="code-lang"><span class="bold">動作環境</span></div>
+<div class="highlight"><pre><code><span class="n">Python</span> <span class="mf">3.9</span>
+<span class="n">rdkit</span> <span class="mf">2024.03</span><span class="p">.</span><span class="mi">3</span><span class="err">（</span><span class="mi">2024</span><span class="n">年現在最新の2024系が望ましい</span><span class="err">）</span>
+</code></pre></div>
+</div>
+<hr data-sourcepos="8:1-9:0">
+<p data-sourcepos="10:1-10:98">ここでは、複数の分子の構造式を含むChemDrawファイルが存在する前提で、</p>
+<ol data-sourcepos="12:1-15:0">
+<li data-sourcepos="12:1-12:53">　ChemDrawからsdf形式のファイルを出力</li>
+<li data-sourcepos="13:1-15:0">　sdfファイルをPythonスクリプトで処理<br>
+（<a href="https://www.rdkit.org/docs/" rel="nofollow noopener" target="_blank"><strong>RDKit</strong></a>を利用して sdf &gt; smiles &gt; xyz に変換）</li>
+</ol>
+<p data-sourcepos="16:1-16:90">という順序で、各分子のxyz形式の三次元座標データを取得します。</p>
+<p data-sourcepos="18:1-18:295">sdfファイルに出力された時点で分子の3次元骨格は得られるのですが、結合長や結合角が正確ではない上に、水素原子を補完する必要があります。これらの点を自動で解決するスクリプトを作成するのが今回の目的です。</p>
+<h1 data-sourcepos="21:1-21:49">
+<span id="chemdrawからsdf形式のファイルを出力" class="fragment"></span><a href="#chemdraw%E3%81%8B%E3%82%89sdf%E5%BD%A2%E5%BC%8F%E3%81%AE%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E3%82%92%E5%87%BA%E5%8A%9B"><i class="fa fa-link"></i></a>ChemDrawからsdf形式のファイルを出力</h1>
+<p data-sourcepos="23:1-23:75">描画されている構造式は例えば以下のようなものです。</p>
+<p data-sourcepos="25:1-25:121"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F59b821b5-ea59-62da-7b9c-2c283c94f161.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=1c39cd07dd5bd6e564981163b74535ca" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/a9ef48467d93c678daa15f41.png" alt="cyclo.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/59b821b5-ea59-62da-7b9c-2c283c94f161.png" loading="lazy" decoding="async"></a></p>
+<blockquote data-sourcepos="27:1-27:184">
+<p data-sourcepos="27:3-27:184">ここでは3～6員環のアルケンを例として説明しますが、より複雑な構造の分子やヘテロ原子を含むような分子でも同様に処理できます。</p>
+</blockquote>
+<p data-sourcepos="29:1-29:270">このcdxmlファイルをsdf形式のファイルとして保存します。ファイル名は適当で良いですが、ここでは <code>cyclo.sdf</code> としておきます。出力されるsdfファイルには先ほどの全ての分子の情報が含まれています。</p>
+<p data-sourcepos="31:1-31:126"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F535bef4e-affa-e81b-6387-f0171b0fd309.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=308929c18d389fc63ca90ac5095e83f1" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/cb7072b7a9e3f22d44f42c93.png" alt="cyclo_demo.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/535bef4e-affa-e81b-6387-f0171b0fd309.png" loading="lazy" decoding="async"></a></p>
+<blockquote data-sourcepos="33:1-34:95">
+<p data-sourcepos="33:3-34:95">ChemDrawの標準ファイルはcdxml形式です。これは「"C"hem"D"rawの"xml"形式のファイル」という意味の拡張子です。<br>
+また、sdfという名称は"Structure-Data File"の頭文字から取られています。</p>
+</blockquote>
+<h1 data-sourcepos="37:1-37:47">
+<span id="sdfファイルからxyz形式に変換する" class="fragment"></span><a href="#sdf%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E3%81%8B%E3%82%89xyz%E5%BD%A2%E5%BC%8F%E3%81%AB%E5%A4%89%E6%8F%9B%E3%81%99%E3%82%8B"><i class="fa fa-link"></i></a>sdfファイルからxyz形式に変換する</h1>
+<p data-sourcepos="39:1-39:253">以下のようなPythonスクリプトでsdfファイルからxyz形式に変換します。<a href="https://www.rdkit.org/docs/" rel="nofollow noopener" target="_blank"><strong>RDKit</strong></a>という情報化学に特化したライブラリを使用するので、インストールしておきましょう。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="41:1-74:3">
+<div class="code-lang"><span class="bold">sdf2xyz.py</span></div>
+<div class="highlight"><pre><code><span class="kn">from</span> <span class="n">rdkit</span> <span class="kn">import</span> <span class="n">Chem</span>
+<span class="kn">from</span> <span class="n">rdkit.Chem</span> <span class="kn">import</span> <span class="n">AllChem</span>
+<span class="kn">from</span> <span class="n">rdkit.Chem.rdmolfiles</span> <span class="kn">import</span> <span class="n">MolToXYZBlock</span>
+
+<span class="c1"># ファイルパスの設定（任意）
+</span><span class="n">filepath</span> <span class="o">=</span> <span class="sh">'</span><span class="s">C:/Users/hogehoge/Documents/</span><span class="sh">'</span>
+<span class="n">inputfile</span> <span class="o">=</span> <span class="sh">'</span><span class="s">cyclo.sdf</span><span class="sh">'</span>
+<span class="n">outputfile</span> <span class="o">=</span> <span class="sh">'</span><span class="s">cyclo.txt</span><span class="sh">'</span>
+<span class="n">suppl</span> <span class="o">=</span> <span class="n">Chem</span><span class="p">.</span><span class="nc">SDMolSupplier</span><span class="p">(</span><span class="n">filepath</span> <span class="o">+</span> <span class="n">inputfile</span><span class="p">)</span>  <span class="c1"># Molオブジェクトのリストを作成
+</span><span class="n">smiles_list</span> <span class="o">=</span> <span class="p">[]</span>
+
+<span class="c1"># SDFファイルから分子を読み込み、XYZ形式に変換
+</span><span class="k">with</span> <span class="nf">open</span><span class="p">(</span><span class="n">filepath</span> <span class="o">+</span> <span class="n">outputfile</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="sh">'</span><span class="s">utf-8</span><span class="sh">'</span><span class="p">,</span> <span class="n">mode</span><span class="o">=</span><span class="sh">'</span><span class="s">w</span><span class="sh">'</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">mol</span> <span class="ow">in</span> <span class="nf">enumerate</span><span class="p">(</span><span class="n">suppl</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">mol</span> <span class="ow">is</span> <span class="ow">not</span> <span class="bp">None</span><span class="p">:</span>
+            <span class="c1"># 3D構造の生成および最適化
+</span>            <span class="n">mol</span> <span class="o">=</span> <span class="n">Chem</span><span class="p">.</span><span class="nc">AddHs</span><span class="p">(</span><span class="n">mol</span><span class="p">)</span>  <span class="c1"># 水素原子を補完
+</span>            <span class="n">AllChem</span><span class="p">.</span><span class="nc">EmbedMolecule</span><span class="p">(</span><span class="n">mol</span><span class="p">,</span> <span class="n">AllChem</span><span class="p">.</span><span class="nc">ETKDG</span><span class="p">())</span> <span class="c1">#分子の3D構造を生成
+</span>            <span class="n">AllChem</span><span class="p">.</span><span class="nc">UFFOptimizeMolecule</span><span class="p">(</span><span class="n">mol</span><span class="p">)</span>  <span class="c1"># 構造最適化（任意）
+</span>
+            <span class="c1"># XYZ形式の文字列を取得
+</span>            <span class="n">mol_xyz</span> <span class="o">=</span> <span class="nc">MolToXYZBlock</span><span class="p">(</span><span class="n">mol</span><span class="p">)</span>
+
+            <span class="c1"># XYZファイルに保存
+</span>            <span class="n">xyzfilename</span> <span class="o">=</span> <span class="n">filepath</span> <span class="o">+</span> <span class="sa">f</span><span class="sh">'</span><span class="s">mol_</span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s">.xyz</span><span class="sh">'</span>
+            <span class="k">with</span> <span class="nf">open</span><span class="p">(</span><span class="n">xyzfilename</span><span class="p">,</span> <span class="sh">'</span><span class="s">w</span><span class="sh">'</span><span class="p">)</span> <span class="k">as</span> <span class="n">xyzfile</span><span class="p">:</span>
+                <span class="n">xyzfile</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="n">mol_xyz</span><span class="p">)</span>
+            
+            <span class="c1"># ログファイルにSMILESとファイル名を記録（任意）
+</span>            <span class="n">tmp_smiles</span> <span class="o">=</span> <span class="n">Chem</span><span class="p">.</span><span class="nc">MolToSmiles</span><span class="p">(</span><span class="n">mol</span><span class="p">)</span>
+            <span class="n">f</span><span class="p">.</span><span class="nf">write</span><span class="p">(</span><span class="sa">f</span><span class="sh">'</span><span class="s">Molecule </span><span class="si">{</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s">: </span><span class="si">{</span><span class="n">tmp_smiles</span><span class="si">}</span><span class="s"> -&gt; XYZ file saved as </span><span class="si">{</span><span class="n">xyzfilename</span><span class="si">}</span><span class="se">\n</span><span class="sh">'</span><span class="p">)</span>
+            <span class="nf">print</span><span class="p">(</span><span class="sa">f</span><span class="sh">'</span><span class="s">Molecule </span><span class="si">{</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="si">}</span><span class="s">: </span><span class="si">{</span><span class="n">tmp_smiles</span><span class="si">}</span><span class="s"> -&gt; XYZ file saved as </span><span class="si">{</span><span class="n">xyzfilename</span><span class="si">}</span><span class="sh">'</span><span class="p">)</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="77:1-77:243">生成した3次元構造は <code>mol_0.xyz</code> ～ <code>mol_3.xyz</code> の各ファイルに出力されます。ファイル名は適宜変更してください。xyz形式なので、一つのファイルに連続的に出力しても良いでしょう。</p>
+<p data-sourcepos="79:1-79:198">生成された構造を並べると以下のようになります。最安定のコンフォマーではありませんが、概ね妥当な初期構造を与えていることが分かります。</p>
+<p data-sourcepos="81:1-81:122"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F253f54e8-e710-79d3-f329-3f71c1cc83c2.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=96eb4aef8d523fa10aee498012883301" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/9c957dce384f21fbea3e9faa.png" alt="cyclos.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/253f54e8-e710-79d3-f329-3f71c1cc83c2.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="83:1-83:367">以上の手順で、ChemDrawの構造式から各分子のxyz座標を一括で取得することが可能です。これにより、分子が複雑でモデリングソフトで初期構造を作成するのが面倒な場合、ChemDrawで描いた構造式をもとに（ある程度まともな）立体構造を生成する、という選択肢が増えます。</p>
+<h1 data-sourcepos="85:1-85:17">
+<span id="補足説明" class="fragment"></span><a href="#%E8%A3%9C%E8%B6%B3%E8%AA%AC%E6%98%8E"><i class="fa fa-link"></i></a>補足説明①</h1>
+<p data-sourcepos="87:1-87:187"><code>AllChem.EmbedMolecule(mol, AllChem.ETKDG())</code> の部分では、結合手が満たされていない原子のうち、順番の若い順から水素原子が付加されていきます。</p>
+<p data-sourcepos="89:1-89:99">3次元構造の生成はETKDGメソッドの他にも、以下のような方法があります。</p>
+<table data-sourcepos="91:1-98:112">
+<thead>
+<tr data-sourcepos="91:1-91:19">
+<th data-sourcepos="91:2-91:9">方法</th>
+<th data-sourcepos="91:11-91:18">内容</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="93:1-93:88">
+<td data-sourcepos="93:2-93:53">ディスタンス・ジオメトリー（DG）法</td>
+<td data-sourcepos="93:55-93:87">2018.03までのデフォルト</td>
+</tr>
+<tr data-sourcepos="94:1-94:40">
+<td data-sourcepos="94:2-94:14">AllChem.KDG</td>
+<td data-sourcepos="94:16-94:39">useBasicKnowledge=True</td>
+</tr>
+<tr data-sourcepos="95:1-95:47">
+<td data-sourcepos="95:2-95:15">AllChem.ETDG</td>
+<td data-sourcepos="95:17-95:46">useExpTorsionAnglePrefs=True</td>
+</tr>
+<tr data-sourcepos="96:1-96:115">
+<td data-sourcepos="96:2-96:16">AllChem.ETKDG</td>
+<td data-sourcepos="96:18-96:114">useBasicKnowledge=True<br>useExpTorsionAnglePrefs=True<br>（2018.09以降のデフォルト）</td>
+</tr>
+<tr data-sourcepos="97:1-97:72">
+<td data-sourcepos="97:2-97:18">AllChem.ETKDGv2</td>
+<td data-sourcepos="97:20-97:71">パラメータが改良されたETKDGメソッド</td>
+</tr>
+<tr data-sourcepos="98:1-98:112">
+<td data-sourcepos="98:2-98:18">AllChem.ETKDGv3</td>
+<td data-sourcepos="98:20-98:111">大環状化合物で精度が向上したETKDGメソッド（2020.03以降で利用可）</td>
+</tr>
+</tbody>
+</table>
+<blockquote data-sourcepos="99:1-99:72">
+<p data-sourcepos="99:3-99:72">参考 -&gt; <a href="https://www.rdkit.org/docs/source/rdkit.Chem.rdDistGeom.html" class="autolink" rel="nofollow noopener" target="_blank">https://www.rdkit.org/docs/source/rdkit.Chem.rdDistGeom.html</a></p>
+</blockquote>
+<p data-sourcepos="101:1-101:182">特殊な分子でもない限りETKDGメソッドで事足りると思いますが、生成された構造が怪しい時は<code>ETKDGv3</code>などを試してみても良いでしょう。</p>
+<h1 data-sourcepos="104:1-104:17">
+<span id="補足説明-1" class="fragment"></span><a href="#%E8%A3%9C%E8%B6%B3%E8%AA%AC%E6%98%8E-1"><i class="fa fa-link"></i></a>補足説明②</h1>
+<p data-sourcepos="106:1-106:318"><code>AllChem.UFFOptimizeMolecule(mol)</code> の部分ではMM力場（universal force field）で簡単に構造最適化をしていますが、立体的に込み入った大きな分子でない限り必要という訳ではありません。ETKDGメソッドだけでも十分妥当な初期構造が得られています。</p>
+<p data-sourcepos="108:1-108:299">むしろ、UFFは簡素な力場であり精度が低いため、<code>UFFOptimizeMolecule</code> を使うとシクロブタンでは4つの炭素原子が同一平面上に存在してしまうなど、分子によっては不正確な構造が得られるケースがあることに注意しましょう。</p>
+
+</div>
+
+
+{% endraw %}

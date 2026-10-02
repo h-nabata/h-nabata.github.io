@@ -1,0 +1,131 @@
+`"Hello, world!"` が100行書き込まれた `write1.txt` ～ `write100.txt` という名前の100個のテキストファイルを作成する場合、並列の有無で実行時間が変わるのか調べました。
+
+> Goのバージョン: go1.15.2 windows/amd64
+> PCの環境: Windows 10 Pro / Intel(R) Core(TM) i5-6300U CPU @2.40GHz (コア数:2, プロセッサ数:4)
+> プログラムはテキストエディタAtom上で動かしており、下記のコードからは時間計測用の部分を除いています。下記の実行時間はコンパイルの時間を含みません。
+
+
+
+# 並列せずに実行する
+
+```Go
+package main
+import ("os"; "strconv")
+
+func writeByres(num int) error {
+    filename := "write" + strconv.Itoa(num) + ".txt"
+    file, err := os.Create(filename)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+
+    b := []byte("Hello, world!\n")
+    for i := 0; i < 100; i++ {
+        _, err2 := file.Write(b)
+        if err2 != nil {
+            return err2
+        }
+    }
+    return nil
+}
+
+func main() {
+    i := 1
+    for i <= 100 {
+        writeByres(i)
+        i++
+    }
+}
+```
+100回の平均実行時間は **0.50095418** 秒でした。
+
+
+# Goroutineで並列する
+```Go:4並列に制限した場合の例
+package main
+import ("fmt"; "sync"; "os"; "strconv"; "io/ioutil")
+
+func writeByres(num int, wg *sync.WaitGroup) error {
+    filename := "write" + strconv.Itoa(num) + ".txt"
+    file, err := os.Create(filename)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+
+    b := []byte("Hello, world!\n")
+    for i := 0; i < 100; i++ {
+        _, err2 := file.Write(b)
+        if err2 != nil {
+            return err2
+        }
+    }
+    return nil
+}
+
+func main() {
+    concurrency := 4
+    limit := make(chan int, concurrency)
+    var wg sync.WaitGroup
+    i := 1
+    for i <= 100 {
+        wg.Add(1)
+        go func(i int, wg *sync.WaitGroup, limit chan int) {
+            defer wg.Done()
+            limit <- 1
+            writeByres(i,wg)
+            fmt.Fprintln(ioutil.Discard, "(%d <-limit)\n", <-limit) // 出力を破棄   
+            // fmt.Printf("No. %d done. (%d <-limit)\n", i, <-limit)
+        }(i, &wg, limit)
+        i++
+    }
+    wg.Wait()
+}
+```
+
+このスクリプトでは `concurrency` の値で並列数の上限を規定しています。これを変えたときの結果を以下に示します。
+
+| concurrency（並列数） | 100回の平均実行時間　 |
+|-------|-----------|
+|    1  | **0.61596947** 秒 |
+|    2  | **0.42971765** 秒 |
+|    4  | **0.25714048** 秒 |
+|    8  | **0.24074216** 秒 |
+|    16 | **0.27779638** 秒 |
+|    32 | **0.28692588** 秒 |
+|    64 | **0.35032400** 秒 |
+
+並列せずに実行すると約 **0.5秒** を要していましたが、4並列の場合はその半分の時間で済むという結果になりました。並列処理の方が明らかに短時間で済んでいます。
+
+また、4並列以上では実行時間の改善が見られず、頭打ちになっている（寧ろ時間が掛かってしまう）ことも観察できました。これはコードの問題というよりはマシン側の制約による所が大きいと考えられます。
+
+> Go言語は並列処理が得意だというのは聞いていましたが、実際に簡単な例で並列処理のメリットを体感することができました。ただし、やたらと並列すれば作業が効率化できるかと言われるとそうではなく、使用できるコア数やスレッド数、処理すべき作業の量などを踏まえた上で能率の最大化を目指すべきですね。
+
+
+# おまけ
+以下の環境で再テストしてみました（2023年1月）。
+
+> Goのバージョン: go1.19.5 windows/amd64
+> PCの環境: Windows 10 Pro / AMD Ryzen 5 5600X 6-Core Processor @3.70GHz (コア数:6, プロセッサ数:12)
+> プログラムはテキストエディタAtom上で動かしており、下記のコードからは時間計測用の部分を除いています。下記の実行時間はコンパイルの時間を含みません。
+
+| concurrency（並列数） | 100回の平均実行時間　 |
+|-------|-----------|
+|    1  | **0.050441054** 秒 |
+|    2  | **0.028784108** 秒 |
+|    3  | **0.021620101** 秒 |
+|    4  | **0.019008461** 秒 |
+|    6  | **0.017685688** 秒 |
+|    8  | **0.018228679** 秒 |
+|    12 | **0.018495253** 秒 |
+|    16 | **0.018154655** 秒 |
+|    32 | **0.017934571** 秒 |
+|    64 | **0.018256293** 秒 |
+
+
+# 参考資料
+
+「[**Golang ゴールーチンで並列数を指定して実行**](https://qiita.com/mykysyk@github/items/bdf96e5c414ca2dc1673)」
+「[**go での非同期処理　その２**](https://qiita.com/TsuyoshiUshio@github/items/1dbab0169c04ceb615bd)」
+「[**Go言語初心者がGo言語をさわってみた**](https://qiita.com/h-nabata/items/7688354b917e18c0b000)」

@@ -1,0 +1,97 @@
+テキストエディタ「[**Atom**](https://atom.io/)」上でCやC++の簡単なプログラムを手軽に（コンパイルの手間を省いて）動かせないか思い、「[**gpp-compiler**](https://atom.io/packages/gpp-compiler)」というプラグインを導入した際の個人的なメモです。
+
+```:想定環境
+OS：Windows10 64bit版
+エディタ：Atom（当方のバージョンは1.58.0）
+```
+
+gpp-compilerはCとC++の両方に対応したコンパイラがパッケージになっているものです。いちいちコンパイルする手間が省けるので便利ですが、単品では動かないので導入の際は少し注意が必要です。
+
+## 導入するもの
+
+###【Atomのパッケージ】
++ **gpp-compiler**
++ **language-c**
+
+###【Windows用のプログラミングツール】
++ **MinGW**
+
+
+## インストール手順（概略）
+
+Atom内の「Installe Packages」から「gpp-compiler」と「language-c」をそれぞれインストールします。
+
+>language-cはC言語でコーディングしやすくするために導入します。
+
+gpp-compilerを動かすにはMinGW（ミン・ジー・ダブリュー、Minimalist GNU for Windows）が必要（gpp-compilerのREADMEに書いてある）なので、「MinGW-w64」という64bit版MinGWのインストーラをダウンロードしてインストールします。
+**（【参考】[MinGW-w64のダウンロードとインストール](https://www.javadrive.jp/cstart/install/index6.html)）**
+>「Downloads」タブからダウンロード用のページに飛べます。色々種類がありますが、ここでは「MingW-W64-builds」を選び、「Sourceforge」をクリック。[遷移後のページ](https://sourceforge.net/projects/mingw-w64/)で数秒待機すればinstall.exeがダウンロードされます。
+>**なお、インストール時の「Settings」において、64bit環境の場合は「Architecture」を「i686」ではなく「x86_64」と指定しなければならないことに注意。**
+
+インストール後はMinGWのパスを通しておくのを忘れずに。インストール先がデフォルト設定のままであれば`C:\Program Files\mingw-w64\x86_64-8.1.0-posix-seh-rt_v6-rev0\mingw64\bin`をユーザー環境変数の「Path」に追加すれば良いでしょう（コンパイラはbinに置いてあるのでbinまで通します）。
+
+>Destination folderは`C:\Program Files\mingw-w64\x86_64-8.1.0-posix-seh-rt_v6-rev0`がデフォルトになっています。
+
+パスが通っているかどうかはコマンドプロンプトで`gcc -v`などを叩いて確かめてください。
+
+>※環境変数にパスを追加していないと、
+
+>```
+'gcc' could not be spawned. Is it installed and on your path? If so please open an issue on the package spawning the process.
+```
+
+>と怒られます。GCCの場所が分からないと言われているので、適宜パスを通してあげてください。
+
+
+## スクリプトの実行
+
+早速、Atomで以下のプログラムを **F5キー** で実行してみましょう。黒画面が立ち上がり`Hello, world!`が出力されます。
+
+```c:hello.c
+#include <stdio.h>
+
+int main(void) {
+    printf("Hello, world!");
+    return 0;
+}
+```
+
+ライブラリも問題無く読み込めます。新規ファイルは同じディレクトリ配下に作成されます。
+
+```c:sum.c
+#include <stdio.h>
+#include <math.h>
+
+int main(void) {
+    FILE *fp;
+    int sum_integer = 0;
+    float sum_float = 0.0;
+    int i;
+    char fname[20] = "sum.txt";
+
+    fp = fopen(fname,"w"); // open the file for writing
+    if (fp == NULL) { // when failed to open
+        printf("failed to open %s!\n", fname);
+        return -1;
+    }
+
+    i = 1; // initialization
+    while (i <= 10) {
+        fprintf(fp, "%d\n", i);
+        sum_integer = sum_integer + i;
+        i++;
+    }
+
+    for (i = 1; i <= 10; i++) {
+        fprintf(fp, "%d: %f\n", i, sqrt(i));
+        sum_float = sum_float + sqrt(i);
+    }
+
+    printf(" int sum =\t%8d\n", sum_integer);
+    printf("sqrt sum =\t%7.5f\n", sum_float);
+
+    return 0;
+}
+```
+
+gpp-compilerを通してAtomから実行する場合、コマンド引数を指定することは難しいようですが、対話型のスクリプトであれば値を逐次入力することは可能です。ちょっとしたプログラムの練習環境としては充分でしょう。

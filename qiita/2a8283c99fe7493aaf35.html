@@ -1,0 +1,201 @@
+---
+layout: "qiita-mirror"
+title: "【Python】距離行列の計算と実行時間"
+qiita_id: "2a8283c99fe7493aaf35"
+qiita_url: "https://qiita.com/h-nabata/items/2a8283c99fe7493aaf35"
+qiita_created: "2025-03-16T22:32:44+09:00"
+qiita_updated: "2025-03-16T22:32:44+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "プログラミング・可視化"
+mirror_tags: ["Python", "距離行列", "実行時間"]
+permalink: "/qiita/2a8283c99fe7493aaf35.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="1:1-2:145">距離行列（distance matrix）とは、データセットに含まれる各要素間の距離を表した行列のことです。データ解析、クラスタリング、機械学習の前処理など、さまざまな場面で広く用いられています。<br>
+本記事ではランダムに生成した3次元データを用いてPython環境で距離行列を作成し、実行時間を比較します。</p>
+<div class="code-frame" data-lang="python" data-sourcepos="4:1-9:3">
+<div class="code-lang"><span class="bold">ランダムに生成した3次元データ</span></div>
+<div class="highlight"><pre><code><span class="kn">import</span> <span class="n">numpy</span> <span class="k">as</span> <span class="n">np</span>
+
+<span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="nf">seed</span><span class="p">(</span><span class="mi">42</span><span class="p">)</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="n">random</span><span class="p">.</span><span class="nf">rand</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span>
+</code></pre></div>
+</div>
+<h2 data-sourcepos="11:1-11:27">
+<span id="距離行列の作成例" class="fragment"></span><a href="#%E8%B7%9D%E9%9B%A2%E8%A1%8C%E5%88%97%E3%81%AE%E4%BD%9C%E6%88%90%E4%BE%8B"><i class="fa fa-link"></i></a>距離行列の作成例</h2>
+<h3 data-sourcepos="13:1-13:30">
+<span id="1-scipyを用いた方法" class="fragment"></span><a href="#1-scipy%E3%82%92%E7%94%A8%E3%81%84%E3%81%9F%E6%96%B9%E6%B3%95"><i class="fa fa-link"></i></a>1. scipyを用いた方法</h3>
+<div class="code-frame" data-lang="python" data-sourcepos="15:1-19:3"><div class="highlight"><pre><code><span class="kn">from</span> <span class="n">scipy.spatial</span> <span class="kn">import</span> <span class="n">distance</span>
+
+<span class="n">dist_matrix</span> <span class="o">=</span> <span class="n">distance</span><span class="p">.</span><span class="nf">cdist</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">data</span><span class="p">,</span> <span class="n">metric</span><span class="o">=</span><span class="sh">'</span><span class="s">euclidean</span><span class="sh">'</span><span class="p">)</span>
+</code></pre></div></div>
+<h3 data-sourcepos="21:1-21:32">
+<span id="2-sklearnを用いた方法" class="fragment"></span><a href="#2-sklearn%E3%82%92%E7%94%A8%E3%81%84%E3%81%9F%E6%96%B9%E6%B3%95"><i class="fa fa-link"></i></a>2. sklearnを用いた方法</h3>
+<div class="code-frame" data-lang="python" data-sourcepos="23:1-27:3"><div class="highlight"><pre><code><span class="kn">from</span> <span class="n">sklearn.metrics</span> <span class="kn">import</span> <span class="n">pairwise_distances</span>
+
+<span class="n">dist_matrix</span> <span class="o">=</span> <span class="nf">pairwise_distances</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">metric</span><span class="o">=</span><span class="sh">'</span><span class="s">euclidean</span><span class="sh">'</span><span class="p">)</span>
+</code></pre></div></div>
+<h3 data-sourcepos="29:1-29:30">
+<span id="3-numpyを用いた方法" class="fragment"></span><a href="#3-numpy%E3%82%92%E7%94%A8%E3%81%84%E3%81%9F%E6%96%B9%E6%B3%95"><i class="fa fa-link"></i></a>3. numpyを用いた方法</h3>
+<div class="code-frame" data-lang="python" data-sourcepos="31:1-40:3"><div class="highlight"><pre><code><span class="kn">import</span> <span class="n">numpy</span> <span class="k">as</span> <span class="n">np</span>
+
+<span class="k">def</span> <span class="nf">numpy_distance_matrix</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+    <span class="n">sum_sq</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nf">sum</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="nf">square</span><span class="p">(</span><span class="n">data</span><span class="p">),</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">dist_matrix</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nf">sqrt</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="nf">maximum</span><span class="p">(</span><span class="n">sum_sq</span><span class="p">[:,</span> <span class="n">np</span><span class="p">.</span><span class="n">newaxis</span><span class="p">]</span> <span class="o">+</span> <span class="n">sum_sq</span> <span class="o">-</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">data</span><span class="p">.</span><span class="nf">dot</span><span class="p">(</span><span class="n">data</span><span class="p">.</span><span class="n">T</span><span class="p">),</span> <span class="mi">0</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">dist_matrix</span>
+
+<span class="n">dist_matrix</span> <span class="o">=</span> <span class="nf">numpy_distance_matrix</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+</code></pre></div></div>
+<blockquote data-sourcepos="42:1-42:169">
+<p data-sourcepos="42:3-42:169">numpyには距離行列を与える関数が組み込み関数としては実装されていないため、ここではベクトル計算として実装している。</p>
+</blockquote>
+<h3 data-sourcepos="44:1-44:30">
+<span id="4-numbaを用いた方法" class="fragment"></span><a href="#4-numba%E3%82%92%E7%94%A8%E3%81%84%E3%81%9F%E6%96%B9%E6%B3%95"><i class="fa fa-link"></i></a>4. numbaを用いた方法</h3>
+<div class="code-frame" data-lang="python" data-sourcepos="46:1-60:3"><div class="highlight"><pre><code><span class="kn">from</span> <span class="n">numba</span> <span class="kn">import</span> <span class="n">jit</span>
+<span class="kn">import</span> <span class="n">numpy</span> <span class="k">as</span> <span class="n">np</span>
+
+<span class="nd">@jit</span><span class="p">(</span><span class="n">nopython</span><span class="o">=</span><span class="bp">True</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">numba_distance_matrix</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="n">data</span><span class="p">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">dist_matrix</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nf">zeros</span><span class="p">((</span><span class="n">n</span><span class="p">,</span> <span class="n">n</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nf">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nf">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+            <span class="n">dist_matrix</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nf">sqrt</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="nf">sum</span><span class="p">((</span><span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">data</span><span class="p">[</span><span class="n">j</span><span class="p">])</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">dist_matrix</span>
+
+<span class="n">dist_matrix</span> <span class="o">=</span> <span class="nf">numba_distance_matrix</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+</code></pre></div></div>
+<h3 data-sourcepos="62:1-62:62">
+<span id="5-純粋なpythonによる実装mathライブラリ" class="fragment"></span><a href="#5-%E7%B4%94%E7%B2%8B%E3%81%AApython%E3%81%AB%E3%82%88%E3%82%8B%E5%AE%9F%E8%A3%85math%E3%83%A9%E3%82%A4%E3%83%96%E3%83%A9%E3%83%AA"><i class="fa fa-link"></i></a>5. 純粋なPythonによる実装（mathライブラリ）</h3>
+<div class="code-frame" data-lang="python" data-sourcepos="64:1-77:3">
+<div class="code-lang"><span class="bold">純粋なPythonによる実装（mathライブラリ）</span></div>
+<div class="highlight"><pre><code><span class="kn">import</span> <span class="n">math</span>
+
+<span class="k">def</span> <span class="nf">plain_Python</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nf">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="n">distance_matrix</span> <span class="o">=</span> <span class="p">[[</span><span class="mf">0.0</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nf">range</span><span class="p">(</span><span class="n">n</span><span class="p">)]</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nf">range</span><span class="p">(</span><span class="n">n</span><span class="p">)]</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nf">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nf">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+            <span class="n">tmp_distance_sq</span> <span class="o">=</span> <span class="mf">0.0</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nf">range</span><span class="p">(</span><span class="mi">3</span><span class="p">):</span>
+                <span class="n">tmp_distance_sq</span> <span class="o">+=</span> <span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">k</span><span class="p">]</span> <span class="o">-</span> <span class="n">data</span><span class="p">[</span><span class="n">j</span><span class="p">][</span><span class="n">k</span><span class="p">])</span> <span class="o">**</span> <span class="mi">2</span>
+            <span class="n">distance_matrix</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">math</span><span class="p">.</span><span class="nf">sqrt</span><span class="p">(</span><span class="n">tmp_distance_sq</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">distance_matrix</span>
+</code></pre></div>
+</div>
+<h3 data-sourcepos="79:1-79:63">
+<span id="6-純粋なpythonによる実装numpyライブラリ" class="fragment"></span><a href="#6-%E7%B4%94%E7%B2%8B%E3%81%AApython%E3%81%AB%E3%82%88%E3%82%8B%E5%AE%9F%E8%A3%85numpy%E3%83%A9%E3%82%A4%E3%83%96%E3%83%A9%E3%83%AA"><i class="fa fa-link"></i></a>6. 純粋なPythonによる実装（numpyライブラリ）</h3>
+<div class="code-frame" data-lang="python" data-sourcepos="81:1-91:3">
+<div class="code-lang"><span class="bold">純粋なPythonによる実装（numpyライブラリ）</span></div>
+<div class="highlight"><pre><code><span class="kn">import</span> <span class="n">numpy</span> <span class="k">as</span> <span class="n">np</span>
+
+<span class="k">def</span> <span class="nf">plain_Python2</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="n">data</span><span class="p">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">dist_matrix</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nf">zeros</span><span class="p">((</span><span class="n">n</span><span class="p">,</span> <span class="n">n</span><span class="p">))</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nf">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nf">range</span><span class="p">(</span><span class="n">n</span><span class="p">):</span>
+            <span class="n">dist_matrix</span><span class="p">[</span><span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">np</span><span class="p">.</span><span class="nf">sqrt</span><span class="p">(</span><span class="n">np</span><span class="p">.</span><span class="nf">sum</span><span class="p">((</span><span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">data</span><span class="p">[</span><span class="n">j</span><span class="p">])</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">dist_matrix</span>
+</code></pre></div>
+</div>
+<h2 data-sourcepos="93:1-93:46">
+<span id="実行速度の比較3次元データ" class="fragment"></span><a href="#%E5%AE%9F%E8%A1%8C%E9%80%9F%E5%BA%A6%E3%81%AE%E6%AF%94%E8%BC%833%E6%AC%A1%E5%85%83%E3%83%87%E3%83%BC%E3%82%BF"><i class="fa fa-link"></i></a>実行速度の比較（3次元データ）</h2>
+<p data-sourcepos="95:1-95:215">各手法を同じデータ（1000個の3次元点列）に適用した際の平均実行速度を以下の表にまとめました。シード値を固定しない場合でも結果はあまり変わりません。</p>
+<table data-sourcepos="97:1-104:45">
+<thead>
+<tr data-sourcepos="97:1-97:60">
+<th data-sourcepos="97:2-97:2"></th>
+<th data-sourcepos="97:4-97:38">ライブラリ・手法</th>
+<th data-sourcepos="97:40-97:59">実行時間 (秒)</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="99:1-99:44">
+<td data-sourcepos="99:2-99:5">1.</td>
+<td data-sourcepos="99:7-99:25">scipy</td>
+<td data-sourcepos="99:27-99:43">0.004471</td>
+</tr>
+<tr data-sourcepos="100:1-100:44">
+<td data-sourcepos="100:2-100:5">2.</td>
+<td data-sourcepos="100:7-100:25">sklearn</td>
+<td data-sourcepos="100:27-100:43">0.006393</td>
+</tr>
+<tr data-sourcepos="101:1-101:44">
+<td data-sourcepos="101:2-101:5">3.</td>
+<td data-sourcepos="101:7-101:25">numpy</td>
+<td data-sourcepos="101:27-101:43">0.010576</td>
+</tr>
+<tr data-sourcepos="102:1-102:46">
+<td data-sourcepos="102:2-102:5">4.</td>
+<td data-sourcepos="102:7-102:27">numba利用</td>
+<td data-sourcepos="102:29-102:45">0.095734</td>
+</tr>
+<tr data-sourcepos="103:1-103:44">
+<td data-sourcepos="103:2-103:5">5.</td>
+<td data-sourcepos="103:7-103:27">math + forループ</td>
+<td data-sourcepos="103:29-103:43">1.880585</td>
+</tr>
+<tr data-sourcepos="104:1-104:45">
+<td data-sourcepos="104:2-104:5">6.</td>
+<td data-sourcepos="104:7-104:28">numpy + forループ</td>
+<td data-sourcepos="104:30-104:44">4.866355</td>
+</tr>
+</tbody>
+</table>
+<blockquote data-sourcepos="106:1-115:20">
+<p data-sourcepos="0:0-0:0">10回の平均値として算出。実行時間は環境やバージョンにより変動するので、あくまで目安として考えてください。（特にnumbaに関してはチューニング次第でさらに速くなる可能性があります）</p>
+<table data-sourcepos="106:3-115:20">
+<thead>
+<tr data-sourcepos="106:3-106:292">
+<th data-sourcepos="106:264-106:264"></th>
+<th data-sourcepos="106:266-106:291">実行環境（参考）</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="109:3-109:21">
+<td data-sourcepos="109:4-109:11">Python</td>
+<td data-sourcepos="109:13-109:20">3.9.12</td>
+</tr>
+<tr data-sourcepos="110:3-110:48">
+<td data-sourcepos="110:4-110:8">CPU</td>
+<td data-sourcepos="110:10-110:47">AMD Ryzen 7 5800X3D 8-Core Processor</td>
+</tr>
+<tr data-sourcepos="111:3-111:29">
+<td data-sourcepos="111:4-111:8">RAM</td>
+<td data-sourcepos="111:10-111:28">32 GB (DDR4-3600)</td>
+</tr>
+<tr data-sourcepos="112:3-112:19">
+<td data-sourcepos="112:4-112:10">scipy</td>
+<td data-sourcepos="112:12-112:18">1.7.3</td>
+</tr>
+<tr data-sourcepos="113:3-113:21">
+<td data-sourcepos="113:4-113:12">sklearn</td>
+<td data-sourcepos="113:14-113:20">1.0.2</td>
+</tr>
+<tr data-sourcepos="114:3-114:20">
+<td data-sourcepos="114:4-114:10">numpy</td>
+<td data-sourcepos="114:12-114:19">1.21.5</td>
+</tr>
+<tr data-sourcepos="115:3-115:20">
+<td data-sourcepos="115:4-115:10">numba</td>
+<td data-sourcepos="115:12-115:19">0.55.1</td>
+</tr>
+</tbody>
+</table>
+</blockquote>
+<h2 data-sourcepos="117:1-117:12">
+<span id="まとめ" class="fragment"></span><a href="#%E3%81%BE%E3%81%A8%E3%82%81"><i class="fa fa-link"></i></a>まとめ</h2>
+<ul data-sourcepos="119:1-123:0">
+<li data-sourcepos="119:1-119:50">scipyとsklearnが最も高速かつ実用的。</li>
+<li data-sourcepos="120:1-120:88">numpyのベクトル演算も高速だが、大規模データでは注意が必要。</li>
+<li data-sourcepos="121:1-121:97">numbaは高速化が期待されるが、実際の速度は環境により大きく異なる。</li>
+<li data-sourcepos="122:1-123:0">純粋Pythonのforループ実装は速度が非常に遅く、実用的ではない。</li>
+</ul>
+<p data-sourcepos="124:1-125:296">目的やデータの規模に応じて適切な手法を選択することが重要です。<br>
+C言語等で実装するのが速くて良いですが、Pythonで距離行列を何度も計算する必要がある場合はとりあえずscipyを使っておけば良さそうです。for文ベタ書きならJITコンパイラが実装されているJulia言語などでも速そうです。</p>
+
+</div>
+
+
+{% endraw %}

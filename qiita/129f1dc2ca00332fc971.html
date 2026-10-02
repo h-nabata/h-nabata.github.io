@@ -1,0 +1,130 @@
+---
+layout: "qiita-mirror"
+title: "結晶構造から特定の指数面を切り出す"
+qiita_id: "129f1dc2ca00332fc971"
+qiita_url: "https://qiita.com/h-nabata/items/129f1dc2ca00332fc971"
+qiita_created: "2023-02-21T13:44:35+09:00"
+qiita_updated: "2023-02-27T13:32:17+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "計算化学・分子構造"
+mirror_tags: ["座標変換", "VESTA", "結晶構造"]
+permalink: "/qiita/129f1dc2ca00332fc971.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<h3 data-sourcepos="1:1-1:22">
+<span id="はじめに" class="fragment"></span><a href="#%E3%81%AF%E3%81%98%E3%82%81%E3%81%AB"><i class="fa fa-link"></i></a>【はじめに】</h3>
+<p data-sourcepos="2:1-2:315">本稿は<strong>計算化学</strong>に関する内容で、VESTAプログラムを利用し、結晶構造（この場合、特にcif形式のファイル）から特定の指数の面を切り出してスラブモデルを作成する手順の例を示すものです。細かい用語の解説は特にしていません。</p>
+<h1 data-sourcepos="4:1-4:25">
+<span id="111面を切り出す" class="fragment"></span><a href="#111%E9%9D%A2%E3%82%92%E5%88%87%E3%82%8A%E5%87%BA%E3%81%99"><i class="fa fa-link"></i></a>(111)面を切り出す</h1>
+<p data-sourcepos="5:1-5:273">例えば「立方体の」ユニットセルをもつ結晶の$(111)$面は下図のようになっています。ここでは各頂点が$xyz$座標系において$\mathrm{A}(1,0,0)$、$\mathrm{B}(0,1,0)$、$\mathrm{C}(0,0,1)$と定義されているものとします。</p>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F355b1089-c5da-ec32-8e53-87fd6ddad030.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=2157bdf43b11bb3f29d2b068a4d8a170" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/866c3a2aae31a837f536c8ba.png" alt="(111)面" title="(111)面" width="50%" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/355b1089-c5da-ec32-8e53-87fd6ddad030.png" loading="lazy" decoding="async"></a>
+<p data-sourcepos="9:1-10:124">スラブモデルを作るにはこれに平行な面を面の一つにもつ直方体（より一般には平行六面体）を作成する必要があります。<br>
+そのような直方体のうち、3辺が直角に交わるものには例えば下図のようなものがあります。</p>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F8252e023-2d3b-79d4-1fbb-407dcd8e327c.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=caf172df4c4b42d4f461c4651fa22c3d" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/d19b6a3247744ca434a5e07d.png" alt="(111)面を面の一つにもつ直方体" title="(111)面を面の一つにもつ直方体" width="60%" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/8252e023-2d3b-79d4-1fbb-407dcd8e327c.png" loading="lazy" decoding="async"></a>
+<p data-sourcepos="14:1-14:289">つまり、新しい座標軸を図中の$\overrightarrow{\mathrm{OP}}$、$\overrightarrow{\mathrm{OQ}}$、$\overrightarrow{\mathrm{OR}}$の向きに取り直すことで、$(111)$面（に平行な面）を$XY$平面とする新たな$XYZ$座標系を定義することができます。</p>
+<p data-sourcepos="16:1-16:208">このような座標変換を行うには、「<a href="https://jp-minerals.org/vesta/jp/" rel="nofollow noopener" target="_blank"><strong>VESTA</strong></a>」のユニットセル変換機能を利用するのが手っ取り早いです。手順は次の通りです。</p>
+<ul data-sourcepos="18:1-22:0">
+<li data-sourcepos="18:1-18:70">VESTAを起動して目当ての結晶のcifファイルを開く。</li>
+<li data-sourcepos="19:1-19:59">次に [Edit] &gt; [Edit Data] &gt; [Unit Cell...] と進む。</li>
+<li data-sourcepos="20:1-20:81">表示されるダイアログボックスの [Transform...] をクリック。</li>
+<li data-sourcepos="21:1-22:0">Rotation matrix P の成分を入力する。今回の場合は以下。</li>
+</ul>
+<div class="code-frame" data-lang="math" data-sourcepos="23:1-29:3"><div class="highlight"><pre><code>\mathbf{P}=\begin{pmatrix} 
+2 &amp; 1 &amp; 1 \\ 
+-2 &amp; 1 &amp; 1 \\ 
+0 &amp; -2 &amp; 1 
+\end{pmatrix}
+</code></pre></div></div>
+<ul data-sourcepos="31:1-34:0">
+<li data-sourcepos="31:1-31:129">[OK]を押下すると「セルの体積が変わるが良いか？」という警告が出るので「はい(Y)」を選択。</li>
+<li data-sourcepos="32:1-32:130">「Additional lattice point(s)...」のラジオボタンは「Add new equivalent positions...」を選択して[OK]を押下。</li>
+<li data-sourcepos="33:1-34:0">[Apply] &gt; [OK] の順で押下。</li>
+</ul>
+<p data-sourcepos="35:1-35:121">以上の手順により$(111)$面を$XY$平面とする$XYZ$座標系に変換された結晶構造が得られます。</p>
+<blockquote data-sourcepos="37:1-42:337">
+<p data-sourcepos="37:3-41:312">例えば<a href="https://materialsproject.org/materials/mp-2" rel="nofollow noopener" target="_blank"><strong>Pd結晶</strong></a>の場合、ユニットセルは次のようになっています。<br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F241b855f-1cd6-11db-de41-1c6cf12df3a5.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=1b1d4b2513209d204b27b0ede597f57f" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/01c38d0febbed0c6e8f02fbd.png" title="Pd結晶" alt="Pd結晶" width="50%" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/241b855f-1cd6-11db-de41-1c6cf12df3a5.png" loading="lazy" decoding="async"></a><br>
+これに対し上記の変換を施すと、次のようになります。<br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Fe3fcffec-a486-9df5-64ca-0390e069bdb1.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=5d461a5d32abc8598ade741305190cbf" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/6216e8290173f64342a01f82.png" title="Pd(111)面を切り出したセル" alt="Pd(111)面を切り出したセル" width="70%" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/e3fcffec-a486-9df5-64ca-0390e069bdb1.png" loading="lazy" decoding="async"></a><br>
+あとは適当に$(111)$方向（図中c軸の方向）に15~20Å程度の真空層を確保してやれば$(111)$面のスラブモデルの完成です。表面積が大きすぎる場合は、変換行列$\mathbf{P}$を上手く調節するか、変換後の結晶のサイズを削減してください。</p>
+<blockquote data-sourcepos="42:2-42:337">
+<p data-sourcepos="42:4-42:337">単位格子が立方体でない場合、上記の変換行列では$XYZ$座標系の3軸が直交しません。そのままでもスラブモデルを作成することはできますが、色々な電子状態計算の都合上、できるだけ3軸の夾角が直角に近付くような軸の取り方を目指しましょう。</p>
+</blockquote>
+</blockquote>
+<h1 data-sourcepos="45:1-45:25">
+<span id="101面を切り出す" class="fragment"></span><a href="#101%E9%9D%A2%E3%82%92%E5%88%87%E3%82%8A%E5%87%BA%E3%81%99"><i class="fa fa-link"></i></a>(101)面を切り出す</h1>
+<p data-sourcepos="46:1-47:163">切り出す手順は二元系でも変わりません。ここでは<a href="http://rruff.geo.arizona.edu/AMS/minerals/Tenorite" rel="nofollow noopener" target="_blank"><strong>CuO結晶</strong></a>の$(101)$面を切り出してみます。<br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F2bd47da5-8323-fcd9-bfb2-df4bb298e32f.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=8d1a2330b693e9cb9a3cdc99e0063bb9" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/1686bf3a26d84f2a80cf8c86.png" alt="CuO結晶" title="CuO結晶" width="50%" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/2bd47da5-8323-fcd9-bfb2-df4bb298e32f.png" loading="lazy" decoding="async"></a></p>
+<blockquote data-sourcepos="48:1-48:68">
+<p data-sourcepos="48:3-48:68">CuO結晶の最安定相は単斜晶系のテノライトです。</p>
+</blockquote>
+<p data-sourcepos="50:1-50:78">最も単純な変換は下図のようなセルの取り方になります。</p>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F52d07d3b-423d-13dd-72a7-8014dc95118c.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=1156e553215aec88e86a164fbf78e683" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/3a2c8c910e3318f7b76f0734.png" alt="(101)面を面の一つにもつ直方体" title="(101)面を面の一つにもつ直方体" width="60%" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/52d07d3b-423d-13dd-72a7-8014dc95118c.png" loading="lazy" decoding="async"></a>
+<p data-sourcepos="54:1-54:42">このときの変換行列$\mathbf{P}$は</p>
+<div class="code-frame" data-lang="math" data-sourcepos="55:1-61:3"><div class="highlight"><pre><code>\mathbf{P}=\begin{pmatrix} 
+1 &amp; 0 &amp; 1 \\ 
+0 &amp; 1 &amp; 0 \\ 
+-1 &amp; 0 &amp; 1 
+\end{pmatrix}
+</code></pre></div></div>
+<p data-sourcepos="62:1-62:178">となりますが、このままだと$Y$方向の辺が短くなってしまうので、新しい$b$軸方向を2倍した$\mathbf{P}^{\prime}$を用いることにします。</p>
+<div class="code-frame" data-lang="math" data-sourcepos="63:1-69:3"><div class="highlight"><pre><code>\mathbf{P}^{\prime}=\begin{pmatrix} 
+1 &amp; 0 &amp; 1 \\ 
+0 &amp; \color{red}{2} &amp; 0 \\ 
+-1 &amp; 0 &amp; 1 
+\end{pmatrix}
+</code></pre></div></div>
+<p data-sourcepos="71:1-71:170">これを用いると以下のように丁度良いサイズの結晶格子が得られます。このセルの$ab$平面は正しく$(101)$面に相当しています。</p>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F39111f2b-2283-ed0c-938b-37e5f4fe2083.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=d0d48827faa9d35128aaf51bbff54dee" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/2e89f1779327313f5bf8c1ed.png" alt="CuO(101)面を切り出したセル" title="CuO(101)面を切り出したセル" width="50%" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/39111f2b-2283-ed0c-938b-37e5f4fe2083.png" loading="lazy" decoding="async"></a>
+<h1 data-sourcepos="76:1-76:35">
+<span id="六方晶系の面を切り出す" class="fragment"></span><a href="#%E5%85%AD%E6%96%B9%E6%99%B6%E7%B3%BB%E3%81%AE%E9%9D%A2%E3%82%92%E5%88%87%E3%82%8A%E5%87%BA%E3%81%99"><i class="fa fa-link"></i></a>六方晶系の面を切り出す</h1>
+<p data-sourcepos="78:1-78:247"><a href="https://materialsproject.org/materials/mp-2133/" rel="nofollow noopener" target="_blank"><strong>ZnO結晶</strong></a>は「ウルツ鉱型結晶構造」の名前の由来であるZnS結晶の類縁体で、下図のような六方晶系（Hexagonal crystal family）の結晶構造をとります。</p>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F35bea0df-47b2-92c2-2f92-36ea5d3ce848.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=e8fb6423ca973eeaeddc405c39daf1bc" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/124390477c5c81de20f4643a.png" alt="ZnO結晶" width="60%" title="ZnO結晶" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/35bea0df-47b2-92c2-2f92-36ea5d3ce848.png" loading="lazy" decoding="async"></a>
+<blockquote data-sourcepos="82:1-82:225">
+<p data-sourcepos="82:3-82:225">（画像の出典）B. Meyer, D. Marx, <a href="https://journals.aps.org/prb/abstract/10.1103/PhysRevB.67.035403" rel="nofollow noopener" target="_blank">“Density-functional study of the structure and stability of ZnO surfaces,”</a> <em>Phys. Rev. B</em> 2003, <strong>67</strong>, 035403.</p>
+</blockquote>
+<p data-sourcepos="84:1-84:343">六方晶系の面指数は下図のように $\vec{a_1}$、$\vec{a_2}$、$\vec{a_3}$、$\vec{c_{}}$ の4つのベクトルによって定義されます。面指数の名付けは $(a_1 a_2 a_3 c)$ のようになります。例えば図中Aの面は$(11\bar{2}0)$面、Bの面は$(1\bar{1}00)$面、Cの面は$(0001)$面と表されます。</p>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F4357b2d4-0f27-4d66-8fc2-5719fa75204f.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=089bf70d80c41ab17c2101bf738d3a9e" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/1fa2893f14432053a8195f17.png" alt="六方晶" width="60%" title="六方晶" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/4357b2d4-0f27-4d66-8fc2-5719fa75204f.png" loading="lazy" decoding="async"></a>
+<blockquote data-sourcepos="88:1-88:278">
+<p data-sourcepos="88:3-88:278">（画像の出典）Aki Takigawa, S. Tachibana, H. Nagahara, K. Ozawa, <a href="https://iopscience.iop.org/article/10.1088/0067-0049/218/1/2" rel="nofollow noopener" target="_blank">“EVAPORATION AND CONDENSATION KINETICS OF CORUNDUM: THE ORIGIN OF THE 13 μm FEATURE OF OXYGEN-RICH AGB STARS,”</a> <em>ApJS</em> 2015, <strong>218</strong>, 2.</p>
+</blockquote>
+<p data-sourcepos="90:1-90:368">六方晶の単位格子は基本的に、六角柱から $\vec{a_1}$、$\vec{a_2}$、$\vec{c_{}}$ を辺とする四角柱を切り出した構造で与えられます。<a href="https://materialsproject.org/materials/mp-2133/" rel="nofollow noopener" target="_blank"><strong>ZnO</strong></a>の場合、単位格子をVESTAで表示すると次のようになります。図中$b$軸が上図の$a_2$軸に相当しています。</p>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Ff74b420a-5a84-08c1-511d-d06cadc81328.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=2968d7ce7a8b99d6ff823e200b9da5b0" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/1b797c8ff187e8f3fbe2146d.png" alt="ZnOの単位格子" width="50%" title="ZnOの単位格子" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/f74b420a-5a84-08c1-511d-d06cadc81328.png" loading="lazy" decoding="async"></a>
+<p data-sourcepos="94:1-94:248">ここで、ZnO$(10\bar{1}0)$面を切り出してみます。$(10\bar{1}0)$面は下図に示す面であり既に単位格子の面の一つとして露出しているので、並進ベクトル（TV）を新しく取り直すだけでOKです。</p>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F5cd70dac-5c2b-2474-9bd8-e36f876c3cf2.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=37450716be67aa378f6fda5cfc31cb15" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/a25ed7f440fca2995357669b.png" alt="ZnO(10-10)面" width="50%" title="ZnO(10-10)面" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/5cd70dac-5c2b-2474-9bd8-e36f876c3cf2.png" loading="lazy" decoding="async"></a>
+<p data-sourcepos="98:1-98:75">これをスラブモデルにする変換行列$\mathbf{P}$は、例えば</p>
+<div class="code-frame" data-lang="math" data-sourcepos="99:1-105:3"><div class="highlight"><pre><code>\mathbf{P}=\begin{pmatrix} 
+0 &amp; 0 &amp; 2 \\ 
+2 &amp; 0 &amp; 1 \\ 
+0 &amp; 1 &amp; 0 
+\end{pmatrix}
+</code></pre></div></div>
+<p data-sourcepos="106:1-106:310">となります。これを施してやると下図のように$ab$平面が$(10\bar{1}0)$面に平行な直方体のセルが得られます。この$c$軸方向は$(10\bar{1}0)$方向に相当するので、この軸方向に真空層を確保すれば$(10\bar{1}0)$面のスラブモデルになります。</p>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F8d522521-e094-2bf2-6780-3a91c3cd37eb.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=1c28ac960d491aa26d8f151769598e5b" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/eace04054d6ab5cd20b7afb8.png" alt="ZnO(10-10)面を切り出したセル" width="50%" title="ZnO(10-10)面を切り出したセル" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/8d522521-e094-2bf2-6780-3a91c3cd37eb.png" loading="lazy" decoding="async"></a>
+<blockquote data-sourcepos="110:1-110:282">
+<p data-sourcepos="110:3-110:282">因みに、ZnO結晶のような3回対称性をもつ六方晶では、$(1\bar{1}00)$、$(10\bar{1}0)$、$(100\bar{1})$およびその面対称なファセットはすべて同一の面を指しています。文献によって表記が異なることがあるので要注意。</p>
+</blockquote>
+<h1 data-sourcepos="112:1-112:35">
+<span id="変換行列の数学について" class="fragment"></span><a href="#%E5%A4%89%E6%8F%9B%E8%A1%8C%E5%88%97%E3%81%AE%E6%95%B0%E5%AD%A6%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6"><i class="fa fa-link"></i></a>変換行列の数学について</h1>
+<p data-sourcepos="113:1-113:72">最後に、変換行列の仕組みについて触れておきます。</p>
+<p data-sourcepos="115:1-115:279">オリジナルの並進ベクトル（TV）である$(\boldsymbol{a}, \boldsymbol{b}, \boldsymbol{c})$に対して、変換行列$\mathbf{P}$は以下のように作用しています（VESTAが表示するダイアログボックスにも全く同じ記載があります）。</p>
+<div class="code-frame" data-lang="math" data-sourcepos="116:1-123:3"><div class="highlight"><pre><code>\begin{aligned}
+\left(\begin{array}{c} \boldsymbol{a}^{\prime} \\ \boldsymbol{b}^{\prime} \\ \boldsymbol{c}^{\prime} \end{array}\right) 
+&amp;= (\boldsymbol{a}, \boldsymbol{b}, \boldsymbol{c}) \mathbf{P} \\ 
+&amp;= (\boldsymbol{a}, \boldsymbol{b}, \boldsymbol{c})\left(\begin{array}{lll}P_{11} &amp; P_{12} &amp; P_{13} \\ P_{21} &amp; P_{22} &amp; P_{23} \\ P_{31} &amp; P_{32} &amp; P_{33}\end{array}\right) \\ 
+&amp;= \left(\begin{array}{c} P_{11} \boldsymbol{a}+P_{21} \boldsymbol{b}+P_{31} \boldsymbol{c} \\ P_{12} \boldsymbol{a}+P_{22} \boldsymbol{b}+P_{32} \boldsymbol{c} \\ P_{13} \boldsymbol{a}+P_{23} \boldsymbol{b}+P_{33} \boldsymbol{c} \end{array}\right)
+\end{aligned}
+</code></pre></div></div>
+<p data-sourcepos="124:1-124:242">ここで行列$\mathbf{P}$の成分$P_{ij}$は実数（スカラー量）です。この座標変換を用いて、ユニットセルおよびその内部の原子の座標を丸ごと新たな座標系に変換することができます。</p>
+<p data-sourcepos="126:1-126:609">ここまでの説明に登場してきた変換行列の成分は、既存のTV$(\boldsymbol{a}, \boldsymbol{b}, \boldsymbol{c})$から新規座標系の新しいTV$(\boldsymbol{a}^{\prime}, \boldsymbol{b}^{\prime}, \boldsymbol{c}^{\prime})$をどのように表現するかを決めてから逆算して求めています。$(\boldsymbol{a}^{\prime}, \boldsymbol{b}^{\prime}, \boldsymbol{c}^{\prime})$は一意には決まりませんが、$(\boldsymbol{a}, \boldsymbol{b}, \boldsymbol{c})$の線形結合で必ず表現できるので、変換行列$\mathbf{P}$は任意に与えることができます。</p>
+<blockquote data-sourcepos="128:1-128:356">
+<p data-sourcepos="128:3-128:356">文章で説明すると大仰な印象になってしまいますが、視覚的に捉えれば難しいことは言っていません。なお、$\boldsymbol{a}$、$\boldsymbol{b}$、$\boldsymbol{c}$ および $\boldsymbol{a}^{\prime}$、$\boldsymbol{b}^{\prime}$、$\boldsymbol{c}^{\prime}$ はいずれも空間ベクトルであることに注意。</p>
+</blockquote>
+<hr data-sourcepos="129:1-130:0">
+<p data-sourcepos="131:1-131:300">以上の手順により、自由自在にユニットセルのあらゆる面を切り出すことができます。空間ベクトルの認識能力がある程度要求されますが、ミラー指数はほとんどの場合で単純な整数となるので慣れれば難しくありません。</p>
+
+</div>
+
+
+{% endraw %}

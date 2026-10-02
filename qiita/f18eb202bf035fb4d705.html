@@ -1,0 +1,107 @@
+---
+layout: "qiita-mirror"
+title: "renameコマンドが使えないときにファイル名を一括置換するワンライナー"
+qiita_id: "f18eb202bf035fb4d705"
+qiita_url: "https://qiita.com/h-nabata/items/f18eb202bf035fb4d705"
+qiita_created: "2024-05-18T20:29:02+09:00"
+qiita_updated: "2024-05-18T20:29:02+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "計算環境・Linux"
+mirror_tags: ["Linux", "tips", "shell", "シェル芸", "Linuxコマンド"]
+permalink: "/qiita/f18eb202bf035fb4d705.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="1:1-1:146">本稿ではrenameコマンドが使えないLinux環境においてファイル名を一括置換するワンライナーの例を紹介する。</p>
+<h1 data-sourcepos="3:1-3:35">
+<span id="forループを利用する場合" class="fragment"></span><a href="#for%E3%83%AB%E3%83%BC%E3%83%97%E3%82%92%E5%88%A9%E7%94%A8%E3%81%99%E3%82%8B%E5%A0%B4%E5%90%88"><i class="fa fa-link"></i></a>forループを利用する場合</h1>
+<p data-sourcepos="5:1-5:48">forループの使用が許容される場合は</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="7:1-9:3">
+<div class="code-lang"><span class="bold">bash系</span></div>
+<div class="highlight"><pre><code><span class="k">for </span>file <span class="k">in</span> <span class="k">*</span>test1<span class="k">*</span><span class="p">;</span> <span class="k">do </span><span class="nb">mv</span> <span class="nt">-n</span> <span class="s2">"</span><span class="nv">$file</span><span class="s2">"</span> <span class="s2">"</span><span class="k">${</span><span class="nv">file</span><span class="p">/test1/test2</span><span class="k">}</span><span class="s2">"</span><span class="p">;</span> <span class="k">done</span>
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="sh" data-sourcepos="11:1-13:3">
+<div class="code-lang"><span class="bold">csh系</span></div>
+<div class="highlight"><pre><code>foreach file <span class="o">(</span><span class="k">*</span>test1<span class="k">*</span><span class="o">)</span> <span class="p">;</span> <span class="nb">mv</span> <span class="nt">-n</span> <span class="s2">"</span><span class="nv">$file</span><span class="s2">"</span> <span class="sb">`</span><span class="nb">echo</span> <span class="s2">"</span><span class="nv">$file</span><span class="s2">"</span> | <span class="nb">sed</span> <span class="s1">'s/test1/test2/'</span><span class="sb">`</span> <span class="p">;</span> end
+</code></pre></div>
+</div>
+<p data-sourcepos="15:1-15:157">などとすればよい。拡張子が <code>.txt</code> のファイルのみリネームしたい場合は <code>*test1*</code> の部分を <code>*test1*.txt</code> と書けばよい。</p>
+<blockquote data-sourcepos="17:1-17:229">
+<p data-sourcepos="17:3-17:229">このうち、bash系のワンライナーの方が処理は速い。bashのワンライナーは、ループの中で外部プロセスを生成することなく、組み込み機能だけで処理を行うためである。</p>
+</blockquote>
+<h1 data-sourcepos="19:1-19:38">
+<span id="forループを利用しない場合" class="fragment"></span><a href="#for%E3%83%AB%E3%83%BC%E3%83%97%E3%82%92%E5%88%A9%E7%94%A8%E3%81%97%E3%81%AA%E3%81%84%E5%A0%B4%E5%90%88"><i class="fa fa-link"></i></a>forループを利用しない場合</h1>
+<p data-sourcepos="21:1-21:96">何らかの理由でforループの使用が躊躇われる場合は以下のようにする。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="23:1-25:3">
+<div class="code-lang"><span class="bold">ファイル名の "test1" の部分を "test2" に一括置換するコマンド①</span></div>
+<div class="highlight"><pre><code><span class="nb">ls</span> <span class="k">*</span> | xargs <span class="nt">-n</span> 1 | <span class="nb">sed</span> <span class="s1">'p;s/test1/test2/g'</span> | xargs <span class="nt">-n</span> 2 <span class="nb">mv</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="27:1-27:69">この一連のコマンドは以下のように機能している。</p>
+<ol data-sourcepos="28:1-33:0">
+<li data-sourcepos="28:1-28:106">
+<code>ls *</code> でカレントディレクトリ内の全ファイルとディレクトリをリストする。</li>
+<li data-sourcepos="29:1-29:60">
+<code>xargs -n 1</code> でそれらを1行ずつ <code>sed</code> に渡す。</li>
+<li data-sourcepos="30:1-30:247">
+<code>sed 'p;s/test1/test2/g'</code> で各ファイルについて変更前後の名前をそれぞれ出力する。1回目（<code>p</code>の部分）はそのまま、2回目（<code>s</code>で置換している部分）は <code>test1</code> を <code>test2</code> に置き換えたもの。</li>
+<li data-sourcepos="31:1-33:0">
+<code>xargs -n 2 mv</code> で2つの引数をまとめて <code>mv</code> コマンドに渡し、ファイル名を変更する。最初の引数は元のファイル名、2番目の引数は新しいファイル名となる。<code>-n</code> オプションは同名のファイルが既に存在する場合に上書きを禁止する。</li>
+</ol>
+<p data-sourcepos="34:1-34:81">例えば、ディレクトリに次のファイルがある場合を考える。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="35:1-39:3"><div class="highlight"><pre><code>file_test1.txt
+file_test2.txt
+test1_document.txt
+</code></pre></div></div>
+<p data-sourcepos="40:1-40:60">この場合、コマンドは次のように動作する。</p>
+<p data-sourcepos="42:1-42:50">① <code>ls *</code> で全ファイルリストを取得：</p>
+<div class="code-frame" data-lang="text" data-sourcepos="43:1-47:3"><div class="highlight"><pre><code>file_test1.txt
+file_test2.txt
+test1_document.txt
+</code></pre></div></div>
+<p data-sourcepos="48:1-48:38">② <code>xargs -n1</code> で1行ずつ処理：</p>
+<div class="code-frame" data-lang="text" data-sourcepos="49:1-53:3"><div class="highlight"><pre><code>file_test1.txt
+file_test2.txt
+test1_document.txt
+</code></pre></div></div>
+<p data-sourcepos="54:1-54:55">③ <code>sed 'p;s/test1/test2/g'</code> で各行を2回出力：</p>
+<div class="code-frame" data-lang="text" data-sourcepos="55:1-62:3"><div class="highlight"><pre><code>file_test1.txt
+file_test2.txt
+file_test2.txt
+file_test2.txt
+test1_document.txt
+test2_document.txt
+</code></pre></div></div>
+<p data-sourcepos="63:1-63:83">④ <code>xargs -n 2 mv</code> で2つの引数を渡し、<code>mv</code> でファイル名を変更：</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="64:1-67:3"><div class="highlight"><pre><code><span class="nb">mv </span>file_test1.txt file_test2.txt
+<span class="nb">mv </span>test1_document.txt test2_document.txt
+</code></pre></div></div>
+<p data-sourcepos="68:1-69:124">先程のコマンドにより、ワンラインでこれを一括実行できる。<br>
+拡張子が <code>.txt</code> のファイルのみリネームしたい場合は <code>ls *</code> の部分を <code>ls *.txt</code> と書けばよい。</p>
+<h2 data-sourcepos="71:1-71:31">
+<span id="findを利用するケース" class="fragment"></span><a href="#find%E3%82%92%E5%88%A9%E7%94%A8%E3%81%99%E3%82%8B%E3%82%B1%E3%83%BC%E3%82%B9"><i class="fa fa-link"></i></a>findを利用するケース</h2>
+<p data-sourcepos="73:1-73:216">以下のように <code>find</code> コマンドを利用することもできる。カレントディレクトリ配下の全ファイルについて <code>rename</code> の操作を一括で実行したい場合には便利である。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="75:1-77:3">
+<div class="code-lang"><span class="bold">ファイル名の "test1" の部分を "test2" に一括置換するコマンド③</span></div>
+<div class="highlight"><pre><code>find <span class="nb">.</span> <span class="nt">-type</span> f <span class="nt">-name</span> <span class="s1">'*test1*'</span> | <span class="nb">sed</span> <span class="s1">'p;s/test1/test2/'</span> | <span class="nb">paste</span> - - | xargs <span class="nt">-n</span> 2 <span class="nb">mv</span> <span class="nt">-n</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="79:1-80:181"><code>paste - -</code> によって標準入力を2行ずつ結合して一行にまとめている。<br>
+なお <code>-n</code> が2回登場しているが、 <code>xargs</code> コマンドの <code>-n</code> オプションと <code>mv</code> コマンドの <code>-n</code> オプションは別物なので、この形式で正しい。</p>
+<blockquote data-sourcepos="82:1-82:276">
+<p data-sourcepos="82:3-82:276"><code>find . -type f -name '*test1*'</code> は現在のディレクトリ以下で名前に test1 を含むファイルを検索する。そのため、カレントディレクトリ配下の該当するすべてのファイルに <code>mv</code> コマンドが適用されることに注意。</p>
+</blockquote>
+<p data-sourcepos="84:1-84:119"><code>sh</code> を呼び出しているのでやや回りくどいが、以下の方法でも同様の処理が実行される。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="86:1-88:3">
+<div class="code-lang"><span class="bold">ファイル名の "test1" の部分を "test2" に一括置換するコマンド②</span></div>
+<div class="highlight"><pre><code>find <span class="nb">.</span> <span class="nt">-type</span> f <span class="nt">-name</span> <span class="s1">'*test1*'</span> | xargs <span class="nt">-I</span> <span class="o">{}</span> sh <span class="nt">-c</span> <span class="s1">'mv -n "$1" "${1//test1/test2}"'</span> _ <span class="o">{}</span>
+</code></pre></div>
+</div>
+<hr data-sourcepos="90:1-91:0">
+<p data-sourcepos="92:1-92:182">環境によっては <code>mv</code> や <code>ls</code> などに特殊なaliasが設定されている場合もあるため、事前に挙動を検証してから実行することが推奨される。</p>
+
+</div>
+
+
+{% endraw %}

@@ -1,0 +1,4540 @@
+# 導入
+
+以前の記事では、Qwen3.8-27BをRTX 5070 Ti（VRAM 16 GB）上でOllamaを用いてローカル実行し、推論性能を検証した。
+
+https://qiita.com/h-nabata/items/390b3558be49c30f85a7
+
+Qwen3.8-27BのOllama公式Q4量子化モデルは、RTX 5070 Tiの16 GB VRAMだけではモデル全体をGPU上に保持できず、一部がCPU/RAM側へオフロードされる。
+
+前回の環境では、
+
+- **RTX 5070 Ti：16 GB VRAM**
+- **Qwen3.8-27B Q4**
+- **一部CPUオフロードあり**
+- **推論速度：約 14 token / sec.**
+
+という状態であった。
+
+今回は遊休状態になっていた RTX 3070 Ti（VRAM 8 GB）を増設し、以下のようにデュアルGPU構成とすることで、CPUオフロード分をGPU側へ移し、Qwen3.8-27Bの推論速度を改善できるか検証する。
+
+```console
+RTX 5070 Ti (16 GB) + RTX 3070 Ti (8 GB)
+-> Aggregate VRAM = 24 GB
+```
+* * *
+:::note info
+### 忙しい人のために
+
+結論として、VRAMマージンを 1 GB に削減したデュアルGPU環境（RTX 5070 Ti + RTX 3070 Ti）において、<font color="red">**32kまでのコンテキスト長で 100 % GPUロードが実現し、約 66 token / sec. の推論速度を達成した。**</font>デフォルト設定での推論速度（CPUオフロード発生時）が約 14 token / sec. であったことを考えると、<font color="red">**デュアルGPU化によるモデル全層GPUオフロードによって約 5 倍の高速化が実現した**</font>ことになる。
+
+> 検証に用いた環境ではRTX 5070 TiがPCIe 4.0 x16、RTX 3070 TiがPCIe 3.0 x4で接続されている。今回はPCIe帯域そのものが推論速度へ与える影響までは検証していないため、より高速なPCIe接続が可能な構成（特にマザーボード）では、さらに性能が改善する余地があると思われる。
+:::
+
+* * *
+:::note warn
+**GPU増設作業は必ず電源プラグを抜いて通電を完全にOFFにした状態で行うこと。**
+:::
+
+# 設定
+
+...というわけで早速3070Tiを増設したので、正しく認識できていることを確認する。
+
+```console:GPUの状態を確認
+nvidia-smi
+```
+
+```console:出力
+Tue Aug 18 22:17:37 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.57                 Driver Version: 591.86         CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+|  0%   33C    P8              3W /  320W |       0MiB /   8192MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+|  0%   48C    P8             13W /  300W |    1340MiB /  16303MiB |      1%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+```
+
+> Windowsの場合は、デバイスが正しく認識されていればタスクマネージャーでGPU 0 と GPU 1 が確認できる。
+
+```console:GPUの設定を確認
+nvidia-smi --query-gpu=index,name,pci.bus_id,pcie.link.gen.max,pcie.link.gen.current,pcie.link.width.max,pcie.link.width.current --format=csv
+```
+```console:出力
+index, name, pci.bus_id, pcie.link.gen.max, pcie.link.gen.current, pcie.link.width.max, pcie.link.width.current
+0, NVIDIA GeForce RTX 3070 Ti, 00000000:04:00.0, 3, 3, 16, 4
+1, NVIDIA GeForce RTX 5070 Ti, 00000000:2B:00.0, 4, 4, 16, 16
+```
+
+Linux環境で正しく認識できている。下段スロットに 3070 Ti を接続したのだが、こちらの方がデバイスの index が若くなった。
+
+:::note info
+### GPU indexについて
+GPUを2台以上差した場合、どのデバイスの index が若くなるかは自明に分かるものではなく、「下段スロットに挿したGPUだから device index 0 になる」というような関係は無い。
+
+したがって、GPUを恒久的に区別して指定したい場合には、indexではなくUUIDまたはPCI Bus IDを使うことが推奨される。
+参考：https://docs.nvidia.com/deploy/nvidia-smi/index.html
+
+```console:UUIDの取得
+$ nvidia-smi -L
+GPU 0: NVIDIA GeForce RTX 3070 Ti (UUID: GPU-d41e4013-aaf1-3562-e8b4-2d7d3a6a5ef7)
+GPU 1: NVIDIA GeForce RTX 5070 Ti (UUID: GPU-926f28bc-9b44-7b7c-e063-2b12d76864d2)
+```
+
+Ollama に 5070 Ti のみを認識させる場合、設定ファイル内において以下のようにUUIDで指定すればよい。両方のGPUを利用する場合は、この制限を解除するか、両GPUを明示的に指定する。
+
+```console:Ollama に 5070 Ti のみを認識させる場合の設定
+Environment="CUDA_VISIBLE_DEVICES=GPU-926f28bc-9b44-7b7c-e063-2b12d76864d2"
+```
+
+> さらに紛らわしいことに、`nvidia-smi` で確認できる GPU index と他の CUDA アプリケーションから見える device ordinal は必ずしも一致しない。無用な混乱を防止するためにも、GPUの指定は GPU index ではなくUUIDなどの不変の値を利用すべきである。
+
+指定した値が間違っていると存在しないGPUを呼ぼうとしてエラーになるので、転記ミスに注意。
+
+:::
+
+:::note info
+
+### マザーボードのスロットの規格による帯域幅の制約
+
+余談ではあるが、今回検証に用いたPCのマザーボード（B550 TOMAHAWK）は上段スロットが PCI Express Gen 4 対応、下段スロットが PCI Express Gen 3 対応であるため、GPUデバイスの帯域幅が制約を受けてしまっている。
+> 5070Ti は PCIe Gen 5、3070Ti は PCIe Gen 4に対応しているので、本来であればより高速な通信が可能。
+
+別のデスクトップPCのマザーボードは Z790 Steel Legend（こちらは上段スロットがPCIe Gen 5に対応）を使用しているので、帯域幅としてはより大きくできる。
+
+|             | B550 TOMAHAWK | Z790 Steel Legend WiFi |
+| ----------- | ---------------- | ---------------------- |
+| RAM         | DDR4             | DDR5               |
+| PCIeスロット上段  | PCIe 4.0 x16     | PCIe 5.0 x16       |
+| PCIeスロット下段 | PCIe 3.0 x4      | PCIe 4.0 x4        |
+| PCIeスロット下段の理論帯域     | 約3.9 GB/s        | 約7.9 GB/s          |
+
+とはいえ、今回のデュアルGPU構成でのテストは、単純に「CPU/RAMへ逃がしていたモデル層を2枚目のGPUへ配置する」ことによる高速化の効果を検証するものであり、モデルを層分割して載せるだけであれば（CPUオフロード時との比較においては）デバイス間通信の帯域幅の制約が推論速度を大幅に制限するとは考えにくいため、特に追加の検証はしていない。
+
+:::
+
+# 推論速度の比較
+
+推論速度の評価は以下のプロンプトに対して実施した。
+
+```console
+"""
+次の三次方程式を複素数の範囲ですべて解いてください。
+
+x^3 - 3x^2 + 4x - 4 = 0
+
+必要な導出を簡潔に示し、最後の1行を
+
+FINAL: ...
+
+の形式で全ての解を列挙してください。
+"""
+```
+
+計測用のPythonスクリプトは以下の通り。
+
+<details><summary>計測用のPythonスクリプト</summary>
+
+```py:ollama_benchmark_4k.py
+#!/usr/bin/env python3
+
+import csv
+import json
+import statistics as stats
+import time
+import urllib.request
+from datetime import datetime
+from pathlib import Path
+
+
+# ============================================================
+# User settings
+# ============================================================
+
+OLLAMA_URL = "http://127.0.0.1:11434/api/chat"
+MODEL = "qwen3.8:27b"
+
+# ここだけ差し替えれば別問題を測定可能
+PROMPT = """
+次の三次方程式を複素数の範囲ですべて解いてください。
+
+x^3 - 3x^2 + 4x - 4 = 0
+
+必要な導出を簡潔に示し、最後の1行を
+
+FINAL: ...
+
+の形式で全ての解を列挙してください。
+"""
+
+# False / True / "low" / "medium" / "high" / "max"
+THINK = "low"
+
+# 本測定回数
+RUNS = 5
+
+# 本測定前のウォームアップ
+WARMUP_RUNS = 1
+
+KEEP_ALIVE = "1h"
+
+OPTIONS = {
+    "num_ctx": 4096,
+    "num_predict": 4096,
+
+    # Thinking mode向けQwen推奨値を基本とする
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+
+    "repeat_penalty": 1.0,
+
+    # 純粋な速度比較では固定seedを推奨
+    "seed": 42,
+}
+
+OUTDIR = Path("ollama_benchmark_results")
+
+
+# ============================================================
+# Utility
+# ============================================================
+
+def ns_to_s(value):
+    """nanoseconds -> seconds"""
+    return (value or 0) / 1e9
+
+
+def safe_rate(count, duration_ns):
+    """tokens / second"""
+    if not count or not duration_ns:
+        return float("nan")
+
+    return count / (duration_ns / 1e9)
+
+
+def finite_values(rows, key):
+    vals = []
+
+    for row in rows:
+        value = row[key]
+
+        if (
+            isinstance(value, (int, float))
+            and value == value     # NaNを除外
+        ):
+            vals.append(value)
+
+    return vals
+
+
+def mean_sd(rows, key):
+    vals = finite_values(rows, key)
+
+    if not vals:
+        return float("nan"), float("nan")
+
+    mean = stats.mean(vals)
+
+    if len(vals) >= 2:
+        sd = stats.stdev(vals)
+    else:
+        sd = 0.0
+
+    return mean, sd
+
+
+def fmt(value, digits=3):
+    if isinstance(value, float) and value != value:
+        return "N/A"
+
+    return f"{value:.{digits}f}"
+
+
+# ============================================================
+# Ollama benchmark
+# ============================================================
+
+def run_once(prompt, *, num_predict_override=None):
+
+    options = dict(OPTIONS)
+
+    if num_predict_override is not None:
+        options["num_predict"] = num_predict_override
+
+    payload = {
+        "model": MODEL,
+
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        ],
+
+        "think": THINK,
+        "stream": True,
+        "keep_alive": KEEP_ALIVE,
+
+        "options": options,
+    }
+
+    request = urllib.request.Request(
+        OLLAMA_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json"
+        },
+        method="POST",
+    )
+
+    # --------------------------------------------------------
+    # Client-side timing
+    # --------------------------------------------------------
+
+    t0 = time.perf_counter()
+
+    t_first_any = None
+    t_first_thinking = None
+    t_first_content = None
+
+    thinking_parts = []
+    content_parts = []
+
+    final_chunk = None
+
+    # --------------------------------------------------------
+    # Streaming request
+    # --------------------------------------------------------
+
+    with urllib.request.urlopen(
+        request,
+        timeout=None,
+    ) as response:
+
+        for raw_line in response:
+
+            if not raw_line.strip():
+                continue
+
+            chunk = json.loads(raw_line)
+
+            now = time.perf_counter()
+
+            message = chunk.get("message") or {}
+
+            thinking = message.get("thinking") or ""
+            content = message.get("content") or ""
+
+            # 最初の出力
+            if (
+                (thinking or content)
+                and t_first_any is None
+            ):
+                t_first_any = now
+
+            # 最初のThinking token
+            if (
+                thinking
+                and t_first_thinking is None
+            ):
+                t_first_thinking = now
+
+            # 最初のfinal answer token
+            if (
+                content
+                and t_first_content is None
+            ):
+                t_first_content = now
+
+            if thinking:
+                thinking_parts.append(thinking)
+
+            if content:
+                content_parts.append(content)
+
+            if chunk.get("done"):
+                final_chunk = chunk
+
+    t_end = time.perf_counter()
+
+    if final_chunk is None:
+        raise RuntimeError(
+            "Stream ended without a done=true chunk."
+        )
+
+    thinking_text = "".join(thinking_parts)
+    content_text = "".join(content_parts)
+
+    # --------------------------------------------------------
+    # Ollama server-side metrics
+    # --------------------------------------------------------
+
+    total_ns = final_chunk.get(
+        "total_duration", 0
+    )
+
+    load_ns = final_chunk.get(
+        "load_duration", 0
+    )
+
+    prompt_ns = final_chunk.get(
+        "prompt_eval_duration", 0
+    )
+
+    eval_ns = final_chunk.get(
+        "eval_duration", 0
+    )
+
+    result = {
+
+        # Client-observed latency
+        "wall_s":
+            t_end - t0,
+
+        "ttft_any_s":
+            (t_first_any - t0)
+            if t_first_any
+            else float("nan"),
+
+        "ttft_thinking_s":
+            (t_first_thinking - t0)
+            if t_first_thinking
+            else float("nan"),
+
+        "ttft_answer_s":
+            (t_first_content - t0)
+            if t_first_content
+            else float("nan"),
+
+        # Thinking開始からfinal answer開始まで
+        "thinking_phase_s":
+            (
+                t_first_content
+                - t_first_thinking
+            )
+            if (
+                t_first_content
+                and t_first_thinking
+            )
+            else float("nan"),
+
+        # Ollama server timing
+        "server_total_s":
+            ns_to_s(total_ns),
+
+        "load_s":
+            ns_to_s(load_ns),
+
+        # Prompt / prefill
+        "prompt_eval_s":
+            ns_to_s(prompt_ns),
+
+        "prompt_eval_count":
+            final_chunk.get(
+                "prompt_eval_count", 0
+            ),
+
+        "prompt_tok_s":
+            safe_rate(
+                final_chunk.get(
+                    "prompt_eval_count", 0
+                ),
+                prompt_ns,
+            ),
+
+        # Generation / decode
+        "eval_s":
+            ns_to_s(eval_ns),
+
+        "eval_count":
+            final_chunk.get(
+                "eval_count", 0
+            ),
+
+        "decode_tok_s":
+            safe_rate(
+                final_chunk.get(
+                    "eval_count", 0
+                ),
+                eval_ns,
+            ),
+
+        # Thinking / final answer sizes
+        "thinking_chars":
+            len(thinking_text),
+
+        "answer_chars":
+            len(content_text),
+
+        "done_reason":
+            final_chunk.get(
+                "done_reason", ""
+            ),
+
+        # Full outputs
+        "thinking":
+            thinking_text,
+
+        "answer":
+            content_text,
+    }
+
+    return result
+
+
+# ============================================================
+# Main
+# ============================================================
+
+def main():
+
+    OUTDIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    timestamp = datetime.now().strftime(
+        "%Y%m%d_%H%M%S"
+    )
+
+    print(
+        f"Model   : {MODEL}"
+    )
+
+    print(
+        f"Think   : {THINK}"
+    )
+
+    print(
+        f"Runs    : {RUNS}"
+        f" (+ {WARMUP_RUNS} warm-up)"
+    )
+
+    print(
+        f"Options : {OPTIONS}"
+    )
+
+    print()
+
+    # --------------------------------------------------------
+    # Warm-up
+    #
+    # 同じcontext / think構成でrunnerを準備するが、
+    # 無駄に長い回答を生成しない。
+    # --------------------------------------------------------
+
+    for i in range(WARMUP_RUNS):
+
+        print(
+            f"Warm-up "
+            f"{i + 1}/{WARMUP_RUNS} ...",
+            flush=True,
+        )
+
+        run_once(
+            "Reply with only: OK",
+            num_predict_override=16,
+        )
+
+    # --------------------------------------------------------
+    # Benchmark
+    # --------------------------------------------------------
+
+    rows = []
+
+    for i in range(RUNS):
+
+        print(
+            f"Run {i + 1}/{RUNS} ...",
+            flush=True,
+        )
+
+        result = run_once(PROMPT)
+
+        result["run"] = i + 1
+
+        rows.append(result)
+
+        print(
+            f"  prompt="
+            f"{result['prompt_eval_count']} tok, "
+
+            f"prefill="
+            f"{fmt(result['prompt_tok_s'], 2)} tok/s, "
+
+            f"output="
+            f"{result['eval_count']} tok, "
+
+            f"decode="
+            f"{fmt(result['decode_tok_s'], 2)} tok/s, "
+
+            f"TTFT="
+            f"{fmt(result['ttft_any_s'])} s, "
+
+            f"answer-start="
+            f"{fmt(result['ttft_answer_s'])} s, "
+
+            f"wall="
+            f"{fmt(result['wall_s'])} s"
+        )
+
+    # --------------------------------------------------------
+    # Save raw outputs
+    # --------------------------------------------------------
+
+    jsonl_path = (
+        OUTDIR
+        / f"raw_{timestamp}.jsonl"
+    )
+
+    with jsonl_path.open(
+        "w",
+        encoding="utf-8",
+    ) as f:
+
+        for result in rows:
+
+            f.write(
+                json.dumps(
+                    result,
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
+    # --------------------------------------------------------
+    # Save compact CSV
+    # --------------------------------------------------------
+
+    csv_path = (
+        OUTDIR
+        / f"runs_{timestamp}.csv"
+    )
+
+    csv_fields = [
+        "run",
+
+        "wall_s",
+
+        "ttft_any_s",
+        "ttft_thinking_s",
+        "ttft_answer_s",
+        "thinking_phase_s",
+
+        "server_total_s",
+        "load_s",
+
+        "prompt_eval_count",
+        "prompt_eval_s",
+        "prompt_tok_s",
+
+        "eval_count",
+        "eval_s",
+        "decode_tok_s",
+
+        "thinking_chars",
+        "answer_chars",
+
+        "done_reason",
+    ]
+
+    with csv_path.open(
+        "w",
+        newline="",
+        encoding="utf-8",
+    ) as f:
+
+        writer = csv.DictWriter(
+            f,
+            fieldnames=csv_fields,
+            extrasaction="ignore",
+        )
+
+        writer.writeheader()
+        writer.writerows(rows)
+
+    # --------------------------------------------------------
+    # Statistics
+    # --------------------------------------------------------
+
+    metrics = [
+
+        (
+            "TTFT any [s]",
+            "ttft_any_s",
+        ),
+
+        (
+            "TTFT thinking [s]",
+            "ttft_thinking_s",
+        ),
+
+        (
+            "Answer start [s]",
+            "ttft_answer_s",
+        ),
+
+        (
+            "Thinking phase [s]",
+            "thinking_phase_s",
+        ),
+
+        (
+            "Prompt eval [s]",
+            "prompt_eval_s",
+        ),
+
+        (
+            "Prompt throughput [tok/s]",
+            "prompt_tok_s",
+        ),
+
+        (
+            "Decode [s]",
+            "eval_s",
+        ),
+
+        (
+            "Decode throughput [tok/s]",
+            "decode_tok_s",
+        ),
+
+        (
+            "Server total [s]",
+            "server_total_s",
+        ),
+
+        (
+            "Wall [s]",
+            "wall_s",
+        ),
+
+        (
+            "Output tokens",
+            "eval_count",
+        ),
+    ]
+
+    print()
+    print("=== Mean ± SD ===")
+
+    for label, key in metrics:
+
+        mean, sd = mean_sd(
+            rows,
+            key,
+        )
+
+        print(
+            f"{label:28s}: "
+            f"{fmt(mean, 3)} "
+            f"± "
+            f"{fmt(sd, 3)}"
+        )
+
+    print()
+
+    print(
+        f"Raw outputs : {jsonl_path}"
+    )
+
+    print(
+        f"Run metrics : {csv_path}"
+    )
+
+
+if __name__ == "__main__":
+    main()
+```
+
+</details>
+
+Thinkモードは有効にしているが、ここでは `low` に設定している。
+
+> Qwen3.8-27Bの thinking effort は `xhigh` がデフォルトだが、そのままだとReasoningが延々と続いてコンテキスト長不足で推論が打ち切られてしまうという既知の問題がある。記事執筆時点では、現状のQwen3.8-27Bに関しては `low` の設定が最もコストパフォーマンスに優れるとされている。
+
+スクリプト中の `OPTIONS` の "num_ctx" の値を変更することでコンテキスト長を変更できる。上記のスクリプトでは 4k に設定されている。
+
+* * *
+
+以下、5070 Tiにディスプレイ（I-O DATA 27型ワイド LCD-AH271XD）を1枚のみ接続した状態で検証を実施した。
+
+## 5070 Ti のみの場合
+
+まず 5070 Ti のみを認識させた状態で検証を実施した。Ollama内の `override.conf` において環境変数を以下のように設定する。
+
+```console:/etc/systemd/system/ollama.service.d/override.conf
+Environment="CUDA_VISIBLE_DEVICES=GPU-926f28bc-9b44-7b7c-e063-2b12d76864d2"
+```
+
+> `sudo vi /etc/systemd/system/ollama.service.d/override.conf` などにより編集して上書き保存する。もう一方のGPUを認識させるには、この行を削除もしくはコメントアウトすればよい。
+
+> `override.conf` 全体としては以下のようになっている。
+> ```:override.conf
+> [Service]
+> Environment="OLLAMA_KV_CACHE_TYPE=q8_0"
+> Environment="OLLAMA_FLASH_ATTENTION=1"
+> Environment="OLLAMA_KEEP_ALIVE=1h"       # <- 無くても良い
+> Environment="OLLAMA_DEBUG=1"             # <- デバッグ用
+> Environment="CUDA_VISIBLE_DEVICES=GPU-926f28bc-9b44-7b7c-e063-2b12d76864d2"
+> ```
+
+念のため、systemdへ設定を再読み込みしてからOllamaサーバーを完全に再起動し、モデルをリロードしておく。
+
+```:モデルをリロードする
+sudo systemctl daemon-reload
+sudo systemctl restart ollama
+```
+
+### コンテキスト長 4k の場合
+
+**➡ 平均速度 14.782 tok/s、29%/71% CPU/GPU オフロード**
+
+<details><summary>詳細（シングルGPU、コンテキスト長 4k）</summary>
+
+```console:測定結果
+Model   : qwen3.8:27b
+Think   : low
+Runs    : 5 (+ 1 warm-up)
+Options : {'num_ctx': 4096, 'num_predict': 4096, 'temperature': 1.0, 'top_p': 0.95, 'top_k': 20, 'min_p': 0.0, 'repeat_penalty': 1.0, 'seed': 42}
+
+Warm-up 1/1 ...
+Run 1/5 ...
+  prompt=104 tok, prefill=115.27 tok/s, output=592 tok, decode=14.74 tok/s, TTFT=1.158 s, answer-start=19.704 s, wall=41.330 s
+Run 2/5 ...
+  prompt=104 tok, prefill=319.07 tok/s, output=592 tok, decode=14.94 tok/s, TTFT=0.722 s, answer-start=19.681 s, wall=40.342 s
+Run 3/5 ...
+  prompt=104 tok, prefill=347.60 tok/s, output=592 tok, decode=14.93 tok/s, TTFT=0.564 s, answer-start=19.228 s, wall=40.218 s
+Run 4/5 ...
+  prompt=104 tok, prefill=338.47 tok/s, output=592 tok, decode=14.77 tok/s, TTFT=0.568 s, answer-start=19.460 s, wall=40.646 s
+Run 5/5 ...
+  prompt=104 tok, prefill=329.98 tok/s, output=592 tok, decode=14.53 tok/s, TTFT=0.572 s, answer-start=19.856 s, wall=41.315 s
+
+=== Mean ± SD ===
+TTFT any [s]                : 0.717 ± 0.255
+TTFT thinking [s]           : 0.717 ± 0.255
+Answer start [s]            : 19.586 ± 0.245
+Thinking phase [s]          : 18.869 ± 0.286
+Prompt eval [s]             : 0.430 ± 0.264
+Prompt throughput [tok/s]   : 290.079 ± 98.287
+Decode [s]                  : 40.053 ± 0.457
+Decode throughput [tok/s]   : 14.782 ± 0.168
+Server total [s]            : 40.769 ± 0.528
+Wall [s]                    : 40.770 ± 0.528
+Output tokens               : 592.000 ± 0.000
+```
+
+```console
+$ ollama ps
+NAME           ID              SIZE     PROCESSOR          CONTEXT    UNTIL
+qwen3.8:27b    22130167c4c2    18 GB    29%/71% CPU/GPU    4096       59 minutes from now
+$ nvidia-smi
+Wed Aug 19 21:03:37 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.57                 Driver Version: 591.86         CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+|  0%   33C    P8              3W /  320W |       0MiB /   8192MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+|  0%   41C    P1             43W /  300W |   14687MiB /  16303MiB |     45%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A           21482      C   /llama-server                         N/A      |
+|    1   N/A  N/A           21482      C   /llama-server                         N/A      |
++-----------------------------------------------------------------------------------------+
+```
+
+```console:モデルの読み込み状態
+common_params_fit_impl: filling dense layers back-to-front:
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti): 48 layers,  12108 MiB used,   2152 MiB free
+load_tensors: offloaded 48/66 layers to GPU
+load_tensors:   CPU_Mapped model buffer size =  4721.41 MiB
+load_tensors:        CUDA0 model buffer size = 11300.06 MiB
+llama_kv_cache:        CPU KV buffer size =    34.00 MiB
+llama_kv_cache:      CUDA0 KV buffer size =   102.00 MiB
+llama_kv_cache: size =  136.00 MiB (  4096 cells,  16 layers,  1/1 seqs), K (q8_0):   68.00 MiB, V (q8_0):   68.00 MiB
+llama_memory_recurrent:        CPU RS buffer size =   218.20 MiB
+llama_memory_recurrent:      CUDA0 RS buffer size =   529.92 MiB
+llama_memory_recurrent: size =  748.12 MiB (     1 cells,  64 layers,  1 seqs  4 rs_seq), R (f32):   28.12 MiB, S (f32):  720.00 MiB
+llama_kv_cache:      CUDA0 KV buffer size =    16.00 MiB
+llama_kv_cache: size =   16.00 MiB (  4096 cells,   1 layers,  1/1 seqs), K (f16):    8.00 MiB, V (f16):    8.00 MiB
+```
+
+</details>
+
+
+### コンテキスト長 8k の場合
+
+**➡ 平均速度 14.674 tok/s、29%/71% CPU/GPU オフロード**
+
+<details><summary>詳細（シングルGPU、コンテキスト長 8k）</summary>
+
+```console:測定結果
+Model   : qwen3.8:27b
+Think   : low
+Runs    : 5 (+ 1 warm-up)
+Options : {'num_ctx': 8192, 'num_predict': 4096, 'temperature': 1.0, 'top_p': 0.95, 'top_k': 20, 'min_p': 0.0, 'repeat_penalty': 1.0, 'seed': 42}
+
+Warm-up 1/1 ...
+Run 1/5 ...
+  prompt=104 tok, prefill=114.68 tok/s, output=592 tok, decode=14.77 tok/s, TTFT=1.193 s, answer-start=19.874 s, wall=41.277 s
+Run 2/5 ...
+  prompt=104 tok, prefill=324.58 tok/s, output=592 tok, decode=14.62 tok/s, TTFT=0.701 s, answer-start=19.857 s, wall=41.191 s
+Run 3/5 ...
+  prompt=104 tok, prefill=356.62 tok/s, output=592 tok, decode=14.68 tok/s, TTFT=0.549 s, answer-start=19.703 s, wall=40.875 s
+Run 4/5 ...
+  prompt=104 tok, prefill=345.40 tok/s, output=592 tok, decode=14.58 tok/s, TTFT=0.559 s, answer-start=19.807 s, wall=41.163 s
+Run 5/5 ...
+  prompt=104 tok, prefill=349.33 tok/s, output=592 tok, decode=14.72 tok/s, TTFT=0.563 s, answer-start=19.640 s, wall=40.782 s
+
+=== Mean ± SD ===
+TTFT any [s]                : 0.713 ± 0.276
+TTFT thinking [s]           : 0.713 ± 0.276
+Answer start [s]            : 19.776 ± 0.101
+Thinking phase [s]          : 19.063 ± 0.222
+Prompt eval [s]             : 0.424 ± 0.270
+Prompt throughput [tok/s]   : 298.122 ± 103.234
+Decode [s]                  : 40.345 ± 0.208
+Decode throughput [tok/s]   : 14.674 ± 0.075
+Server total [s]            : 41.057 ± 0.216
+Wall [s]                    : 41.058 ± 0.216
+Output tokens               : 592.000 ± 0.000
+```
+
+```console
+$ ollama ps
+NAME           ID              SIZE     PROCESSOR          CONTEXT    UNTIL
+qwen3.8:27b    22130167c4c2    18 GB    29%/71% CPU/GPU    8192       59 minutes from now
+$ nvidia-smi
+Wed Aug 19 22:14:06 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.57                 Driver Version: 591.86         CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+|  0%   36C    P8              4W /  320W |       0MiB /   8192MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+|  0%   50C    P3             66W /  300W |   14812MiB /  16303MiB |     25%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+```
+
+```console:モデルの読み込み状態
+common_params_fit_impl: filling dense layers back-to-front:
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti): 48 layers,  12225 MiB used,   2035 MiB free
+load_tensors: offloaded 48/66 layers to GPU
+load_tensors:   CPU_Mapped model buffer size =  4721.41 MiB
+load_tensors:        CUDA0 model buffer size = 11300.06 MiB
+llama_kv_cache:        CPU KV buffer size =    68.00 MiB
+llama_kv_cache:      CUDA0 KV buffer size =   204.00 MiB
+llama_kv_cache: size =  272.00 MiB (  8192 cells,  16 layers,  1/1 seqs), K (q8_0):  136.00 MiB, V (q8_0):  136.00 MiB
+llama_memory_recurrent:        CPU RS buffer size =   218.20 MiB
+llama_memory_recurrent:      CUDA0 RS buffer size =   529.92 MiB
+llama_memory_recurrent: size =  748.12 MiB (     1 cells,  64 layers,  1 seqs  4 rs_seq), R (f32):   28.12 MiB, S (f32):  720.00 MiB
+llama_kv_cache:      CUDA0 KV buffer size =    32.00 MiB
+llama_kv_cache: size =   32.00 MiB (  8192 cells,   1 layers,  1/1 seqs), K (f16):   16.00 MiB, V (f16):   16.00 MiB
+```
+
+</details>
+
+
+### コンテキスト長 16k の場合
+
+**➡ 平均速度 14.023 tok/s、31%/69% CPU/GPU オフロード**
+
+<details><summary>詳細（シングルGPU、コンテキスト長 16k）</summary>
+
+```console:測定結果
+Model   : qwen3.8:27b
+Think   : low
+Runs    : 5 (+ 1 warm-up)
+Options : {'num_ctx': 16384, 'num_predict': 4096, 'temperature': 1.0, 'top_p': 0.95, 'top_k': 20, 'min_p': 0.0, 'repeat_penalty': 1.0, 'seed': 42}
+
+Warm-up 1/1 ...
+Run 1/5 ...
+  prompt=104 tok, prefill=113.38 tok/s, output=609 tok, decode=14.15 tok/s, TTFT=1.177 s, answer-start=20.824 s, wall=44.216 s
+Run 2/5 ...
+  prompt=104 tok, prefill=314.42 tok/s, output=609 tok, decode=13.98 tok/s, TTFT=0.709 s, answer-start=20.925 s, wall=44.270 s
+Run 3/5 ...
+  prompt=104 tok, prefill=328.33 tok/s, output=609 tok, decode=14.10 tok/s, TTFT=0.576 s, answer-start=20.306 s, wall=43.782 s
+Run 4/5 ...
+  prompt=104 tok, prefill=337.62 tok/s, output=609 tok, decode=13.96 tok/s, TTFT=0.568 s, answer-start=20.462 s, wall=44.187 s
+Run 5/5 ...
+  prompt=104 tok, prefill=331.80 tok/s, output=609 tok, decode=13.93 tok/s, TTFT=0.566 s, answer-start=20.739 s, wall=44.296 s
+
+=== Mean ± SD ===
+TTFT any [s]                : 0.719 ± 0.263
+TTFT thinking [s]           : 0.719 ± 0.263
+Answer start [s]            : 20.651 ± 0.259
+Thinking phase [s]          : 19.932 ± 0.256
+Prompt eval [s]             : 0.437 ± 0.268
+Prompt throughput [tok/s]   : 285.111 ± 96.381
+Decode [s]                  : 43.431 ± 0.294
+Decode throughput [tok/s]   : 14.023 ± 0.095
+Server total [s]            : 44.149 ± 0.210
+Wall [s]                    : 44.150 ± 0.210
+Output tokens               : 609.000 ± 0.000
+```
+
+```console
+$ ollama ps
+NAME           ID              SIZE     PROCESSOR          CONTEXT    UNTIL
+qwen3.8:27b    22130167c4c2    18 GB    31%/69% CPU/GPU    16384      59 minutes from now
+$ nvidia-smi
+Wed Aug 19 22:18:10 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.57                 Driver Version: 591.86         CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+|  0%   34C    P8              4W /  320W |       0MiB /   8192MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+| 32%   48C    P3             66W /  300W |   14820MiB /  16303MiB |     24%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+```
+
+```console:モデルの読み込み状態
+common_params_fit_impl: filling dense layers back-to-front:
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti): 47 layers,  12231 MiB used,   2029 MiB free
+load_tensors: offloaded 47/66 layers to GPU
+load_tensors:   CPU_Mapped model buffer size =  4927.18 MiB
+load_tensors:        CUDA0 model buffer size = 11094.29 MiB
+llama_kv_cache:        CPU KV buffer size =   136.00 MiB
+llama_kv_cache:      CUDA0 KV buffer size =   408.00 MiB
+llama_kv_cache: size =  544.00 MiB ( 16384 cells,  16 layers,  1/1 seqs), K (q8_0):  272.00 MiB, V (q8_0):  272.00 MiB
+llama_memory_recurrent:        CPU RS buffer size =   233.79 MiB
+llama_memory_recurrent:      CUDA0 RS buffer size =   514.34 MiB
+llama_memory_recurrent: size =  748.12 MiB (     1 cells,  64 layers,  1 seqs  4 rs_seq), R (f32):   28.12 MiB, S (f32):  720.00 MiB
+llama_kv_cache:      CUDA0 KV buffer size =    64.00 MiB
+llama_kv_cache: size =   64.00 MiB ( 16384 cells,   1 layers,  1/1 seqs), K (f16):   32.00 MiB, V (f16):   32.00 MiB
+```
+
+</details>
+
+### コンテキスト長 32k の場合
+
+**➡ 平均速度 13.206 tok/s、34%/66% CPU/GPU オフロード**
+
+<details><summary>詳細（シングルGPU、コンテキスト長 32k）</summary>
+
+```console:測定結果
+Model   : qwen3.8:27b
+Think   : low
+Runs    : 5 (+ 1 warm-up)
+Options : {'num_ctx': 32768, 'num_predict': 4096, 'temperature': 1.0, 'top_p': 0.95, 'top_k': 20, 'min_p': 0.0, 'repeat_penalty': 1.0, 'seed': 42}
+
+Warm-up 1/1 ...
+Run 1/5 ...
+  prompt=104 tok, prefill=107.78 tok/s, output=766 tok, decode=13.38 tok/s, TTFT=1.216 s, answer-start=30.963 s, wall=58.450 s
+Run 2/5 ...
+  prompt=104 tok, prefill=292.12 tok/s, output=766 tok, decode=13.49 tok/s, TTFT=0.744 s, answer-start=30.658 s, wall=57.542 s
+Run 3/5 ...
+  prompt=104 tok, prefill=313.74 tok/s, output=766 tok, decode=13.26 tok/s, TTFT=0.590 s, answer-start=30.731 s, wall=58.339 s
+Run 4/5 ...
+  prompt=104 tok, prefill=305.30 tok/s, output=766 tok, decode=12.73 tok/s, TTFT=0.615 s, answer-start=31.328 s, wall=60.765 s
+Run 5/5 ...
+  prompt=104 tok, prefill=323.63 tok/s, output=766 tok, decode=13.16 tok/s, TTFT=0.580 s, answer-start=31.070 s, wall=58.778 s
+
+=== Mean ± SD ===
+TTFT any [s]                : 0.749 ± 0.269
+TTFT thinking [s]           : 0.749 ± 0.269
+Answer start [s]            : 30.950 ± 0.270
+Thinking phase [s]          : 30.201 ± 0.399
+Prompt eval [s]             : 0.463 ± 0.281
+Prompt throughput [tok/s]   : 268.513 ± 90.596
+Decode [s]                  : 58.026 ± 1.300
+Decode throughput [tok/s]   : 13.206 ± 0.291
+Server total [s]            : 58.774 ± 1.202
+Wall [s]                    : 58.775 ± 1.202
+Output tokens               : 766.000 ± 0.000
+```
+
+```console
+$ ollama ps
+NAME           ID              SIZE     PROCESSOR          CONTEXT    UNTIL
+qwen3.8:27b    22130167c4c2    18 GB    34%/66% CPU/GPU    32768      59 minutes from now
+$ nvidia-smi
+Wed Aug 19 22:23:01 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.57                 Driver Version: 591.86         CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+|  0%   33C    P8              4W /  320W |       0MiB /   8192MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+| 32%   45C    P3             60W /  300W |   14926MiB /  16303MiB |     23%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+```
+
+```console:モデルの読み込み状態
+common_params_fit_impl: filling dense layers back-to-front:
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti): 45 layers,  12276 MiB used,   1984 MiB free
+load_tensors: offloaded 45/66 layers to GPU
+load_tensors:   CPU_Mapped model buffer size =  5355.88 MiB
+load_tensors:        CUDA0 model buffer size = 10665.58 MiB
+llama_kv_cache:        CPU KV buffer size =   340.00 MiB
+llama_kv_cache:      CUDA0 KV buffer size =   748.00 MiB
+llama_kv_cache: size = 1088.00 MiB ( 32768 cells,  16 layers,  1/1 seqs), K (q8_0):  544.00 MiB, V (q8_0):  544.00 MiB
+llama_memory_recurrent:        CPU RS buffer size =   249.38 MiB
+llama_memory_recurrent:      CUDA0 RS buffer size =   498.75 MiB
+llama_memory_recurrent: size =  748.12 MiB (     1 cells,  64 layers,  1 seqs  4 rs_seq), R (f32):   28.12 MiB, S (f32):  720.00 MiB
+llama_kv_cache:      CUDA0 KV buffer size =   128.00 MiB
+llama_kv_cache: size =  128.00 MiB ( 32768 cells,   1 layers,  1/1 seqs), K (f16):   64.00 MiB, V (f16):   64.00 MiB
+```
+
+</details>
+
+
+### コンテキスト長 64k の場合
+
+**➡ 平均速度 11.171 tok/s、41%/59% CPU/GPU オフロード**
+
+<details><summary>詳細（シングルGPU、コンテキスト長 64k）</summary>
+
+```console:測定結果
+Model   : qwen3.8:27b
+Think   : low
+Runs    : 5 (+ 1 warm-up)
+Options : {'num_ctx': 65536, 'num_predict': 4096, 'temperature': 1.0, 'top_p': 0.95, 'top_k': 20, 'min_p': 0.0, 'repeat_penalty': 1.0, 'seed': 42}
+
+Warm-up 1/1 ...
+Run 1/5 ...
+  prompt=104 tok, prefill=92.88 tok/s, output=592 tok, decode=11.42 tok/s, TTFT=1.385 s, answer-start=25.415 s, wall=53.217 s
+Run 2/5 ...
+  prompt=104 tok, prefill=258.33 tok/s, output=592 tok, decode=11.17 tok/s, TTFT=0.794 s, answer-start=25.654 s, wall=53.806 s
+Run 3/5 ...
+  prompt=104 tok, prefill=283.86 tok/s, output=592 tok, decode=11.17 tok/s, TTFT=0.624 s, answer-start=25.164 s, wall=53.600 s
+Run 4/5 ...
+  prompt=104 tok, prefill=229.54 tok/s, output=592 tok, decode=11.07 tok/s, TTFT=0.706 s, answer-start=25.664 s, wall=54.162 s
+Run 5/5 ...
+  prompt=104 tok, prefill=286.74 tok/s, output=592 tok, decode=11.02 tok/s, TTFT=0.616 s, answer-start=25.613 s, wall=54.355 s
+
+=== Mean ± SD ===
+TTFT any [s]                : 0.825 ± 0.321
+TTFT thinking [s]           : 0.825 ± 0.321
+Answer start [s]            : 25.502 ± 0.214
+Thinking phase [s]          : 24.677 ± 0.404
+Prompt eval [s]             : 0.541 ± 0.326
+Prompt throughput [tok/s]   : 230.270 ± 80.193
+Decode [s]                  : 53.003 ± 0.728
+Decode throughput [tok/s]   : 11.171 ± 0.155
+Server total [s]            : 53.827 ± 0.452
+Wall [s]                    : 53.828 ± 0.451
+Output tokens               : 592.000 ± 0.000
+```
+
+```console
+$ ollama ps
+NAME           ID              SIZE     PROCESSOR          CONTEXT    UNTIL
+qwen3.8:27b    22130167c4c2    19 GB    41%/59% CPU/GPU    65536      59 minutes from now
+$ nvidia-smi
+Wed Aug 19 22:34:51 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.57                 Driver Version: 591.86         CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+|  0%   32C    P8              4W /  320W |       0MiB /   8192MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+|  0%   52C    P3             51W /  300W |   15039MiB /  16303MiB |     22%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+```
+
+```console:モデルの読み込み状態
+common_params_fit_impl: filling dense layers back-to-front:
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti): 41 layers,  12217 MiB used,   2043 MiB free
+load_tensors: offloaded 41/66 layers to GPU
+load_tensors:   CPU_Mapped model buffer size =  6207.73 MiB
+load_tensors:        CUDA0 model buffer size =  9813.73 MiB
+llama_kv_cache:        CPU KV buffer size =   816.00 MiB
+llama_kv_cache:      CUDA0 KV buffer size =  1360.00 MiB
+llama_kv_cache: size = 2176.00 MiB ( 65536 cells,  16 layers,  1/1 seqs), K (q8_0): 1088.00 MiB, V (q8_0): 1088.00 MiB
+llama_memory_recurrent:        CPU RS buffer size =   296.13 MiB
+llama_memory_recurrent:      CUDA0 RS buffer size =   451.99 MiB
+llama_memory_recurrent: size =  748.12 MiB (     1 cells,  64 layers,  1 seqs  4 rs_seq), R (f32):   28.12 MiB, S (f32):  720.00 MiB
+llama_kv_cache:      CUDA0 KV buffer size =   256.00 MiB
+llama_kv_cache: size =  256.00 MiB ( 65536 cells,   1 layers,  1/1 seqs), K (f16):  128.00 MiB, V (f16):  128.00 MiB
+```
+
+</details>
+
+
+### コンテキスト長依存性まとめ（シングルGPU； 5070 Ti）
+
+q8_0 KV cacheはほぼ完全にcontext長に比例して増加している。これに伴ってGPU側に載せられる層数が減少していることも観察された。CPU側に載るモデル層数が増えるにしたがってDecode速度が減少している点も、自然な挙動と言える。
+
+| `num_ctx` | GPU offload | GPU/CPU 層数 | CPU_Mapped | KV cache |         Decode速度 |    4k比 |
+| --------: | ----------: | ----: | ---------: | ------: | ---------------: | -----: |
+|        4k |     71% GPU | 48/18 |   4721 MiB |  136 MiB | **14.782 tok/s** | 1.000× |
+|        8k |     71% GPU | 48/18 |   4721 MiB |  272 MiB | **14.674 tok/s** | 0.993× |
+|       16k |     69% GPU | 47/19 |   4927 MiB |  544 MiB | **14.023 tok/s** | 0.949× |
+|       32k |     66% GPU | 45/21 |   5356 MiB | 1088 MiB | **13.206 tok/s** | 0.893× |
+|       64k |     59% GPU | 41/25 |   6208 MiB | 2176 MiB | **11.171 tok/s** | 0.756× |
+
+コンテキスト長8kまでは追加のKVキャッシュ分がGPU側で吸収できており、モデルのlayer splitを変える必要がないため性能（Decode速度）がほぼ一定に保たれている。コンテキスト長を16kにしたときに初めて `48/66 → 47/66 layers` とモデルの層の載り方が変動し、この時点から速度低下が明瞭になっている。
+
+> 今回計測しているのは、**最大context windowとして4k～64kを予約した状態で短いpromptを処理した場合の性能**であるため、純粋にロードされる層の構成についての性能比較になっている。
+
+デュアルGPU構成にした場合に、これらの値がどの程度向上するかが本稿の主眼となる。
+
+## 5070 Ti + 3070 Ti の場合
+
+続いて、デュアルGPUの条件で検証を行った。
+
+systemdへ設定を再読み込みしてからOllamaサーバーを完全に再起動し、モデルをリロードする。
+
+```:モデルをリロードする
+sudo systemctl daemon-reload
+sudo systemctl restart ollama
+```
+
+### コンテキスト長 4k の場合
+
+**➡ 平均速度 45.081 tok/s、7%/93% CPU/GPU オフロード**
+
+<details><summary>詳細（デュアルGPU、コンテキスト長 4k）</summary>
+
+```console:測定結果
+Model   : qwen3.8:27b
+Think   : low
+Runs    : 5 (+ 1 warm-up)
+Options : {'num_ctx': 4096, 'num_predict': 4096, 'temperature': 1.0, 'top_p': 0.95, 'top_k': 20, 'min_p': 0.0, 'repeat_penalty': 1.0, 'seed': 42}
+
+Warm-up 1/1 ...
+Run 1/5 ...
+  prompt=104 tok, prefill=249.90 tok/s, output=686 tok, decode=45.16 tok/s, TTFT=0.682 s, answer-start=9.665 s, wall=15.874 s
+Run 2/5 ...
+  prompt=104 tok, prefill=536.53 tok/s, output=686 tok, decode=43.82 tok/s, TTFT=0.594 s, answer-start=10.076 s, wall=16.250 s
+Run 3/5 ...
+  prompt=104 tok, prefill=633.32 tok/s, output=686 tok, decode=45.27 tok/s, TTFT=0.427 s, answer-start=9.093 s, wall=15.580 s
+Run 4/5 ...
+  prompt=104 tok, prefill=690.71 tok/s, output=686 tok, decode=45.66 tok/s, TTFT=0.422 s, answer-start=9.210 s, wall=15.446 s
+Run 5/5 ...
+  prompt=104 tok, prefill=647.95 tok/s, output=686 tok, decode=45.50 tok/s, TTFT=0.424 s, answer-start=9.331 s, wall=15.501 s
+
+=== Mean ± SD ===
+TTFT any [s]                : 0.510 ± 0.121
+TTFT thinking [s]           : 0.510 ± 0.121
+Answer start [s]            : 9.475 ± 0.398
+Thinking phase [s]          : 8.965 ± 0.313
+Prompt eval [s]             : 0.217 ± 0.112
+Prompt throughput [tok/s]   : 551.685 ± 177.878
+Decode [s]                  : 15.220 ± 0.252
+Decode throughput [tok/s]   : 45.081 ± 0.734
+Server total [s]            : 15.729 ± 0.334
+Wall [s]                    : 15.730 ± 0.334
+Output tokens               : 686.000 ± 0.000
+```
+
+
+```console
+$ ollama ps
+NAME           ID              SIZE     PROCESSOR         CONTEXT    UNTIL
+qwen3.8:27b    22130167c4c2    18 GB    7%/93% CPU/GPU    4096       59 minutes from now
+$ nvidia-smi
+Wed Aug 19 00:14:03 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.57                 Driver Version: 591.86         CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+| 30%   44C    P2            111W /  320W |    3962MiB /   8192MiB |     38%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+| 32%   48C    P1            118W /  300W |   14923MiB /  16303MiB |     26%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+```
+
+```console:モデルの読み込み状態
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti):  16302 total,  10633 used,   3847 free vs. target of   1936
+common_params_fit_impl:   - CUDA1 (NVIDIA GeForce RTX 3070 Ti):   8191 total,   5987 used,    883 free vs. target of   3048
+common_params_fit_impl: filling dense layers back-to-front:
+common_params_fit_impl:   - CUDA1 (NVIDIA GeForce RTX 3070 Ti): 11 layers,   3613 MiB used,   3257 MiB free
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti): 53 layers,  12391 MiB used,   2089 MiB free
+load_tensors: offloaded 64/66 layers to GPU
+load_tensors:   CPU_Mapped model buffer size =  1163.19 MiB
+load_tensors:        CUDA0 model buffer size = 11500.26 MiB
+load_tensors:        CUDA1 model buffer size =  3358.02 MiB
+llama_kv_cache:      CUDA0 KV buffer size =   110.50 MiB
+llama_kv_cache:      CUDA1 KV buffer size =    25.50 MiB
+llama_kv_cache: size =  136.00 MiB (  4096 cells,  16 layers,  1/1 seqs), K (q8_0):   68.00 MiB, V (q8_0):   68.00 MiB
+llama_memory_recurrent:        CPU RS buffer size =    31.17 MiB
+llama_memory_recurrent:      CUDA0 RS buffer size =   623.44 MiB
+llama_memory_recurrent:      CUDA1 RS buffer size =    93.52 MiB
+llama_memory_recurrent: size =  748.12 MiB (     1 cells,  64 layers,  1 seqs  4 rs_seq), R (f32):   28.12 MiB, S (f32):  720.00 MiB
+llama_kv_cache:      CUDA1 KV buffer size =    16.00 MiB
+llama_kv_cache: size =   16.00 MiB (  4096 cells,   1 layers,  1/1 seqs), K (f16):    8.00 MiB, V (f16):    8.00 MiB
+```
+
+</details>
+
+### コンテキスト長 8k の場合
+
+**➡ 平均速度 45.457 tok/s、7%/93% CPU/GPU オフロード**
+
+<details><summary>詳細（デュアルGPU、コンテキスト長 8k）</summary>
+```console:測定結果
+Model   : qwen3.8:27b
+Think   : low
+Runs    : 5 (+ 1 warm-up)
+Options : {'num_ctx': 8192, 'num_predict': 4096, 'temperature': 1.0, 'top_p': 0.95, 'top_k': 20, 'min_p': 0.0, 'repeat_penalty': 1.0, 'seed': 42}
+
+Warm-up 1/1 ...
+Run 1/5 ...
+  prompt=104 tok, prefill=299.37 tok/s, output=686 tok, decode=45.99 tok/s, TTFT=0.630 s, answer-start=9.379 s, wall=15.546 s
+Run 2/5 ...
+  prompt=104 tok, prefill=554.42 tok/s, output=686 tok, decode=45.72 tok/s, TTFT=0.593 s, answer-start=9.454 s, wall=15.598 s
+Run 3/5 ...
+  prompt=104 tok, prefill=686.84 tok/s, output=686 tok, decode=46.10 tok/s, TTFT=0.418 s, answer-start=9.070 s, wall=15.299 s
+Run 4/5 ...
+  prompt=104 tok, prefill=660.54 tok/s, output=686 tok, decode=44.77 tok/s, TTFT=0.430 s, answer-start=9.397 s, wall=15.753 s
+Run 5/5 ...
+  prompt=104 tok, prefill=664.56 tok/s, output=686 tok, decode=44.70 tok/s, TTFT=0.415 s, answer-start=9.279 s, wall=15.760 s
+
+=== Mean ± SD ===
+TTFT any [s]                : 0.497 ± 0.105
+TTFT thinking [s]           : 0.497 ± 0.105
+Answer start [s]            : 9.316 ± 0.151
+Thinking phase [s]          : 8.818 ± 0.121
+Prompt eval [s]             : 0.200 ± 0.084
+Prompt throughput [tok/s]   : 573.147 ± 161.420
+Decode [s]                  : 15.094 ± 0.224
+Decode throughput [tok/s]   : 45.457 ± 0.672
+Server total [s]            : 15.590 ± 0.189
+Wall [s]                    : 15.591 ± 0.189
+Output tokens               : 686.000 ± 0.000
+```
+
+
+```console
+$ ollama ps
+NAME           ID              SIZE     PROCESSOR         CONTEXT    UNTIL
+qwen3.8:27b    22130167c4c2    18 GB    7%/93% CPU/GPU    8192       59 minutes from now
+$ nvidia-smi
+Tue Aug 18 23:42:06 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.57                 Driver Version: 591.86         CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+| 30%   44C    P2            122W /  320W |    4012MiB /   8192MiB |     27%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+| 30%   56C    P1            129W /  300W |   14980MiB /  16303MiB |     38%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+```
+
+```console:モデルの読み込み状態
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti):  16302 total,  10743 used,   3737 free vs. target of   1936
+common_params_fit_impl:   - CUDA1 (NVIDIA GeForce RTX 3070 Ti):   8191 total,   6046 used,    824 free vs. target of   3048
+common_params_fit_impl: filling dense layers back-to-front:
+common_params_fit_impl:   - CUDA1 (NVIDIA GeForce RTX 3070 Ti): 11 layers,   3642 MiB used,   3228 MiB free
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti): 53 layers,  12502 MiB used,   1978 MiB free
+load_tensors: offloaded 64/66 layers to GPU
+load_tensors:   CPU_Mapped model buffer size =  1163.19 MiB
+load_tensors:        CUDA0 model buffer size = 11500.26 MiB
+load_tensors:        CUDA1 model buffer size =  3358.02 MiB
+llama_kv_cache:      CUDA0 KV buffer size =   221.00 MiB
+llama_kv_cache:      CUDA1 KV buffer size =    51.00 MiB
+llama_kv_cache: size =  272.00 MiB (  8192 cells,  16 layers,  1/1 seqs), K (q8_0):  136.00 MiB, V (q8_0):  136.00 MiB
+llama_memory_recurrent:        CPU RS buffer size =    31.17 MiB
+llama_memory_recurrent:      CUDA0 RS buffer size =   623.44 MiB
+llama_memory_recurrent:      CUDA1 RS buffer size =    93.52 MiB
+llama_memory_recurrent: size =  748.12 MiB (     1 cells,  64 layers,  1 seqs  4 rs_seq), R (f32):   28.12 MiB, S (f32):  720.00 MiB
+llama_kv_cache:      CUDA1 KV buffer size =    32.00 MiB
+llama_kv_cache: size =   32.00 MiB (  8192 cells,   1 layers,  1/1 seqs), K (f16):   16.00 MiB, V (f16):   16.00 MiB
+```
+
+</details>
+
+### コンテキスト長 16k の場合
+
+**➡ 平均速度 34.964 tok/s、8%/92% CPU/GPU オフロード**
+
+<details><summary>詳細（デュアルGPU、コンテキスト長 16k）</summary>
+
+```console:測定結果
+Model   : qwen3.8:27b
+Think   : low
+Runs    : 5 (+ 1 warm-up)
+Options : {'num_ctx': 16384, 'num_predict': 4096, 'temperature': 1.0, 'top_p': 0.95, 'top_k': 20, 'min_p': 0.0, 'repeat_penalty': 1.0, 'seed': 42}
+
+Warm-up 1/1 ...
+Run 1/5 ...
+  prompt=104 tok, prefill=279.26 tok/s, output=631 tok, decode=35.60 tok/s, TTFT=0.661 s, answer-start=8.707 s, wall=18.384 s
+Run 2/5 ...
+  prompt=104 tok, prefill=470.65 tok/s, output=631 tok, decode=34.77 tok/s, TTFT=0.685 s, answer-start=9.140 s, wall=18.832 s
+Run 3/5 ...
+  prompt=104 tok, prefill=577.69 tok/s, output=631 tok, decode=34.87 tok/s, TTFT=0.448 s, answer-start=8.849 s, wall=18.546 s
+Run 4/5 ...
+  prompt=104 tok, prefill=559.95 tok/s, output=631 tok, decode=34.79 tok/s, TTFT=0.438 s, answer-start=8.808 s, wall=18.575 s
+Run 5/5 ...
+  prompt=104 tok, prefill=550.51 tok/s, output=631 tok, decode=34.79 tok/s, TTFT=0.447 s, answer-start=8.877 s, wall=18.586 s
+
+=== Mean ± SD ===
+TTFT any [s]                : 0.536 ± 0.126
+TTFT thinking [s]           : 0.536 ± 0.126
+Answer start [s]            : 8.876 ± 0.161
+Thinking phase [s]          : 8.340 ± 0.167
+Prompt eval [s]             : 0.230 ± 0.081
+Prompt throughput [tok/s]   : 487.611 ± 123.494
+Decode [s]                  : 18.049 ± 0.183
+Decode throughput [tok/s]   : 34.964 ± 0.359
+Server total [s]            : 18.584 ± 0.160
+Wall [s]                    : 18.584 ± 0.160
+Output tokens               : 631.000 ± 0.000
+```
+
+```console
+$ ollama ps
+NAME           ID              SIZE     PROCESSOR         CONTEXT    UNTIL
+qwen3.8:27b    22130167c4c2    18 GB    8%/92% CPU/GPU    16384      59 minutes from now
+$ nvidia-smi
+Tue Aug 18 23:55:10 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.57                 Driver Version: 591.86         CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+|  0%   42C    P3             76W /  320W |    4098MiB /   8192MiB |     40%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+| 32%   53C    P1            104W /  300W |   14985MiB /  16303MiB |     25%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+```
+
+```console:モデルの読み込み状態
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti):  16302 total,  10984 used,   3496 free vs. target of   1936
+common_params_fit_impl:   - CUDA1 (NVIDIA GeForce RTX 3070 Ti):   8191 total,   6185 used,    685 free vs. target of   3048
+common_params_fit_impl: filling dense layers back-to-front:
+common_params_fit_impl:   - CUDA1 (NVIDIA GeForce RTX 3070 Ti): 11 layers,   3713 MiB used,   3157 MiB free
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti): 52 layers,  12525 MiB used,   1955 MiB free
+load_tensors: offloaded 63/66 layers to GPU
+load_tensors:   CPU_Mapped model buffer size =  1403.76 MiB
+load_tensors:        CUDA0 model buffer size = 11259.68 MiB
+load_tensors:        CUDA1 model buffer size =  3358.02 MiB
+llama_kv_cache:      CUDA0 KV buffer size =   442.00 MiB
+llama_kv_cache:      CUDA1 KV buffer size =   102.00 MiB
+llama_kv_cache: size =  544.00 MiB ( 16384 cells,  16 layers,  1/1 seqs), K (q8_0):  272.00 MiB, V (q8_0):  272.00 MiB
+llama_memory_recurrent:        CPU RS buffer size =    46.76 MiB
+llama_memory_recurrent:      CUDA0 RS buffer size =   607.85 MiB
+llama_memory_recurrent:      CUDA1 RS buffer size =    93.52 MiB
+llama_memory_recurrent: size =  748.12 MiB (     1 cells,  64 layers,  1 seqs  4 rs_seq), R (f32):   28.12 MiB, S (f32):  720.00 MiB
+llama_kv_cache:      CUDA1 KV buffer size =    64.00 MiB
+llama_kv_cache: size =   64.00 MiB ( 16384 cells,   1 layers,  1/1 seqs), K (f16):   32.00 MiB, V (f16):   32.00 MiB
+```
+
+</details>
+
+
+### コンテキスト長 32k の場合
+
+**➡ 平均速度 18.525 tok/s、14%/86% CPU/GPU オフロード**
+
+<details><summary>詳細（デュアルGPU、コンテキスト長 32k）</summary>
+
+```console:測定結果
+Model   : qwen3.8:27b
+Think   : low
+Runs    : 5 (+ 1 warm-up)
+Options : {'num_ctx': 32768, 'num_predict': 4096, 'temperature': 1.0, 'top_p': 0.95, 'top_k': 20, 'min_p': 0.0, 'repeat_penalty': 1.0, 'seed': 42}
+
+Warm-up 1/1 ...
+Run 1/5 ...
+  prompt=104 tok, prefill=198.35 tok/s, output=642 tok, decode=20.28 tok/s, TTFT=0.816 s, answer-start=13.607 s, wall=32.480 s
+Run 2/5 ...
+  prompt=104 tok, prefill=340.35 tok/s, output=642 tok, decode=18.09 tok/s, TTFT=0.768 s, answer-start=16.128 s, wall=36.255 s
+Run 3/5 ...
+  prompt=104 tok, prefill=403.49 tok/s, output=642 tok, decode=17.87 tok/s, TTFT=0.532 s, answer-start=16.149 s, wall=36.452 s
+Run 4/5 ...
+  prompt=104 tok, prefill=427.39 tok/s, output=642 tok, decode=18.10 tok/s, TTFT=0.514 s, answer-start=15.852 s, wall=35.988 s
+Run 5/5 ...
+  prompt=104 tok, prefill=428.12 tok/s, output=642 tok, decode=18.29 tok/s, TTFT=0.506 s, answer-start=15.772 s, wall=35.611 s
+
+=== Mean ± SD ===
+TTFT any [s]                : 0.627 ± 0.152
+TTFT thinking [s]           : 0.627 ± 0.152
+Answer start [s]            : 15.502 ± 1.072
+Thinking phase [s]          : 14.874 ± 1.172
+Prompt eval [s]             : 0.315 ± 0.120
+Prompt throughput [tok/s]   : 359.541 ± 96.939
+Decode [s]                  : 34.730 ± 1.738
+Decode throughput [tok/s]   : 18.525 ± 0.989
+Server total [s]            : 35.357 ± 1.639
+Wall [s]                    : 35.357 ± 1.639
+Output tokens               : 642.000 ± 0.000
+```
+
+
+```
+$ ollama ps
+NAME           ID              SIZE     PROCESSOR          CONTEXT    UNTIL
+qwen3.8:27b    22130167c4c2    19 GB    14%/86% CPU/GPU    32768      59 minutes from now
+$ nvidia-smi
+Wed Aug 19 00:07:25 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.57                 Driver Version: 591.86         CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+|  0%   37C    P3             66W /  320W |    4068MiB /   8192MiB |     26%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+|  0%   47C    P3             83W /  300W |   14803MiB /  16303MiB |     23%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+```
+
+```console:モデルの読み込み状態
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti):  16302 total,  11486 used,   2994 free vs. target of   1936
+common_params_fit_impl:   - CUDA1 (NVIDIA GeForce RTX 3070 Ti):   8191 total,   6483 used,    387 free vs. target of   3048
+common_params_fit_impl: filling dense layers back-to-front:
+common_params_fit_impl:   - CUDA1 (NVIDIA GeForce RTX 3070 Ti): 10 layers,   3604 MiB used,   3266 MiB free
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti): 49 layers,  12312 MiB used,   2168 MiB free
+load_tensors: offloaded 59/66 layers to GPU
+load_tensors:   CPU_Mapped model buffer size =  2348.43 MiB
+load_tensors:        CUDA0 model buffer size = 10537.95 MiB
+load_tensors:        CUDA1 model buffer size =  3135.09 MiB
+llama_kv_cache:        CPU KV buffer size =    68.00 MiB
+llama_kv_cache:      CUDA0 KV buffer size =   884.00 MiB
+llama_kv_cache:      CUDA1 KV buffer size =   136.00 MiB
+llama_kv_cache: size = 1088.00 MiB ( 32768 cells,  16 layers,  1/1 seqs), K (q8_0):  544.00 MiB, V (q8_0):  544.00 MiB
+llama_memory_recurrent:        CPU RS buffer size =    93.52 MiB
+llama_memory_recurrent:      CUDA0 RS buffer size =   561.09 MiB
+llama_memory_recurrent:      CUDA1 RS buffer size =    93.52 MiB
+llama_memory_recurrent: size =  748.12 MiB (     1 cells,  64 layers,  1 seqs  4 rs_seq), R (f32):   28.12 MiB, S (f32):  720.00 MiB
+llama_kv_cache:      CUDA1 KV buffer size =   128.00 MiB
+llama_kv_cache: size =  128.00 MiB ( 32768 cells,   1 layers,  1/1 seqs), K (f16):   64.00 MiB, V (f16):   64.00 MiB
+```
+
+</details>
+
+### コンテキスト長 64k の場合
+
+**➡ 平均速度 14.459 tok/s、20%/80% CPU/GPU オフロード**
+
+<details><summary>詳細（デュアルGPU、コンテキスト長 64k）</summary>
+
+```console:測定結果
+$ python ollama_benchmark_64k.py
+Model   : qwen3.8:27b
+Think   : low
+Runs    : 5 (+ 1 warm-up)
+Options : {'num_ctx': 65536, 'num_predict': 4096, 'temperature': 1.0, 'top_p': 0.95, 'top_k': 20, 'min_p': 0.0, 'repeat_penalty': 1.0, 'seed': 42}
+
+Warm-up 1/1 ...
+Run 1/5 ...
+  prompt=104 tok, prefill=148.15 tok/s, output=724 tok, decode=14.72 tok/s, TTFT=0.961 s, answer-start=27.322 s, wall=50.134 s
+Run 2/5 ...
+  prompt=104 tok, prefill=307.35 tok/s, output=724 tok, decode=14.42 tok/s, TTFT=0.785 s, answer-start=27.649 s, wall=50.980 s
+Run 3/5 ...
+  prompt=104 tok, prefill=367.06 tok/s, output=724 tok, decode=14.40 tok/s, TTFT=0.543 s, answer-start=27.575 s, wall=50.831 s
+Run 4/5 ...
+  prompt=104 tok, prefill=351.84 tok/s, output=724 tok, decode=14.37 tok/s, TTFT=0.551 s, answer-start=27.545 s, wall=50.919 s
+Run 5/5 ...
+  prompt=104 tok, prefill=360.87 tok/s, output=724 tok, decode=14.38 tok/s, TTFT=0.550 s, answer-start=27.751 s, wall=50.906 s
+
+=== Mean ± SD ===
+TTFT any [s]                : 0.678 ± 0.188
+TTFT thinking [s]           : 0.678 ± 0.188
+Answer start [s]            : 27.568 ± 0.159
+Thinking phase [s]          : 26.890 ± 0.319
+Prompt eval [s]             : 0.381 ± 0.180
+Prompt throughput [tok/s]   : 307.055 ± 91.862
+Decode [s]                  : 50.076 ± 0.509
+Decode throughput [tok/s]   : 14.459 ± 0.149
+Server total [s]            : 50.753 ± 0.351
+Wall [s]                    : 50.754 ± 0.351
+Output tokens               : 724.000 ± 0.000
+```
+
+```
+$ ollama ps
+NAME           ID              SIZE     PROCESSOR          CONTEXT    UNTIL
+qwen3.8:27b    22130167c4c2    20 GB    20%/80% CPU/GPU    65536      59 minutes from now
+$ nvidia-smi
+Wed Aug 19 02:32:32 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.57                 Driver Version: 591.86         CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+|  0%   46C    P3             56W /  320W |    4236MiB /   8192MiB |     40%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+| 32%   48C    P3             51W /  300W |   14581MiB /  16303MiB |     16%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+```
+
+```console:モデルの読み込み状態
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti):  16302 total,  12490 used,   1990 free vs. target of   1936
+common_params_fit_impl:   - CUDA1 (NVIDIA GeForce RTX 3070 Ti):   8191 total,   7079 used,   -208 free vs. target of   3048
+common_params_fit_impl: filling dense layers back-to-front:
+common_params_fit_impl:   - CUDA1 (NVIDIA GeForce RTX 3070 Ti):  9 layers,   3644 MiB used,   3226 MiB free
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti): 45 layers,  12321 MiB used,   2159 MiB free
+load_tensors: offloaded 54/66 layers to GPU
+load_tensors:   CPU_Mapped model buffer size =  3423.21 MiB
+load_tensors:        CUDA0 model buffer size =  9703.75 MiB
+load_tensors:        CUDA1 model buffer size =  2894.51 MiB
+llama_kv_cache:        CPU KV buffer size =   408.00 MiB
+llama_kv_cache:      CUDA0 KV buffer size =  1496.00 MiB
+llama_kv_cache:      CUDA1 KV buffer size =   272.00 MiB
+llama_kv_cache: size = 2176.00 MiB ( 65536 cells,  16 layers,  1/1 seqs), K (q8_0): 1088.00 MiB, V (q8_0): 1088.00 MiB
+llama_memory_recurrent:        CPU RS buffer size =   140.27 MiB
+llama_memory_recurrent:      CUDA0 RS buffer size =   529.92 MiB
+llama_memory_recurrent:      CUDA1 RS buffer size =    77.93 MiB
+llama_memory_recurrent: size =  748.12 MiB (     1 cells,  64 layers,  1 seqs  4 rs_seq), R (f32):   28.12 MiB, S (f32):  720.00 MiB
+llama_kv_cache:      CUDA1 KV buffer size =   256.00 MiB
+llama_kv_cache: size =  256.00 MiB ( 65536 cells,   1 layers,  1/1 seqs), K (f16):  128.00 MiB, V (f16):  128.00 MiB
+```
+
+</details>
+
+### コンテキスト長依存性まとめ（デュアルGPU、デフォルト設定）
+
+4kと8kではほとんど同じ速度で、8k以下にコンテキスト長を制限しても速度は変わらなかった。コンテキスト長を増やすとGPU側に乗る層が減っており、これに伴ってDecode速度がステップ状に低下している様子が観察された。
+
+| `num_ctx` | GPU offload | GPU/CPU 層数 | CPU mapped | KV cache |        Decode速度 |
+| --------: | --------: | ----------: | ---------: | -------: | --------------: |
+|        4k |  93% GPU |       11/53/2 |   1163 MiB |  136 MiB | **45.081 tok/s** |
+|        8k |  93% GPU |       11/53/2 |   1163 MiB |  272 MiB | **45.457 tok/s** |
+|       16k |  92% GPU |       11/52/3 |   1404 MiB |  544 MiB | **34.964 tok/s** |
+|       32k |  86% GPU |       10/49/7 |   2348 MiB | 1088 MiB | **18.525 tok/s** |
+|       64k |  80% GPU |       9/45/12 |   3423 MiB | 2176 MiB | **14.459 tok/s** |
+
+> `GPU/CPU 層数` の内訳はそれぞれ、3070 Ti / 5070 Ti / CPU に載っている層の数を示す。
+> `CPU mapped` はCPU側にmmapされたモデルweight bufferに対応する。これはCPUにオフロードされている量とは一致しない。
+
+KVキャッシュは線形に増加しており自然な挙動に見える。一方でDecode速度がステップ状に減少しているのは「長いcontextだからattention計算が重くなってdecodeが遅くなる」というわけではなく、CPU側の層を経由する割合によるものと思われる。
+
+> 32kでは実際、`CPU_Mapped model buffer = 2348.43 MiB` まで増え、さらに通常のKVキャッシュ自体にも僅かではあるが `CPU KV buffer = 68 MiB` が発生している。これより、コンテキスト長が32kの場合は weight だけでなく context に関連するメモリの一部までCPU側へ跨がっていることが分かる。
+
+Ollamaはかなり保守的にメモリのバッファを確保しているようで、（コンテキスト長8kの場合）GPU側では合計64層が乗っており、2層分だけCPUオフロードが発生してしまっている。特に3070Ti側では 3 GB 程度のメモリがバッファとして避けられており、これが削減できれば更なる高速化が見込めそうである。
+
+```:コンテキスト長がDecode速度を減速させるメカニズム
+contextを増やす
+→ KV cache等の予約量が増える
+→ 保守的なVRAM marginのためweightがCPUへ押し出される
+→ CPU layerがautoregressive decodeの律速になる
+→ decode throughputが急減する
+```
+
+## 5070 Ti + 3070 Ti （VRAMマージン削減後）
+
+VRAMの安全マージンを減らすため、 `override.conf` に下記の行を加える。この設定により、5070 Ti と 3070 Ti の両方でVRAMの安全マージンを 1 GB に設定できる。
+
+```console:/etc/systemd/system/ollama.service.d/override.conf
+Environment="LLAMA_ARG_FIT=on"
+Environment="LLAMA_ARG_FIT_TARGET=1024,1024"
+```
+
+> `sudo vi /etc/systemd/system/ollama.service.d/override.conf` などで編集して上書き保存すればよい。
+
+設定変更後は忘れずにモデルをリロードする。
+
+```console:モデルをリロードする
+sudo systemctl daemon-reload
+sudo systemctl restart ollama
+```
+
+デフォルト設定では 3070 Ti で 3 GB のマージンが確保されていたが、これを 1 GB に設定することで 2 GB 分の余裕が生まれる。ここにCPU/RAM側に溢れていた2層が乗ればQwen3.8-27Bの全層をGPU上でロードできることになる。
+
+以下、結果を示す。
+
+### コンテキスト長 4k
+
+**➡ 平均 66.008 tok/s、15/51 layers (3070Ti/5070Ti)： 100% GPU 達成**
+
+<details><summary>詳細</summary>
+
+```
+$ python ollama_benchmark_4k.py
+Model   : qwen3.8:27b
+Think   : low
+Runs    : 5 (+ 1 warm-up)
+Options : {'num_ctx': 4096, 'num_predict': 4096, 'temperature': 1.0, 'top_p': 0.95, 'top_k': 20, 'min_p': 0.0, 'repeat_penalty': 1.0, 'seed': 42}
+
+Warm-up 1/1 ...
+Run 1/5 ...
+  prompt=104 tok, prefill=426.60 tok/s, output=623 tok, decode=66.04 tok/s, TTFT=0.501 s, answer-start=4.790 s, wall=9.934 s
+Run 2/5 ...
+  prompt=104 tok, prefill=554.85 tok/s, output=623 tok, decode=66.10 tok/s, TTFT=0.646 s, answer-start=4.911 s, wall=10.070 s
+Run 3/5 ...
+  prompt=104 tok, prefill=797.79 tok/s, output=623 tok, decode=65.83 tok/s, TTFT=0.397 s, answer-start=4.681 s, wall=9.861 s
+Run 4/5 ...
+  prompt=104 tok, prefill=789.25 tok/s, output=623 tok, decode=66.27 tok/s, TTFT=0.398 s, answer-start=4.664 s, wall=9.799 s
+Run 5/5 ...
+  prompt=104 tok, prefill=809.36 tok/s, output=623 tok, decode=65.80 tok/s, TTFT=0.381 s, answer-start=4.713 s, wall=9.849 s
+
+=== Mean ± SD ===
+TTFT any [s]                : 0.465 ± 0.112
+TTFT thinking [s]           : 0.465 ± 0.112
+Answer start [s]            : 4.752 ± 0.101
+Thinking phase [s]          : 4.287 ± 0.027
+Prompt eval [s]             : 0.164 ± 0.051
+Prompt throughput [tok/s]   : 675.569 ± 174.871
+Decode [s]                  : 9.438 ± 0.028
+Decode throughput [tok/s]   : 66.008 ± 0.196
+Server total [s]            : 9.902 ± 0.106
+Wall [s]                    : 9.903 ± 0.106
+Output tokens               : 623.000 ± 0.000
+```
+
+```
+$ ollama ps
+NAME           ID              SIZE     PROCESSOR    CONTEXT    UNTIL
+qwen3.8:27b    22130167c4c2    17 GB    100% GPU     4096       59 minutes from now
+$ nvidia-smi
+Wed Aug 19 01:49:37 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.57                 Driver Version: 591.86         CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+| 30%   46C    P2            214W /  320W |    5002MiB /   8192MiB |     46%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+| 31%   61C    P1            174W /  300W |   14698MiB /  16303MiB |     47%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+```
+
+```
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti):  16302 total,  10633 used,   3847 free vs. target of   1048
+common_params_fit_impl:   - CUDA1 (NVIDIA GeForce RTX 3070 Ti):   8191 total,   5987 used,    883 free vs. target of   2160
+common_params_fit_impl: filling dense layers back-to-front:
+common_params_fit_impl:   - CUDA1 (NVIDIA GeForce RTX 3070 Ti): 15 layers,   4510 MiB used,   2360 MiB free
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti): 51 layers,  12018 MiB used,   2462 MiB free
+load_tensors: offloaded 66/66 layers to GPU
+load_tensors:   CPU_Mapped model buffer size =   682.03 MiB
+load_tensors:        CUDA0 model buffer size = 11129.56 MiB
+load_tensors:        CUDA1 model buffer size =  4209.87 MiB
+llama_kv_cache:      CUDA0 KV buffer size =   102.00 MiB
+llama_kv_cache:      CUDA1 KV buffer size =    34.00 MiB
+llama_kv_cache: size =  136.00 MiB (  4096 cells,  16 layers,  1/1 seqs), K (q8_0):   68.00 MiB, V (q8_0):   68.00 MiB
+llama_memory_recurrent:      CUDA0 RS buffer size =   607.85 MiB
+llama_memory_recurrent:      CUDA1 RS buffer size =   140.27 MiB
+llama_memory_recurrent: size =  748.12 MiB (     1 cells,  64 layers,  1 seqs  4 rs_seq), R (f32):   28.12 MiB, S (f32):  720.00 MiB
+llama_kv_cache:      CUDA1 KV buffer size =    16.00 MiB
+llama_kv_cache: size =   16.00 MiB (  4096 cells,   1 layers,  1/1 seqs), K (f16):    8.00 MiB, V (f16):    8.00 MiB
+```
+
+</details>
+
+### コンテキスト長 8k
+
+**➡ 平均 65.146 tok/s、15/51 layers (3070Ti/5070Ti)： 100% GPU 達成**
+
+<details><summary>詳細</summary>
+
+```
+$ python ollama_benchmark_8k.py
+Model   : qwen3.8:27b
+Think   : low
+Runs    : 5 (+ 1 warm-up)
+Options : {'num_ctx': 8192, 'num_predict': 4096, 'temperature': 1.0, 'top_p': 0.95, 'top_k': 20, 'min_p': 0.0, 'repeat_penalty': 1.0, 'seed': 42}
+
+Warm-up 1/1 ...
+Run 1/5 ...
+  prompt=104 tok, prefill=410.13 tok/s, output=623 tok, decode=64.72 tok/s, TTFT=0.512 s, answer-start=4.945 s, wall=10.137 s
+Run 2/5 ...
+  prompt=104 tok, prefill=472.74 tok/s, output=623 tok, decode=65.04 tok/s, TTFT=0.679 s, answer-start=5.040 s, wall=10.258 s
+Run 3/5 ...
+  prompt=104 tok, prefill=788.77 tok/s, output=623 tok, decode=65.27 tok/s, TTFT=0.402 s, answer-start=4.691 s, wall=9.946 s
+Run 4/5 ...
+  prompt=104 tok, prefill=765.32 tok/s, output=623 tok, decode=65.04 tok/s, TTFT=0.397 s, answer-start=4.744 s, wall=9.976 s
+Run 5/5 ...
+  prompt=104 tok, prefill=794.68 tok/s, output=623 tok, decode=65.66 tok/s, TTFT=0.388 s, answer-start=4.720 s, wall=9.875 s
+
+=== Mean ± SD ===
+TTFT any [s]                : 0.475 ± 0.125
+TTFT thinking [s]           : 0.475 ± 0.125
+Answer start [s]            : 4.828 ± 0.155
+Thinking phase [s]          : 4.353 ± 0.053
+Prompt eval [s]             : 0.174 ± 0.058
+Prompt throughput [tok/s]   : 646.329 ± 188.667
+Decode [s]                  : 9.563 ± 0.051
+Decode throughput [tok/s]   : 65.146 ± 0.349
+Server total [s]            : 10.038 ± 0.156
+Wall [s]                    : 10.038 ± 0.156
+Output tokens               : 623.000 ± 0.000
+```
+
+```
+$ ollama ps
+NAME           ID              SIZE     PROCESSOR    CONTEXT    UNTIL
+qwen3.8:27b    22130167c4c2    17 GB    100% GPU     8192       59 minutes from now
+$ nvidia-smi
+Wed Aug 19 01:51:26 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.57                 Driver Version: 591.86         CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+| 30%   57C    P2            223W /  320W |    5084MiB /   8192MiB |     45%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+| 59%   66C    P1            177W /  300W |   14829MiB /  16303MiB |     49%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+```
+
+```
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti):  16302 total,  10743 used,   3737 free vs. target of   1048
+common_params_fit_impl:   - CUDA1 (NVIDIA GeForce RTX 3070 Ti):   8191 total,   6046 used,    824 free vs. target of   2160
+common_params_fit_impl: filling dense layers back-to-front:
+common_params_fit_impl:   - CUDA1 (NVIDIA GeForce RTX 3070 Ti): 15 layers,   4548 MiB used,   2322 MiB free
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti): 51 layers,  12136 MiB used,   2344 MiB free
+load_tensors: offloaded 66/66 layers to GPU
+load_tensors:   CPU_Mapped model buffer size =   682.03 MiB
+load_tensors:        CUDA0 model buffer size = 11129.56 MiB
+load_tensors:        CUDA1 model buffer size =  4209.87 MiB
+llama_kv_cache:      CUDA0 KV buffer size =   204.00 MiB
+llama_kv_cache:      CUDA1 KV buffer size =    68.00 MiB
+llama_kv_cache: size =  272.00 MiB (  8192 cells,  16 layers,  1/1 seqs), K (q8_0):  136.00 MiB, V (q8_0):  136.00 MiB
+llama_memory_recurrent:      CUDA0 RS buffer size =   607.85 MiB
+llama_memory_recurrent:      CUDA1 RS buffer size =   140.27 MiB
+llama_memory_recurrent: size =  748.12 MiB (     1 cells,  64 layers,  1 seqs  4 rs_seq), R (f32):   28.12 MiB, S (f32):  720.00 MiB
+llama_kv_cache:      CUDA1 KV buffer size =    32.00 MiB
+llama_kv_cache: size =   32.00 MiB (  8192 cells,   1 layers,  1/1 seqs), K (f16):   16.00 MiB, V (f16):   16.00 MiB
+```
+
+</details>
+
+### コンテキスト長 16k
+
+**➡ 平均 65.940 tok/s、15/51 layers (3070Ti/5070Ti)： 100% GPU 達成**
+
+<details><summary>詳細</summary>
+
+```
+$ python ollama_benchmark_16k.py
+Model   : qwen3.8:27b
+Think   : low
+Runs    : 5 (+ 1 warm-up)
+Options : {'num_ctx': 16384, 'num_predict': 4096, 'temperature': 1.0, 'top_p': 0.95, 'top_k': 20, 'min_p': 0.0, 'repeat_penalty': 1.0, 'seed': 42}
+
+Warm-up 1/1 ...
+Run 1/5 ...
+  prompt=104 tok, prefill=466.30 tok/s, output=623 tok, decode=65.74 tok/s, TTFT=0.491 s, answer-start=4.838 s, wall=9.967 s
+Run 2/5 ...
+  prompt=104 tok, prefill=649.03 tok/s, output=623 tok, decode=66.27 tok/s, TTFT=0.591 s, answer-start=4.874 s, wall=9.992 s
+Run 3/5 ...
+  prompt=104 tok, prefill=792.02 tok/s, output=623 tok, decode=66.22 tok/s, TTFT=0.387 s, answer-start=4.642 s, wall=9.795 s
+Run 4/5 ...
+  prompt=104 tok, prefill=729.16 tok/s, output=623 tok, decode=65.34 tok/s, TTFT=0.419 s, answer-start=4.735 s, wall=9.953 s
+Run 5/5 ...
+  prompt=104 tok, prefill=783.42 tok/s, output=623 tok, decode=66.13 tok/s, TTFT=0.392 s, answer-start=4.683 s, wall=9.812 s
+
+=== Mean ± SD ===
+TTFT any [s]                : 0.456 ± 0.086
+TTFT thinking [s]           : 0.456 ± 0.086
+Answer start [s]            : 4.755 ± 0.099
+Thinking phase [s]          : 4.299 ± 0.035
+Prompt eval [s]             : 0.158 ± 0.038
+Prompt throughput [tok/s]   : 683.987 ± 134.358
+Decode [s]                  : 9.448 ± 0.057
+Decode throughput [tok/s]   : 65.940 ± 0.395
+Server total [s]            : 9.903 ± 0.093
+Wall [s]                    : 9.904 ± 0.093
+Output tokens               : 623.000 ± 0.000
+```
+
+```
+$ ollama ps
+NAME           ID              SIZE     PROCESSOR    CONTEXT    UNTIL
+qwen3.8:27b    22130167c4c2    18 GB    100% GPU     16384      59 minutes from now
+$ nvidia-smi
+Wed Aug 19 01:56:12 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.57                 Driver Version: 591.86         CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+| 31%   51C    P2            219W /  320W |    5270MiB /   8192MiB |     47%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+| 32%   53C    P1            168W /  300W |   15119MiB /  16303MiB |     40%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+```
+
+```
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti):  16302 total,  10984 used,   3496 free vs. target of   1048
+common_params_fit_impl:   - CUDA1 (NVIDIA GeForce RTX 3070 Ti):   8191 total,   6185 used,    685 free vs. target of   2160
+common_params_fit_impl: filling dense layers back-to-front:
+common_params_fit_impl:   - CUDA1 (NVIDIA GeForce RTX 3070 Ti): 15 layers,   4646 MiB used,   2224 MiB free
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti): 51 layers,  12394 MiB used,   2086 MiB free
+load_tensors: offloaded 66/66 layers to GPU
+load_tensors:   CPU_Mapped model buffer size =   682.03 MiB
+load_tensors:        CUDA0 model buffer size = 11129.56 MiB
+load_tensors:        CUDA1 model buffer size =  4209.87 MiB
+llama_kv_cache:      CUDA0 KV buffer size =   408.00 MiB
+llama_kv_cache:      CUDA1 KV buffer size =   136.00 MiB
+llama_kv_cache: size =  544.00 MiB ( 16384 cells,  16 layers,  1/1 seqs), K (q8_0):  272.00 MiB, V (q8_0):  272.00 MiB
+llama_memory_recurrent:      CUDA0 RS buffer size =   607.85 MiB
+llama_memory_recurrent:      CUDA1 RS buffer size =   140.27 MiB
+llama_memory_recurrent: size =  748.12 MiB (     1 cells,  64 layers,  1 seqs  4 rs_seq), R (f32):   28.12 MiB, S (f32):  720.00 MiB
+llama_kv_cache:      CUDA1 KV buffer size =    64.00 MiB
+llama_kv_cache: size =   64.00 MiB ( 16384 cells,   1 layers,  1/1 seqs), K (f16):   32.00 MiB, V (f16):   32.00 MiB
+```
+
+</details>
+
+
+### コンテキスト長 32k
+
+**➡ 平均 65.221 tok/s、14/52 layers (3070Ti/5070Ti)： 100% GPU 達成**
+
+<details><summary>詳細</summary>
+
+```
+$ python ollama_benchmark_32k.py
+Model   : qwen3.8:27b
+Think   : low
+Runs    : 5 (+ 1 warm-up)
+Options : {'num_ctx': 32768, 'num_predict': 4096, 'temperature': 1.0, 'top_p': 0.95, 'top_k': 20, 'min_p': 0.0, 'repeat_penalty': 1.0, 'seed': 42}
+
+Warm-up 1/1 ...
+Run 1/5 ...
+  prompt=104 tok, prefill=355.39 tok/s, output=769 tok, decode=64.34 tok/s, TTFT=0.558 s, answer-start=6.648 s, wall=12.510 s
+Run 2/5 ...
+  prompt=104 tok, prefill=637.01 tok/s, output=769 tok, decode=65.88 tok/s, TTFT=0.567 s, answer-start=6.426 s, wall=12.239 s
+Run 3/5 ...
+  prompt=104 tok, prefill=793.54 tok/s, output=769 tok, decode=65.70 tok/s, TTFT=0.386 s, answer-start=6.255 s, wall=12.091 s
+Run 4/5 ...
+  prompt=104 tok, prefill=765.00 tok/s, output=769 tok, decode=65.06 tok/s, TTFT=0.397 s, answer-start=6.309 s, wall=12.216 s
+Run 5/5 ...
+  prompt=104 tok, prefill=762.68 tok/s, output=769 tok, decode=65.12 tok/s, TTFT=0.393 s, answer-start=6.289 s, wall=12.202 s
+
+=== Mean ± SD ===
+TTFT any [s]                : 0.460 ± 0.094
+TTFT thinking [s]           : 0.460 ± 0.094
+Answer start [s]            : 6.385 ± 0.160
+Thinking phase [s]          : 5.925 ± 0.094
+Prompt eval [s]             : 0.172 ± 0.069
+Prompt throughput [tok/s]   : 662.723 ± 182.127
+Decode [s]                  : 11.792 ± 0.110
+Decode throughput [tok/s]   : 65.221 ± 0.606
+Server total [s]            : 12.251 ± 0.155
+Wall [s]                    : 12.252 ± 0.155
+Output tokens               : 769.000 ± 0.000
+```
+
+```
+$ ollama ps
+NAME           ID              SIZE     PROCESSOR    CONTEXT    UNTIL
+qwen3.8:27b    22130167c4c2    18 GB    100% GPU     32768      59 minutes from now
+$ nvidia-smi
+Wed Aug 19 01:58:57 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.57                 Driver Version: 591.86         CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+| 30%   52C    P2            213W /  320W |    5396MiB /   8192MiB |     46%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+| 32%   59C    P1            173W /  300W |   15312MiB /  16303MiB |     44%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+```
+
+```
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti):  16302 total,  11486 used,   2994 free vs. target of   1048
+common_params_fit_impl:   - CUDA1 (NVIDIA GeForce RTX 3070 Ti):   8191 total,   6483 used,    387 free vs. target of   2160
+common_params_fit_impl: filling dense layers back-to-front:
+common_params_fit_impl:   - CUDA1 (NVIDIA GeForce RTX 3070 Ti): 14 layers,   4594 MiB used,   2276 MiB free
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti): 52 layers,  13198 MiB used,   1282 MiB free
+load_tensors: offloaded 66/66 layers to GPU
+load_tensors:   CPU_Mapped model buffer size =   682.03 MiB
+load_tensors:        CUDA0 model buffer size = 11329.29 MiB
+load_tensors:        CUDA1 model buffer size =  4010.14 MiB
+llama_kv_cache:      CUDA0 KV buffer size =   884.00 MiB
+llama_kv_cache:      CUDA1 KV buffer size =   204.00 MiB
+llama_kv_cache: size = 1088.00 MiB ( 32768 cells,  16 layers,  1/1 seqs), K (q8_0):  544.00 MiB, V (q8_0):  544.00 MiB
+llama_memory_recurrent:      CUDA0 RS buffer size =   607.85 MiB
+llama_memory_recurrent:      CUDA1 RS buffer size =   140.27 MiB
+llama_memory_recurrent: size =  748.12 MiB (     1 cells,  64 layers,  1 seqs  4 rs_seq), R (f32):   28.12 MiB, S (f32):  720.00 MiB
+llama_kv_cache:      CUDA1 KV buffer size =   128.00 MiB
+llama_kv_cache: size =  128.00 MiB ( 32768 cells,   1 layers,  1/1 seqs), K (f16):   64.00 MiB, V (f16):   64.00 MiB
+```
+
+</details>
+
+### コンテキスト長 64k
+
+**➡ 平均 32.040 tok/s、13/49/4 layers (3070Ti/5070Ti/CPU)**
+
+<details><summary>詳細</summary>
+
+```
+$ python ollama_benchmark_64k.py
+Model   : qwen3.8:27b
+Think   : low
+Runs    : 5 (+ 1 warm-up)
+Options : {'num_ctx': 65536, 'num_predict': 4096, 'temperature': 1.0, 'top_p': 0.95, 'top_k': 20, 'min_p': 0.0, 'repeat_penalty': 1.0, 'seed': 42}
+
+Warm-up 1/1 ...
+Run 1/5 ...
+  prompt=104 tok, prefill=213.49 tok/s, output=646 tok, decode=32.31 tok/s, TTFT=0.754 s, answer-start=13.053 s, wall=20.750 s
+Run 2/5 ...
+  prompt=104 tok, prefill=433.76 tok/s, output=646 tok, decode=31.96 tok/s, TTFT=0.653 s, answer-start=13.115 s, wall=20.863 s
+Run 3/5 ...
+  prompt=104 tok, prefill=530.43 tok/s, output=646 tok, decode=31.87 tok/s, TTFT=0.468 s, answer-start=12.964 s, wall=20.738 s
+Run 4/5 ...
+  prompt=104 tok, prefill=559.78 tok/s, output=646 tok, decode=32.01 tok/s, TTFT=0.452 s, answer-start=12.976 s, wall=20.635 s
+Run 5/5 ...
+  prompt=104 tok, prefill=529.39 tok/s, output=646 tok, decode=32.05 tok/s, TTFT=0.468 s, answer-start=12.956 s, wall=20.622 s
+
+=== Mean ± SD ===
+TTFT any [s]                : 0.559 ± 0.137
+TTFT thinking [s]           : 0.559 ± 0.137
+Answer start [s]            : 13.013 ± 0.069
+Thinking phase [s]          : 12.454 ± 0.089
+Prompt eval [s]             : 0.261 ± 0.128
+Prompt throughput [tok/s]   : 453.372 ± 142.274
+Decode [s]                  : 20.163 ± 0.102
+Decode throughput [tok/s]   : 32.040 ± 0.163
+Server total [s]            : 20.721 ± 0.098
+Wall [s]                    : 20.722 ± 0.098
+Output tokens               : 646.000 ± 0.000
+```
+
+CPUオフロードが発生している分、GPUの消費電力が低下している。
+
+```
+$ ollama ps
+NAME           ID              SIZE     PROCESSOR          CONTEXT    UNTIL
+qwen3.8:27b    22130167c4c2    20 GB    10%/90% CPU/GPU    65536      59 minutes from now
+$ nvidia-smi
+Wed Aug 19 02:05:54 2026
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.57                 Driver Version: 591.86         CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+|  0%   41C    P3             75W /  320W |    5296MiB /   8192MiB |     25%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+| 32%   43C    P1             86W /  300W |   15304MiB /  16303MiB |     21%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|  No running processes found                                                             |
++-----------------------------------------------------------------------------------------+
+```
+
+```
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti):  16302 total,  12490 used,   1990 free vs. target of   1048
+common_params_fit_impl:   - CUDA1 (NVIDIA GeForce RTX 3070 Ti):   8191 total,   7079 used,   -208 free vs. target of   2160
+common_params_fit_impl: filling dense layers back-to-front:
+common_params_fit_impl:   - CUDA1 (NVIDIA GeForce RTX 3070 Ti): 13 layers,   4702 MiB used,   2168 MiB free
+common_params_fit_impl:   - CUDA0 (NVIDIA GeForce RTX 5070 Ti): 49 layers,  13425 MiB used,   1055 MiB free
+load_tensors: offloaded 62/66 layers to GPU
+load_tensors:   CPU_Mapped model buffer size =  1626.69 MiB
+load_tensors:        CUDA0 model buffer size = 10625.21 MiB
+load_tensors:        CUDA1 model buffer size =  3769.57 MiB
+llama_kv_cache:        CPU KV buffer size =   136.00 MiB
+llama_kv_cache:      CUDA0 KV buffer size =  1632.00 MiB
+llama_kv_cache:      CUDA1 KV buffer size =   408.00 MiB
+llama_kv_cache: size = 2176.00 MiB ( 65536 cells,  16 layers,  1/1 seqs), K (q8_0): 1088.00 MiB, V (q8_0): 1088.00 MiB
+llama_memory_recurrent:        CPU RS buffer size =    46.76 MiB
+llama_memory_recurrent:      CUDA0 RS buffer size =   576.68 MiB
+llama_memory_recurrent:      CUDA1 RS buffer size =   124.69 MiB
+llama_memory_recurrent: size =  748.12 MiB (     1 cells,  64 layers,  1 seqs  4 rs_seq), R (f32):   28.12 MiB, S (f32):  720.00 MiB
+llama_kv_cache:      CUDA1 KV buffer size =   256.00 MiB
+llama_kv_cache: size =  256.00 MiB ( 65536 cells,   1 layers,  1/1 seqs), K (f16):  128.00 MiB, V (f16):  128.00 MiB
+```
+
+</details>
+
+流石に64kのコンテキスト長ではCPUオフロードが発生してしまうようである。VRAMマージンをさらに削れば100%GPUロードも可能性はあるが、このマージン分のメモリは全く使われないわけではないため、削りすぎると弊害を生じる恐れがある（512 MB程度までなら粘ってもよいかもしれない）。
+
+
+### コンテキスト長依存性まとめ（デュアルGPU、VRAMマージン削減後）
+
+32k以下のコンテキスト長ではモデルを 100% GPU オフロードを達成し、トークン生成速度は 65 ～ 66 token/sec. で安定していた。コンテキスト長が 64k になるとCPU側に乗る層が出始め、これに伴ってDecode速度が半減する様子が観察された。
+
+| `num_ctx` |   CPU/GPU | GPU/CPU offload | CPU mapped | KV cache |        Decode速度 |
+| --------: | --------: | ----------: | ---------: | -------: | --------------: |
+|        4k |  100% GPU |       15/51/0 |    682 MiB |  136 MiB | **66.008 tok/s** |
+|        8k |  100% GPU |       15/51/0 |    682 MiB |  272 MiB | **65.146 tok/s** |
+|       16k |  100% GPU |       15/51/0 |    682 MiB |  544 MiB | **65.940 tok/s** |
+|       32k |  100% GPU |       15/51/0 |    682 MiB | 1088 MiB | **65.221 tok/s** |
+|       64k | 10% / 90% |       13/49/4 |   1627 MiB | 2176 MiB | **32.040 tok/s** |
+
+> `CPU_Mapped` がゼロではないが、これ自体はCPUオフロードの発生を意味しない。`ollama ps` の PROCESSOR が 100% GPU であれば、推論は完全にGPU側で実行されている。
+
+今回のプロンプトでは入力トークンのサイズが比較的小さいことも考慮すると、16k～32k程度のコンテキスト長を予約した状態で推論させるのが安全に思われる。
+
+注意点として、ここではトークン生成速度を優先する目的で VRAM マージンを削っているため、テキスト以外のマルチモーダルなプロンプトが入力された場合にメモリが不足するなどの弊害を生じる可能性がある。画像などを入力に含める場合は別途ベンチマークを取得し、コンテキスト長の良い塩梅を探るべきである。
+
+
+## プロンプト長依存性（デュアルGPU、VRAMマージン削減後）
+
+最後に、100% GPUオフロードが実現した**コンテキスト長32k＋デュアルGPU＋VRAMマージン削減**の条件下で、プロンプト長を 4k→8k→16k→24k と段階的に増やして推論速度をテストする。
+
+> `num_ctx` の値は入力と生成で共有されるため、32kのコンテキスト長を設定したとしても32kのバッファすべてを入力分のトークンで埋めるのは望ましくない。Chat Templateや回答生成用のマージンを確保し、context shiftやtruncationを避けるため、本試験では最大プロンプト長を24k tokensとした。
+
+ここでは、以下のスクリプトを用いる。
+
+<details><summary>計測用Pythonスクリプト（1627行）</summary>
+
+```py:benchmark_long_records.py
+#!/usr/bin/env python3
+
+import csv
+import json
+import math
+import re
+import statistics as stats
+import time
+import urllib.error
+import urllib.request
+from datetime import datetime
+from pathlib import Path
+
+
+# ============================================================
+# Benchmark settings
+# ============================================================
+
+OLLAMA_URL = "http://127.0.0.1:11434/api/chat"
+MODEL = "qwen3.8:27b"
+
+# 最大context長は全条件で固定
+NUM_CTX = 32768
+
+# 実際に入力するprompt長の目標値
+TARGET_PROMPT_TOKENS = [
+    4096,
+    8192,
+    16384,
+    24576,
+]
+
+# 各条件の本測定回数
+RUNS = 5
+
+# calibration後のwarm-up回数
+WARMUP_RUNS = 1
+
+# 最大生成token数
+# 24k promptでも32k contextに十分な余裕を残す
+NUM_PREDICT = 1024
+
+# calibration時は生成を最小限にする
+CALIBRATION_NUM_PREDICT = 1
+
+# Ollama公式 qwen3.8:27b の現在の設定を明示的に固定
+# PARAMETER draft_num_predict 4
+DRAFT_NUM_PREDICT = 4
+
+# Thinking設定
+THINK = "low"
+
+# モデルを測定中にアンロードさせない
+KEEP_ALIVE = "1h"
+
+# 再現性確保
+SEED = 42
+
+
+BASE_OPTIONS = {
+    "num_ctx": NUM_CTX,
+    "num_predict": NUM_PREDICT,
+
+    "temperature": 1.0,
+    "top_p": 0.95,
+    "top_k": 20,
+    "min_p": 0.0,
+
+    "repeat_penalty": 1.0,
+    "seed": SEED,
+
+    # MTP speculative decoding
+    "draft_num_predict": DRAFT_NUM_PREDICT,
+}
+
+
+# ============================================================
+# Calibration settings
+# ============================================================
+
+# 前回の実測から得られた関係
+#
+# prompt_tokens ≈ 45 * n_records + 220
+#
+EST_TOKENS_PER_RECORD = 45.0
+EST_FIXED_TOKENS = 220.0
+
+# calibration時の目標token数との差
+TOKEN_TOLERANCE = 32
+
+# 本測定時にも実prompt長を確認
+RUN_TOKEN_TOLERANCE = 32
+
+MAX_CALIBRATION_ITERATIONS = 8
+
+# NUM_CTXいっぱいまでpromptを入れず、
+# generationやtemplate等の余裕を確保する
+CONTEXT_SAFETY_MARGIN = 2048
+
+MAX_SAFE_PROMPT_TOKENS = (
+    NUM_CTX
+    - NUM_PREDICT
+    - CONTEXT_SAFETY_MARGIN
+)
+
+# needleの相対位置
+NEEDLE_FRACTION = 0.55
+
+OUTDIR = Path(
+    "qwen38_long_context_benchmark"
+)
+
+
+# ============================================================
+# Test cases
+# ============================================================
+
+# 条件ごとに答えを変える
+CASE_DATA = {
+    4096: {
+        "code": "R7K4",
+        "measurements": (17, 29, 31),
+    },
+
+    8192: {
+        "code": "Q4M9",
+        "measurements": (23, 41, 37),
+    },
+
+    16384: {
+        "code": "V8N3",
+        "measurements": (43, 19, 28),
+    },
+
+    24576: {
+        "code": "K5P7",
+        "measurements": (31, 47, 26),
+    },
+}
+
+
+# ============================================================
+# Prompt generation
+# ============================================================
+
+def ordinary_record(i: int) -> str:
+    """
+    通常レコードを生成する。
+
+    fillerが完全な同一文章の繰り返しにならないよう、
+    数値フィールドを決定論的に変化させる。
+    """
+
+    sensor_a = (i * 17 + 11) % 97
+    sensor_b = (i * 29 + 7) % 89
+    sensor_c = (i * 13 + 19) % 83
+    batch = (i * 7 + 3) % 251
+
+    return (
+        f"Record {i:05d}: "
+        f"class=ordinary; "
+        f"batch={batch:03d}; "
+        f"sensor_a={sensor_a:02d}; "
+        f"sensor_b={sensor_b:02d}; "
+        f"sensor_c={sensor_c:02d}; "
+        f"status=normal; "
+        f"note=no exception.\n"
+    )
+
+
+def make_prompt(
+    n_records: int,
+    case_data: dict,
+    run_nonce: str,
+):
+    """
+    n_records個のレコードを含むpromptを生成する。
+
+    needleは全レコード中の約55%地点へ置く。
+    """
+
+    if n_records < 3:
+        raise ValueError(
+            "n_records must be >= 3"
+        )
+
+    needle_index = int(
+        n_records * NEEDLE_FRACTION
+    )
+
+    needle_index = max(
+        1,
+        min(
+            n_records - 2,
+            needle_index,
+        ),
+    )
+
+    code = case_data["code"]
+
+    m1, m2, m3 = (
+        case_data["measurements"]
+    )
+
+    expected_sum = (
+        m1 + m2 + m3
+    )
+
+    records = []
+
+    for i in range(n_records):
+
+        if i == needle_index:
+
+            records.append(
+                f"Record {i:05d}: "
+                f"class=exception; "
+                f"SPECIAL_CODE={code}; "
+                f"measurements={m1},{m2},{m3}; "
+                f"status=requires_review; "
+                f"note=this is the unique special record.\n"
+            )
+
+        else:
+
+            records.append(
+                ordinary_record(i)
+            )
+
+    body = "".join(records)
+
+    prompt = f"""RUN_NONCE={run_nonce}
+
+以下は多数の測定レコードである。
+RUN_NONCEはベンチマーク用メタデータなので無視してよい。
+
+この記録群には、SPECIAL_CODEを持つレコードが
+ちょうど1件だけ存在する。
+
+--- RECORDS BEGIN ---
+
+{body}
+--- RECORDS END ---
+
+次の問いに答えてください。
+
+1. SPECIAL_CODEを持つ唯一のRecord番号を特定してください。
+2. そのSPECIAL_CODEを答えてください。
+3. 同じRecordに含まれる3つのmeasurementsの合計を計算してください。
+4. 誤ったRecordを選んでいないことを確認するため、
+   根拠を簡潔に説明してください。
+
+回答は簡潔にしてください。
+
+最後の1行は必ず次の形式にしてください。
+
+FINAL: Record=xxxxx, Code=xxxx, Sum=xxx
+"""
+
+    expected = {
+        "record": needle_index,
+        "record_str":
+            f"{needle_index:05d}",
+        "code": code,
+        "sum": expected_sum,
+    }
+
+    return prompt, expected
+
+
+# ============================================================
+# HTTP utilities
+# ============================================================
+
+def post_json(
+    payload,
+    stream=False,
+):
+
+    request = urllib.request.Request(
+        OLLAMA_URL,
+        data=json.dumps(
+            payload
+        ).encode("utf-8"),
+        headers={
+            "Content-Type":
+                "application/json"
+        },
+        method="POST",
+    )
+
+    try:
+
+        response = (
+            urllib.request.urlopen(
+                request,
+                timeout=None,
+            )
+        )
+
+        if stream:
+            return response
+
+        raw = response.read()
+
+        response.close()
+
+        return json.loads(raw)
+
+    except urllib.error.HTTPError as e:
+
+        body = (
+            e.read()
+            .decode(
+                "utf-8",
+                errors="replace",
+            )
+        )
+
+        raise RuntimeError(
+            f"Ollama HTTP error "
+            f"{e.code}:\n{body}"
+        ) from e
+
+
+def ns_to_s(value):
+
+    return (
+        (value or 0)
+        / 1e9
+    )
+
+
+def safe_rate(
+    count,
+    duration_ns,
+):
+
+    if (
+        not count
+        or not duration_ns
+    ):
+        return float("nan")
+
+    return (
+        count
+        / (duration_ns / 1e9)
+    )
+
+
+# ============================================================
+# Prompt token calibration
+# ============================================================
+
+def measure_prompt_tokens(
+    n_records,
+    case_data,
+    nonce="CALIB000",
+):
+    """
+    Ollama自身にpromptを評価させ、
+    prompt_eval_countを取得する。
+
+    num_predict=1として、
+    generationの負荷を最小限にする。
+    """
+
+    prompt, _ = make_prompt(
+        n_records,
+        case_data,
+        nonce,
+    )
+
+    options = dict(
+        BASE_OPTIONS
+    )
+
+    options[
+        "num_predict"
+    ] = CALIBRATION_NUM_PREDICT
+
+    payload = {
+        "model": MODEL,
+
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        ],
+
+        "think": THINK,
+        "stream": False,
+        "keep_alive": KEEP_ALIVE,
+
+        "options": options,
+    }
+
+    result = post_json(
+        payload,
+        stream=False,
+    )
+
+    count = result.get(
+        "prompt_eval_count",
+        0,
+    )
+
+    if count <= 0:
+        raise RuntimeError(
+            "Invalid prompt_eval_count "
+            f"returned by Ollama: {count}"
+        )
+
+    return count
+
+
+def estimate_initial_records(
+    target_tokens,
+):
+    """
+    前回の実測関係
+
+        tokens ≈ 45 * records + 220
+
+    から初期record数を求める。
+    """
+
+    estimate = (
+        target_tokens
+        - EST_FIXED_TOKENS
+    ) / EST_TOKENS_PER_RECORD
+
+    return max(
+        50,
+        int(round(estimate)),
+    )
+
+
+def calibrate_record_count(
+    target_tokens,
+    case_data,
+):
+    """
+    record数を調整して、
+    actual prompt_eval_countを
+    target_tokensへ近づける。
+
+    num_ctx超過等によってprompt token数が
+    頭打ちになる場合には異常終了する。
+    """
+
+    if (
+        target_tokens
+        > MAX_SAFE_PROMPT_TOKENS
+    ):
+
+        raise ValueError(
+            f"Target prompt "
+            f"{target_tokens} exceeds "
+            f"safe limit "
+            f"{MAX_SAFE_PROMPT_TOKENS} "
+            f"for num_ctx={NUM_CTX}."
+        )
+
+    print(
+        f"\nCalibrating target "
+        f"{target_tokens} tokens ..."
+    )
+
+    n = estimate_initial_records(
+        target_tokens
+    )
+
+    best = None
+
+    history = []
+
+    previous_n = None
+    previous_count = None
+
+    for iteration in range(
+        MAX_CALIBRATION_ITERATIONS
+    ):
+
+        count = (
+            measure_prompt_tokens(
+                n,
+                case_data,
+                nonce=(
+                    f"CAL"
+                    f"{iteration:05d}"
+                ),
+            )
+        )
+
+        error = (
+            count
+            - target_tokens
+        )
+
+        print(
+            f"  calibration "
+            f"{iteration + 1}: "
+            f"records={n}, "
+            f"prompt={count} tok, "
+            f"error={error:+d}"
+        )
+
+        candidate = {
+            "n_records": n,
+            "tokens": count,
+            "abs_error":
+                abs(error),
+        }
+
+        if (
+            best is None
+            or candidate["abs_error"]
+            < best["abs_error"]
+        ):
+
+            best = candidate
+
+        # ----------------------------------------------------
+        # truncation / saturation detection
+        # ----------------------------------------------------
+
+        if (
+            previous_n is not None
+            and n > previous_n
+            and count <= previous_count
+        ):
+
+            raise RuntimeError(
+                "\nPrompt token count "
+                "did not increase even though "
+                "the number of records increased.\n"
+                f"Previous: "
+                f"{previous_n} records "
+                f"-> {previous_count} tokens\n"
+                f"Current : "
+                f"{n} records "
+                f"-> {count} tokens\n\n"
+                "The prompt may have exceeded "
+                "num_ctx and been truncated. "
+                "Benchmark aborted."
+            )
+
+        previous_n = n
+        previous_count = count
+
+        # ----------------------------------------------------
+        # success
+        # ----------------------------------------------------
+
+        if (
+            abs(error)
+            <= TOKEN_TOLERANCE
+        ):
+
+            print(
+                f"  -> selected: "
+                f"{n} records, "
+                f"{count} tokens"
+            )
+
+            return n, count
+
+        history.append(
+            (n, count)
+        )
+
+        # ----------------------------------------------------
+        # determine local tokens / record
+        # ----------------------------------------------------
+
+        if len(history) >= 2:
+
+            n1, c1 = history[-2]
+            n2, c2 = history[-1]
+
+            dn = n2 - n1
+            dc = c2 - c1
+
+            if (
+                dn != 0
+                and dc > 0
+            ):
+
+                slope = (
+                    dc / dn
+                )
+
+            else:
+
+                slope = (
+                    EST_TOKENS_PER_RECORD
+                )
+
+        else:
+
+            slope = (
+                EST_TOKENS_PER_RECORD
+            )
+
+        # 異常なslopeは採用しない
+        if (
+            not math.isfinite(slope)
+            or slope < 5
+            or slope > 200
+        ):
+
+            slope = (
+                EST_TOKENS_PER_RECORD
+            )
+
+        correction = (
+            target_tokens
+            - count
+        ) / slope
+
+        step = int(
+            round(correction)
+        )
+
+        if step == 0:
+
+            if count < target_tokens:
+                step = 1
+            else:
+                step = -1
+
+        new_n = max(
+            10,
+            n + step,
+        )
+
+        if new_n == n:
+
+            new_n += (
+                1
+                if count < target_tokens
+                else -1
+            )
+
+        n = new_n
+
+    # --------------------------------------------------------
+    # calibration did not converge
+    # --------------------------------------------------------
+
+    if (
+        best is None
+        or best["abs_error"]
+        > TOKEN_TOLERANCE
+    ):
+
+        raise RuntimeError(
+            "\nCalibration failed.\n"
+            f"Target : {target_tokens}\n"
+            f"Best   : "
+            f"{best['tokens'] if best else 'N/A'}\n"
+            f"Error  : "
+            f"{best['abs_error'] if best else 'N/A'}\n\n"
+            "Benchmark aborted to avoid "
+            "recording invalid prompt lengths."
+        )
+
+    return (
+        best["n_records"],
+        best["tokens"],
+    )
+
+
+# ============================================================
+# Accuracy check
+# ============================================================
+
+FINAL_PATTERN = re.compile(
+    r"FINAL:\s*"
+    r"Record\s*=\s*(\d+)\s*,\s*"
+    r"Code\s*=\s*([A-Za-z0-9_-]+)\s*,\s*"
+    r"Sum\s*=\s*(-?\d+)",
+    re.IGNORECASE,
+)
+
+
+def extract_final_result(
+    answer: str,
+):
+    """
+    最後に出現したFINAL行を解析する。
+    """
+
+    matches = list(
+        FINAL_PATTERN.finditer(
+            answer
+        )
+    )
+
+    if not matches:
+
+        return {
+            "found": False,
+            "record": None,
+            "code": None,
+            "sum": None,
+            "final_line": "",
+        }
+
+    match = matches[-1]
+
+    return {
+        "found": True,
+        "record":
+            int(match.group(1)),
+        "code":
+            match.group(2),
+        "sum":
+            int(match.group(3)),
+        "final_line":
+            match.group(0),
+    }
+
+
+def check_answer(
+    answer: str,
+    expected: dict,
+):
+
+    parsed = (
+        extract_final_result(
+            answer
+        )
+    )
+
+    if not parsed["found"]:
+
+        return {
+            "passed": False,
+            "record_ok": False,
+            "code_ok": False,
+            "sum_ok": False,
+            "final_line": "",
+        }
+
+    record_ok = (
+        parsed["record"]
+        == expected["record"]
+    )
+
+    code_ok = (
+        parsed["code"].upper()
+        == expected["code"].upper()
+    )
+
+    sum_ok = (
+        parsed["sum"]
+        == expected["sum"]
+    )
+
+    return {
+        "passed":
+            record_ok
+            and code_ok
+            and sum_ok,
+
+        "record_ok":
+            record_ok,
+
+        "code_ok":
+            code_ok,
+
+        "sum_ok":
+            sum_ok,
+
+        "final_line":
+            parsed["final_line"],
+    }
+
+
+# ============================================================
+# Benchmark request
+# ============================================================
+
+def run_once(
+    prompt,
+    expected,
+    target_prompt_tokens,
+):
+
+    payload = {
+        "model": MODEL,
+
+        "messages": [
+            {
+                "role": "user",
+                "content": prompt,
+            }
+        ],
+
+        "think": THINK,
+        "stream": True,
+        "keep_alive": KEEP_ALIVE,
+
+        "options":
+            dict(BASE_OPTIONS),
+    }
+
+    request = urllib.request.Request(
+        OLLAMA_URL,
+        data=json.dumps(
+            payload
+        ).encode("utf-8"),
+        headers={
+            "Content-Type":
+                "application/json"
+        },
+        method="POST",
+    )
+
+    t0 = time.perf_counter()
+
+    t_first_any = None
+    t_first_thinking = None
+    t_first_content = None
+
+    thinking_parts = []
+    content_parts = []
+
+    final_chunk = None
+
+    try:
+
+        with urllib.request.urlopen(
+            request,
+            timeout=None,
+        ) as response:
+
+            for raw_line in response:
+
+                if not raw_line.strip():
+                    continue
+
+                chunk = json.loads(
+                    raw_line
+                )
+
+                now = (
+                    time.perf_counter()
+                )
+
+                message = (
+                    chunk.get("message")
+                    or {}
+                )
+
+                thinking = (
+                    message.get(
+                        "thinking"
+                    )
+                    or ""
+                )
+
+                content = (
+                    message.get(
+                        "content"
+                    )
+                    or ""
+                )
+
+                if (
+                    (thinking or content)
+                    and t_first_any is None
+                ):
+
+                    t_first_any = now
+
+                if (
+                    thinking
+                    and
+                    t_first_thinking
+                    is None
+                ):
+
+                    t_first_thinking = now
+
+                if (
+                    content
+                    and
+                    t_first_content
+                    is None
+                ):
+
+                    t_first_content = now
+
+                if thinking:
+
+                    thinking_parts.append(
+                        thinking
+                    )
+
+                if content:
+
+                    content_parts.append(
+                        content
+                    )
+
+                if chunk.get("done"):
+
+                    final_chunk = chunk
+
+    except urllib.error.HTTPError as e:
+
+        body = (
+            e.read()
+            .decode(
+                "utf-8",
+                errors="replace",
+            )
+        )
+
+        raise RuntimeError(
+            f"Ollama HTTP error "
+            f"{e.code}:\n{body}"
+        ) from e
+
+    t_end = time.perf_counter()
+
+    if final_chunk is None:
+
+        raise RuntimeError(
+            "No done=true chunk received."
+        )
+
+    thinking_text = "".join(
+        thinking_parts
+    )
+
+    answer_text = "".join(
+        content_parts
+    )
+
+    prompt_count = (
+        final_chunk.get(
+            "prompt_eval_count",
+            0,
+        )
+    )
+
+    # --------------------------------------------------------
+    # Important safety check
+    # --------------------------------------------------------
+
+    prompt_error = (
+        prompt_count
+        - target_prompt_tokens
+    )
+
+    if (
+        abs(prompt_error)
+        > RUN_TOKEN_TOLERANCE
+    ):
+
+        raise RuntimeError(
+            "\nActual prompt length "
+            "differs too much from target.\n"
+            f"Target : "
+            f"{target_prompt_tokens}\n"
+            f"Actual : "
+            f"{prompt_count}\n"
+            f"Error  : "
+            f"{prompt_error:+d}\n\n"
+            "Possible truncation or "
+            "calibration failure detected. "
+            "Benchmark aborted."
+        )
+
+    prompt_ns = (
+        final_chunk.get(
+            "prompt_eval_duration",
+            0,
+        )
+    )
+
+    eval_ns = (
+        final_chunk.get(
+            "eval_duration",
+            0,
+        )
+    )
+
+    accuracy = check_answer(
+        answer_text,
+        expected,
+    )
+
+    result = {
+        # ----------------------------------------------------
+        # Configuration
+        # ----------------------------------------------------
+
+        "model":
+            MODEL,
+
+        "num_ctx":
+            NUM_CTX,
+
+        "num_predict":
+            NUM_PREDICT,
+
+        "think":
+            THINK,
+
+        "draft_num_predict":
+            DRAFT_NUM_PREDICT,
+
+        "seed":
+            SEED,
+
+        # ----------------------------------------------------
+        # Prompt / prefill
+        # ----------------------------------------------------
+
+        "prompt_eval_count":
+            prompt_count,
+
+        "prompt_eval_s":
+            ns_to_s(
+                prompt_ns
+            ),
+
+        "prompt_tok_s":
+            safe_rate(
+                prompt_count,
+                prompt_ns,
+            ),
+
+        # ----------------------------------------------------
+        # Generation / decode
+        # ----------------------------------------------------
+
+        "eval_count":
+            final_chunk.get(
+                "eval_count",
+                0,
+            ),
+
+        "eval_s":
+            ns_to_s(
+                eval_ns
+            ),
+
+        "decode_tok_s":
+            safe_rate(
+                final_chunk.get(
+                    "eval_count",
+                    0,
+                ),
+                eval_ns,
+            ),
+
+        # ----------------------------------------------------
+        # Server timing
+        # ----------------------------------------------------
+
+        "server_total_s":
+            ns_to_s(
+                final_chunk.get(
+                    "total_duration",
+                    0,
+                )
+            ),
+
+        "load_s":
+            ns_to_s(
+                final_chunk.get(
+                    "load_duration",
+                    0,
+                )
+            ),
+
+        # ----------------------------------------------------
+        # Client-observed latency
+        # ----------------------------------------------------
+
+        "wall_s":
+            t_end - t0,
+
+        "ttft_any_s":
+            (
+                t_first_any - t0
+                if t_first_any
+                is not None
+                else float("nan")
+            ),
+
+        "ttft_thinking_s":
+            (
+                t_first_thinking - t0
+                if t_first_thinking
+                is not None
+                else float("nan")
+            ),
+
+        "ttft_answer_s":
+            (
+                t_first_content - t0
+                if t_first_content
+                is not None
+                else float("nan")
+            ),
+
+        "thinking_phase_s":
+            (
+                t_first_content
+                - t_first_thinking
+                if (
+                    t_first_content
+                    is not None
+                    and
+                    t_first_thinking
+                    is not None
+                )
+                else float("nan")
+            ),
+
+        # ----------------------------------------------------
+        # Text
+        # ----------------------------------------------------
+
+        "thinking_chars":
+            len(thinking_text),
+
+        "answer_chars":
+            len(answer_text),
+
+        "done_reason":
+            final_chunk.get(
+                "done_reason",
+                "",
+            ),
+
+        # ----------------------------------------------------
+        # Expected answer
+        # ----------------------------------------------------
+
+        "expected_record":
+            expected[
+                "record_str"
+            ],
+
+        "expected_code":
+            expected[
+                "code"
+            ],
+
+        "expected_sum":
+            expected[
+                "sum"
+            ],
+
+        # ----------------------------------------------------
+        # Accuracy
+        # ----------------------------------------------------
+
+        "passed":
+            accuracy[
+                "passed"
+            ],
+
+        "record_ok":
+            accuracy[
+                "record_ok"
+            ],
+
+        "code_ok":
+            accuracy[
+                "code_ok"
+            ],
+
+        "sum_ok":
+            accuracy[
+                "sum_ok"
+            ],
+
+        "final_line":
+            accuracy[
+                "final_line"
+            ],
+
+        # ----------------------------------------------------
+        # Full output
+        # ----------------------------------------------------
+
+        "thinking":
+            thinking_text,
+
+        "answer":
+            answer_text,
+    }
+
+    return result
+
+
+# ============================================================
+# Statistics
+# ============================================================
+
+def finite_values(
+    rows,
+    key,
+):
+
+    values = []
+
+    for row in rows:
+
+        value = row.get(
+            key
+        )
+
+        if isinstance(
+            value,
+            (int, float),
+        ):
+
+            if math.isfinite(
+                float(value)
+            ):
+
+                values.append(
+                    float(value)
+                )
+
+    return values
+
+
+def mean_sd(
+    rows,
+    key,
+):
+
+    values = finite_values(
+        rows,
+        key,
+    )
+
+    if not values:
+
+        return (
+            float("nan"),
+            float("nan"),
+        )
+
+    mean = stats.mean(
+        values
+    )
+
+    sd = (
+        stats.stdev(
+            values
+        )
+        if len(values) >= 2
+        else 0.0
+    )
+
+    return mean, sd
+
+
+def median_value(
+    rows,
+    key,
+):
+
+    values = finite_values(
+        rows,
+        key,
+    )
+
+    if not values:
+
+        return float("nan")
+
+    return stats.median(
+        values
+    )
+
+
+def fmt(
+    value,
+    digits=3,
+):
+
+    try:
+
+        if not math.isfinite(
+            float(value)
+        ):
+
+            return "N/A"
+
+    except Exception:
+
+        return str(value)
+
+    return (
+        f"{value:.{digits}f}"
+    )
+
+
+# ============================================================
+# Warm-up
+# ============================================================
+
+def warmup():
+
+    print(
+        "\n=== Warm-up ==="
+    )
+
+    for i in range(
+        WARMUP_RUNS
+    ):
+
+        options = dict(
+            BASE_OPTIONS
+        )
+
+        options[
+            "num_predict"
+        ] = 16
+
+        payload = {
+            "model": MODEL,
+
+            "messages": [
+                {
+                    "role": "user",
+                    "content":
+                        "Reply with only: OK",
+                }
+            ],
+
+            "think": THINK,
+            "stream": False,
+            "keep_alive":
+                KEEP_ALIVE,
+
+            "options": options,
+        }
+
+        post_json(
+            payload,
+            stream=False,
+        )
+
+        print(
+            f"Warm-up "
+            f"{i + 1}/"
+            f"{WARMUP_RUNS} done"
+        )
+
+
+# ============================================================
+# Main
+# ============================================================
+
+def main():
+
+    # --------------------------------------------------------
+    # Sanity checks
+    # --------------------------------------------------------
+
+    for target in (
+        TARGET_PROMPT_TOKENS
+    ):
+
+        if (
+            target
+            > MAX_SAFE_PROMPT_TOKENS
+        ):
+
+            raise ValueError(
+                f"Target {target} exceeds "
+                f"safe prompt limit "
+                f"{MAX_SAFE_PROMPT_TOKENS}."
+            )
+
+    OUTDIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    timestamp = (
+        datetime.now()
+        .strftime(
+            "%Y%m%d_%H%M%S"
+        )
+    )
+
+    print(
+        "======================================"
+    )
+
+    print(
+        "Qwen3.8-27B long-context benchmark"
+    )
+
+    print(
+        "======================================"
+    )
+
+    print(
+        f"Model              : {MODEL}"
+    )
+
+    print(
+        f"num_ctx            : {NUM_CTX}"
+    )
+
+    print(
+        f"Think              : {THINK}"
+    )
+
+    print(
+        f"draft_num_predict  : "
+        f"{DRAFT_NUM_PREDICT}"
+    )
+
+    print(
+        f"Runs / condition   : {RUNS}"
+    )
+
+    print(
+        "Target prompt toks : "
+        + ", ".join(
+            str(x)
+            for x
+            in TARGET_PROMPT_TOKENS
+        )
+    )
+
+    print(
+        f"Safe prompt limit  : "
+        f"{MAX_SAFE_PROMPT_TOKENS}"
+    )
+
+    # ========================================================
+    # 1. Calibration
+    # ========================================================
+
+    cases = []
+
+    print(
+        "\n=== Prompt calibration ==="
+    )
+
+    for target in (
+        TARGET_PROMPT_TOKENS
+    ):
+
+        case_data = (
+            CASE_DATA[target]
+        )
+
+        (
+            n_records,
+            calibrated_tokens,
+        ) = calibrate_record_count(
+            target,
+            case_data,
+        )
+
+        _, expected = make_prompt(
+            n_records,
+            case_data,
+            "CHECK00000",
+        )
+
+        cases.append(
+            {
+                "target_tokens":
+                    target,
+
+                "n_records":
+                    n_records,
+
+                "calibrated_tokens":
+                    calibrated_tokens,
+
+                "case_data":
+                    case_data,
+
+                "expected":
+                    expected,
+            }
+        )
+
+    # --------------------------------------------------------
+    # Calibration data save
+    # --------------------------------------------------------
+
+    calibration_path = (
+        OUTDIR
+        / (
+            f"calibration_"
+            f"{timestamp}.json"
+        )
+    )
+
+    with calibration_path.open(
+        "w",
+        encoding="utf-8",
+    ) as f:
+
+        json.dump(
+            cases,
+            f,
+            ensure_ascii=False,
+            indent=2,
+        )
+
+    # ========================================================
+    # 2. Warm-up
+    # ========================================================
+
+    warmup()
+
+    # ========================================================
+    # 3. Benchmark
+    #
+    # 条件順序をrotationし、
+    # 時間ドリフトのbiasを減らす。
+    #
+    # repetition 1:
+    #   4k -> 8k -> 16k -> 24k
+    #
+    # repetition 2:
+    #   8k -> 16k -> 24k -> 4k
+    #
+    # ...
+    # ========================================================
+
+    all_rows = []
+
+    global_request_id = 0
+
+    n_cases = len(
+        cases
+    )
+
+    print(
+        "\n=== Benchmark ==="
+    )
+
+    for repetition in range(
+        RUNS
+    ):
+
+        shift = (
+            repetition
+            % n_cases
+        )
+
+        order = (
+            cases[shift:]
+            + cases[:shift]
+        )
+
+        print(
+            f"\n--- repetition "
+            f"{repetition + 1}/"
+            f"{RUNS} ---"
+        )
+
+        for case in order:
+
+            global_request_id += 1
+
+            target = (
+                case[
+                    "target_tokens"
+                ]
+            )
+
+            nonce = (
+                f"BENCH"
+                f"{global_request_id:06d}"
+            )
+
+            (
+                prompt,
+                expected,
+            ) = make_prompt(
+                case[
+                    "n_records"
+                ],
+                case[
+                    "case_data"
+                ],
+                nonce,
+            )
+
+            print(
+                f"Target "
+                f"{target:5d}: ",
+                end="",
+                flush=True,
+            )
+
+            result = run_once(
+                prompt,
+                expected,
+                target_prompt_tokens=
+                    target,
+            )
+
+            result[
+                "target_prompt_tokens"
+            ] = target
+
+            result[
+                "calibrated_prompt_tokens"
+            ] = (
+                case[
+                    "calibrated_tokens"
+                ]
+            )
+
+            result[
+                "n_records"
+            ] = (
+                case[
+                    "n_records"
+                ]
+            )
+
+            result[
+                "repetition"
+            ] = (
+                repetition + 1
+            )
+
+            result[
+                "request_id"
+            ] = (
+                global_request_id
+            )
+
+            result[
+                "run_nonce"
+            ] = nonce
+
+            all_rows.append(
+                result
+            )
+
+            status = (
+                "PASS"
+                if result[
+                    "passed"
+                ]
+                else "FAIL"
+            )
+
+            print(
+                f"actual="
+                f"{result['prompt_eval_count']} tok, "
+                f"prefill="
+                f"{fmt(result['prompt_tok_s'], 1)} tok/s, "
+                f"decode="
+                f"{fmt(result['decode_tok_s'], 2)} tok/s, "
+                f"TTFT="
+                f"{fmt(result['ttft_any_s'], 3)} s, "
+                f"answer-start="
+                f"{fmt(result['ttft_answer_s'], 3)} s, "
+                f"{status}"
+            )
+
+    # ========================================================
+    # 4. Raw JSONL
+    # ========================================================
+
+    jsonl_path = (
+        OUTDIR
+        / (
+            f"raw_"
+            f"{timestamp}.jsonl"
+        )
+    )
+
+    with jsonl_path.open(
+        "w",
+        encoding="utf-8",
+    ) as f:
+
+        for row in all_rows:
+
+            f.write(
+                json.dumps(
+                    row,
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
+    # ========================================================
+    # 5. Raw CSV
+    # ========================================================
+
+    raw_csv_path = (
+        OUTDIR
+        / (
+            f"runs_"
+            f"{timestamp}.csv"
+        )
+    )
+
+    raw_fields = [
+        "model",
+        "num_ctx",
+        "num_predict",
+        "think",
+        "draft_num_predict",
+        "seed",
+
+        "target_prompt_tokens",
+        "calibrated_prompt_tokens",
+        "prompt_eval_count",
+        "n_records",
+
+        "repetition",
+        "request_id",
+        "run_nonce",
+
+        "prompt_eval_s",
+        "prompt_tok_s",
+
+        "eval_count",
+        "eval_s",
+        "decode_tok_s",
+
+        "ttft_any_s",
+        "ttft_thinking_s",
+        "ttft_answer_s",
+        "thinking_phase_s",
+
+        "server_total_s",
+        "wall_s",
+        "load_s",
+
+        "thinking_chars",
+        "answer_chars",
+
+        "expected_record",
+        "expected_code",
+        "expected_sum",
+
+        "passed",
+        "record_ok",
+        "code_ok",
+        "sum_ok",
+
+        "final_line",
+        "done_reason",
+    ]
+
+    with raw_csv_path.open(
+        "w",
+        newline="",
+        encoding="utf-8",
+    ) as f:
+
+        writer = csv.DictWriter(
+            f,
+            fieldnames=
+                raw_fields,
+            extrasaction=
+                "ignore",
+        )
+
+        writer.writeheader()
+
+        writer.writerows(
+            all_rows
+        )
+
+    # ========================================================
+    # 6. Summary
+    # ========================================================
+
+    summary_rows = []
+
+    print(
+        "\n"
+        "======================================"
+    )
+
+    print(
+        "Summary"
+    )
+
+    print(
+        "======================================"
+    )
+
+    for case in cases:
+
+        target = (
+            case[
+                "target_tokens"
+            ]
+        )
+
+        rows = [
+            r
+            for r in all_rows
+            if (
+                r[
+                    "target_prompt_tokens"
+                ]
+                == target
+            )
+        ]
+
+        (
+            prompt_count_mean,
+            prompt_count_sd,
+        ) = mean_sd(
+            rows,
+            "prompt_eval_count",
+        )
+
+        (
+            prefill_mean,
+            prefill_sd,
+        ) = mean_sd(
+            rows,
+            "prompt_tok_s",
+        )
+
+        (
+            decode_mean,
+            decode_sd,
+        ) = mean_sd(
+            rows,
+            "decode_tok_s",
+        )
+
+        (
+            ttft_mean,
+            ttft_sd,
+        ) = mean_sd(
+            rows,
+            "ttft_any_s",
+        )
+
+        (
+            answer_start_mean,
+            answer_start_sd,
+        ) = mean_sd(
+            rows,
+            "ttft_answer_s",
+        )
+
+        (
+            wall_mean,
+            wall_sd,
+        ) = mean_sd(
+            rows,
+            "wall_s",
+        )
+
+        (
+            eval_count_mean,
+            eval_count_sd,
+        ) = mean_sd(
+            rows,
+            "eval_count",
+        )
+
+        pass_count = sum(
+            1
+            for r in rows
+            if r["passed"]
+        )
+
+        accuracy = (
+            pass_count
+            / len(rows)
+            if rows
+            else float("nan")
+        )
+
+        summary = {
+            "target_prompt_tokens":
+                target,
+
+            "actual_prompt_tokens_mean":
+                prompt_count_mean,
+
+            "actual_prompt_tokens_sd":
+                prompt_count_sd,
+
+            "n_records":
+                case[
+                    "n_records"
+                ],
+
+            "prefill_tok_s_mean":
+                prefill_mean,
+
+            "prefill_tok_s_sd":
+                prefill_sd,
+
+            "prefill_tok_s_median":
+                median_value(
+                    rows,
+                    "prompt_tok_s",
+                ),
+
+            "decode_tok_s_mean":
+                decode_mean,
+
+            "decode_tok_s_sd":
+                decode_sd,
+
+            "decode_tok_s_median":
+                median_value(
+                    rows,
+                    "decode_tok_s",
+                ),
+
+            "ttft_s_mean":
+                ttft_mean,
+
+            "ttft_s_sd":
+                ttft_sd,
+
+            "answer_start_s_mean":
+                answer_start_mean,
+
+            "answer_start_s_sd":
+                answer_start_sd,
+
+            "wall_s_mean":
+                wall_mean,
+
+            "wall_s_sd":
+                wall_sd,
+
+            "eval_count_mean":
+                eval_count_mean,
+
+            "eval_count_sd":
+                eval_count_sd,
+
+            "accuracy":
+                accuracy,
+
+            "pass_count":
+                pass_count,
+
+            "total_runs":
+                len(rows),
+
+            "expected_record":
+                case[
+                    "expected"
+                ][
+                    "record_str"
+                ],
+
+            "expected_code":
+                case[
+                    "expected"
+                ][
+                    "code"
+                ],
+
+            "expected_sum":
+                case[
+                    "expected"
+                ][
+                    "sum"
+                ],
+        }
+
+        summary_rows.append(
+            summary
+        )
+
+        print()
+
+        print(
+            f"Target: "
+            f"{target} tokens"
+        )
+
+        print(
+            f"  Actual prompt     : "
+            f"{fmt(prompt_count_mean, 1)} "
+            f"± "
+            f"{fmt(prompt_count_sd, 1)} tok"
+        )
+
+        print(
+            f"  Prefill           : "
+            f"{fmt(prefill_mean, 1)} "
+            f"± "
+            f"{fmt(prefill_sd, 1)} tok/s"
+        )
+
+        print(
+            f"  Decode            : "
+            f"{fmt(decode_mean, 2)} "
+            f"± "
+            f"{fmt(decode_sd, 2)} tok/s"
+        )
+
+        print(
+            f"  TTFT              : "
+            f"{fmt(ttft_mean, 3)} "
+            f"± "
+            f"{fmt(ttft_sd, 3)} s"
+        )
+
+        print(
+            f"  Answer start      : "
+            f"{fmt(answer_start_mean, 3)} "
+            f"± "
+            f"{fmt(answer_start_sd, 3)} s"
+        )
+
+        print(
+            f"  Wall              : "
+            f"{fmt(wall_mean, 3)} "
+            f"± "
+            f"{fmt(wall_sd, 3)} s"
+        )
+
+        print(
+            f"  Output tokens     : "
+            f"{fmt(eval_count_mean, 1)} "
+            f"± "
+            f"{fmt(eval_count_sd, 1)}"
+        )
+
+        print(
+            f"  Accuracy          : "
+            f"{pass_count}/"
+            f"{len(rows)} "
+            f"({accuracy * 100:.1f}%)"
+        )
+
+    # ========================================================
+    # 7. Summary CSV
+    # ========================================================
+
+    summary_csv_path = (
+        OUTDIR
+        / (
+            f"summary_"
+            f"{timestamp}.csv"
+        )
+    )
+
+    if summary_rows:
+
+        with summary_csv_path.open(
+            "w",
+            newline="",
+            encoding="utf-8",
+        ) as f:
+
+            writer = csv.DictWriter(
+                f,
+                fieldnames=list(
+                    summary_rows[
+                        0
+                    ].keys()
+                ),
+            )
+
+            writer.writeheader()
+
+            writer.writerows(
+                summary_rows
+            )
+
+    # ========================================================
+    # Output paths
+    # ========================================================
+
+    print(
+        "\n"
+        "======================================"
+    )
+
+    print(
+        f"Calibration : "
+        f"{calibration_path}"
+    )
+
+    print(
+        f"Raw JSONL   : "
+        f"{jsonl_path}"
+    )
+
+    print(
+        f"Raw CSV     : "
+        f"{raw_csv_path}"
+    )
+
+    print(
+        f"Summary CSV : "
+        f"{summary_csv_path}"
+    )
+
+
+if __name__ == "__main__":
+    main()
+```
+
+</details>
+
+このスクリプトでは、`num_ctx=32768` に固定したまま、実際に入力するプロンプト長だけを約4k、8k、16k、24k tokensへ変化させる。これにより、最大コンテキスト長の設定変更によるVRAM使用量・GPUオフロード層数の変化を避け、実際の長文入力がprefill速度、decode速度、TTFT、回答開始時間、正答率へ与える影響を比較できる。
+
+テストには多数のレコードから特定の1件を検索するneedle retrieval形式の課題を用いた。各レコードには通常の測定値を持たせ、その中に1件だけ SPECIAL_CODE を含む特殊レコードを埋め込んでいる。モデルには、このレコード番号、コード、3つの測定値の合計を回答させる。
+
+> Needle retrieval（needle-in-a-haystack）形式のタスクは、LLMのロングコンテキスト性能、特に長い文脈中から必要な情報を検索・取得できる能力を測る代表的な評価方法の一つである。
+
+> プロンプト長はOllama自身が返す `prompt_eval_count` を利用して測定し、入力token数が4096、8192、16384、24576 tokens付近になるよう較正している。この際、$$N_\mathrm{token}​≃45N_\mathrm{record}​+220$$の関係が成り立つことを事前に確かめているので、天下り的に初期値を `int(round((target_tokens - 220) / 45.0))` で与えるようにしている。
+
+各プロンプト長ごとに5回ずつ測定し、以下を記録する。
+
+- Prompt processing（prefill）速度
+- Token generation（decode）速度
+- TTFT（最初のtokenが返るまでの時間）
+- Thinking開始から最終回答開始までの時間
+- End-to-endの処理時間
+- 出力token数
+- レコード検索・計算結果の正答率
+
+また、各試行で短いnonceをプロンプト冒頭へ付加し、同一prompt prefixの再利用によるキャッシュの影響をできるだけ避けている。測定順序も4k→8k→16k→24kで固定せず、試行ごとにローテーションさせることで、GPU温度やクロック等の時間依存の影響を偏らせにくくしている。
+
+> 今回の条件では、Qwen3.8-27BのOllama公式モデルに設定されているデフォルト値をそのまま使用し、MTP speculative decodingを `draft_num_predict=4` で有効化している。（念のため、条件合わせのために明示的に指定している）
+
+> 余談だが、計測中はGPU（特に5070Ti側）がかなり発熱し、80℃近くまで達した。筆者は急遽、PCケースのカバーを外し、外付けのファンを2台設置して対応した。
+> ```:実行時の様子
+> +-----------------------------------------------------------------------------------------+
+> | NVIDIA-SMI 590.57                 Driver Version: 591.86         CUDA Version: 13.1     |
+> +-----------------------------------------+------------------------+----------------------+
+> | GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+> | Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+> |                                         |                        |               MIG M. |
+> |=========================================+========================+======================|
+> |   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+> | 30%   54C    P2            135W /  320W |    5408MiB /   8192MiB |     13%      Default |
+> |                                         |                        |                  N/A |
+> +-----------------------------------------+------------------------+----------------------+
+> |   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+> | 86%   76C    P1            227W /  300W |   15708MiB /  16303MiB |     68%      Default |
+> |                                         |                        |                  N/A |
+> +-----------------------------------------+------------------------+----------------------+
+> ```
+
+* * *
+
+結果は以下の通り。
+
+| 目標prompt長 | 実prompt長 | Prefill [tok/s] | Decode [tok/s] |       TTFT [s] |       回答開始 [s] |       Wall Time [s] | 正答率 |
+| --------: | -------: | --------------: | -------------: | -------------: | -------------: | -------------: | --: |
+|        4k |    4,091 |   1159.4 ± 21.2 |   64.99 ± 1.47 |  4.209 ± 0.139 |  7.058 ± 0.343 |  9.118 ± 0.477 | 5/5 |
+|        8k |    8,187 |   1172.1 ± 12.9 |   65.80 ± 2.90 |  7.582 ± 0.200 | 10.413 ± 0.276 | 12.604 ± 0.385 | 5/5 |
+|       16k |   16,377 |    1149.2 ± 1.7 |   62.41 ± 1.91 | 14.902 ± 0.202 | 18.230 ± 0.855 | 20.486 ± 0.986 | 5/5 |
+|       24k |   24,567 |    1098.9 ± 2.1 |   60.87 ± 0.78 | 23.057 ± 0.198 | 26.834 ± 0.326 | 29.603 ± 0.279 | 5/5 |
+
+`num_ctx=32768`と100% GPUオフロードという同一条件を維持した状態で実prompt長を約6倍（4,091 → 24,567 tokens）に増やしても、decode throughputの低下は約6.3%に留まることが確認された。prefillの速度低下も約5.2%に留まっている。
+
+needle（答えとなるレコード）を相対的に約55%地点へ置いた今回の条件では、少なくとも24.6kトークン程度までは検索性能の破綻が観測されなかった。
+
+TTFTは当然ながら入力が長文になるほど増加している。
+```
+4k  :  4.21 s
+8k  :  7.58 s
+16k : 14.90 s
+24k : 23.06 s
+```
+
+各条件について、`prefill throughput` と `prompt tokens` の比を取ると、おおよそ
+```
+4k  :  3.53 s
+8k  :  6.98 s
+16k : 14.25 s
+24k : 22.36 s
+```
+となり、TTFTとの差は全条件で約0.6～0.7秒である。つまりTTFT増加の大半は、単純に長い入力をprefillする時間に対応していると考えられる。prefill throughput自体は約1,100～1,170 tok/sを維持しており、TTFTの増加は主として処理すべき入力トークン数の増加によるものと考えられる。
+
+全体を通じて正答率が安定して高く、24kの場合でも
+```
+Prefill: 約1,099 tok/s
+Decode: 約60.9 tok/s
+Accuracy: 100%
+```
+となっている。全層GPUオフロードを維持できる32kコンテキスト長の条件下では、24k程度の実入力でもかなり安定した性能を保っていることが確認できた。
+
+# まとめ
+
+表題の通り、デュアルGPU構成（RTX 5070 Ti + RTX 3070 Ti）を用いることで、Qwen3.8-27Bの推論を高速化することができた。VRAMマージンを調整し、両GPUでそれぞれ1 GBまで削減することで、モデル層を100% GPUへオフロードすることが可能となり、CPUオフロードが発生していたシングルGPU構成と比較して、推論速度が大幅に向上することを確認した。
+
+さらに、100% GPUオフロードを維持できる予約コンテキスト長（今回の環境では32k）の条件下で、実際の入力トークン長に対する性能変化も検証した。その結果、入力長を約4kから24k tokensまで増加させても、prefillおよびdecode速度の低下は比較的小さく、今回用いたneedle retrieval + simple reasoningのタスクでは全条件で正答率100%を維持した。したがって、少なくとも今回の課題と条件では、24kトークン程度の長い入力に対しても大幅な性能劣化なく推論可能であることが確認された。
+
+* * *
+
+本稿の結果は、単一GPUではモデル全体をVRAMへ収容できずCPUオフロードが発生するような場合でも、余剰の遊休GPUを追加してモデルをGPU上へ分散配置することで、推論性能を大きく改善できることを示している。特に、異世代・異容量のGPUを組み合わせた構成であっても、適切にVRAMを利用できれば実用上有益なレベルでの大きな性能向上を得られることが確認された。
+
+単一のGPUではVRAM容量がボトルネックとなる大型ローカルLLMに対し、手持ちのGPUを追加してCPUオフロードを解消することは、比較的低コストで大きな推論性能向上を得る有効な手段になり得る。
+
+> ...ということで、中古GPU価格は今後も暫く高止まりすると予想される。
+
+# （おまけ）よく使うコマンド
+
+```console:読み込んでいるモデルを完全にシャットダウンするコマンド
+ollama stop qwen3.8:27b
+```
+
+```console:設定ファイルの編集
+sudo vi /etc/systemd/system/ollama.service.d/override.conf
+```
+
+```console:Ollamaサーバーを再起動するコマンド
+sudo systemctl daemon-reload
+sudo systemctl restart ollama
+```
+
+```console:Ollamaのプロセスを確認するコマンド
+ollama ps
+```
+
+```console:NVIDIA製GPUの状態を確認するコマンド
+nvidia-smi
+```
+
+```console:Ollama関係のLinuxシステムログを確認するコマンド
+journalctl -u ollama -b --no-pager   | grep -E   'filling dense|layers,|offloaded|model buffer size|KV buffer|RS buffer|free vs. target' | tail -n 20
+```
+
+> `tail` で表示する行数は 20 で十分だと思われるが、必要に応じて増やす。

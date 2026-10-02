@@ -1,0 +1,37 @@
+ちょっとした回帰の実装をしてみようと思い、scikit-learnをpipでローカル環境(Windows10)に導入することにしました。
+
+```
+C:\Users\[ユーザー名]>pip install scikit-learn
+```
+
+しかしエラー。
+
+```:scikit-learnインストール時のエラーメッセージ
+ERROR: Could not install packages due to an OSError: [Errno 2] No such file or directory:
+```
+
+エラーの原因はインストール先のパスが長すぎることらしいです。
+Windows10ではデフォルトでパス名の文字数が260文字までに制限されているので、以下の投稿を参考に文字数制限を解除しました。
+
+https://qiita.com/y-shoji/items/19def45edf582646f584
+
+やったことは以下の通りです。
+
+1. スタートメニューから [グループポリシーの編集] へ
+2. [コンピューターの構成] > [管理用テンプレート] > [システム] > [ファイルシステム]
+3. [Win32 の長いパスを有効にする] をダブルクリック
+3. [有効] のラジオボタンをonにして、画面下部の [OK] をクリック
+
+以上でパス名の文字数制限を撤廃できます。もう一度インストールすると…
+
+```:scikit-learnのインストール成功
+C:\Users\[ユーザー名]>pip install scikit-learn
+Collecting scikit-learn
+  Downloading scikit_learn-0.24.2-cp37-cp37m-win_amd64.whl (6.8 MB)
+     |████████████████████████████████| 6.8 MB 3.3 MB/s
+・・・（中略）・・・
+Installing collected packages: scikit-learn
+Successfully installed scikit-learn-0.24.2
+```
+
+無事に導入できました。めでたしめでたし。

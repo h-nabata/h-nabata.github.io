@@ -1,0 +1,76 @@
+Juliaで3Dのgifアニメを作るために格闘したのでメモ。
+使用しているJuliaは**v1.5.1**で、エディタは**Atom**を使っています（筆者はWindowsユーザーです）。
+
+#・3Dのgifアニメを作りたい！
+
+[**Julia**](https://julialang.org/)で出力された3D画像について色々と調べていると次のページに巡り合いました。
+
+
+**"Depth" - cormullion’s blog**
+**https://cormullion.github.io/pages/2020-09-22-depth/index.html**
+
+このページの一番下には以下のようなgifムービーが掲載されていました。これは冥王星の５つの衛星の周回軌道を、カロン(Charon)が公転する分だけ3Dプロットした動画です。
+![plutoniansystem.gif](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/02fa9986-b604-0b81-6aee-307b820e9cef.gif)
+なかなか綺麗なので自分の環境でも出力してみようと思い立ち、色々やってみました。
+
+
+#・準備
+
+これを動かすには「**Thebes**」と「**Luxor**」という２つのパッケージが必要です。
+
+パッケージのインストールは、JuliaのREPLを起動してパッケージモードで `add Thebes` などとすれば可能です。もしくは、コードの冒頭に `import Pkg; Pkg.add("Thebes")` などと書いておけばインストールできます（※一度インストールすればそれ以降は書かなくてOKです）。
+
+>「PyPlot」が無くても出力されるかどうかについては、試していないので分かりませんが、併せてインストールしておくのが良いと思います。
+
+また、Juliaとは別に「**FFmpeg**」というフリーソフトウェアが必要です。これは動画･音声を記録･変換･再生するためのソフトウェアで、以下のページからzipファイルがダウンロード可能です。
+
+[**FFmpeg Windows Builds**](https://www.gyan.dev/ffmpeg/builds/)（Windows環境の場合）
+※ https://www.gyan.dev/ffmpeg/builds/ffmpeg-git-full.zip を選びます。
+
+> MacやLinuxをお使いの方は [**Download FFmpeg**](https://ffmpeg.org/download.html) のページから適するものをダウンロードして下さい。
+
+ダウンロードしたら展開し、`C:\Program Files` の下などに `FFmpeg` などと名前を変更しつつ移動します。その後、ユーザー環境変数のPathの中に `C:\Program Files\FFmpeg\bin` とパスを通してください。これでプログラムがFFmpegを使えるようになります。
+
+> この辺りの操作は「[**Plots.jlで動画出力するにはffmpegまたはimagemagickが必要**](https://qiita.com/STInverSpinel/items/94600300633a23512aa5)」の記事などを参考にさせて頂きました。
+
+
+#・出力してみた
+
+[**元コード**](https://cormullion.github.io/pages/2020-09-22-depth/index.html#plutonian)をそのまま実行してもgifがうまく出力されないので、コードの最初の行に
+
+```Julia
+using Thebes, Luxor
+```
+
+を付け加え、最後の `pathname` の部分を
+
+```Julia
+pathname  = "C:/Users/user/AppData/Local/Temp/plutonian.gif"
+```
+などと書き替えます（場所は適当。`user` の部分は適宜書き換える）。これにより `C:/Users/user/AppData/Local/Temp/` の中に `plutonian.gif` が作成されます。他人様のコードを丸ごと載せる訳にはいかないので、コード全体については[**元ページのソースコード**](https://cormullion.github.io/pages/2020-09-22-depth/index.html#plutonian)を適宜参照して下さい。
+
+実際に自分で作成したgifも載せておきます。オリジナルとは少し配色を変えてみました。
+![plutonian2.gif](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/02a4ef02-01f1-3c9c-11b8-14d45ab0ee17.gif)
+
+
+#・他にも出力してみた
+いかにもJuliaのロゴマークっぽい配色です。
+![ferriswheel.gif](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/cd64f529-0f60-f8f6-2580-6319e91ee696.gif)
+![amovie.gif](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/0b3158af-6f39-9636-134e-502055859797.gif)
+
+> コードは先ほどの [**cormullion’s blog**](https://cormullion.github.io/pages/2020-09-22-depth/index.html) のページを参考にアレンジしました。
+
+#・Pyplotパッケージを使う場合
+Pyplotパッケージを使うとPythonのmatplotlibが呼び出せます。これによりmatplotlibを用いた3Dグラフが出力可能になります。Pythonと同じ書き方ができるので非常にラクです。（ただし、使う場合はPyCall、PyPlot、matplotlib本体をインストールしておいて下さい）
+![PyPlot_plot_rwalk.gif](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/d1280186-4739-7fc4-ecda-c68b7471b656.gif)
+![PyPlot_plot_rwalk2.gif](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/108bdf45-b360-18be-c56e-a014e6d01be2.gif)
+![PyPlot_plot_rwalk3.gif](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/bc94f1df-4f9a-20df-3cf7-76ff6f9f9dd9.gif)
+
+> いずれも乱数により生成した点列をプロットしたものです。コードは[**こちらのページ**](https://nbviewer.jupyter.org/gist/genkuroki/0428f82e2291be95da7d037a8ff4e0a5)を参考にアレンジしました。
+
+#・あとがき
+
+･･･という訳で、表題の通りJuliaで3Dのgifアニメを色々と作ってみました。
+特にPythonユーザーからしてみると、`using PyCall, PyPlot` とすればPythonと同じ書き方ができるのは嬉しいですね。Plotsパッケージを使った2Dのgif画像については「[**JuliaでグラフのGIFアニメを作ってみた**](https://qiita.com/MTNakata/items/0418ae3493a26ac44603)」や「[**Julia言語と Plots + GR で複素関数のgifアニメーションを作る**](https://optie.hatenablog.com/entry/2018/03/29/210619)」などのページに色々な例が紹介されているので、参考にしてみて下さい。
+
+その他のJuliaの基本的な部分については「[**Julia初心者がJuliaをさわってみた**](https://qiita.com/h-nabata/items/f2849d2d1b69f2415de3)」などのページを参考にしてみて下さい。

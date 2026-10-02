@@ -1,0 +1,800 @@
+---
+layout: "qiita-mirror"
+title: "Go言語初心者がGo言語をさわってみた"
+qiita_id: "7688354b917e18c0b000"
+qiita_url: "https://qiita.com/h-nabata/items/7688354b917e18c0b000"
+qiita_created: "2020-09-19T19:10:11+09:00"
+qiita_updated: "2022-10-24T11:12:20+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "プログラミング・可視化"
+mirror_tags: ["Go"]
+permalink: "/qiita/7688354b917e18c0b000.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="1:1-2:120">Windowsユーザー＆Goに初めて触れるor久々に触れる人が流し読む用のメモです。<br>
+使用しているGoのバージョンは<strong>go1.15.2 windows/amd64</strong>で、エディタは<strong>Atom</strong>を使っています。</p>
+<h1 data-sourcepos="4:1-4:37">
+<span id="プログラミング言語go" class="fragment"></span><a href="#%E3%83%97%E3%83%AD%E3%82%B0%E3%83%A9%E3%83%9F%E3%83%B3%E3%82%B0%E8%A8%80%E8%AA%9Ego"><i class="fa fa-link"></i></a>プログラミング言語「Go」</h1>
+<p data-sourcepos="6:1-6:426">「<a href="https://golang.org./" rel="nofollow noopener" target="_blank"><strong>Go</strong></a>」は2009年に発表されたGoogle発のプログラミング言語で、バージョン1.0が2012年に公開された、比較的最近登場した言語です。「<strong>Golang</strong>」や「<strong>Go言語</strong>」などと呼ばれていますが、正式名称は「<strong>Go</strong>」だそうです。Googleが開発しているだけあって、YouTubeなどのシステムはGoで構築されています。</p>
+<p data-sourcepos="8:1-8:53">Goは以下のような特長を備えています。</p>
+<ul data-sourcepos="10:1-14:0">
+<li data-sourcepos="10:1-10:21"><strong>静的型付け</strong></li>
+<li data-sourcepos="11:1-11:30"><strong>コンパイルが速い</strong></li>
+<li data-sourcepos="12:1-12:48"><strong>タイプセーフかつメモリセーフ</strong></li>
+<li data-sourcepos="13:1-14:0">
+<strong>並列処理が得意</strong> （など...）</li>
+</ul>
+<p data-sourcepos="15:1-15:295">Goはモバイル向けのアプリ開発や、Webサーバー構築などの用途で採用されることの多い言語です。CやC++に迫る高速処理がウリで、GoroutineやChannelなどの機能を使えば同時並行で処理を進める（並列処理）ことができます。</p>
+<blockquote data-sourcepos="17:1-17:237">
+<p data-sourcepos="17:2-17:237">なお、GoのデメリットについてはQiita内外の各所で議論されていますので、興味のある方は探してみて下さい。私はGo言語初心者なので、取り敢えず動けばOK、のスタンスです。</p>
+</blockquote>
+<p data-sourcepos="19:1-19:463">Goの文法については後で詳しく見ていきますが、C言語Likeに記述でき、あまり自由な書き方が許されていないことから、<strong>ソフトウェア等の共同開発に向いている言語</strong>と評価されています。Cを知らないPythonエンジニアなどにとっては習得に時間が掛かりそうですが、Cに慣れていればそれほど苦労せずコーディングできるようになると思います。</p>
+<p data-sourcepos="22:1-22:506">今回はテキストエディタ「<a href="https://atom.io/" rel="nofollow noopener" target="_blank"><strong>Atom</strong></a>」でGoを動かしてみます。Atomは<a href="https://atom.io/" rel="nofollow noopener" target="_blank"><strong>公式サイト</strong></a>からダウンロードできます。この記事ではAtomについては深く立ち入りません。Atomの詳しい使い方や設定方法については「<a href="https://qiita.com/spiegel-im-spiegel/items/3d41d98dacc107d73431" id="reference-3494301e5c7a249f11e1"><strong>ATOM Editor をそろそろ始めようか</strong></a>」に掲載されているブックマーク等を参考にしてみて下さい。</p>
+<p data-sourcepos="24:1-24:386">今回の主な目的はWindowsユーザーが手早くGoを使える環境を作ることです。書いて保存してコンパイルして実行...という手順を楽しみたい方はご自由にどうぞ...。Ubuntuをご利用の方は「<a href="https://qiita.com/notchi/items/5f76b2f77cff39eca4d8" id="reference-95ca8ce40203b4bbd5d4"><strong>Ubuntuに最新のGolangをインストールする</strong></a>」などをご覧下さい。</p>
+<h1 data-sourcepos="27:1-27:25">
+<span id="goを導入する手順" class="fragment"></span><a href="#go%E3%82%92%E5%B0%8E%E5%85%A5%E3%81%99%E3%82%8B%E6%89%8B%E9%A0%86"><i class="fa fa-link"></i></a>Goを導入する手順</h1>
+<p data-sourcepos="29:1-30:131">主にWindows向けに紹介します。<br>
+まず<a href="https://go.dev/dl/" rel="nofollow noopener" target="_blank"><strong>Goの公式サイト</strong></a>から、PCの環境に合った Go installer をダウンロードします。</p>
+<blockquote data-sourcepos="32:1-32:154">
+<p data-sourcepos="32:2-32:154">当方のPCの環境は Windows 10 Pro (バージョン 1903) なので、私は go1.15.2.windows-amd64.msi (116 MB) をダウンロードしました。</p>
+</blockquote>
+<p data-sourcepos="34:1-34:200">ダウンロードした.msiファイルを実行すると以下のような画面が出てきますので、[Next] を押しまくってデフォルトの設定のままインストールします。</p>
+<p data-sourcepos="36:1-36:132"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F3f134f0d-ea6f-a151-046d-01c4f0cd8045.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=0c12cf46e432815fad34a20222bdd141" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/ea89b1844b2682f65f0f5981.png" width="70%" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/3f134f0d-ea6f-a151-046d-01c4f0cd8045.png" loading="lazy" decoding="async"></a></p>
+<blockquote data-sourcepos="37:1-38:111">
+<p data-sourcepos="37:2-38:111">Macなら.pkgファイルを開いてインストールする、もしくは <code>brew install go</code> でインストールする。（詳しくは「<a href="https://qiita.com/mumoshu/items/0d2f2a13c6e9fc8da2a4#comments" id="reference-02b941dd58b65ff2040c"><strong>他言語から来た人がGoを使い始めてすぐハマったこととその答え</strong></a>」を参照）<br>
+Linuxなら <code>tar -C /usr/local -xzf go1.15.2.linux-amd64.tar.gz</code> として.tar.gzファイルを解凍する。</p>
+</blockquote>
+<p data-sourcepos="40:1-40:133">[finish] を押せば、以上でGoのインストールは完了です。コマンドプロンプトで <code>go version</code> と叩けば、</p>
+<div class="code-frame" data-lang="text" data-sourcepos="42:1-44:3"><div class="highlight"><pre><code>go version go1.15.2 windows/amd64
+</code></pre></div></div>
+<p data-sourcepos="46:1-46:30">などと返ってきます。</p>
+<p data-sourcepos="48:1-48:393">あとはGoのパスを通せばAtom上で使えるようになります…が、デフォルト設定でインストールした場合は既にユーザー環境変数に「GOPATH」が追加されているはずです（不慮の事故を防止するため、GOPATHは普通は1つだけ指定しておきます）。デフォルトでは <code>C:\Users\name\go</code> にパスが通っています。</p>
+<p data-sourcepos="50:1-50:54">環境変数の確認方法は以下の通りです。</p>
+<blockquote data-sourcepos="52:1-55:74">
+<p data-sourcepos="52:2-55:74">① コントロールパネルを開く（プログラム → Windowsシステムツール から選択できる）<br>
+② システムとセキュリティ → システム に移動<br>
+③ システムの詳細設定 をクリックしてプロパティを開く<br>
+④「環境設定」をクリック →「環境変数」をクリック</p>
+</blockquote>
+<p data-sourcepos="57:1-57:113">以上でGoのパスが通ったので、Atom上でGoのスクリプトが動かせるようになりました。</p>
+<blockquote data-sourcepos="59:1-64:196">
+<p data-sourcepos="59:2-59:188">Goをインストールしていない状態、もしくは、GoのPathが通っていない状態でGoのスクリプトを実行すると以下のようなエラーが出てきます。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="60:2-63:4"><div class="highlight"><pre><code>'go' �́A�����R�}���h�܂��͊O���R�}���h�A
+����\�ȃv���O�����܂��̓o�b�` �t�@�C���Ƃ��ĔF������Ă��܂���B
+</code></pre></div></div>
+<p data-sourcepos="64:2-64:196">これはAtomがGoの実行ファイルの場所を見つけられない時に出てくるエラーですが、上記の手順を踏む限り、このエラーには遭遇しないはずです。</p>
+</blockquote>
+<h1 data-sourcepos="66:1-66:22">
+<span id="goを使ってみる" class="fragment"></span><a href="#go%E3%82%92%E4%BD%BF%E3%81%A3%E3%81%A6%E3%81%BF%E3%82%8B"><i class="fa fa-link"></i></a>Goを使ってみる</h1>
+<p data-sourcepos="67:1-67:489">テキストエディタとしてAtomを使う場合は「<strong>script</strong>」パッケージをインストールしておくと、<strong>[Ctrl + Shift + B]</strong> でスクリプトを実行することができるので便利です。冒頭でも述べましたがGoはコンパイラ型言語です。Atom上でGoスクリプトを実行する際はコンパイルする手間が掛かるので、レスポンスは多少遅くなります（プログラム自体が遅い訳ではありません）。</p>
+<p data-sourcepos="69:1-69:60">以下、Goの使用例とTipsを紹介していきます。</p>
+<h3 data-sourcepos="71:1-71:42">
+<span id="ご挨拶-println関数-print関数" class="fragment"></span><a href="#%E3%81%94%E6%8C%A8%E6%8B%B6-println%E9%96%A2%E6%95%B0-print%E9%96%A2%E6%95%B0"><i class="fa fa-link"></i></a>ご挨拶 (Println関数, Print関数)</h3>
+<div class="code-frame" data-lang="Go" data-sourcepos="73:1-82:3"><div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="s">"Hello, world"</span><span class="p">)</span>
+<span class="p">}</span>
+<span class="c">// Print    改行なし出力</span>
+<span class="c">// Println  改行あり出力</span>
+</code></pre></div></div>
+<blockquote data-sourcepos="83:1-83:237">
+<p data-sourcepos="83:3-83:237">fmt は入出力を制御するパッケージで、Print関数やPrintln関数によって文字列を表示できます。このとき <code>print</code> のように小文字にしてしまうとエラーになるので注意して下さい。</p>
+</blockquote>
+<div class="code-frame" data-lang="Go" data-sourcepos="85:1-93:3"><div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Print</span><span class="p">(</span><span class="s">"Hello, "</span><span class="p">);</span> <span class="n">fmt</span><span class="o">.</span><span class="n">Print</span><span class="p">(</span><span class="s">"world!"</span><span class="p">)</span>
+<span class="p">}</span>
+<span class="c">// 出力結果は Hello, world!</span>
+</code></pre></div></div>
+<blockquote data-sourcepos="94:1-94:120">
+<p data-sourcepos="94:2-94:120">セミコロンで繋げば出力を1行で表示することができます。C言語と似たような仕様です。</p>
+</blockquote>
+<h3 data-sourcepos="96:1-96:31">
+<span id="printf関数の取り扱い" class="fragment"></span><a href="#printf%E9%96%A2%E6%95%B0%E3%81%AE%E5%8F%96%E3%82%8A%E6%89%B1%E3%81%84"><i class="fa fa-link"></i></a>Printf関数の取り扱い</h3>
+<div class="code-frame" data-lang="Go" data-sourcepos="98:1-112:3"><div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Printf</span><span class="p">(</span><span class="s">"%v</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="s">"apple"</span><span class="p">)</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Printf</span><span class="p">(</span><span class="s">"%v</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="m">2020</span><span class="p">)</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Printf</span><span class="p">(</span><span class="s">"%v</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="kt">uint</span><span class="p">(</span><span class="m">2020</span><span class="p">))</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Printf</span><span class="p">(</span><span class="s">"%v</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="m">12.345</span><span class="p">)</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Printf</span><span class="p">(</span><span class="s">"%v</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="m">2</span> <span class="o">+</span> <span class="m">1i</span><span class="p">)</span> <span class="c">// 複素数</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Printf</span><span class="p">(</span><span class="s">"%v</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="s">"ぴえん🥺"</span><span class="p">)</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Printf</span><span class="p">(</span><span class="s">"%v</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="nb">make</span><span class="p">(</span><span class="k">chan</span> <span class="kt">bool</span><span class="p">))</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Printf</span><span class="p">(</span><span class="s">"%v</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="nb">new</span><span class="p">(</span><span class="kt">int</span><span class="p">))</span>
+<span class="p">}</span>
+</code></pre></div></div>
+<div class="code-frame" data-lang="" data-sourcepos="113:1-122:3">
+<div class="code-lang"><span class="bold">出力結果</span></div>
+<div class="highlight"><pre><code>apple
+2020
+2020
+12.345
+(2+1i)
+ぴえん🥺
+0xc000014120
+0xc000010098
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="123:1-125:103">
+<p data-sourcepos="123:2-125:103">書式指定子がCと少し異なりますが、Printfが使えます。詳しい使い方については以下の記事をご参照ください。<br>
+・「<a href="https://qiita.com/rock619/items/14eb2b32f189514b5c3c" id="reference-ae2a8e890e33989aa74a"><strong>fmt.Printfなんかこわくない</strong></a>」<br>
+・「<a href="https://qiita.com/taji-taji/items/77845ef744da7c88a6fe" id="reference-337762097ef15883f7c7"><strong>【Go】print系関数の違い</strong></a>」</p>
+</blockquote>
+<h3 data-sourcepos="127:1-127:33">
+<span id="for文if文の取り扱い" class="fragment"></span><a href="#for%E6%96%87if%E6%96%87%E3%81%AE%E5%8F%96%E3%82%8A%E6%89%B1%E3%81%84"><i class="fa fa-link"></i></a>for文、if文の取り扱い</h3>
+<div class="code-frame" data-lang="Go" data-sourcepos="128:1-148:3">
+<div class="code-lang"><span class="bold">FizzBuzz</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="k">var</span> <span class="n">i</span> <span class="o">=</span> <span class="m">1</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="m">16</span> <span class="p">{</span>
+        <span class="k">switch</span> <span class="p">{</span> <span class="c">// Cと同様にswitch文が利用可能</span>
+        <span class="k">case</span> <span class="n">i</span> <span class="o">%</span> <span class="m">15</span> <span class="o">==</span> <span class="m">0</span><span class="o">:</span>
+            <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="s">"FizzBuzz"</span><span class="p">)</span>
+        <span class="k">case</span> <span class="n">i</span> <span class="o">%</span> <span class="m">3</span> <span class="o">==</span> <span class="m">0</span><span class="o">:</span>
+            <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="s">"Fizz"</span><span class="p">)</span>
+        <span class="k">case</span> <span class="n">i</span> <span class="o">%</span> <span class="m">5</span> <span class="o">==</span> <span class="m">0</span><span class="o">:</span>
+            <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="s">"Buzz"</span><span class="p">)</span>
+        <span class="k">default</span><span class="o">:</span>
+            <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+        <span class="p">}</span>
+        <span class="n">i</span><span class="o">++</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="149:1-150:100">
+<p data-sourcepos="149:3-150:100"><code>var i = 1</code> という変数の定義の仕方は <code>i := 1</code> のような型を省略した変数宣言に置き換えることができます。いわゆる「セイウチ演算子」です。<br>
+また、GoではCやJavaと異なりif文の条件を丸括弧で囲む必要はありません。</p>
+</blockquote>
+<div class="code-frame" data-lang="Go" data-sourcepos="152:1-159:3">
+<div class="code-lang"><span class="bold">1行for文</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="o">:=</span> <span class="m">1</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;=</span> <span class="m">10</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span> <span class="p">{</span><span class="n">fmt</span><span class="o">.</span><span class="n">Printf</span><span class="p">(</span><span class="s">"%d</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">i</span><span class="p">)}</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="Go" data-sourcepos="161:1-175:3">
+<div class="code-lang"><span class="bold">無限ループ</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">i</span> <span class="o">:=</span> <span class="m">1</span>
+    <span class="k">for</span> <span class="p">{</span> <span class="c">// &lt;-- 条件を書かない</span>
+        <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;</span> <span class="m">10</span> <span class="p">{</span>
+            <span class="k">break</span> <span class="c">// ループを抜ける</span>
+        <span class="p">}</span>
+        <span class="n">fmt</span><span class="o">.</span><span class="n">Printf</span><span class="p">(</span><span class="s">"%d</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+        <span class="n">i</span><span class="o">++</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="177:1-177:200">
+<p data-sourcepos="177:2-177:200">**Goにはwhile文が無く、すべてのloop処理はfor文で書きます。**他の言語から来た方や久し振りにGoを触る方は、whileを使おうと頑張らないで下さい...。</p>
+</blockquote>
+<h3 data-sourcepos="180:1-180:28">
+<span id="文字列の取り扱い" class="fragment"></span><a href="#%E6%96%87%E5%AD%97%E5%88%97%E3%81%AE%E5%8F%96%E3%82%8A%E6%89%B1%E3%81%84"><i class="fa fa-link"></i></a>文字列の取り扱い</h3>
+<div class="code-frame" data-lang="Go" data-sourcepos="181:1-192:3">
+<div class="code-lang"><span class="bold">文字列の結合</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">a</span> <span class="o">:=</span> <span class="s">"ABCDEF"</span>
+    <span class="n">b</span> <span class="o">:=</span> <span class="s">"abcdef"</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">a</span> <span class="o">+</span> <span class="n">b</span><span class="p">)</span> <span class="c">// ABCDEFabcdef</span>
+    <span class="n">c</span> <span class="o">:=</span> <span class="n">a</span> <span class="o">+</span> <span class="n">b</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="c">// ABCDEFabcdef</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="Go" data-sourcepos="193:1-202:3">
+<div class="code-lang"><span class="bold">文字列の分割（インデックス指定）</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">a</span> <span class="o">:=</span> <span class="s">"ABCDEF"</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="o">:</span><span class="m">3</span><span class="p">])</span> <span class="c">// ABC</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="m">3</span><span class="o">:</span><span class="p">])</span> <span class="c">// DEF</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="Go" data-sourcepos="203:1-212:3">
+<div class="code-lang"><span class="bold">大文字化・小文字化</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="p">(</span><span class="s">"fmt"</span><span class="p">;</span> <span class="s">"strings"</span><span class="p">)</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">a</span> <span class="o">:=</span> <span class="s">"ABCdef"</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">strings</span><span class="o">.</span><span class="n">ToUpper</span><span class="p">(</span><span class="n">a</span><span class="p">))</span>  <span class="c">// ABCDEF</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">strings</span><span class="o">.</span><span class="n">ToLower</span><span class="p">(</span><span class="n">a</span><span class="p">))</span>  <span class="c">// abcdef</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="214:1-214:202">
+<p data-sourcepos="214:3-214:202">変数型の変換については「<a href="https://qiita.com/quicksort/items/c9522793a941edf074fd" id="reference-dd6768df93b5aec56284"><strong>golang　文字列→数値、数値→文字列変換</strong></a>」などの記事を参考にして下さい。</p>
+</blockquote>
+<h3 data-sourcepos="216:1-216:56">
+<span id="配列arraysとスライスslicesの取り扱い" class="fragment"></span><a href="#%E9%85%8D%E5%88%97arrays%E3%81%A8%E3%82%B9%E3%83%A9%E3%82%A4%E3%82%B9slices%E3%81%AE%E5%8F%96%E3%82%8A%E6%89%B1%E3%81%84"><i class="fa fa-link"></i></a>配列(Arrays)とスライス(Slices)の取り扱い</h3>
+<p data-sourcepos="217:1-220:55">Goの**配列(Arrays)**の宣言には以下の3タイプがあります。<br>
+①　<code>var 変数名 [長さ]型</code><br>
+②　<code>var 変数名 [長さ]型 = [大きさ]型{初期値1, 初期値n}</code><br>
+③　<code>変数名 := [...]型{初期値１, 初期値n}</code></p>
+<p data-sourcepos="222:1-222:121">③の記法は<strong>要素数の指定が不要</strong>でシンプルに書けるため、よく使われているようです。</p>
+<div class="code-frame" data-lang="Go" data-sourcepos="225:1-238:3"><div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">(){</span>
+    <span class="n">arr</span> <span class="o">:=</span> <span class="p">[</span><span class="o">...</span><span class="p">]</span> <span class="kt">string</span><span class="p">{</span><span class="s">"apple"</span><span class="p">,</span> <span class="s">"banana"</span><span class="p">,</span> <span class="s">"cherry"</span><span class="p">}</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">arr</span><span class="p">[</span><span class="m">0</span><span class="p">],</span> <span class="n">arr</span><span class="p">[</span><span class="m">1</span><span class="p">])</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">arr</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">arr</span><span class="p">))</span>
+<span class="p">}</span>
+<span class="c">/* 出力結果
+apple banana
+[apple banana cherry] 3
+*/</span>
+</code></pre></div></div>
+<blockquote data-sourcepos="239:1-239:68">
+<p data-sourcepos="239:3-239:68">len関数で配列の長さ（要素数）を取得できます。</p>
+</blockquote>
+<p data-sourcepos="242:1-242:293">配列(Arrays)は長さ（要素数）が固定されているのに対して、**スライス(Slices)**は長さ（要素数）が可変です。Goの「配列」はCの配列と似ており、Goの「スライス」はPythonのリストやRubyの配列に近いイメージでしょうか。</p>
+<p data-sourcepos="244:1-248:38">スライスの宣言方法も何通りか知られています。<br>
+①　<code>var 変数名 []型</code><br>
+②　<code>var 変数名 []型 = []型{初期値1, ..., 初期値n}</code><br>
+③　<code>変数名 := []型{初期値1, ..., 初期値n}</code><br>
+④　<code>変数名 := 配列[start:end]</code></p>
+<p data-sourcepos="250:1-250:108">④は既に存在する配列をスライスにする方法です。例えば以下のようにします。</p>
+<div class="code-frame" data-lang="Go" data-sourcepos="252:1-266:3"><div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">(){</span>
+    <span class="n">arr</span> <span class="o">:=</span> <span class="p">[</span><span class="o">...</span><span class="p">]</span> <span class="kt">string</span><span class="p">{</span><span class="s">"apple"</span><span class="p">,</span> <span class="s">"banana"</span><span class="p">,</span> <span class="s">"cherry"</span><span class="p">}</span>
+    <span class="n">slice</span> <span class="o">:=</span> <span class="n">arr</span><span class="p">[</span><span class="m">0</span><span class="o">:</span><span class="m">2</span><span class="p">]</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">slice</span><span class="p">)</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">arr</span><span class="p">)</span>
+<span class="p">}</span>
+<span class="c">/* 出力結果
+[apple banana]
+[apple banana cherry]
+*/</span>
+</code></pre></div></div>
+<blockquote data-sourcepos="268:1-272:113">
+<p data-sourcepos="268:3-272:113">参考：<br>
+「<a href="https://qiita.com/k-penguin-sato/items/daad9986d6c42bdcde90" id="reference-e4a998a6fa3c3c8eea3c"><strong>【Go】基本文法④(配列・スライス)</strong></a>」<br>
+「<a href="https://qiita.com/Kashiwara/items/e621a4ad8ec00974f025" id="reference-8d910c79595496b9f08e"><strong>Go言語のスライスで勘違いしやすいこところ</strong></a>」<br>
+「<a href="https://qiita.com/YumaInaura/items/aec7857518102ff5e27c" id="reference-de56c1f854b93ca053a9"><strong>Go言語の基本 — array と slice の違い</strong></a>」<br>
+「<a href="https://qiita.com/seihmd/items/d9bc98a4f4f606ecaef7" id="reference-84d49df44d8c28e48e71"><strong>Goのarrayとsliceを理解するときがきた</strong></a>」</p>
+</blockquote>
+<h3 data-sourcepos="274:1-274:40">
+<span id="配列は要素数を増やせない" class="fragment"></span><a href="#%E9%85%8D%E5%88%97%E3%81%AF%E8%A6%81%E7%B4%A0%E6%95%B0%E3%82%92%E5%A2%97%E3%82%84%E3%81%9B%E3%81%AA%E3%81%84"><i class="fa fa-link"></i></a>配列は要素数を増やせない</h3>
+<div class="code-frame" data-lang="Go" data-sourcepos="275:1-284:3">
+<div class="code-lang"><span class="bold">配列(要素数指定)だと怒られる</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">(){</span>
+    <span class="n">numbers</span> <span class="o">:=</span> <span class="p">[</span><span class="m">3</span><span class="p">]</span><span class="kt">int</span><span class="p">{</span><span class="m">1</span><span class="p">,</span> <span class="m">2</span><span class="p">,</span> <span class="m">3</span><span class="p">}</span>
+    <span class="n">numbers</span> <span class="o">=</span> <span class="nb">append</span><span class="p">(</span><span class="n">numbers</span><span class="p">,</span> <span class="m">4</span><span class="p">)</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">numbers</span><span class="p">)</span> <span class="c">// first argument to append must be slice; have [3]int</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="Go" data-sourcepos="285:1-294:3">
+<div class="code-lang"><span class="bold">要素数を指定しなければ動く...？</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">(){</span>
+    <span class="n">numbers</span> <span class="o">:=</span> <span class="p">[]</span><span class="kt">int</span><span class="p">{</span><span class="m">1</span><span class="p">,</span> <span class="m">2</span><span class="p">,</span> <span class="m">3</span><span class="p">}</span>
+    <span class="n">numbers</span> <span class="o">=</span> <span class="nb">append</span><span class="p">(</span><span class="n">numbers</span><span class="p">,</span> <span class="m">4</span><span class="p">)</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">numbers</span><span class="p">)</span> <span class="c">// [1 2 3 4]</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="295:1-295:158">
+<p data-sourcepos="295:3-295:158">実は後者の <code>test</code> は配列ではなく、<strong>スライスとして宣言されています</strong>。そのため、appendで要素の追加が可能です。</p>
+</blockquote>
+<h3 data-sourcepos="297:1-297:35">
+<span id="2次元配列多次元配列" class="fragment"></span><a href="#2%E6%AC%A1%E5%85%83%E9%85%8D%E5%88%97%E5%A4%9A%E6%AC%A1%E5%85%83%E9%85%8D%E5%88%97"><i class="fa fa-link"></i></a>2次元配列、多次元配列</h3>
+<p data-sourcepos="298:1-298:105">中括弧 <code>{ }</code> で二重に囲めば、2次元配列・2次元スライス（行列）になります。</p>
+<div class="code-frame" data-lang="Go" data-sourcepos="300:1-309:3">
+<div class="code-lang"><span class="bold">2次元スライスへの行追加</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">numbers</span> <span class="o">:=</span> <span class="p">[][]</span><span class="kt">int</span><span class="p">{{</span><span class="m">1</span><span class="p">,</span> <span class="m">1</span><span class="p">},</span> <span class="p">{</span><span class="m">1</span><span class="p">,</span> <span class="m">2</span><span class="p">},</span> <span class="p">{</span><span class="m">1</span><span class="p">,</span> <span class="m">3</span><span class="p">},</span> <span class="p">{</span><span class="m">1</span><span class="p">,</span> <span class="m">4</span><span class="p">}}</span>
+    <span class="n">numbers</span> <span class="o">=</span> <span class="nb">append</span><span class="p">(</span><span class="n">numbers</span><span class="p">,</span> <span class="p">[]</span><span class="kt">int</span><span class="p">{</span><span class="m">1</span><span class="p">,</span> <span class="m">5</span><span class="p">})</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">numbers</span><span class="p">)</span> <span class="c">// [[1 1] [1 2] [1 3] [1 4] [1 5]]</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="310:1-310:47">
+<p data-sourcepos="310:3-310:47">これは以下の操作に該当します。</p>
+</blockquote>
+<div class="code-frame" data-lang="math" data-sourcepos="311:1-326:3"><div class="highlight"><pre><code>\left[\begin{array}{ll}
+1 &amp; 1 \\
+1 &amp; 2 \\
+1 &amp; 3 \\
+1 &amp; 4
+\end{array}\right]
+\to
+\left[\begin{array}{ll}
+1 &amp; 1 \\
+1 &amp; 2 \\
+1 &amp; 3 \\
+1 &amp; 4 \\
+1 &amp; 5
+\end{array}\right]
+</code></pre></div></div>
+<p data-sourcepos="328:1-328:66">なお、多次元配列は以下のように生成可能です。</p>
+<div class="code-frame" data-lang="Go" data-sourcepos="330:1-340:3">
+<div class="code-lang"><span class="bold">多次元配列の生成</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">multiDimArray</span> <span class="o">:=</span> <span class="p">[</span><span class="m">2</span><span class="p">][</span><span class="m">4</span><span class="p">][</span><span class="m">3</span><span class="p">][</span><span class="m">2</span><span class="p">]</span><span class="kt">string</span><span class="p">{}</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">multiDimArray</span><span class="p">)</span>
+<span class="p">}</span>
+<span class="c">// 以下のような多次元「配列」が作成されます。</span>
+<span class="c">// [[[[ ] [ ] [ ]] [[ ] [ ] [ ]] [[ ] [ ] [ ]] [[ ] [ ] [ ]]] [[[ ] [ ] [ ]] [[ ] [ ] [ ]] [[ ] [ ] [ ]] [[ ] [ ] [ ]]]]</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="342:1-342:136">
+<p data-sourcepos="342:3-342:136">要素数を指定したくないからといって <code>[][][][]型{}</code> のように書いても多次元配列は生成されません。</p>
+</blockquote>
+<h3 data-sourcepos="344:1-344:67">
+<span id="関数例ニュートン法による平方根の計算" class="fragment"></span><a href="#%E9%96%A2%E6%95%B0%E4%BE%8B%E3%83%8B%E3%83%A5%E3%83%BC%E3%83%88%E3%83%B3%E6%B3%95%E3%81%AB%E3%82%88%E3%82%8B%E5%B9%B3%E6%96%B9%E6%A0%B9%E3%81%AE%E8%A8%88%E7%AE%97"><i class="fa fa-link"></i></a>関数（例：ニュートン法による平方根の計算）</h3>
+<div class="code-frame" data-lang="Go" data-sourcepos="345:1-376:3">
+<div class="code-lang"><span class="bold">ニュートン法による平方根の計算</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+
+<span class="k">import</span> <span class="p">(</span>
+    <span class="s">"fmt"</span>
+    <span class="s">"math"</span>
+<span class="p">)</span>
+
+<span class="k">func</span> <span class="n">mySqrt</span><span class="p">(</span><span class="n">x</span> <span class="kt">float64</span><span class="p">)</span> <span class="p">(</span><span class="kt">float64</span><span class="p">)</span> <span class="p">{</span>
+	<span class="n">z</span> <span class="o">:=</span> <span class="m">1.0</span>
+	<span class="k">for</span> <span class="n">i</span> <span class="o">:=</span> <span class="m">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="m">10</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span> <span class="p">{</span> <span class="c">// 10回最適化する</span>
+		<span class="n">calculation</span> <span class="o">:=</span> <span class="n">z</span> <span class="o">-</span> <span class="p">(</span><span class="n">z</span><span class="o">*</span><span class="n">z</span><span class="o">-</span><span class="n">x</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="m">2</span><span class="o">*</span><span class="n">z</span><span class="p">)</span>
+		<span class="k">if</span> <span class="n">calculation</span> <span class="o">==</span> <span class="n">z</span> <span class="p">{</span>
+			<span class="k">break</span>
+		<span class="p">}</span>
+		<span class="n">z</span> <span class="o">=</span> <span class="n">calculation</span>
+	<span class="p">}</span>
+	<span class="k">return</span> <span class="n">z</span>
+<span class="p">}</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">a</span> <span class="o">:=</span> <span class="p">[</span><span class="m">4</span><span class="p">]</span><span class="kt">float64</span><span class="p">{</span><span class="m">0</span><span class="p">,</span> <span class="m">0.25</span><span class="p">,</span> <span class="m">0.999</span><span class="p">,</span> <span class="m">2020</span><span class="p">}</span> <span class="c">// この4点について平方根を求める</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="o">:=</span> <span class="m">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="m">4</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span> <span class="p">{</span>
+        <span class="n">mySqrt</span> <span class="o">:=</span> <span class="n">mySqrt</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="n">mathSqrt</span> <span class="o">:=</span> <span class="n">math</span><span class="o">.</span><span class="n">Sqrt</span><span class="p">(</span><span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+
+        <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="s">"自作Sqrt関数  = "</span><span class="p">,</span> <span class="n">mySqrt</span><span class="p">,</span> <span class="s">"(x ="</span><span class="p">,</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="s">"のとき)"</span><span class="p">)</span>
+        <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="s">"math.Sqrt関数 = "</span><span class="p">,</span> <span class="n">mathSqrt</span><span class="p">,</span> <span class="s">"(x ="</span><span class="p">,</span> <span class="n">a</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="s">"のとき)"</span><span class="p">)</span>
+        <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="s">"自作Sqrt関数とmath.Sqrt関数の差 = "</span><span class="p">,</span> <span class="n">math</span><span class="o">.</span><span class="n">Abs</span><span class="p">(</span><span class="n">mySqrt</span><span class="o">-</span><span class="n">mathSqrt</span><span class="p">),</span> <span class="s">"</span><span class="se">\n</span><span class="s">"</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="" data-sourcepos="377:1-393:3">
+<div class="code-lang"><span class="bold">出力結果</span></div>
+<div class="highlight"><pre><code>自作Sqrt関数  =  0.0009765625 (x = 0 のとき)
+math.Sqrt関数 =  0 (x = 0 のとき)
+自作Sqrt関数とmath.Sqrt関数の差 =  0.0009765625 
+
+自作Sqrt関数  =  0.5 (x = 0.25 のとき)
+math.Sqrt関数 =  0.5 (x = 0.25 のとき)
+自作Sqrt関数とmath.Sqrt関数の差 =  0 
+
+自作Sqrt関数  =  0.999499874937461 (x = 0.999 のとき)
+math.Sqrt関数 =  0.999499874937461 (x = 0.999 のとき)
+自作Sqrt関数とmath.Sqrt関数の差 =  0 
+
+自作Sqrt関数  =  44.94441010848846 (x = 2020 のとき)
+math.Sqrt関数 =  44.94441010848846 (x = 2020 のとき)
+自作Sqrt関数とmath.Sqrt関数の差 =  0 
+</code></pre></div>
+</div>
+<h3 data-sourcepos="396:1-396:22">
+<span id="ファイル処理" class="fragment"></span><a href="#%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E5%87%A6%E7%90%86"><i class="fa fa-link"></i></a>ファイル処理</h3>
+<p data-sourcepos="397:1-398:98">osパッケージを利用してファイルの読み書きが可能です。<br>
+例として以下のようなテキストファイル（test.txt）を読み込んでみます。</p>
+<div class="code-frame" data-lang="" data-sourcepos="400:1-404:3">
+<div class="code-lang"><span class="bold">test.txt</span></div>
+<div class="highlight"><pre><code>apple
+banana
+cherry
+</code></pre></div>
+</div>
+<p data-sourcepos="406:1-406:105">バイト型スライスを利用すると以下のようにファイルの読み込みが可能です。</p>
+<div class="code-frame" data-lang="Go" data-sourcepos="408:1-434:3">
+<div class="code-lang"><span class="bold">ファイルの読み込み</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span><span class="p">(</span>
+    <span class="s">"fmt"</span>
+    <span class="s">"os"</span>
+<span class="p">)</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">(){</span>
+    <span class="n">f</span><span class="p">,</span> <span class="n">err</span> <span class="o">:=</span> <span class="n">os</span><span class="o">.</span><span class="n">Open</span><span class="p">(</span><span class="s">"test.txt"</span><span class="p">)</span> <span class="c">// ファイルを開く</span>
+    <span class="k">if</span> <span class="n">err</span> <span class="o">!=</span> <span class="no">nil</span><span class="p">{</span> <span class="c">// 読み取り時の例外処理</span>
+        <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="s">"error"</span><span class="p">)</span>
+    <span class="p">}</span>
+    <span class="k">defer</span> <span class="n">f</span><span class="o">.</span><span class="n">Close</span><span class="p">()</span> <span class="c">// 関数終了時にファイルを閉じる</span>
+
+    <span class="n">buf</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">([]</span><span class="kt">byte</span><span class="p">,</span> <span class="m">1024</span><span class="p">)</span> <span class="c">// バイト型スライスを用意する</span>
+    <span class="k">for</span> <span class="p">{</span>
+        <span class="n">n</span><span class="p">,</span> <span class="n">err</span> <span class="o">:=</span> <span class="n">f</span><span class="o">.</span><span class="n">Read</span><span class="p">(</span><span class="n">buf</span><span class="p">)</span> <span class="c">// n = バイト数</span>
+        <span class="k">if</span> <span class="n">n</span> <span class="o">==</span> <span class="m">0</span><span class="p">{</span> <span class="c">// バイト数が 0 になれば読み取り終了</span>
+            <span class="k">break</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="n">err</span> <span class="o">!=</span> <span class="no">nil</span><span class="p">{</span> <span class="c">// 読み取り時の例外処理</span>
+            <span class="k">break</span>
+        <span class="p">}</span>
+        <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="kt">string</span><span class="p">(</span><span class="n">buf</span><span class="p">[</span><span class="o">:</span><span class="n">n</span><span class="p">]))</span> <span class="c">// バイト型スライスを文字列型に変換して出力</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="436:1-436:60">ファイルへの書き出しは次のようにします。</p>
+<div class="code-frame" data-lang="Go" data-sourcepos="438:1-472:3">
+<div class="code-lang"><span class="bold">ファイルへの書き出し</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span><span class="p">(</span>
+    <span class="s">"fmt"</span>
+    <span class="s">"os"</span>
+<span class="p">)</span>
+
+<span class="k">func</span> <span class="n">writeByres</span><span class="p">(</span><span class="n">filename</span> <span class="kt">string</span><span class="p">)</span> <span class="kt">error</span> <span class="p">{</span>
+    <span class="n">file</span><span class="p">,</span> <span class="n">err</span> <span class="o">:=</span> <span class="n">os</span><span class="o">.</span><span class="n">Create</span><span class="p">(</span><span class="n">filename</span><span class="p">)</span> <span class="c">// 新規ファイルの作成</span>
+    <span class="k">if</span> <span class="n">err</span> <span class="o">!=</span> <span class="no">nil</span> <span class="p">{</span> <span class="c">// ファイル作成時の例外処理</span>
+        <span class="k">return</span> <span class="n">err</span>
+    <span class="p">}</span>
+    <span class="k">defer</span> <span class="n">file</span><span class="o">.</span><span class="n">Close</span><span class="p">()</span> <span class="c">// 関数終了時にファイルを閉じる</span>
+
+    <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">line</span> <span class="o">:=</span> <span class="k">range</span> <span class="n">lines</span> <span class="p">{</span> <span class="c">// インデックスの値は変数 _ に逃がす</span>
+        <span class="n">b</span> <span class="o">:=</span> <span class="p">[]</span><span class="kt">byte</span><span class="p">(</span><span class="n">line</span><span class="p">)</span> <span class="c">// バイト型スライスを用意する</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">err</span> <span class="o">:=</span> <span class="n">file</span><span class="o">.</span><span class="n">Write</span><span class="p">(</span><span class="n">b</span><span class="p">)</span> <span class="c">// ファイル書き込み</span>
+        <span class="k">if</span> <span class="n">err</span> <span class="o">!=</span> <span class="no">nil</span> <span class="p">{</span> <span class="c">// ファイル書き込み時の例外処理</span>
+            <span class="k">return</span> <span class="n">err</span>
+        <span class="p">}</span>
+    <span class="p">}</span>
+    <span class="k">return</span> <span class="no">nil</span>
+<span class="p">}</span>
+
+<span class="k">var</span> <span class="p">(</span> <span class="c">// ファイルに書き込む文字列</span>
+    <span class="n">lines</span> <span class="o">=</span> <span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">"apple</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="s">"banana</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="s">"cherry</span><span class="se">\n</span><span class="s">"</span><span class="p">}</span>
+<span class="p">)</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="k">if</span> <span class="n">err</span> <span class="o">:=</span> <span class="n">writeByres</span><span class="p">(</span><span class="s">"write.txt"</span><span class="p">);</span> <span class="n">err</span> <span class="o">!=</span> <span class="no">nil</span> <span class="p">{</span> <span class="c">// write.txt に書き込む</span>
+        <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">os</span><span class="o">.</span><span class="n">Stderr</span><span class="p">,</span> <span class="n">err</span><span class="p">)</span>
+        <span class="n">os</span><span class="o">.</span><span class="n">Exit</span><span class="p">(</span><span class="m">1</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="474:1-477:150">
+<p data-sourcepos="474:3-474:141">os.Create は既に同じ名前のファイルがある場合でも新規作成（上書き）するので使い方には要注意です。</p>
+<p data-sourcepos="476:2-477:150">参考：<br>
+「<a href="https://qiita.com/qt-luigi/items/2c13ad68e7d9f8f8c0f2" id="reference-5512fe1739a7969e95cb"><strong>Goでテキストファイルを読み書きする時に使う標準パッケージ</strong></a>」</p>
+</blockquote>
+<h3 data-sourcepos="479:1-479:25">
+<span id="コメントアウト" class="fragment"></span><a href="#%E3%82%B3%E3%83%A1%E3%83%B3%E3%83%88%E3%82%A2%E3%82%A6%E3%83%88"><i class="fa fa-link"></i></a>コメントアウト</h3>
+<div class="code-frame" data-lang="Go" data-sourcepos="480:1-491:3"><div class="highlight"><pre><code><span class="c">// 一行ずつコメントアウト</span>
+<span class="c">// apple</span>
+<span class="c">// banana</span>
+<span class="c">// cherry</span>
+
+<span class="c">/* 複数行コメントアウト
+apple
+banana
+cherry
+*/</span>
+</code></pre></div></div>
+<blockquote data-sourcepos="492:1-492:27">
+<p data-sourcepos="492:3-492:27">C言語と同じです。</p>
+</blockquote>
+<h3 data-sourcepos="494:1-494:37">
+<span id="日本語文字列の取り扱い" class="fragment"></span><a href="#%E6%97%A5%E6%9C%AC%E8%AA%9E%E6%96%87%E5%AD%97%E5%88%97%E3%81%AE%E5%8F%96%E3%82%8A%E6%89%B1%E3%81%84"><i class="fa fa-link"></i></a>日本語文字列の取り扱い</h3>
+<p data-sourcepos="496:1-496:198">文字列はバイト列になっているので、マルチバイト文字を含む文字列をインデックス指定で取り出そうとしても、文字単位での指定はできません。</p>
+<div class="code-frame" data-lang="Go" data-sourcepos="498:1-509:3">
+<div class="code-lang"><span class="bold">stringのスライスはバイト単位</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="k">var</span> <span class="n">s</span> <span class="o">=</span> <span class="s">"あいうえお"</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="o">:</span><span class="m">3</span><span class="p">])</span>         <span class="c">//-&gt; あ</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Printf</span><span class="p">(</span><span class="s">"%x</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">s</span><span class="p">[</span><span class="o">:</span><span class="m">3</span><span class="p">])</span>  <span class="c">//-&gt; e38182</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">s</span><span class="p">[</span><span class="o">:</span><span class="m">4</span><span class="p">])</span>         <span class="c">//-&gt; あ�</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Printf</span><span class="p">(</span><span class="s">"%x</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">s</span><span class="p">[</span><span class="o">:</span><span class="m">4</span><span class="p">])</span>  <span class="c">//-&gt; e38182e3</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="511:1-511:216">「ルーン (rune)」型のスライスを使えば、文字数ごとに文字列をインデックス指定で取り出すことができます。（rune型文字とはUnicode文字のことを指しています）</p>
+<div class="code-frame" data-lang="Go" data-sourcepos="513:1-522:3">
+<div class="code-lang"><span class="bold">runeのスライスを使う</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="k">var</span> <span class="n">str</span> <span class="o">=</span> <span class="s">"あいうえお"</span>
+    <span class="n">rstr</span> <span class="o">:=</span> <span class="p">[]</span><span class="kt">rune</span><span class="p">(</span><span class="n">str</span><span class="p">)</span>
+	<span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="kt">string</span><span class="p">(</span><span class="n">rstr</span><span class="p">[</span><span class="o">:</span><span class="m">3</span><span class="p">]))</span>  <span class="c">//-&gt; あいう</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="524:1-524:343">for文の条件文でのインデックス指定もバイト単位なので、マルチバイト文字を使っている場合はハマる危険性があり、注意が必要です。日本語を含む文字列の文字数を取得したい場合は<strong>unicode/utf8</strong>パッケージの<strong>RuneCountInString</strong>関数を使うこともできます。</p>
+<div class="code-frame" data-lang="Go" data-sourcepos="526:1-537:3">
+<div class="code-lang"><span class="bold">RuneCountInString関数によるカウント</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="p">(</span>
+    <span class="s">"fmt"</span>
+    <span class="s">"unicode/utf8"</span>
+<span class="p">)</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">str</span> <span class="o">:=</span> <span class="s">"ゼロから始めるGo言語生活"</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">utf8</span><span class="o">.</span><span class="n">RuneCountInString</span><span class="p">(</span><span class="n">str</span><span class="p">))</span>  <span class="c">//-&gt; 13</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="539:1-539:88">因みに、<strong>rangeで取り出すとrune単位で取り出すことができます。</strong></p>
+<div class="code-frame" data-lang="Go" data-sourcepos="541:1-553:3">
+<div class="code-lang"><span class="bold">日本語文字列を1文字ずつ抜き出す</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="p">(</span>
+    <span class="s">"fmt"</span>
+<span class="p">)</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">str</span> <span class="o">:=</span> <span class="s">"ゼロから始めるGo言語生活"</span>
+    <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">letter</span> <span class="o">:=</span> <span class="k">range</span> <span class="n">str</span> <span class="p">{</span> <span class="c">// rune単位での切り出し</span>
+        <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="kt">string</span><span class="p">(</span><span class="n">letter</span><span class="p">))</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="555:1-558:111">
+<p data-sourcepos="555:3-558:111">参考：<br>
+「<a href="https://hake.hatenablog.com/entry/20150826/p1" rel="nofollow noopener" target="_blank"><strong>Go言語 - 日本語文字列の操作</strong></a>」<br>
+「<a href="https://qiita.com/masakielastic/items/01a4fb691c572dd71a19" id="reference-cf4e97f17a6cacf81892"><strong>Go で UTF-8 の文字列を扱う</strong></a>」<br>
+「<a href="https://qiita.com/seihmd/items/4a878e7fa340d7963fee" id="reference-ca7de0059535f34dd837"><strong>Goのruneを理解するためのUnicode知識</strong></a>」</p>
+</blockquote>
+<h3 data-sourcepos="561:1-561:78">
+<span id="for文でのrangeの取り扱いインデックスの値を逃がす" class="fragment"></span><a href="#for%E6%96%87%E3%81%A7%E3%81%AErange%E3%81%AE%E5%8F%96%E3%82%8A%E6%89%B1%E3%81%84%E3%82%A4%E3%83%B3%E3%83%87%E3%83%83%E3%82%AF%E3%82%B9%E3%81%AE%E5%80%A4%E3%82%92%E9%80%83%E3%81%8C%E3%81%99"><i class="fa fa-link"></i></a>for文でのrangeの取り扱い（インデックスの値を逃がす）</h3>
+<div class="code-frame" data-lang="Go" data-sourcepos="563:1-579:3">
+<div class="code-lang"><span class="bold">上手く動かないrange</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">words</span> <span class="o">:=</span> <span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">"ABC"</span><span class="p">,</span> <span class="s">"DEF"</span><span class="p">,</span> <span class="s">"abc"</span><span class="p">,</span> <span class="s">"def"</span><span class="p">}</span>
+	<span class="k">for</span> <span class="n">str</span> <span class="o">:=</span> <span class="k">range</span> <span class="n">words</span> <span class="p">{</span>
+    	<span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">str</span><span class="p">)</span>
+	<span class="p">}</span>
+<span class="p">}</span>
+<span class="c">/* 出力結果
+0
+1
+2
+3
+*/</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="581:1-581:217">こうなってしまう理由は、インデックスの値が <code>str</code> に代入されているためです。この問題は以下のようにダミーの使い捨て変数を用意することで解消可能です。</p>
+<div class="code-frame" data-lang="Go" data-sourcepos="583:1-593:3">
+<div class="code-lang"><span class="bold">意図した通りのrange</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">words</span> <span class="o">:=</span> <span class="p">[]</span><span class="kt">string</span><span class="p">{</span><span class="s">"ABC"</span><span class="p">,</span> <span class="s">"DEF"</span><span class="p">,</span> <span class="s">"abc"</span><span class="p">,</span> <span class="s">"def"</span><span class="p">}</span>
+	<span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">str</span> <span class="o">:=</span> <span class="k">range</span> <span class="n">words</span> <span class="p">{</span> <span class="c">// &lt;-- インデックスの値を変数 _ に逃がす</span>
+    	<span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">str</span><span class="p">)</span>
+	<span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="595:1-595:208">
+<p data-sourcepos="595:3-595:208">初心者のハマりやすいポイントみたいです。「<a href="https://qiita.com/modal_soul/items/e49480e5692597fda975" id="reference-07bf678e9dc8e5fb5133"><strong>Goのfor rangeで思った値が取れなかった話</strong></a>」などをご参考に。</p>
+</blockquote>
+<h3 data-sourcepos="598:1-598:48">
+<span id="goにおける整数小数の取り扱い" class="fragment"></span><a href="#go%E3%81%AB%E3%81%8A%E3%81%91%E3%82%8B%E6%95%B4%E6%95%B0%E5%B0%8F%E6%95%B0%E3%81%AE%E5%8F%96%E3%82%8A%E6%89%B1%E3%81%84"><i class="fa fa-link"></i></a>Goにおける整数＆小数の取り扱い</h3>
+<p data-sourcepos="599:1-599:268">「<a href="https://qiita.com/sonatard/items/464a9d45c689386edfe1" id="reference-89d42c158fb13115a647"><strong>Better C - Goと整数</strong></a>」や「<a href="https://qiita.com/sonatard/items/eac6fb35dcc8e052a293" id="reference-1206699663c8df5dfc13"><strong>Better C - Goと小数</strong></a>」などの記事に詳しくまとめられていますので参考にして下さい。</p>
+<h3 data-sourcepos="601:1-601:49">
+<span id="使用しない変数は宣言しないこと" class="fragment"></span><a href="#%E4%BD%BF%E7%94%A8%E3%81%97%E3%81%AA%E3%81%84%E5%A4%89%E6%95%B0%E3%81%AF%E5%AE%A3%E8%A8%80%E3%81%97%E3%81%AA%E3%81%84%E3%81%93%E3%81%A8"><i class="fa fa-link"></i></a>使用しない変数は宣言しないこと</h3>
+<div class="code-frame" data-lang="Go" data-sourcepos="602:1-614:3">
+<div class="code-lang"><span class="bold">未使用変数がある場合</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">a</span> <span class="o">:=</span> <span class="s">"apple"</span>
+    <span class="n">b</span> <span class="o">:=</span> <span class="s">"banana"</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="p">}</span>
+<span class="c">/* 出力結果（エラー）
+b declared but not used
+*/</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="615:1-615:176">
+<p data-sourcepos="615:3-615:176">変数の型によらず、使用されていない変数があると怒られます。importしたのに使っていないパッケージがある場合も怒られます。</p>
+</blockquote>
+<h3 data-sourcepos="617:1-617:36">
+<span id="-による再代入は可能" class="fragment"></span><a href="#-%E3%81%AB%E3%82%88%E3%82%8B%E5%86%8D%E4%BB%A3%E5%85%A5%E3%81%AF%E5%8F%AF%E8%83%BD"><i class="fa fa-link"></i></a><code>:=</code> による再代入は可能</h3>
+<p data-sourcepos="618:1-618:84">宣言済みの変数に再び値を代入する際は以下のようにします。</p>
+<div class="code-frame" data-lang="Go" data-sourcepos="620:1-632:3">
+<div class="code-lang"><span class="bold">varを用いた再代入の例</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="k">var</span> <span class="n">str</span> <span class="o">=</span> <span class="s">"apple"</span>
+    <span class="n">str</span> <span class="o">=</span> <span class="s">"banana"</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">str</span><span class="p">)</span>
+<span class="p">}</span>
+<span class="c">/* 出力結果
+banana
+*/</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="634:1-634:138">しかし以下のように書くと <code>no new variables on left side of :=</code> などと怒られてコンパイルエラーとなります。</p>
+<div class="code-frame" data-lang="Go" data-sourcepos="636:1-645:3">
+<div class="code-lang"><span class="bold">ダメな代入例</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">str</span> <span class="o">:=</span> <span class="s">"apple"</span>
+    <span class="n">str</span> <span class="o">:=</span> <span class="s">"banana"</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">str</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="647:1-647:136">ただし、<strong>新しい変数を含む複数の変数の宣言を同時に行えば、既存の変数への再代入が可能</strong>です。</p>
+<div class="code-frame" data-lang="Go" data-sourcepos="649:1-663:3">
+<div class="code-lang"><span class="bold">許容される代入例</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="s">"fmt"</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="n">str1</span> <span class="o">:=</span> <span class="s">"apple"</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">str1</span><span class="p">)</span>
+    <span class="n">str1</span><span class="p">,</span> <span class="n">str2</span> <span class="o">:=</span> <span class="s">"banana"</span><span class="p">,</span> <span class="s">"cherry"</span>
+    <span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="n">str1</span><span class="p">,</span> <span class="n">str2</span><span class="p">)</span>
+<span class="p">}</span>
+<span class="c">/* 出力結果
+apple
+banana cherry
+*/</span>
+</code></pre></div>
+</div>
+<h1 data-sourcepos="666:1-666:59">
+<span id="goで並列処理goroutineとchannelの取り扱い" class="fragment"></span><a href="#go%E3%81%A7%E4%B8%A6%E5%88%97%E5%87%A6%E7%90%86goroutine%E3%81%A8channel%E3%81%AE%E5%8F%96%E3%82%8A%E6%89%B1%E3%81%84"><i class="fa fa-link"></i></a>Goで並列処理（GoroutineとChannelの取り扱い）</h1>
+<p data-sourcepos="668:1-668:362">Goのウリでもある並列処理は、大量のcsvファイルを同時に読み込んで処理するとか、大量のhtmlをダウンロードするとかいう場合に用いられます。Goではプログラマがスレッドやプロセスのことをあまり考えていなくても、自動でうまい具合に処理を振り分けてくれます。</p>
+<p data-sourcepos="670:1-670:83">GoではGoroutineを使えば簡単に並列処理を書くことができます。</p>
+<div class="code-frame" data-lang="Go" data-sourcepos="672:1-701:3">
+<div class="code-lang"><span class="bold">Goroutineの使用例</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="p">(</span>
+    <span class="s">"fmt"</span>
+    <span class="s">"time"</span>
+<span class="p">)</span>
+
+<span class="k">func</span> <span class="n">printnumbers</span><span class="p">()</span> <span class="p">{</span> <span class="c">// 100ミリ秒ごとに数字を表示</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="o">:=</span> <span class="m">1</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;=</span> <span class="m">5</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span> <span class="p">{</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">Sleep</span><span class="p">(</span><span class="m">100</span> <span class="o">*</span> <span class="n">time</span><span class="o">.</span><span class="n">Millisecond</span><span class="p">)</span>
+        <span class="n">fmt</span><span class="o">.</span><span class="n">Printf</span><span class="p">(</span><span class="s">"%d "</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">func</span> <span class="n">printletters</span><span class="p">()</span> <span class="p">{</span> <span class="c">// 140ミリ秒ごとにアルファベットを表示</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="o">:=</span> <span class="sc">'a'</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;=</span> <span class="sc">'e'</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span> <span class="p">{</span>
+        <span class="n">time</span><span class="o">.</span><span class="n">Sleep</span><span class="p">(</span><span class="m">140</span> <span class="o">*</span> <span class="n">time</span><span class="o">.</span><span class="n">Millisecond</span><span class="p">)</span>
+        <span class="n">fmt</span><span class="o">.</span><span class="n">Printf</span><span class="p">(</span><span class="s">"%c "</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+    <span class="p">}</span>
+<span class="p">}</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+    <span class="k">go</span> <span class="n">printnumbers</span><span class="p">()</span> <span class="c">// goroutine その1</span>
+    <span class="k">go</span> <span class="n">printletters</span><span class="p">()</span> <span class="c">// goroutine その2</span>
+    <span class="n">time</span><span class="o">.</span><span class="n">Sleep</span><span class="p">(</span><span class="m">1000</span> <span class="o">*</span> <span class="n">time</span><span class="o">.</span><span class="n">Millisecond</span><span class="p">)</span> <span class="c">// 1秒待機する</span>
+<span class="p">}</span>
+<span class="c">/* 出力結果
+1 a 2 b 3 4 c 5 d e 
+*/</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="703:1-706:216">
+<p data-sourcepos="703:2-706:216">このコードではGoroutineを２つ動かして同時並行で処理を行っています。プログラムの挙動は以下のようなイメージです。<br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F044d6238-6b3e-26ae-7df1-7543cb1262c1.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=820bad55da46a583aba191372aeb44dc" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/98b9a29273f640e336893187.png" width="90%" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/044d6238-6b3e-26ae-7df1-7543cb1262c1.png" loading="lazy" decoding="async"></a><br>
+赤色の打刻はprintnumbers関数が、青色の打刻はprintletters関数が、それぞれ行っています。これを並列で実行しているため <code>1 a 2 b 3 4 c 5 d e </code> という順で出力されます。<br>
+それから、最後に待ち時間を確保しているのはgoroutineが終わる前にmain関数自体が終わるのを防止するためです（この1行はChannelを利用すれば不要になります）。</p>
+</blockquote>
+<p data-sourcepos="708:1-708:88">Goroutineの出力結果はChannelを介することで値をやり取りできます。</p>
+<div class="code-frame" data-lang="Go" data-sourcepos="710:1-737:3">
+<div class="code-lang"><span class="bold">Channelの使用例</span></div>
+<div class="highlight"><pre><code><span class="k">package</span> <span class="n">main</span>
+<span class="k">import</span> <span class="p">(</span>
+    <span class="s">"fmt"</span>
+    <span class="s">"time"</span>
+<span class="p">)</span>
+
+<span class="k">func</span> <span class="n">print1</span><span class="p">(</span><span class="n">ch</span> <span class="k">chan</span> <span class="kt">bool</span><span class="p">)</span> <span class="p">{</span>
+	<span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="s">"print1"</span><span class="p">)</span>
+	<span class="n">ch</span> <span class="o">&lt;-</span> <span class="no">true</span>
+<span class="p">}</span>
+
+<span class="k">func</span> <span class="n">print2</span><span class="p">(</span><span class="n">ch</span> <span class="k">chan</span> <span class="kt">bool</span><span class="p">)</span> <span class="p">{</span> <span class="c">// 時間が掛かる処理</span>
+	<span class="n">time</span><span class="o">.</span><span class="n">Sleep</span><span class="p">(</span><span class="m">1000</span> <span class="o">*</span> <span class="n">time</span><span class="o">.</span><span class="n">Millisecond</span><span class="p">)</span>
+	<span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="s">"print2"</span><span class="p">)</span>
+	<span class="n">ch</span> <span class="o">&lt;-</span> <span class="no">true</span>
+<span class="p">}</span>
+
+<span class="k">func</span> <span class="n">main</span><span class="p">()</span> <span class="p">{</span>
+	<span class="n">ch1</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="k">chan</span> <span class="kt">bool</span><span class="p">)</span> <span class="c">// bool型のchannelその1を作成</span>
+	<span class="n">ch2</span> <span class="o">:=</span> <span class="nb">make</span><span class="p">(</span><span class="k">chan</span> <span class="kt">bool</span><span class="p">)</span> <span class="c">// bool型のchannelその2を作成</span>
+	<span class="k">go</span> <span class="n">print1</span><span class="p">(</span><span class="n">ch1</span><span class="p">)</span> <span class="c">// 並列処理</span>
+	<span class="k">go</span> <span class="n">print2</span><span class="p">(</span><span class="n">ch2</span><span class="p">)</span>
+	<span class="o">&lt;-</span><span class="n">ch1</span> <span class="c">// bool型の要素を受信するまで待機（順不同）</span>
+	<span class="o">&lt;-</span><span class="n">ch2</span>
+	<span class="n">fmt</span><span class="o">.</span><span class="n">Println</span><span class="p">(</span><span class="s">"処理終了"</span><span class="p">)</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="739:1-746:107">
+<p data-sourcepos="739:3-746:107">並列する処理ごとにChannelを用意しておけば処理が終わるまで待機してくれます。<code>&lt;-ch1</code> と <code>&lt;-ch2</code> で受信待ちをしていますが、これらを入れ替えても（どっちの処理の方が時間が掛かるか分からなくても）ちゃんと待ってくれます。意外と簡単に並列処理が書けるんですね。Goroutine(ゴルーチン)やChannel(チャネル)の使い方は公式には<a href="https://tour.golang.org/concurrency/1" rel="nofollow noopener" target="_blank"><strong>こちらのページ</strong></a>で紹介されています。<br>
+並列処理の例：<br>
+「<a href="/qiita/854076d3437b70990cb3.html" id="reference-e91da72f9a3d6064c0fd"><strong>Goで実装する並列処理（Hello, world!を10000回出力してみる）</strong></a>」<br>
+参考：<br>
+「<a href="https://qiita.com/Kohei909Otsuka/items/26be74de803d195b37bd" id="reference-12ee93f5067396f18d76"><strong>並行処理、並列処理のあれこれ</strong></a>」<br>
+「<a href="https://qiita.com/awakia/items/f8afa070c96d1c9a04c9" id="reference-0586cc4155660f50052a"><strong>GoのChannelを使いこなせるようになるための手引</strong></a>」<br>
+「<a href="https://qiita.com/taigamikami/items/fc798cdd6a4eaf9a7d5e" id="reference-961e8c44f2f4d176b5f3"><strong>Goのgoroutine, channelをちょっと攻略！</strong></a>」<br>
+「<a href="https://qiita.com/marnie_ms4/items/8706f43591fb23dd4e64" id="reference-8021b58205dcd5237d33"><strong>Goのテストを並列で実行する</strong></a>」</p>
+</blockquote>
+<h1 data-sourcepos="748:1-748:16">
+<span id="goは速い" class="fragment"></span><a href="#go%E3%81%AF%E9%80%9F%E3%81%84"><i class="fa fa-link"></i></a>Goは速い？</h1>
+<p data-sourcepos="750:1-750:225">当然ですが、PythonやRubyなどのインタプリタ型言語に比べて、コンパイラ型言語であるGoは数段速く動きます。探してみるとベンチマークの報告が色々とヒットします。</p>
+<blockquote data-sourcepos="752:1-755:15">
+<p data-sourcepos="752:2-755:15">「<a href="https://qiita.com/achm/items/679b3f3af2cf377f0f02" id="reference-44865af13bda930ed1cc"><strong>RubyからGoの関数をつかう → はやい</strong></a>」<br>
+「<a href="https://qiita.com/Nabetani/items/fc20e83405a2f9e7f4d6" id="reference-bbac84cf548c9c811e0f"><strong>C++, Go, Julia, Kotlin, Rust, Swift5 で競争</strong></a>」<br>
+「<a href="https://qiita.com/gx3n-inue/items/7b63a2101ea26d3d1a29" id="reference-b6aff0bd394506a00eef"><strong>言語別int64素因数分解（試し割り法）処理時間比較</strong></a>」<br>
+などなど...</p>
+</blockquote>
+<p data-sourcepos="757:1-757:341">ただ、下手に言語間のベンチマーク結果を公開すると宗教戦争に発展することが間々あります。どんな言語にも一長一短はありますので、少なくとも個人開発の範囲では目的・用途に応じて改宗？(良いトコ取り)すれば良いと思います。平和主義ですね。</p>
+<h1 data-sourcepos="759:1-759:14">
+<span id="リンク集" class="fragment"></span><a href="#%E3%83%AA%E3%83%B3%E3%82%AF%E9%9B%86"><i class="fa fa-link"></i></a>リンク集</h1>
+<blockquote data-sourcepos="761:1-764:155">
+<p data-sourcepos="761:2-764:155">「<a href="https://qiita.com/spiegel-im-spiegel/items/98d49ac456485b007a15" id="reference-9db105e5958cca9769c6"><strong>Go 言語に関するブックマーク</strong></a>」（← Goを使うならブックマーク推奨です）<br>
+「<a href="https://qiita.com/tenntenn/items/0e33a4959250d1a55045" id="reference-df1ea65f2348e8ee8c92"><strong>Go言語の初心者が見ると幸せになれる場所</strong></a>」<br>
+「<a href="https://qiita.com/mumoshu/items/0d2f2a13c6e9fc8da2a4#comments"><strong>他言語から来た人がGoを使い始めてすぐハマったこととその答え</strong></a>」<br>
+「<a href="https://qiita.com/naka_kyon/items/3652550b5d5a7e579b61" id="reference-e3e9a2ee327b42b2b1a0"><strong>何故Go言語を私は使いたいのか？ 良い点と悪い点を雑にまとめる</strong></a>」</p>
+</blockquote>
+
+</div>
+
+
+
+{% endraw %}

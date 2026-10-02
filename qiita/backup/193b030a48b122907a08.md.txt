@@ -1,0 +1,93 @@
+既出かもしれませんが、まとめておきます。
+
+# アスタリスクが認識されない場合の対処
+`*`を複数含むコードは上手くレンダリングされないことがあります。
+
+> ##### 【失敗例】
+> $\psi_{ij}^{*}$
+>
+> $\psi_{ij}^{*} \psi_{kl}^{*}$
+>
+> $\psi_{ij}^{*} \psi_{kl}^{*} \psi_{mn}^{*}$
+
+```:失敗している例のコード
+$\psi_{ij}^{*}$
+
+$\psi_{ij}^{*} \psi_{kl}^{*}$
+
+$\psi_{ij}^{*} \psi_{kl}^{*} \psi_{mn}^{*}$
+```
+
+これは、Qiita内ではアスタリスクが *Italic* や **Bold** への書式変更に利用されており、2個以上のアスタリスクを含む数式が正しく認識されないことが原因です（実際、上の例では斜体になってしまっています）。
+
+このような場合は `*` の代わりに `\ast` を使うか、 `*` をバックスラッシュでエスケープします。
+
+> ##### 【成功例】
+> $\psi_{ij}^{\ast}$
+>
+> $\psi_{ij}^{\ast} \psi_{kl}^{\ast}$
+>
+> $\psi_{ij}^{\ast} \psi_{kl}^{\ast} \psi_{mn}^{\ast}$
+
+```:\ast を使う
+$\psi_{ij}^{\ast}$
+
+$\psi_{ij}^{\ast} \psi_{kl}^{\ast}$
+
+$\psi_{ij}^{\ast} \psi_{kl}^{\ast} \psi_{mn}^{\ast}$
+```
+
+```:バックスラッシュを使う
+$\psi_{ij}^{\*}$
+
+$\psi_{ij}^{\*} \psi_{kl}^{\*}$
+
+$\psi_{ij}^{\*} \psi_{kl}^{\*} \psi_{mn}^{\*}$
+```
+
+　
+
+# アンダーバーが認識されない場合の対処
+
+Qiitaではアンダーバー `_` もアスタリスクと同様に書式変更に用いられています。
+
+> ##### 【失敗例】（これも部分的に斜体になってしまっています）
+>$$\begin{equation}
+\begin{aligned}
+E_{\mathrm{x}}^{\mathrm{HF}}=-\frac{1}{2} \sum_{i, j} \iint \psi_{i}^{\ast}\left(\mathbf{r}_{1}\right) \psi_{j}^{\ast}\left(\mathbf{r}_{2}\right) \frac{1}{r_{12}} \psi_{j}\left(\mathbf{r}_{1}\right) \psi_{i}\left(\mathbf{r}_{2}\right) d \mathbf{r}_{1} d \mathbf{r}_{2}
+\end{aligned}
+\end{equation}$$
+```:失敗している例のコード
+$$\begin{equation}
+\begin{aligned}
+E_{\mathrm{x}}^{\mathrm{HF}}=-\frac{1}{2} \sum_{i, j} \iint \psi_{i}^{\ast}\left(\mathbf{r}_{1}\right) \psi_{j}^{\ast}\left(\mathbf{r}_{2}\right) \frac{1}{r_{12}} \psi_{j}\left(\mathbf{r}_{1}\right) \psi_{i}\left(\mathbf{r}_{2}\right) d \mathbf{r}_{1} d \mathbf{r}_{2}
+\end{aligned}
+\end{equation}$$
+```
+
+コマンドが多く長い数式の場合は、アスタリスクと同様に、アンダーバーもバックスラッシュでエスケープしておくと良いでしょう。
+
+> ##### 【成功例】
+> $$\begin{equation}
+\begin{aligned}
+E\_{\mathrm{x}}^{\mathrm{HF}}=-\frac{1}{2} \sum\_{i, j} \iint \psi\_{i}^{\ast}\left(\mathbf{r}\_{1}\right) \psi\_{j}^{\ast}\left(\mathbf{r}\_{2}\right) \frac{1}{r\_{12}} \psi\_{j}\left(\mathbf{r}\_{1}\right) \psi\_{i}\left(\mathbf{r}\_{2}\right) d \mathbf{r}\_{1} d \mathbf{r}\_{2}
+\end{aligned}
+\end{equation}$$
+
+```:エスケープした場合のコード
+$$\begin{equation}
+\begin{aligned}
+E\_{\mathrm{x}}^{\mathrm{HF}}=-\frac{1}{2} \sum\_{i, j} \iint \psi\_{i}^{\ast}\left(\mathbf{r}\_{1}\right) \psi\_{j}^{\ast}\left(\mathbf{r}\_{2}\right) \frac{1}{r\_{12}} \psi\_{j}\left(\mathbf{r}\_{1}\right) \psi\_{i}\left(\mathbf{r}\_{2}\right) d \mathbf{r}\_{1} d \mathbf{r}\_{2}
+\end{aligned}
+\end{equation}$$
+```
+
+　
+
+## その他、Qiita内での数式記法に関する参考記事
+
+Qiitaで数式を記述する上で参考になると思われる記事を挙げておきます。
+
+https://qiita.com/yyu/items/633ae6af08aff4e5805c
+
+https://qiita.com/PlanetMeron/items/63ac58898541cbe81ada

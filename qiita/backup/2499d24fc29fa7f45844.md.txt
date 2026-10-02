@@ -1,0 +1,475 @@
+# はじめに
+
+9月28日にLLM-jpの新バージョン「[LLM-jp-4.1](https://llm-jp.nii.ac.jp/blog/llm-jp-4-1/)」がリリースされた。
+
+https://llmc.nii.ac.jp/topics/llm-jp-4-1/
+
+公開されたモデルは以下の通り。[公式のGGUFファイル](https://huggingface.co/llm-jp/llm-jp-4.1-33b-thinking-gguf)も提供されている。
+
+- **llm-jp-4.1-8b-thinking**
+約86億パラメータのDenseモデル。
+https://huggingface.co/llm-jp/llm-jp-4.1-8b-thinking
+- **llm-jp-4.1-32b-a3b-thinking**
+約320億パラメータのMixture of Experts（MoE）モデル。
+https://huggingface.co/llm-jp/llm-jp-4.1-32b-a3b-thinking
+- **llm-jp-4.1-33b-thinking（<font color="red">本稿で検証</font>）**
+約332億パラメータのDenseモデル。
+https://huggingface.co/llm-jp/llm-jp-4.1-33b-thinking
+
+今回リリースされたLLM-jp-4.1では、STEM分野の性能向上、ツール呼び出しへの新規対応、回答の簡潔化が図られている。本稿ではLLM-jp-4.1-33B-thinkingについて、STEM分野を含む純粋な推論性能を検証する。
+
+また、国産LLM「LLM-jp-4-33B-thinking」と「Qwen3.8-27B」の推論能力を比較した記事を2本公開しているので、そちらも参考にされたい。
+
+https://qiita.com/h-nabata/items/b80484406e839ee6507b
+
+https://qiita.com/h-nabata/items/70d7d6ed64e91fce8675
+
+# LLM-jp-4.1対応のFork版lamma.cpp環境構築
+
+ここでは以前作成したLLM-jp-4用のFork版lamma.cpp環境を流用せず、LLM-jp-4.1専用のFork版lamma.cpp環境を構築する。これは、**従来のllama.cpp serverがLLM-jp-4.1固有のチャット／reasoning出力形式を正しくパースできないケースがあるため**である。
+
+> LLM-jp-4.1は、推論過程と最終回答を特殊なチャネル形式で区別して出力する。従来のllama.cppではこの出力形式を十分に解釈できず、OpenAI互換APIへの変換時に`content`が崩れたり、推論部分が`reasoning_content`として取得できない場合があった。そこで今回は、LLM-jp-4.1のHarmony形式に対応した専用ハンドラを含むforkを使用し、推論過程と最終回答を正しく分離して取得できるようにした。
+
+やや面倒だが、以下の手順で環境構築する。
+
+## 依存関係とCUDAを確認
+
+```sh:バージョン確認
+cmake --version
+nvcc --version
+nvidia-smi -L
+```
+
+```sh:結果
+cmake version 3.28.3
+CMake suite maintained and supported by Kitware (kitware.com/cmake).
+
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2023 NVIDIA Corporation
+Built on Fri_Jan__6_16:45:21_PST_2023
+Cuda compilation tools, release 12.0, V12.0.140
+Build cuda_12.0.r12.0/compiler.32267302_0
+
+GPU 0: NVIDIA GeForce RTX 3070 Ti (UUID: GPU-d41e4013-aaf1-3562-e8b4-2d7d3a6a5ef7)
+GPU 1: NVIDIA GeForce RTX 5070 Ti (UUID: GPU-926f28bc-9b44-7b7c-e063-2b12d76864d2)
+```
+
+## 4.1用forkをclone
+
+**本稿では `~/llama.cpp-llmjp41` というディレクトリ内でビルドすることにする。**
+
+```sh:4.1用forkを別ディレクトリへclone
+cd ~
+
+git clone \
+  --branch llmjp-harmony-handler \
+  --single-branch \
+  https://github.com/e-mon/llama.cpp.git \
+  llama.cpp-llmjp41
+
+cd ~/llama.cpp-llmjp41
+```
+
+> 必要なら以下を実行。
+> ```sh:現在のcommitを記録
+> git rev-parse HEAD
+> git branch --show-current
+> ```
+> ```sh:ベンチマークを完全に固定する
+> git checkout d71fd74e95fdd3873a87340cd96f4d12057940c9
+> ```
+
+## CUDA対応でビルドする
+
+llama.cppはBlackwell (`120`) についてCUDA 12.8以上を前提としているため、CUDA 13.2を明示している。
+
+```sh:CUDAバージョンを指定してビルド（CUDAアーキテクチャはGPUに合わせて適宜変更する）
+cmake -S . -B build-cublas \
+  -DGGML_CUDA=ON \
+  -DGGML_NATIVE=OFF \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CUDA_COMPILER=/usr/local/cuda-13.2/bin/nvcc \
+  -DCUDAToolkit_ROOT=/usr/local/cuda-13.2 \
+  -DCMAKE_CUDA_ARCHITECTURES="86-real;120a-real"
+
+cmake --build build-cublas \
+  --config Release \
+  --target llama-server \
+  -j"$(nproc)"
+```
+
+> バージョン確認の際に見た通り、筆者の環境ではシステム既定の`nvcc`はCUDA 12.0を指しているが、RTX 5070 Ti（Compute Capability 12.0）向けのネイティブCUDAコードを生成するため、ビルド時にはCUDA 13.2の`nvcc`とToolkitを明示的に指定する。複数のCUDA Toolkitが共存する環境では、`CMAKE_CUDA_COMPILER`と`CUDAToolkit_ROOT`を指定しておくことで、意図しない旧バージョンのCUDAが使用されるのを防ぐのがよい。
+
+:::note info
+
+### KV cacheを量子化してcontext長を拡張するビルド
+
+今回のベンチマークテストでは過度な性能劣化を避けるためにKV cacheには`q8_0/q8_0`を使用した。一方、VRAM容量をさらに節約したい場合は、モデル本体とは別にKV cacheをより強く量子化できる。
+
+例えば、サーバー起動時に
+
+```sh
+--cache-type-k q8_0 \
+--cache-type-v q4_0
+```
+
+とすると、Key cacheはQ8の精度を維持しつつ、Value cacheのみQ4へ圧縮できる。`q8_0/q8_0`と比べてKV cacheのVRAM使用量を概ね2割強削減できるため、同じGPU構成でもより長いcontextを確保しやすい。
+
+ただし、CUDA版llama.cppの標準buildではFlash Attention用の`q8_0-q4_0` kernelはデフォルトではコンパイルされない。そのため、混合KVを使用する場合はbuild時に対応する組み合わせを追加する必要がある。
+
+```sh:混合KV対応でビルド（CUDAアーキテクチャはGPUに合わせて適宜変更する）
+cmake -S . -B build-mmq-mixed \
+  -DGGML_CUDA=ON \
+  -DGGML_NATIVE=OFF \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CUDA_COMPILER=/usr/local/cuda-13.2/bin/nvcc \
+  -DCUDAToolkit_ROOT=/usr/local/cuda-13.2 \
+  -DCMAKE_CUDA_ARCHITECTURES="86-real;120a-real" \
+  -DGGML_CUDA_FA_QUANTS="q4_0-q4_0;q8_0-q8_0;q8_0-q4_0;f16-f16;bf16-bf16"
+
+cmake --build build-mmq-mixed \
+  --config Release \
+  --target llama-server \
+  -j"$(nproc)"
+```
+
+> すべての対応組み合わせをまとめてコンパイルする場合は、
+> 
+> ```sh
+> -DGGML_CUDA_FA_QUANTS=all
+> ```
+> 
+> とすることもできるが、build時間は大幅に長くなる。
+
+起動時には例えば、
+
+```sh
+--flash-attn on \
+--cache-type-k q8_0 \
+--cache-type-v q4_0
+```
+
+を指定する。
+
+なお、KV cacheの量子化率を変更すると推論結果にもわずかな影響を与える可能性がある。そのため、本稿のベンチマークでは比較条件を統一する目的で`q8_0/q8_0`を採用し、`q8_0/q4_0`や`q4_0/q4_0`は使用していない。長contextを優先する実運用では有力な選択肢となる。
+
+:::
+
+:::note warn
+
+### `llama-server`が即終了／Segmentation faultする場合
+
+CUDA build自体は正常に完了しているにもかかわらず、
+
+```sh
+./build/bin/llama-server --version
+```
+
+だけでも`Segmentation fault (core dumped)`となる場合がある。
+
+今回の環境では、CUDA Toolkit側ではなく、**WSL2が参照しているCUDA driver library（`libcuda.so`）の組み合わせ**が原因だった。`ldd`ではすべてのライブラリが正常に解決されていても、`/usr/lib/wsl/lib/libcuda.so.1`経由ではCUDA初期化時に落ちる場合がある。同様の事例はBlackwell GPU＋WSL2環境でも報告されている。
+
+>（参考）https://github.com/ggml-org/llama.cpp/issues/20631
+
+まず、実際にリンクされているCUDA関連ライブラリを確認する。
+
+```sh:リンクされたライブラリの確認
+ldd ./build/bin/llama-server | \
+grep -Ei 'cuda|cublas|ggml|nvidia|not found'
+```
+
+Windows側NVIDIA driverからWSLへ公開されている実体は、次のように確認できる。
+
+```sh
+find /usr/lib/wsl/drivers \
+  -maxdepth 2 \
+  -name 'libcuda.so.1.1' \
+  -printf '%h\n'
+```
+
+今回の環境では、`/usr/lib/wsl/lib/libcuda.so.1`ではなく、`nv_dispig.inf_amd64_*`以下の`libcuda.so.1.1`を優先して読み込ませることで正常に起動した。
+
+例えば、次のようにllama.cpp実行時だけ一時的にlibrary pathを切り替えられる。
+
+```sh
+DRV=/usr/lib/wsl/drivers/nv_dispig.inf_amd64_XXXXXXXX
+TMP="$HOME/.wsl-cuda-llama"
+
+mkdir -p "$TMP"
+ln -sfn "$DRV/libcuda.so.1.1" "$TMP/libcuda.so.1"
+ln -sfn "$DRV/libcuda.so.1.1" "$TMP/libcuda.so"
+
+LD_LIBRARY_PATH="$TMP:$DRV:/usr/local/cuda-13.2/lib64:$LD_LIBRARY_PATH" \
+./build/bin/llama-server --version
+```
+
+`XXXXXXXX`の部分は環境・driver versionによって異なるため、上記`find`コマンドなどで実際のパスを確認する。
+
+この問題はCUDA kernelそのものではなく、**WSL2のCUDA driver/runtime interop層でCUDA初期化時に不整合が生じる問題**である。CUDA環境やNVIDIA driver／WSLを更新・再構築することでも解消する場合があるが、既存環境を大きく変更したくない場合は、llama.cpp起動時だけ正しいdriver libraryを優先する方法が扱いやすい。
+
+:::
+
+:::note warn
+
+### MMQ kernelで`mmq_x_best=0`等のエラーが出る場合
+
+以前の記事では、Blackwell環境でMMQ kernelが
+
+```text
+mmq_x_best=0
+mmq.cuh:...: fatal error
+```
+
+として停止する問題を回避するため、
+
+```cmake
+-DGGML_CUDA_FORCE_CUBLAS=ON
+```
+
+を指定してcuBLASの利用を強制していた。
+
+このMMQクラッシュについては、初期のBlackwell対応driverでCUDA device propertyの
+
+```text
+sharedMemPerBlockOptin
+```
+
+が`0`や異常に大きな値として返される問題が報告されている。MMQ側はこの値を使って利用可能なshared memory量とkernel configurationを決定するため、誤った値を受け取ると有効なMMQ tileを選択できず、`mmq_x_best=0`に至る場合があった。
+
+>（参考）https://github.com/ggml-org/llama.cpp/issues/23385
+
+今回の環境では、RTX 5070 Ti／RTX 3070 Tiともに
+
+```text
+sharedMemPerBlockOptin = 101376
+```
+
+と正常な値が取得できており、MMQ有効状態でも推論まで正常に完走した。また、現在使用しているllama.cpp系コードでは、MMQが必要とするshared memory量を事前に確認し、不足する場合はBLAS側へfallbackする処理も追加されている。
+
+そのため、現在は
+
+```cmake
+-DGGML_CUDA_FORCE_CUBLAS=ON
+```
+
+を通常のbuild設定から外し、**llama.cpp標準のCUDA kernel自動選択に任せる**構成としている。
+
+> `GGML_CUDA_FORCE_CUBLAS`を外すことは「すべての演算をMMQで強制する」という意味ではない。行列形状や量子化形式などに応じて、llama.cpp側がMMQやcuBLAS等を選択する。
+
+Blackwell環境でMMQ関連のfatal errorが再現する場合は、まずNVIDIA driver、WSL2、CUDA Toolkitおよびllama.cppを更新する。それでも解消しない場合には、`GGML_CUDA_FORCE_CUBLAS=ON`を一時的な回避策として利用できる。
+
+:::
+
+> llama.cppサーバーのSegmentation faultとMMQ kernelクラッシュはそれぞれ別個の問題である。前者は`--version`の段階でも発生するCUDA初期化・driver library参照の問題で、後者は推論時にMMQ kernelを選択する際のshared-memory情報に関する問題である。
+
+## llama.cppサーバーの起動
+
+筆者の環境でGPU全層オフロードを実現するようなパラメータは以下のようになった。`--ctx-size 24000` としているが、以前のLLM-jp-4での検証結果を踏まえ、多くの設問で十分なコンテキスト長と判断した。（そもそも今回の環境でフルGPUオフロードする場合はctx 24k程度がVRAM限界である）
+
+```sh:llama.cppサーバー立ち上げ
+cd ~/llama.cpp-llmjp41
+
+DRV=/usr/lib/wsl/drivers/nv_dispig.inf_amd64_f4c7a2fd13e0f763
+TMP="$HOME/.wsl-cuda-llama"
+
+LD_LIBRARY_PATH="$TMP:$DRV:/usr/local/cuda-13.2/lib64:$LD_LIBRARY_PATH" \
+./build-mmq-test/bin/llama-server \
+  --model ~/models/llm-jp-4.1-33b-thinking-gguf/llm-jp-4.1-33b-thinking-Q4_K_M.gguf \
+  --jinja \
+  -rea on \
+  --reasoning-budget -1 \
+  --flash-attn on \
+  --fit off \
+  --split-mode layer \
+  --tensor-split 16,7 \
+  -ngl all \
+  --ctx-size 24000 \
+  --cache-type-k q8_0 \
+  --cache-type-v q8_0 \
+  --parallel 1 \
+  --batch-size 256 \
+  --ubatch-size 64 \
+  --host 127.0.0.1 \
+  --port 8080 \
+  -lv 4 \
+  2>&1 | tee ~/llmjp41_mmq_test.log
+```
+
+> GPUの認識される順序はllama.cppとシステムで逆転する可能性があるので注意。筆者の環境ではドライバー更新時に `nvidia-smi -L` の番号と今回のllama.cpp内部のCUDA番号が逆になったが、llama.cppで認識されている順序は同じだったため、結局前回同様 `--tensor-split 16,7` としている。
+
+メモリ使用量からも分かる通り、5070Ti + 3070Ti のデュアルGPU環境（VRAM 24GB）でかなりギリギリの運用になっている。グラフィックボードに接続するモニターは極力減らしておくことが望ましい。
+
+```:モデルロード時のGPU
++-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 590.57                 Driver Version: 591.86         CUDA Version: 13.1     |
++-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 3070 Ti     On  |   00000000:04:00.0 Off |                  N/A |
+|  0%   23C    P8              3W /  320W |    7366MiB /   8192MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+|   1  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+|  0%   27C    P8              9W /  300W |   15922MiB /  16303MiB |      0%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+
++-----------------------------------------------------------------------------------------+
+| Processes:                                                                              |
+|  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+|        ID   ID                                                               Usage      |
+|=========================================================================================|
+|    0   N/A  N/A              26      G   /Xwayland                             N/A      |
+|    0   N/A  N/A           31460      C   /llama-server                         N/A      |
+|    0   N/A  N/A           31460      C   /llama-server                         N/A      |
+|    1   N/A  N/A              26      G   /Xwayland                             N/A      |
+|    1   N/A  N/A           31460      C   /llama-server                         N/A      |
+|    1   N/A  N/A           31460      C   /llama-server                         N/A      |
++-----------------------------------------------------------------------------------------+
+```
+
+:::note info 
+
+### KV cacheをCPU側へ置いてコンテキスト長を増やす方法
+
+context長を確保しようとするとVRAM容量が不足してしまう場合は、サーバー起動時に
+
+```sh id="x3ycum"
+--no-kv-offload
+```
+
+を指定する方法もある。
+
+このオプションは、単にKV cacheだけをRAMへ移すというより、llama.cpp内部ではK/Q/V関連のattention処理をGPUへoffloadせず、KV cacheを含めてCPU側で処理する設定となる。
+
+その代わり、モデル本体のweightはGPUに残すことができるため、VRAM不足を理由にTransformer layerそのものをCPUへoffloadする場合と比べると、大幅に高速になる場合がある。
+
+今回の環境では、
+
+```text id="1p8lag"
+部分的にモデルlayerをCPU offload (-ngl 50)
+ ↓
+低速（ ~ 4 tok/s）
+
+モデル65/65層をGPUへoffload + --no-kv-offload
+ ↓
+数倍高速（ ~ 13 tok/s）
+```
+
+となった。
+
+通常はKV cacheとattention処理もGPU上に置いた方が高速である。実際、KV cache含めフルGPUオフロードの場合は 30 tok/s 程度のデコード速度であった。`--no-kv-offload` 適用時にCPUオフロードの場合に比べて速度が向上するのは、KV cache用VRAMをホスト側へ移すことで計算量の大きいモデルの重みを全層GPU上に維持できたことが主な要因である。
+
+また、KV cacheがVRAMを消費しなくなるため、同じGPU構成でもより長いcontextを確保できる。
+
+一方で、contextが長くなるほどCPU側のattention処理量やRAM帯域、CPU-GPU間のデータ転送がボトルネックになりやすい。そのため、
+
+```text id="ael4gm"
+速度優先：
+モデル + KV cacheともGPU
+
+VRAM不足時（コンテキスト長を増やしたい場合）の妥協：
+モデルは全層GPU
+KV/KQV処理のみCPU (--no-kv-offload)
+
+根本的にVRAMが不足している場合：
+モデルlayer自体をCPU offload
+```
+
+という優先順位で考えるのがよい。
+
+本稿のベンチマークでは実行条件を統一するためKV cacheもGPU上に配置したが、VRAM容量が厳しい環境で長contextを利用したい場合には`--no-kv-offload`は有力な選択肢となる。
+:::
+
+
+# ベンチマークテスト
+
+ベンチマークには前回同様に以下の問題を利用した。
+
+https://qiita.com/h-nabata/items/8ba25944017b64207792
+
+
+# 結果
+
+全体の結果を以下の表に示す。LLM-jp-4-33Bからの差分Δはほとんどの分野で伸びている。特に物理学ではQwen3.8-27Bに匹敵する正答率を叩き出した。とはいえ、LLM-jp-4.1の総得点（66.1%）はQwen3.8-27B（88.2%）に及ばず、数学やコンピュータサイエンスは差が大きい。また、化学ではLLM-jp-4に比べて得点が低下した。
+
+| 系列 | Qwen3.8-27B | LLM-jp-4-33B | **LLM-jp-4.1-33B** | Δ (4→4.1) |
+|---|---:|---:|---:|---:|
+| LOG | 78.5 | 78.5 | **80.0** | +1.5 |
+| LIT | 75.9 | 64.9 | **71.2** | +6.3 |
+| CSC | 68.0 | 51.0 | **52.0** | +1.0 |
+| NUM | 56.0 | 34.0 | **43.0** | +9.0 |
+| ANL | 65.0 | 21.0 | **35.0** | +14.0 |
+| PHY | 70.5 | 41.5 | **67.5** | **+26.0** |
+| CHE | 77.1 | 65.5 | **61.3** | **−4.2** |
+| BIO | 73.6 | 66.4 | **69.5** | +3.1 |
+| **総合得点** | **564.6** | **422.8** | **479.5** | **+56.7** |
+
+改善が最も顕著だったのは物理学で、41.5/80点から67.5/80点へ大幅に上昇した。数学（解析・幾何）も21点から35点、数学（代数・数論）も34点から43点へ改善している。LLM-jp-4で頻発した長い推論ループは大幅に減少し、多くの問題で最終回答まで正常に到達できるようになった。この点から、LLM-jp-4.1では単純な正答率だけでなく、長い推論を収束させる能力そのものが改善したと考えられる。
+
+一方で、改善はすべての分野について一様というわけではなかった。化学は65.5点から58.5点へ低下し、情報科学は51点から52点とほぼ横ばいだった。また、必要条件と十分条件の混同、特殊解や解集合の取りこぼし、問題文で明示された局所ルールより学習済みの一般知識を優先する挙動など、LLM-jp-4でも見られた失敗形式の一部は4.1でも残った。
+
+興味深いのは論理系列で、LLM-jp-4.1は80/80点を獲得し、前回の検証でQwen3.8とLLM-jp-4の双方が誤った問題も正答していた。物理学でもQwen3.8の70.5点に対して67.5点まで接近している。したがって、**LLM-jp-4.1はLLM-jp-4から確実に性能を伸ばしたモデルと評価できる一方、Qwen3.8に対しては高度な数学、情報科学、化学を中心に依然として差が残る**という結果となった。
+
+
+> Qwen3.8で複数回見られたJSON-only等の形式違反は、今回のLLM-jp-4.1では観察されなかった。LLM-jp-4系列はもともと形式追従が比較的良好だったが、4.1ではexact-formatタスクを意識したSFTやTool Callingデータも追加されており、この結果と整合的である。
+
+各問の結果を以下に示す。
+
+| 系列 | P01 | P02 | P03 | P04 | P05 | P06 | P07 | P08 | **合計** |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| **LOG：論理** | 10.0 | 10.0 | 10.0 | 10.0 | 10.0 | 10.0 | 10.0 | 10.0 | **80.0** |
+| **LIT：文章理解・翻訳** | 10.0 | 5.0 | 10.0 | 10.0 | 9.2 | 8.0 | 9.8 | 9.2 | **71.2** |
+| **CSC：情報科学** | 5.0 | 10.0 | 4.0 | 10.0 | 9.0 | 7.0 | 6.0 | 1.0 | **52.0** |
+| **NUM：代数・数論** | 5.0 | 7.0 | 2.0 | 3.0 | 8.0 | 8.0 | 6.0 | 4.0 | **43.0** |
+| **ANL：解析・幾何** | 6.0 | 10.0 | 1.0 | 2.0 | 8.0 | 2.0 | 2.0 | 4.0 | **35.0** |
+| **PHY：物理** | 10.0 | 7.0 | 10.0 | 9.0 | 8.5 | 9.0 | 8.0 | 6.0 | **67.5** |
+| **CHE：化学** | 8.0 | 7.5 | 3.0 | 4.0 | 10.0 | 9.2 | 9.8 | 9.8 | **61.3** |
+| **BIO：生物** | 9.5 | 9.0 | 4.0 | 10.0 | 8.0 | 9.5 | 10.0 | 9.5 | **69.5** |
+
+ANL-P01については、Thinkingの無限ループが発生してしまったため `--no-kv-offload` を適用して再試行した結果を採用している。無限ループによる解答不能のケースを最終結果と見なす場合、ANL系列の得点は35.0→30.0に低下する。
+
+## temperature=0.1の結果
+
+今回、設定によってはANL-01の推論中に無限ループに陥ってしまうパターンがあった（temperature=0.0で実施）。ループに陥るトラジェクトリからの脱出能力を見るため、全体をtemperature=0.1で実施した結果も掲載しておく。
+
+| 分野 | P01 | P02 | P03 | P04 | P05 | P06 | P07 | P08 | 合計 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| LOG | 10.0 | 10.0 | 10.0 | 10.0 | 10.0 | 10.0 | 8.5 | 10.0 | **78.5** |
+| LIT | 10.0 | 6.7 | 10.0 | 10.0 | 9.2 | 8.0 | 7.5 | 9.2 | **70.6** |
+| CSC | 10.0 | 10.0 | 4.5 | 8.0 | 10.0 | 6.0 | 4.0 | 1.0 | **53.5** |
+| NUM | 2.0 | 8.0 | 2.0 | 3.0 | 6.0 | 3.0 | 6.0 | 2.0 | **32.0** |
+| ANL | 6.0 | 5.0 | 2.0 | 2.0 | 8.0 | 2.0 | 10.0 | 3.0 | **38.0** |
+| PHY | 8.5 | 4.0 | 9.5 | 5.5 | 7.0 | 8.5 | 9.5 | 5.5 | **58.0** |
+| CHE | 9.0 | 8.0 | 7.0 | 9.8 | 9.7 | 6.5 | 9.2 | 9.0 | **68.2** |
+| BIO | 9.8 | 9.5 | 7.5 | 10.0 | 7.5 | 8.5 | 10.0 | 9.8 | **72.6** |
+
+化学系列は改善が見られるものの、数論や物理系列では得点率が悪化した。このことから、別の生成経路が選ばれることで、正解になる問題も、逆に誤答になる問題も出ていることが分かる。したがって、temperature=0.1は推論時の最適な温度パラメータとは言えない。
+
+以上の結果をレーダーチャートにプロットした。旧バージョンのLLM-jp-4に比べて全体的に面積が広がっていること、Qwen3.8の推論性能にはまだ及ばないことが見て取れる。
+
+![benchmark_radar_chart_llmjp41_legend_bottom.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/4309675b-3c74-4ba5-b192-6c0a19e2a50f.png)
+
+実行結果はGitHubにアップロードしている。（req：プロンプト等の情報、res：結果）
+
+https://github.com/h-nabata/LLM/tree/main/Qiita/LLM-jp/local_llm_hard_benchmark_v1_0/LLM-jp-4.1
+
+# まとめ
+
+[前回の検証記事](https://qiita.com/h-nabata/items/70d7d6ed64e91fce8675)の「まとめ」の部分で以下のように述べたが、今回LLM-jp-4.1で実際に長考の収束性に改善が見られたのは良い傾向と言える。
+
+> *LLM-jpの次世代バージョンで改善すべき点の優先度は概ね*
+> ***推論品質･収束性の改善 ＞ 事後学習の強化 ＞ MTP等によるdecode高速化***
+> *の順となるように思う。*
+
+LLM-jp-4では「完答できる知識は有するが、推論を終了できない」という部分で失点していたのに対し、LLM-jp-4.1では「最終回答には到達するものの、必要十分条件や例外などを見落とす」という形での失点に重心が移っている。モデルとしてはもう一歩というところだが、前バージョンに比べて確実に一段前進したと評価できる。
+
+一方で、以下のようにLLM-jp-4と共通する失点も見られた。
+- 設問文中の強い命題を受け入れてしまう（LIT-P02）
+- 問題文で明示的に与えられたattenuationの局所ルールよりも学習済みの一般的なtrp operon知識を優先してしまう（BIO-P03）
+- 特殊解・連続解族の完全性を最後まで保てない（NUM-P02やNUM-P0）
+
+LLM-jpの弱点は一貫して、**局所的には正しい推論を生成できても、命題のscope・必要十分条件・例外集合・全解性を長い推論の最後まで保持することが苦手**という点に集約される。この点でQwen3.8は高度なタスクであっても論理的一貫性を損なわずに長考できており、ここがLLM-jpとの得点差に大きく効いている。
+

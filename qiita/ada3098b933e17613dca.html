@@ -1,0 +1,103 @@
+---
+layout: "qiita-mirror"
+title: "アイリングの式から反応速度定数を見積もる"
+qiita_id: "ada3098b933e17613dca"
+qiita_url: "https://qiita.com/h-nabata/items/ada3098b933e17613dca"
+qiita_created: "2023-06-21T12:46:42+09:00"
+qiita_updated: "2023-06-21T12:46:42+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "プログラミング・可視化"
+mirror_tags: ["Python", "数値計算", "化学", "反応速度論"]
+permalink: "/qiita/ada3098b933e17613dca.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="1:1-1:252">遷移状態理論の範囲において、反応速度定数はアイリングの式（H. EYRING, <em>J. Chem. Phys.</em> <strong>1935</strong>, 3, 107–115.）に基づいて温度$T$と活性化エネルギー$\Delta G^{\ddagger}$の関数として与えられます。</p>
+<div class="code-frame" data-lang="math" data-sourcepos="3:1-5:3"><div class="highlight"><pre><code>k=\varGamma \dfrac{k_{\mathrm{B}}T}{h} \, \exp \left(-{\dfrac{\Delta G^{\ddagger}}{RT}}\right)
+</code></pre></div></div>
+<blockquote data-sourcepos="7:1-8:523">
+<p data-sourcepos="7:3-8:523">【補足】<br>
+透過係数 $\varGamma$ は簡単のために$1$とすることが多いですが、トンネル効果を簡便に取り入れる方法として、遷移状態における虚振動 $\omega$ (cm-1) を用いて$$\varGamma = 1 + \dfrac{1}{24}\left(\dfrac{100hc|\omega|}{k_{\mathrm{B}}T}\right)^2$$と見積もる「Wignerの補正」（E. Wigner, <em>Phys. Rev.</em> <strong>1932</strong>, 40, 749–759.）が知られています。式を見て分かる通り、トンネル効果は反応速度定数を増加する作用をもちます。</p>
+</blockquote>
+<p data-sourcepos="10:1-10:150">以上をまとめると、次のようなコードで反応速度定数が計算できます。ここではPythonのスクリプトを示します。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="12:1-55:3">
+<div class="code-lang"><span class="bold">barrier2rate.py</span></div>
+<div class="highlight"><pre><code><span class="kn">import</span> <span class="n">math</span>
+
+<span class="c1"># input parameters
+</span><span class="n">temperature</span> <span class="o">=</span> <span class="mf">300.0</span>                 <span class="c1"># 273.15+25  # K
+</span><span class="n">activation_barrier</span> <span class="o">=</span> <span class="mf">80.0</span>           <span class="c1"># kJ / mol
+</span><span class="n">frequency</span> <span class="o">=</span> <span class="mf">800.0</span>                   <span class="c1"># cm-1 : imaginary frequency
+</span><span class="n">ratio</span> <span class="o">=</span> <span class="mf">99.9</span>                        <span class="c1"># reactant consumption
+</span>
+<span class="c1"># constants
+</span><span class="n">GAS_CONSTANT</span> <span class="o">=</span> <span class="mf">8.3144621</span>            <span class="c1"># J / K / mol
+</span><span class="n">PLANCK_CONSTANT</span> <span class="o">=</span> <span class="mf">6.62606957e-34</span>    <span class="c1"># J * s
+</span><span class="n">BOLTZMANN_CONSTANT</span> <span class="o">=</span> <span class="mf">1.3806488e-23</span>  <span class="c1"># J / K
+</span><span class="n">SPEED_OF_LIGHT</span> <span class="o">=</span> <span class="mf">2.99792458e8</span>       <span class="c1"># m / s
+</span>
+<span class="c1"># Eyring's equation (H. EYRING, J. Chem. Phys., 1935, 3, 107–115.)
+</span><span class="n">E</span> <span class="o">=</span> <span class="n">math</span><span class="p">.</span><span class="nf">exp</span><span class="p">(</span><span class="o">-</span> <span class="n">activation_barrier</span> <span class="o">*</span> <span class="mf">1000.0</span> <span class="o">/</span> <span class="p">(</span><span class="n">GAS_CONSTANT</span> <span class="o">*</span> <span class="n">temperature</span><span class="p">))</span>
+<span class="n">Z</span> <span class="o">=</span> <span class="p">(</span><span class="n">BOLTZMANN_CONSTANT</span> <span class="o">*</span> <span class="n">temperature</span> <span class="o">/</span> <span class="n">PLANCK_CONSTANT</span><span class="p">)</span>
+<span class="n">k</span> <span class="o">=</span> <span class="n">Z</span> <span class="o">*</span> <span class="n">E</span>
+
+<span class="c1"># Wigner's tunneling correction (E. Wigner, Phys. Rev., 1932, 40, 749–759.)
+# 100.0 is the scaling factor to convert cm-1 into m-1
+</span><span class="n">wigner_factor</span> <span class="o">=</span> <span class="p">(</span><span class="n">PLANCK_CONSTANT</span> <span class="o">*</span> <span class="nf">abs</span><span class="p">(</span><span class="n">frequency</span><span class="p">)</span> <span class="o">*</span> <span class="mf">100.0</span> <span class="o">*</span> <span class="n">SPEED_OF_LIGHT</span> <span class="o">/</span> <span class="p">(</span><span class="n">BOLTZMANN_CONSTANT</span> <span class="o">*</span> <span class="n">temperature</span><span class="p">))</span>
+<span class="c1"># the transmission coefficient
+</span><span class="n">kappa</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">+</span> <span class="mi">1</span><span class="o">/</span><span class="mi">24</span> <span class="o">*</span> <span class="n">wigner_factor</span> <span class="o">**</span> <span class="mi">2</span>
+<span class="n">Z_corr</span> <span class="o">=</span> <span class="n">kappa</span> <span class="o">*</span> <span class="n">Z</span>
+<span class="n">k_corr</span> <span class="o">=</span> <span class="n">Z_corr</span> <span class="o">*</span> <span class="n">E</span>
+
+<span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">反応温度 =</span><span class="sh">"</span><span class="p">,</span> <span class="sh">'</span><span class="s">{:&gt;5.1f}</span><span class="sh">'</span><span class="p">.</span><span class="nf">format</span><span class="p">(</span><span class="n">temperature</span><span class="p">),</span> <span class="sh">"</span><span class="s">(K) / 反応障壁 =</span><span class="sh">"</span><span class="p">,</span> <span class="sh">'</span><span class="s">{:&gt;5.1f}</span><span class="sh">'</span><span class="p">.</span><span class="nf">format</span><span class="p">(</span><span class="n">activation_barrier</span><span class="p">),</span> <span class="sh">"</span><span class="s">(kJ/mol) / 虚振動数 =</span><span class="sh">"</span><span class="p">,</span> <span class="sh">'</span><span class="s">{:&gt;6.1f}</span><span class="sh">'</span><span class="p">.</span><span class="nf">format</span><span class="p">(</span><span class="n">frequency</span><span class="p">),</span> <span class="sh">"</span><span class="s">(cm-1)</span><span class="sh">"</span><span class="p">)</span>
+<span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">Wigner補正項 κ = {:e}</span><span class="sh">"</span><span class="p">.</span><span class="nf">format</span><span class="p">(</span><span class="n">kappa</span><span class="p">))</span>
+<span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">反応速度定数 : {:e}</span><span class="sh">"</span><span class="p">.</span><span class="nf">format</span><span class="p">(</span><span class="n">k</span><span class="p">))</span>
+<span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">      補正後 : {:e}</span><span class="sh">"</span><span class="p">.</span><span class="nf">format</span><span class="p">(</span><span class="n">k_corr</span><span class="p">))</span>
+<span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">時定数       : {:e}</span><span class="sh">"</span><span class="p">.</span><span class="nf">format</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="n">k</span><span class="p">),</span> <span class="sh">"</span><span class="s">/ sec.</span><span class="sh">"</span><span class="p">)</span>
+<span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">      補正後 : {:e}</span><span class="sh">"</span><span class="p">.</span><span class="nf">format</span><span class="p">(</span><span class="mi">1</span><span class="o">/</span><span class="n">k_corr</span><span class="p">),</span> <span class="sh">"</span><span class="s">/ sec.</span><span class="sh">"</span><span class="p">)</span>
+
+<span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">反応物が </span><span class="sh">"</span><span class="o">+</span><span class="nf">str</span><span class="p">(</span><span class="n">ratio</span><span class="p">)</span><span class="o">+</span><span class="sh">"</span><span class="s"> % 消費されるまでの時間（補正前）</span><span class="sh">"</span><span class="p">)</span>
+<span class="nf">print</span><span class="p">(</span><span class="sh">'</span><span class="s">{:&gt;18.10f}</span><span class="sh">'</span><span class="p">.</span><span class="nf">format</span><span class="p">((</span><span class="n">math</span><span class="p">.</span><span class="nf">log</span><span class="p">(</span><span class="mi">100</span><span class="o">/</span><span class="p">(</span><span class="mi">100</span><span class="o">-</span><span class="n">ratio</span><span class="p">))</span><span class="o">/</span><span class="n">k</span><span class="p">)</span><span class="o">/</span><span class="mi">3600</span><span class="p">),</span> <span class="sh">"</span><span class="s">/ hour</span><span class="sh">"</span><span class="p">)</span>       <span class="c1"># / hour
+</span><span class="nf">print</span><span class="p">(</span><span class="sh">'</span><span class="s">{:&gt;18.10f}</span><span class="sh">'</span><span class="p">.</span><span class="nf">format</span><span class="p">((</span><span class="n">math</span><span class="p">.</span><span class="nf">log</span><span class="p">(</span><span class="mi">100</span><span class="o">/</span><span class="p">(</span><span class="mi">100</span><span class="o">-</span><span class="n">ratio</span><span class="p">))</span><span class="o">/</span><span class="n">k</span><span class="p">)</span><span class="o">/</span><span class="mi">60</span><span class="p">),</span> <span class="sh">"</span><span class="s">/ min.</span><span class="sh">"</span><span class="p">)</span>         <span class="c1"># / min.
+</span><span class="nf">print</span><span class="p">(</span><span class="sh">'</span><span class="s">{:&gt;18.10f}</span><span class="sh">'</span><span class="p">.</span><span class="nf">format</span><span class="p">(</span><span class="n">math</span><span class="p">.</span><span class="nf">log</span><span class="p">(</span><span class="mi">100</span><span class="o">/</span><span class="p">(</span><span class="mi">100</span><span class="o">-</span><span class="n">ratio</span><span class="p">))</span><span class="o">/</span><span class="n">k</span><span class="p">),</span> <span class="sh">"</span><span class="s">/ sec.</span><span class="sh">"</span><span class="p">)</span>              <span class="c1"># / sec.
+</span><span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">反応物が </span><span class="sh">"</span><span class="o">+</span><span class="nf">str</span><span class="p">(</span><span class="n">ratio</span><span class="p">)</span><span class="o">+</span><span class="sh">"</span><span class="s"> % 消費されるまでの時間（補正後）</span><span class="sh">"</span><span class="p">)</span>
+<span class="nf">print</span><span class="p">(</span><span class="sh">'</span><span class="s">{:&gt;18.10f}</span><span class="sh">'</span><span class="p">.</span><span class="nf">format</span><span class="p">((</span><span class="n">math</span><span class="p">.</span><span class="nf">log</span><span class="p">(</span><span class="mi">100</span><span class="o">/</span><span class="p">(</span><span class="mi">100</span><span class="o">-</span><span class="n">ratio</span><span class="p">))</span><span class="o">/</span><span class="n">k_corr</span><span class="p">)</span><span class="o">/</span><span class="mi">3600</span><span class="p">),</span> <span class="sh">"</span><span class="s">/ hour</span><span class="sh">"</span><span class="p">)</span>  <span class="c1"># / hour
+</span><span class="nf">print</span><span class="p">(</span><span class="sh">'</span><span class="s">{:&gt;18.10f}</span><span class="sh">'</span><span class="p">.</span><span class="nf">format</span><span class="p">((</span><span class="n">math</span><span class="p">.</span><span class="nf">log</span><span class="p">(</span><span class="mi">100</span><span class="o">/</span><span class="p">(</span><span class="mi">100</span><span class="o">-</span><span class="n">ratio</span><span class="p">))</span><span class="o">/</span><span class="n">k_corr</span><span class="p">)</span><span class="o">/</span><span class="mi">60</span><span class="p">),</span> <span class="sh">"</span><span class="s">/ min.</span><span class="sh">"</span><span class="p">)</span>    <span class="c1"># / min.
+</span><span class="nf">print</span><span class="p">(</span><span class="sh">'</span><span class="s">{:&gt;18.10f}</span><span class="sh">'</span><span class="p">.</span><span class="nf">format</span><span class="p">(</span><span class="n">math</span><span class="p">.</span><span class="nf">log</span><span class="p">(</span><span class="mi">100</span><span class="o">/</span><span class="p">(</span><span class="mi">100</span><span class="o">-</span><span class="n">ratio</span><span class="p">))</span><span class="o">/</span><span class="n">k_corr</span><span class="p">),</span> <span class="sh">"</span><span class="s">/ sec.</span><span class="sh">"</span><span class="p">)</span>         <span class="c1"># / sec.
+</span></code></pre></div>
+</div>
+<div class="code-frame" data-lang="sh" data-sourcepos="57:1-72:3">
+<div class="code-lang"><span class="bold">出力</span></div>
+<div class="highlight"><pre><code>反応温度 <span class="o">=</span> 300.0 <span class="o">(</span>K<span class="o">)</span> / 反応障壁 <span class="o">=</span>  80.0 <span class="o">(</span>kJ/mol<span class="o">)</span> / 虚振動数 <span class="o">=</span>  800.0 <span class="o">(</span>cm-1<span class="o">)</span>
+Wigner補正項 κ <span class="o">=</span> 1.613357e+00
+反応速度定数 : 7.361770e-02
+      補正後 : 1.187716e-01
+時定数       : 1.358369e+01 / sec.
+      補正後 : 8.419520e+00 / sec.
+反応物が 99.9 % 消費されるまでの時間（補正前）
+      0.0260646677 / hour
+      1.5638800644 / min.
+     93.8328038628 / sec.
+反応物が 99.9 % 消費されるまでの時間（補正後）
+      0.0161555510 / hour
+      0.9693330585 / min.
+     58.1599835119 / sec.
+</code></pre></div>
+</div>
+<p data-sourcepos="74:1-74:336">これより、80.0 kJ/mol の活性化エネルギーをもつ反応が 99.9 % 進行するまでには、1分半程度の時間を要することが分かります。また、トンネル効果を考慮すると、虚振動数の大きさが 800.0 cm-1 の場合、1分程度で反応が 99.9 % 進行することも分かります。</p>
+<blockquote data-sourcepos="76:1-78:146">
+<p data-sourcepos="76:3-78:146">【補足】<br>
+「時定数」は反応物が $1-\dfrac{1}{e} \approx 63.212$ % だけ消費される（＝反応物が $\dfrac{100}{e}$ % に減じる）までに要する時間なので、 <code>ratio = 100 - 100 * 1/math.exp(1)</code> などと書き換えれば求められます。<br>
+類似した概念に「半減期」がありますが、これは反応物が 50 % に減じるまでに要する時間を指しています。</p>
+</blockquote>
+<hr data-sourcepos="80:1-81:0">
+<p data-sourcepos="82:1-82:204">先日連投した記事中で用いている反応速度定数は上記のコードによって求めています。速度論シミュレーションに関心のある方は併せてご覧ください。</p>
+<p data-sourcepos="84:1-84:53"><a href="/qiita/3e9c79fa462fb7716d71.html" class="mirror-link-card">https://qiita.com/h-nabata/items/3e9c79fa462fb7716d71</a>
+</p>
+<p data-sourcepos="86:1-86:53"><a href="/qiita/3ffdabb45cb08eaab2f0.html" class="mirror-link-card">https://qiita.com/h-nabata/items/3ffdabb45cb08eaab2f0</a>
+</p>
+
+</div>
+
+
+{% endraw %}

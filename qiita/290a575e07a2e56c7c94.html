@@ -1,0 +1,419 @@
+---
+layout: "qiita-mirror"
+title: "簡単なスラブモデルの作り方"
+qiita_id: "290a575e07a2e56c7c94"
+qiita_url: "https://qiita.com/h-nabata/items/290a575e07a2e56c7c94"
+qiita_created: "2023-11-22T15:42:37+09:00"
+qiita_updated: "2023-11-25T16:36:51+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "計算化学・分子構造"
+mirror_tags: ["化学", "計算化学", "VESTA", "結晶構造", "周期境界条件"]
+permalink: "/qiita/290a575e07a2e56c7c94.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="4:1-4:270">※本稿は2023年11月24日に開催された「<a href="https://www.hpc.co.jp/tech-blog/2023/09/26/grrm-tutorial-2023-cfp/" rel="nofollow noopener" target="_blank"><strong>GRRMチュートリアル2023</strong></a>」の表面モデル作成パートの内容について、講演者自身が要点を再録したものである。</p>
+<h1 data-sourcepos="6:1-6:26">
+<span id="スラブモデルとは" class="fragment"></span><a href="#%E3%82%B9%E3%83%A9%E3%83%96%E3%83%A2%E3%83%87%E3%83%AB%E3%81%A8%E3%81%AF"><i class="fa fa-link"></i></a>スラブモデルとは</h1>
+<p data-sourcepos="7:1-7:552">スラブモデルは計算化学において表面系を記述する際に広く利用されるモデルである。特に表面科学や触媒反応の分野において、固体材料の表面をシミュレーションし、研究するために用いられる計算手法として用いられている。固体表面の特性はバルク材料の特性とは著しく異なることがあり、様々な化学プロセスにおいて重要な役割を果たしているため、このモデルは理論計算において非常に重要である。</p>
+
+<p data-sourcepos="13:1-13:54">スラブモデルの作成手順は以下の通り。</p>
+<blockquote data-sourcepos="15:1-24:51">
+<ol data-sourcepos="15:3-24:51">
+<li data-sourcepos="15:3-16:79">
+<strong>結晶構造を取得する</strong>
+<ul data-sourcepos="16:6-16:79">
+<li data-sourcepos="16:6-16:79">結晶構造データベースなどからcifファイルを取得する</li>
+</ul>
+</li>
+<li data-sourcepos="17:3-19:44">
+<strong>格子面の切り出し</strong>
+<ul data-sourcepos="18:6-19:44">
+<li data-sourcepos="18:6-18:80">注目する格子面がz軸に直交するように回転操作を施す</li>
+<li data-sourcepos="19:6-19:44">結晶構造を拡大 or 削減する</li>
+</ul>
+</li>
+<li data-sourcepos="20:3-23:31">
+<strong>スラブモデルのxyz座標を取得する</strong>
+<ul data-sourcepos="21:6-23:31">
+<li data-sourcepos="21:6-21:46">結晶構造のxyz座標を取得する</li>
+<li data-sourcepos="22:6-22:46">必要に応じて構造最適化する</li>
+<li data-sourcepos="23:6-23:31">真空層を設定する</li>
+</ul>
+</li>
+<li data-sourcepos="24:3-24:51"><strong>必要に応じて最表面を緩和する</strong></li>
+</ol>
+</blockquote>
+<p data-sourcepos="26:1-26:176">手順2については記事「<a href="/qiita/129f1dc2ca00332fc971.html" id="reference-8e74fc3c52447b5beca6"><strong>結晶構造から特定の指数面を切り出す</strong></a>」も併せて参照のこと。</p>
+<h1 data-sourcepos="29:1-29:21">
+<span id="pt111面の作成" class="fragment"></span><a href="#pt111%E9%9D%A2%E3%81%AE%E4%BD%9C%E6%88%90"><i class="fa fa-link"></i></a>Pt(111)面の作成</h1>
+<p data-sourcepos="30:1-30:73">ここでは例としてPt(111)面のスラブモデルを作成する。</p>
+<p data-sourcepos="32:1-32:267">結晶構造を加工・調整する準備として「<a href="https://jp-minerals.org/vesta/jp/" rel="nofollow noopener" target="_blank"><strong>VESTA</strong></a>」のダウンロードを推奨する。VESTAは結晶構造、電子・核密度等の三次元データ、及び結晶外形の可視化プログラムである。</p>
+<blockquote data-sourcepos="33:1-34:159">
+<p data-sourcepos="33:3-34:159">VESTAの利用に際しては、必ず次の論文をciteすること。<br>
+K. Momma and F. Izumi, "VESTA 3 for three-dimensional visualization of crystal, volumetric and morphology data," J. Appl. Crystallogr., 44, 1272-1276 (2011).</p>
+</blockquote>
+<p data-sourcepos="36:1-36:185">「ミラー指数（面）」については崎間公久氏による<a href="https://hooktail.sub.jp/solid/millerIndex1/" rel="nofollow noopener" target="_blank">物理のかぎプロジェクトの記事</a>などを参照のこと。</p>
+<h2 data-sourcepos="38:1-38:27">
+<span id="1-結晶構造の取得" class="fragment"></span><a href="#1-%E7%B5%90%E6%99%B6%E6%A7%8B%E9%80%A0%E3%81%AE%E5%8F%96%E5%BE%97"><i class="fa fa-link"></i></a>1. 結晶構造の取得</h2>
+<p data-sourcepos="40:1-40:275">最も手軽なのはMaterials Projectからcifファイルを取得することである。Pt結晶の​face-centered cubic (fcc)のcifファイルは以下のページから取得可能。「cif」と「cif (symmetrized)」の2種類があるが、どちらでも良い。</p>
+<p data-sourcepos="42:1-44:55"><a href="https://legacy.materialsproject.org/materials/mp-126/" class="autolink" rel="nofollow noopener" target="_blank">https://legacy.materialsproject.org/materials/mp-126/</a><br>
+または<br>
+<a href="https://next-gen.materialsproject.org/materials/mp-126/" class="autolink" rel="nofollow noopener" target="_blank">https://next-gen.materialsproject.org/materials/mp-126/</a></p>
+<p data-sourcepos="46:1-46:96">VESTAで表示すると以下の図のようになる。このab面は(001)面に相当する。</p>
+<p data-sourcepos="48:1-48:128"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F56eb34ad-b28e-dfa2-5ce3-d03bbb5bd005.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=682f32616645daca1f93475cc2586c48" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/63090da9db91f47eab9afbb4.png" alt="Pt_111_slab1.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/56eb34ad-b28e-dfa2-5ce3-d03bbb5bd005.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="50:1-50:160">(111)面は下図の桃色の面に相当する。これがxy平面に並行になるように結晶全体に回転操作を施すのが次の手順となる。</p>
+<p data-sourcepos="52:1-52:128"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F3cbcc2e1-e810-d88e-1ebd-c3a5ad989ec6.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=9da4764f6d539b63079e80aa132e25f1" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/5c4114151a75f2322445b5ca.png" alt="Pt_111_slab2.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/3cbcc2e1-e810-d88e-1ebd-c3a5ad989ec6.png" loading="lazy" decoding="async"></a></p>
+<h2 data-sourcepos="55:1-55:30">
+<span id="2-格子面の切り出し" class="fragment"></span><a href="#2-%E6%A0%BC%E5%AD%90%E9%9D%A2%E3%81%AE%E5%88%87%E3%82%8A%E5%87%BA%E3%81%97"><i class="fa fa-link"></i></a>2. 格子面の切り出し</h2>
+<p data-sourcepos="57:1-57:222">VESTAにはセルの並進ベクトル（translation vector; TV）を再定義する機能が備わっている。これを利用してユニットセルの座標を再定義（回転操作による座標変換）する。</p>
+<p data-sourcepos="59:1-59:24">手順は次の通り。</p>
+<hr data-sourcepos="61:1-62:0">
+<ol data-sourcepos="63:1-82:0">
+<li data-sourcepos="63:1-63:72"><strong>VESTAを起動して目当ての結晶のcifファイルを開く</strong></li>
+<li data-sourcepos="64:1-65:132">
+<strong>次に [Edit] &gt; [Edit Data] &gt; [Unit Cell...] と進む</strong><br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F489a143a-64d0-31f2-9a18-c4fefe137184.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=fd0e91a921daccc130b4f3ab307bed59" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/0e2d97aa0d0b0b46ecebe3ff.png" alt="Pt_111_slab3.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/489a143a-64d0-31f2-9a18-c4fefe137184.png" loading="lazy" decoding="async"></a>
+</li>
+<li data-sourcepos="66:1-67:128">
+<strong>表示されるダイアログボックスの [Transform...] をクリック</strong><br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F76cbe988-f97c-fd02-cd05-0d649994b6cb.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=e22df74ff9430e9e9f649988c3ee503c" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/0fa4a86a9d532900376665c3.png" alt="Pt_111_slab4.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/76cbe988-f97c-fd02-cd05-0d649994b6cb.png" loading="lazy" decoding="async"></a>
+</li>
+<li data-sourcepos="68:1-76:131">
+<strong>Rotation matrix P の成分を入力する（今回の場合は以下）</strong>
+<div class="code-frame" data-lang="math" data-sourcepos="69:4-75:6"><div class="highlight"><pre><code>\mathbf{P}=\begin{pmatrix} 
+2 &amp; 1 &amp; 1 \\ 
+-2 &amp; 1 &amp; 1 \\ 
+0 &amp; -2 &amp; 1 
+\end{pmatrix}
+</code></pre></div></div>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F9ba91193-f6d3-ab34-2dac-896a166484de.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=69c351ad5fb1d998ecf0875a11ba9c54" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/01188e5d51c71572d169066f.png" alt="Pt_111_slab5.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/9ba91193-f6d3-ab34-2dac-896a166484de.png" loading="lazy" decoding="async"></a>
+</li>
+<li data-sourcepos="77:1-78:128">
+<strong>[OK]を押下すると「セルの体積が変わるが良いか？」という警告が出るので「はい(Y)」を選択</strong><br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Fc13713ff-8c0f-32bb-03c0-252af344b5a4.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=98efdc606136c07aeb16dacfab55e44d" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/dd5b92d77cd581b07131d6d4.png" alt="Pt_111_slab6.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/c13713ff-8c0f-32bb-03c0-252af344b5a4.png" loading="lazy" decoding="async"></a>
+</li>
+<li data-sourcepos="79:1-80:128">
+<strong>「Additional lattice point(s)...」のラジオボタンは「Add new equivalent positions...」を選択して[OK]を押下</strong><br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F697fd983-a2f1-f1a6-0ee5-181eb329dc4b.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=5f0994b51a3f1b36d1cc323710372c5f" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/5a9ebe0e7e6edb137b2b388b.png" alt="Pt_111_slab7.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/697fd983-a2f1-f1a6-0ee5-181eb329dc4b.png" loading="lazy" decoding="async"></a>
+</li>
+<li data-sourcepos="81:1-82:0"><strong>[Apply] &gt; [OK] の順で押下</strong></li>
+</ol>
+<hr data-sourcepos="83:2-84:0">
+<p data-sourcepos="85:1-85:90">以上の手順により、下図のような新しいユニットセルが得られる。</p>
+<p data-sourcepos="87:1-87:128"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F047025a1-dd12-57f5-6469-74b431f475ea.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=57826bf92458676023d3ca3054147403" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/ef3df5ea7f3fc41eb283556b.png" alt="Pt_111_slab8.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/047025a1-dd12-57f5-6469-74b431f475ea.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="89:1-89:192">切り出す格子面によってはユニットセル内の原子数が必ずしも保存されない。格子内の原子数が多すぎる場合は適宜手動で削除するなどする。</p>
+<p data-sourcepos="91:1-91:118">a,b,cの各軸とそれらの成す夾角はVESTAのOutputの欄にLattice parametersとして表示されている。</p>
+<blockquote data-sourcepos="93:1-96:62">
+<p data-sourcepos="0:0-0:0">今回の場合の格子定数は次の通り。</p>
+<table data-sourcepos="93:3-96:62">
+<thead>
+<tr data-sourcepos="93:3-93:87">
+<th data-sourcepos="93:53-93:55">a</th>
+<th data-sourcepos="93:57-93:59">b</th>
+<th data-sourcepos="93:61-93:63">c</th>
+<th data-sourcepos="93:65-93:71">alpha</th>
+<th data-sourcepos="93:73-93:78">beta</th>
+<th data-sourcepos="93:80-93:86">gamma</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="96:3-96:62">
+<td data-sourcepos="96:4-96:13">11.15291</td>
+<td data-sourcepos="96:15-96:22">9.65871</td>
+<td data-sourcepos="96:24-96:32">6.82974</td>
+<td data-sourcepos="96:34-96:40">90.0000</td>
+<td data-sourcepos="96:42-96:50">90.0000</td>
+<td data-sourcepos="96:52-96:61">90.0000</td>
+</tr>
+</tbody>
+</table>
+</blockquote>
+<h2 data-sourcepos="100:1-100:51">
+<span id="3-スラブモデルのxyz座標を取得する" class="fragment"></span><a href="#3-%E3%82%B9%E3%83%A9%E3%83%96%E3%83%A2%E3%83%87%E3%83%AB%E3%81%AExyz%E5%BA%A7%E6%A8%99%E3%82%92%E5%8F%96%E5%BE%97%E3%81%99%E3%82%8B"><i class="fa fa-link"></i></a>3. スラブモデルのxyz座標を取得する</h2>
+<p data-sourcepos="102:1-102:264">このようにして作成したユニットセルからスラブモデルを作成するにあたって、必要に応じて使用する計算レベルでユニットセルの最適化計算を行う。この結果をもとにスラブモデルを作成する。</p>
+<blockquote data-sourcepos="104:1-104:322">
+<p data-sourcepos="104:3-104:322">GRRMプログラムを用いてセルの形状を維持したユニットセルの最適化計算を行う手順については、GRRMチュートリアルにおいて紹介しているので本稿では省略する。ここでは最適化計算用の小さいサイズのユニットセルの作成方法を述べる。</p>
+</blockquote>
+<p data-sourcepos="106:1-106:161">セル内の原子を削って整える方法は幾つかあるが、VESTAの原子選択モードを使ってカットしてしまうのが手っ取り早い。</p>
+<p data-sourcepos="108:1-108:239">VESTAでは原点を通らない面上にも原子が描画されるので、これらをまず削除する。さらにa軸とb軸の方向について原子を半分に削減して、下図に示すPt12原子からなる構造を作る。</p>
+<p data-sourcepos="110:1-110:129"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Fde83bd7a-4a87-9b65-3a97-cf00e31dc92f.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=0d404a5e2fa5536220c0e53ba9ab67a6" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/8bf65ddf1b4ebd8d0d76f46f.png" alt="Pt_111_slab10.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/de83bd7a-4a87-9b65-3a97-cf00e31dc92f.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="112:1-112:240">これをxyz形式のファイルとしてエクスポート（[File] &gt; [Export Data...]）してxyz座標を取得する。取得したxyz構造を<a href="https://www.chemcraftprog.com/" rel="nofollow noopener" target="_blank"><strong>ChemCraft</strong></a>で表示すると以下のようになる。</p>
+<blockquote data-sourcepos="114:1-114:170">
+<p data-sourcepos="114:3-114:170">セルは [Tools] &gt; [Crystallography tools] &gt; [Cuild cells ...] でTVの情報を入力すれば描画可能。cifを読み込んだ際にもセルが表示できる。</p>
+</blockquote>
+<p data-sourcepos="116:1-116:129"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F035f401d-8c5d-95f9-cb4f-9815fb50e147.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=062336703c71006f6cd7189b666c7f83" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/77613940de473f7156a3e34b.png" alt="Pt_111_slab11.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/035f401d-8c5d-95f9-cb4f-9815fb50e147.png" loading="lazy" decoding="async"></a></p>
+<div class="code-frame" data-lang="" data-sourcepos="118:1-134:3">
+<div class="code-lang"><span class="bold">xyz coordinates for the Pt(111) unit cell</span></div>
+<div class="highlight"><pre><code>Pt    0.000000000000      3.219569000000      4.553158000000
+Pt    1.394114000000      0.804892000000      4.553158000000
+Pt    2.788228000000      3.219569000000      4.553158000000
+Pt    4.182342000000      0.804892000000      4.553158000000
+Pt    0.000000000000      1.609784000000      2.276579000000
+Pt    1.394114000000      4.024461000000      2.276579000000
+Pt    2.788228000000      1.609784000000      2.276579000000
+Pt    4.182342000000      4.024461000000      2.276579000000
+Pt    0.000000000000      0.000000000000      0.000000000000
+Pt    1.394114000000      2.414677000000      0.000000000000
+Pt    2.788228000000      0.000000000000      0.000000000000
+Pt    4.182342000000      2.414677000000      0.000000000000
+TV    5.576455000000      0.000000000000      0.000000000000
+TV    0.000000000000      4.829355000000      0.000000000000
+TV    0.000000000000      0.000000000000      6.829740000000
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="135:1-135:127">
+<p data-sourcepos="135:3-135:127">ここで、Pt原子の座標はz座標の大きい順にソートしている。ソートにはExcelなどを利用する。</p>
+</blockquote>
+<p data-sourcepos="138:1-138:251">xyz座標が得られたら、中身をTVごと拡大する。ここではa軸方向に2倍、b軸方向に2倍する。反応経路探索の段階では計算コストを低減する目的で、第3層を削って2層のモデルにするとよい。</p>
+<blockquote data-sourcepos="140:1-140:83">
+<p data-sourcepos="140:3-140:83">ただし、層数が多いほど吸着エネルギーの精度は向上する。</p>
+</blockquote>
+<p data-sourcepos="142:1-142:358">最後に15～20Å程度の真空層をz方向に確保して、下図のようなスラブモデルを得る。ここではc軸を15Åだけ伸ばして真空層を設定している。系によっては必ずしもc軸がxy平面に直行しないので、c軸に相当するTVを伸ばす際はz成分が15～20Å程度増加するように注意する。</p>
+<p data-sourcepos="144:1-144:129"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F8cf4cd1c-9e44-5ff6-d3a0-c468e2e8d606.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=5b67f3bc1903b95c6f8877d42a228f05" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/c02453ae6ef2bae05319efb1.png" alt="Pt_111_slab12.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/8cf4cd1c-9e44-5ff6-d3a0-c468e2e8d606.png" loading="lazy" decoding="async"></a></p>
+<blockquote data-sourcepos="146:1-146:168">
+<p data-sourcepos="146:3-146:168">z成分の大きい原子の順番を若くしておくとインプット作成時の苦労が減る。また、表面の原子は整列させておくのがよい。</p>
+</blockquote>
+<h2 data-sourcepos="148:1-148:48">
+<span id="4-必要に応じて最表面を緩和する" class="fragment"></span><a href="#4-%E5%BF%85%E8%A6%81%E3%81%AB%E5%BF%9C%E3%81%98%E3%81%A6%E6%9C%80%E8%A1%A8%E9%9D%A2%E3%82%92%E7%B7%A9%E5%92%8C%E3%81%99%E3%82%8B"><i class="fa fa-link"></i></a>4. 必要に応じて最表面を緩和する</h2>
+<p data-sourcepos="150:1-150:261">酸化物表面などのように表面緩和や表面再構成が起き得る系では、必要に応じて最表面を緩和する。ただし反応経路探索のインプットにおいては必ずしも必要ではないため、ここでは省略する。</p>
+<hr data-sourcepos="153:1-154:0">
+<p data-sourcepos="155:1-155:57">その他の系についても手順は同様である。</p>
+<h1 data-sourcepos="158:1-158:44">
+<span id="補足資料１変換行列について" class="fragment"></span><a href="#%E8%A3%9C%E8%B6%B3%E8%B3%87%E6%96%99%EF%BC%91%E5%A4%89%E6%8F%9B%E8%A1%8C%E5%88%97%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6"><i class="fa fa-link"></i></a>補足資料１：変換行列について</h1>
+<p data-sourcepos="160:1-160:95">VESTAにおいて、変換後の新しいユニットセルは以下の式で与えられる。</p>
+<div class="code-frame" data-lang="math" data-sourcepos="162:1-170:3"><div class="highlight"><pre><code>{\begin{aligned}
+\left(\begin{array}{c} \boldsymbol{a}^{\prime} \\ \boldsymbol{b}^{\prime} \\ \boldsymbol{c}^{\prime} \end{array}\right) 
+&amp;= (\boldsymbol{a}, \boldsymbol{b}, \boldsymbol{c}) \mathbf{P} \\ 
+&amp;= (\boldsymbol{a}, \boldsymbol{b}, \boldsymbol{c})\left(\begin{array}{lll}P_{11} &amp; P_{12} &amp; P_{13} \\ P_{21} &amp; P_{22} &amp; P_{23} \\ P_{31} &amp; P_{32} &amp; P_{33}\end{array}\right) \\ 
+&amp;= \left(\begin{array}{c} P_{11} \boldsymbol{a}+P_{21} \boldsymbol{b}+P_{31} \boldsymbol{c} \\ P_{12} \boldsymbol{a}+P_{22} \boldsymbol{b}+P_{32} \boldsymbol{c} \\ P_{13} \boldsymbol{a}+P_{23} \boldsymbol{b}+P_{33} \boldsymbol{c} \end{array}\right)
+\end{aligned}
+}
+</code></pre></div></div>
+<p data-sourcepos="172:1-172:104">綺麗な（各TVの夾角が直角に近い）スラブモデルを作成するコツは次の通り。</p>
+<ol data-sourcepos="173:1-175:0">
+<li data-sourcepos="173:1-173:109">$\boldsymbol{c}^{\prime}$軸を注目している格子面の法線にできるだけ近付けること。</li>
+<li data-sourcepos="174:1-175:0">$\boldsymbol{a}^{\prime}$軸と$\boldsymbol{b}^{\prime}$軸の夾角をできるだけ直角に近付けること。</li>
+</ol>
+<p data-sourcepos="176:1-176:114">このような条件を満たす成分の行列を入力すると上手くスラブモデルが作成できる。</p>
+<p data-sourcepos="178:1-178:270">1.を満たすには、一番右の列の成分$P_{13}$、$P_{23}$、$P_{33}$が格子面の法線成分になるように設定すればよい。例えば今回のPt(111)面の場合は取得したcif構造が立方体なので$(1,1,1)$にすればちょうどよい。</p>
+<blockquote data-sourcepos="179:1-188:23">
+<p data-sourcepos="179:3-179:41">実際、今回用いた変換行列は</p>
+<div class="code-frame" data-lang="math" data-sourcepos="180:3-187:5"><div class="highlight"><pre><code>{\mathbf{P}=\begin{pmatrix} 
+2 &amp; 1 &amp; \color{red}{1} \\ 
+-2 &amp; 1 &amp; \color{red}{1} \\ 
+0 &amp; -2 &amp; \color{red}{1} 
+\end{pmatrix}
+}
+</code></pre></div></div>
+<p data-sourcepos="188:3-188:23">となっている。</p>
+</blockquote>
+<p data-sourcepos="190:1-190:242">2.を満たすには少し空間把握能力が要求される。一般にユニットセルは必ずしも直方体とは限らないので、その都度スーパーセルを作成して立体構造を眺めながら決めるのがよい。</p>
+<blockquote data-sourcepos="192:1-196:229">
+<p data-sourcepos="192:3-192:456">今回の場合は$(2,-2,0)$と$(1,1,-2)$のベクトルを新しい$\boldsymbol{a}^{\prime}$軸, $\boldsymbol{b}^{\prime}$軸にとっている。$\boldsymbol{a}^{\prime}$軸と$\boldsymbol{b}^{\prime}$軸を定義するベクトルの張る平面は必ず注目している格子面（今回の場合は(111)面）に平行でなければならない。また、この操作は特定のルールさえ決めれば恐らく自動化できるだろう。</p>
+<p data-sourcepos="194:3-194:101">参考までに、$\mathbf{P}$によって新たに作られるセルは下図のようになる。</p>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F9da0988a-e23d-6ce8-9f25-e8758f779ad9.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=1c9aa0230d4298e2d2a626223589ae28" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/2bf32f5d0e4124df18b9d946.png" alt="(111)面を面の一つにもつ直方体" title="(111)面を面の一つにもつ直方体" width="60%" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/9da0988a-e23d-6ce8-9f25-e8758f779ad9.png" loading="lazy" decoding="async"></a>
+</blockquote>
+<h1 data-sourcepos="198:1-198:32">
+<span id="補足資料２各種座標" class="fragment"></span><a href="#%E8%A3%9C%E8%B6%B3%E8%B3%87%E6%96%99%EF%BC%92%E5%90%84%E7%A8%AE%E5%BA%A7%E6%A8%99"><i class="fa fa-link"></i></a>補足資料２：各種座標</h1>
+<h3 data-sourcepos="200:1-200:70">
+<span id="xyz-coordinates-for-the-2-layer-pt111-slab-model-not-optimized" class="fragment"></span><a href="#xyz-coordinates-for-the-2-layer-pt111-slab-model-not-optimized"><i class="fa fa-link"></i></a>xyz coordinates for the 2-layer Pt(111) slab model (not optimized)</h3>
+<div class="code-frame" data-lang="text" data-sourcepos="201:1-237:3"><div class="highlight"><pre><code>Pt    0.000000000000      3.219569000000      4.553158000000
+Pt    0.000000000000      8.048924000000      4.553158000000
+Pt    1.394114000000      0.804892000000      4.553158000000
+Pt    1.394114000000      5.634247000000      4.553158000000
+Pt    2.788228000000      3.219569000000      4.553158000000
+Pt    2.788228000000      8.048924000000      4.553158000000
+Pt    4.182342000000      0.804892000000      4.553158000000
+Pt    4.182342000000      5.634247000000      4.553158000000
+Pt    5.576455000000      3.219569000000      4.553158000000
+Pt    5.576455000000      8.048924000000      4.553158000000
+Pt    6.970569000000      0.804892000000      4.553158000000
+Pt    6.970569000000      5.634247000000      4.553158000000
+Pt    8.364683000000      3.219569000000      4.553158000000
+Pt    8.364683000000      8.048924000000      4.553158000000
+Pt    9.758797000000      0.804892000000      4.553158000000
+Pt    9.758797000000      5.634247000000      4.553158000000
+Pt    0.000000000000      1.609784000000      2.276579000000
+Pt    0.000000000000      6.439139000000      2.276579000000
+Pt    1.394114000000      4.024461000000      2.276579000000
+Pt    1.394114000000      8.853816000000      2.276579000000
+Pt    2.788228000000      1.609784000000      2.276579000000
+Pt    2.788228000000      6.439139000000      2.276579000000
+Pt    4.182342000000      4.024461000000      2.276579000000
+Pt    4.182342000000      8.853816000000      2.276579000000
+Pt    5.576455000000      1.609784000000      2.276579000000
+Pt    5.576455000000      6.439139000000      2.276579000000
+Pt    6.970569000000      4.024461000000      2.276579000000
+Pt    6.970569000000      8.853816000000      2.276579000000
+Pt    8.364683000000      1.609784000000      2.276579000000
+Pt    8.364683000000      6.439139000000      2.276579000000
+Pt    9.758797000000      4.024461000000      2.276579000000
+Pt    9.758797000000      8.853816000000      2.276579000000
+TV   11.152910000000      0.000000000000      0.000000000000
+TV    0.000000000000      9.658710000000      0.000000000000
+TV    0.000000000000      0.000000000000     21.829740000000
+</code></pre></div></div>
+<h3 data-sourcepos="239:1-239:48">
+<span id="xyz-coordinates-for-the-optimized-unit-cells" class="fragment"></span><a href="#xyz-coordinates-for-the-optimized-unit-cells"><i class="fa fa-link"></i></a>xyz coordinates for the optimized unit cells</h3>
+<div class="code-frame" data-lang="" data-sourcepos="241:1-258:3">
+<div class="code-lang"><span class="bold">optimized at the PBE/DZP level with TV-Shape=Fix</span></div>
+<div class="highlight"><pre><code>Pt        -0.046019344478          3.246150408237          4.603325535366
+Pt         1.378874466057          0.778328229405          4.603133001891
+Pt         2.803535649485          3.246203222511          4.603291606219
+Pt         4.228441228515          0.778348039592          4.603197847389
+Pt        -0.046022421522          1.600966562853          2.276545323484
+Pt         1.378808140908          4.068640812784          2.276521560607
+Pt         2.803536593815          1.600941249568          2.276605713874
+Pt         4.228369187709          4.068770628458          2.276539113016
+Pt        -0.046041686355         -0.044282934734         -0.050024833423
+Pt         1.378807518954          2.423453760747         -0.050107134640
+Pt         2.803445855284         -0.044275001037         -0.050035153616
+Pt         4.228316811628          2.423521021613         -0.050044580177
+TV         5.699119888090         -0.000000000000          0.000000000000
+TV         0.000000000000          4.935585981983          0.000000000000
+TV        -0.000000000000          0.000000000000          6.979973310010
+ENERGY    = -334.904841336624
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="" data-sourcepos="260:1-277:3">
+<div class="code-lang"><span class="bold">optimized at the PBE/DZP level with TV-Angle=Fix</span></div>
+<div class="highlight"><pre><code>Pt        -0.052627998133          3.237005492441          4.613534016269
+Pt         1.376547305680          0.787592163078          4.613430939256
+Pt         2.805653281108          3.236993848048          4.613466960513
+Pt         4.234880337379          0.787520417831          4.613431766320
+Pt        -0.052460156221          1.604143725424          2.276496989656
+Pt         1.376652044881          4.053123896714          2.276641270948
+Pt         2.805851210794          1.604042484125          2.276502461513
+Pt         4.234933348795          4.053136786694          2.276595177103
+Pt        -0.052507728002         -0.028728183600         -0.060302555819
+Pt         1.376605455528          2.420360465223         -0.060234804622
+Pt         2.805691617208         -0.028748092539         -0.060350031175
+Pt         4.234833280984          2.420322996559         -0.060264189961
+TV         5.716541980275         -0.000000000000         -0.000000000000
+TV        -0.000000000000          4.898545141936          0.000000000000
+TV        -0.000000000000          0.000000000000          7.010637970666
+ENERGY    = -334.905100676933
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="279:1-279:112">
+<p data-sourcepos="279:3-279:112"><code>TV-Shape=Fix</code>と<code>TV-Angle=Fix</code>の計算結果の差は 0.68 kJ/mol で、ほぼ誤差の範囲と言える。</p>
+</blockquote>
+<h3 data-sourcepos="281:1-281:54">
+<span id="xyz-coordinates-for-the-3-layer-pt111-slab-model" class="fragment"></span><a href="#xyz-coordinates-for-the-3-layer-pt111-slab-model"><i class="fa fa-link"></i></a>xyz coordinates for the 3-layer Pt(111) slab model</h3>
+<div class="code-frame" data-lang="" data-sourcepos="283:1-335:3">
+<div class="code-lang"><span class="bold">created by using the optimized structure under TV-Shape=Fix</span></div>
+<div class="highlight"><pre><code>Pt   -0.046019344000      3.246150408000      4.603325535000
+Pt   -0.046019344000      8.181736390000      4.603325535000
+Pt    5.653100544000      3.246150408000      4.603325535000
+Pt    5.653100544000      8.181736390000      4.603325535000
+Pt    2.803535649000      3.246203223000      4.603291606000
+Pt    2.803535649000      8.181789204000      4.603291606000
+Pt    8.502655538000      3.246203223000      4.603291606000
+Pt    8.502655538000      8.181789204000      4.603291606000
+Pt    4.228441229000      0.778348040000      4.603197847000
+Pt    4.228441229000      5.713934022000      4.603197847000
+Pt    9.927561117000      0.778348040000      4.603197847000
+Pt    9.927561117000      5.713934022000      4.603197847000
+Pt    1.378874466000      0.778328229000      4.603133002000
+Pt    1.378874466000      5.713914211000      4.603133002000
+Pt    7.077994354000      0.778328229000      4.603133002000
+Pt    7.077994354000      5.713914211000      4.603133002000
+Pt    2.803536594000      1.600941250000      2.276605714000
+Pt    2.803536594000      6.536527232000      2.276605714000
+Pt    8.502656482000      1.600941250000      2.276605714000
+Pt    8.502656482000      6.536527232000      2.276605714000
+Pt   -0.046022422000      1.600966563000      2.276545323000
+Pt   -0.046022422000      6.536552545000      2.276545323000
+Pt    5.653097467000      1.600966563000      2.276545323000
+Pt    5.653097467000      6.536552545000      2.276545323000
+Pt    4.228369188000      4.068770628000      2.276539113000
+Pt    4.228369188000      9.004356610000      2.276539113000
+Pt    9.927489076000      4.068770628000      2.276539113000
+Pt    9.927489076000      9.004356610000      2.276539113000
+Pt    1.378808141000      4.068640813000      2.276521561000
+Pt    1.378808141000      9.004226795000      2.276521561000
+Pt    7.077928029000      4.068640813000      2.276521561000
+Pt    7.077928029000      9.004226795000      2.276521561000
+Pt   -0.046041686000     -0.044282935000     -0.050024833000
+Pt   -0.046041686000      4.891303047000     -0.050024833000
+Pt    5.653078202000     -0.044282935000     -0.050024833000
+Pt    5.653078202000      4.891303047000     -0.050024833000
+Pt    2.803445855000     -0.044275001000     -0.050035154000
+Pt    2.803445855000      4.891310981000     -0.050035154000
+Pt    8.502565743000     -0.044275001000     -0.050035154000
+Pt    8.502565743000      4.891310981000     -0.050035154000
+Pt    4.228316812000      2.423521022000     -0.050044580000
+Pt    4.228316812000      7.359107004000     -0.050044580000
+Pt    9.927436700000      2.423521022000     -0.050044580000
+Pt    9.927436700000      7.359107004000     -0.050044580000
+Pt    1.378807519000      2.423453761000     -0.050107135000
+Pt    1.378807519000      7.359039743000     -0.050107135000
+Pt    7.077927407000      2.423453761000     -0.050107135000
+Pt    7.077927407000      7.359039743000     -0.050107135000
+TV   11.398239776180      0.000000000000      0.000000000000
+TV    0.000000000000      9.871171963966      0.000000000000
+TV    0.000000000000      0.000000000000     21.979973310010
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="" data-sourcepos="337:1-389:3">
+<div class="code-lang"><span class="bold">created by using the optimized structure under TV-Angle=Fix</span></div>
+<div class="highlight"><pre><code>Pt   -0.052627998000      3.237005492000      4.613534016000
+Pt   -0.052627998000      8.135550634000      4.613534016000
+Pt    5.663913982000      3.237005492000      4.613534016000
+Pt    5.663913982000      8.135550634000      4.613534016000
+Pt    2.805653281000      3.236993848000      4.613466961000
+Pt    2.805653281000      8.135538990000      4.613466961000
+Pt    8.522195261000      3.236993848000      4.613466961000
+Pt    8.522195261000      8.135538990000      4.613466961000
+Pt    4.234880337000      0.787520418000      4.613431766000
+Pt    4.234880337000      5.686065560000      4.613431766000
+Pt    9.951422318000      0.787520418000      4.613431766000
+Pt    9.951422318000      5.686065560000      4.613431766000
+Pt    1.376547306000      0.787592163000      4.613430939000
+Pt    1.376547306000      5.686137305000      4.613430939000
+Pt    7.093089286000      0.787592163000      4.613430939000
+Pt    7.093089286000      5.686137305000      4.613430939000
+Pt    1.376652045000      4.053123897000      2.276641271000
+Pt    1.376652045000      8.951669039000      2.276641271000
+Pt    7.093194025000      4.053123897000      2.276641271000
+Pt    7.093194025000      8.951669039000      2.276641271000
+Pt    4.234933349000      4.053136787000      2.276595177000
+Pt    4.234933349000      8.951681929000      2.276595177000
+Pt    9.951475329000      4.053136787000      2.276595177000
+Pt    9.951475329000      8.951681929000      2.276595177000
+Pt    2.805851211000      1.604042484000      2.276502462000
+Pt    2.805851211000      6.502587626000      2.276502462000
+Pt    8.522393191000      1.604042484000      2.276502462000
+Pt    8.522393191000      6.502587626000      2.276502462000
+Pt   -0.052460156000      1.604143725000      2.276496990000
+Pt   -0.052460156000      6.502688867000      2.276496990000
+Pt    5.664081824000      1.604143725000      2.276496990000
+Pt    5.664081824000      6.502688867000      2.276496990000
+Pt    1.376605456000      2.420360465000     -0.060234805000
+Pt    1.376605456000      7.318905607000     -0.060234805000
+Pt    7.093147436000      2.420360465000     -0.060234805000
+Pt    7.093147436000      7.318905607000     -0.060234805000
+Pt    4.234833281000      2.420322997000     -0.060264190000
+Pt    4.234833281000      7.318868138000     -0.060264190000
+Pt    9.951375261000      2.420322997000     -0.060264190000
+Pt    9.951375261000      7.318868138000     -0.060264190000
+Pt   -0.052507728000     -0.028728184000     -0.060302556000
+Pt   -0.052507728000      4.869816958000     -0.060302556000
+Pt    5.664034252000     -0.028728184000     -0.060302556000
+Pt    5.664034252000      4.869816958000     -0.060302556000
+Pt    2.805691617000     -0.028748093000     -0.060350031000
+Pt    2.805691617000      4.869797049000     -0.060350031000
+Pt    8.522233597000     -0.028748093000     -0.060350031000
+Pt    8.522233597000      4.869797049000     -0.060350031000
+TV   11.433083960550      0.000000000000      0.000000000000
+TV    0.000000000000      9.797090283872      0.000000000000
+TV    0.000000000000      0.000000000000     22.010637970666
+</code></pre></div>
+</div>
+
+</div>
+
+
+
+{% endraw %}

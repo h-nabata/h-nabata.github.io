@@ -1,0 +1,254 @@
+:::note info
+計算化学における「機械学習ポテンシャル」の概念については以下の記事等を参照のこと。
+
+- [機械学習原子間ポテンシャル - Wikipedia](https://ja.wikipedia.org/wiki/%E6%A9%9F%E6%A2%B0%E5%AD%A6%E7%BF%92%E5%8E%9F%E5%AD%90%E9%96%93%E3%83%9D%E3%83%86%E3%83%B3%E3%82%B7%E3%83%A3%E3%83%AB)
+- [機械学習ポテンシャル入門 - Matlantis](https://matlantis.com/ja/resources/blog/mlip-intro/)
+:::
+
+
+# UMA smallモデルのリリース
+
+MetaのFairChemから機械学習ポテンシャル「UMA」のsmallモデルについて、新しいモデル（uma-s-1.2）がリリースされた。[公式リポジトリ](https://github.com/facebookresearch/fairchem)のREADMEには以下のように記載がある。
+
+| Model Name | Description |
+|---|---|
+| uma-s-1p2 | Latest version of the UMA small model, fastest of the UMA models while still SOTA on most benchmarks (6.6M/290M active/total params) |
+| uma-s-1p1 | Early version of the UMA small model while still SOTA on most benchmarks (6.6M/150M active/total params) |
+| uma-m-1p1 | Best in class UMA model across all metrics, but slower and more memory intensive than uma-s (50M/1.4B active/total params) |
+
+
+モデルとしては拡張されているが、活性化するパラメータ数は従来と同規模に抑えられており、さらなるチューニングによって推論速度が向上したとのこと。
+
+新たに増強された学習データは、
+- 酸化物や電極表面などの広範な無機物質
+  - OC22: https://pubs.acs.org/doi/10.1021/acscatal.2c05426
+  - OC25: https://doi.org/10.48550/arXiv.2509.17862
+- 高分子
+  - OPoly26: https://doi.org/10.48550/arXiv.2512.23117
+
+が該当する。このモデル一つで、より広い領域の材料が扱えるようになっている。
+
+
+昨年公開されたarΧivの論文も今月v2にアップデートされており、補足資料も更新されている。
+
+https://arxiv.org/abs/2506.23971v2
+
+# 環境構築
+
+早速動かしてみる。以前の記事に倣い、最新の[fairchem-coreライブラリ](https://github.com/facebookresearch/fairchem)を導入する。（2026/03/10現在は 2.17 が最新）
+
+https://qiita.com/h-nabata/items/788f97e09c8593ac3951
+
+fairchem-core 2.17 では dependencies に `"torch~=2.8.0"` とあるので、PyTorchは 2.8.0 のバージョンを入れる必要がある。
+また、`requires-python = ">=3.11, <3.14"` とあるので、ここでは Python 3.12 で環境を構築する。
+
+:::note info
+**インストールの流れ**
+
+1. conda仮想環境を Python 3.12 で作成
+2. PyTorch 2.8.0 のGPU対応版をインストールする
+3. fairchem-core 2.17 をインストールする
+:::
+
+:::note warn
+**fairchem-coreのバージョンについて**
+
+古いバージョンでは新しいモデルを動かせないケースがあるため、可能な限り最新のバージョンのfairchem-coreをインストールするのが良い。今回の UMA-s-1.2 のモデルは 2.16 以上が想定されている。
+:::
+
+<details><summary>【参考】fairchem-core 2.17 の依存関係</summary>
+
+```:pyproject.toml
+[build-system]
+requires = ["hatchling", "hatch-vcs", "hatch-fancy-pypi-readme>=24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fairchem-core"
+description = "Machine learning models for chemistry and materials science by the FAIR Chemistry team"
+license = {text = "MIT License"}
+dynamic = ["version", "readme"]
+requires-python = ">=3.11, <3.14"
+dependencies = [
+    "torch~=2.8.0",
+    "ray[serve]>=2.53.0",
+    "numpy>=2.0,<2.4",
+    "scipy>=1.15.0",
+    "lmdb>=1.6.2,<=1.7.3",
+    "numba>=0.62.0",
+    "e3nn>=0.5",
+    "huggingface_hub>=0.27.1",
+    "ase>=3.26.0",
+    "ase-db-backends>=0.10.0",
+    "monty>=v2025.1.3",
+    "clusterscope==0.0.18",
+    "setuptools<81.0.0",
+    "requests",
+    "orjson",
+    "tqdm",
+    "submitit",
+    "hydra-core",
+    "torchtnt",
+    "pyyaml",
+    "wandb",
+    "websockets",
+]
+
+[project.optional-dependencies]  # add optional dependencies, e.g. to be installed as pip install fairchem.core[dev]
+dev = ["pre-commit", "pytest", "pytest-cov", "coverage", "syrupy", "ruff==0.5.1"]
+docs = ["jupyter-book", "jupytext", "sphinx","sphinx-autoapi==3.3.3", "astroid<4", "umap-learn", "vdict", "ipywidgets", "jupyter_book>=2.0", "torch-dftd"]
+adsorbml = ["dscribe", "x3dase", "scikit-image"]
+extras = ["pymatgen", "quacc[phonons]>=0.15.3", "pandas", "nvalchemi-toolkit-ops", "pyarrow"]
+
+
+[project.scripts]
+fairchem = "fairchem.core._cli:main"
+
+[project.urls]
+repository = "https://github.com/facebookresearch/fairchem"
+home = "https://opencatalystproject.org/"
+documentation = "https://fair-chem.github.io/"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+root = "../../"
+git_describe_command = 'git describe --tags --match fairchem_core-*'
+
+[tool.hatch.build]
+directory = "../../dist-core"
+
+[tool.hatch.build.targets.sdist]
+only-include = ["src/fairchem/core", "src/fairchem/experimental"]
+
+[tool.hatch.build.targets.wheel]
+sources = ["src"]
+only-include = ["src/fairchem/core", "src/fairchem/experimental"]
+
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+fragments = [
+  { path = "src/fairchem/core/README.md" },
+  { path = "src/fairchem/core/LICENSE.md" },
+]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts  =  "-p no:warnings -x --quiet -rxXs --color yes"
+filterwarnings  = [
+    'ignore::UserWarning',
+    'ignore::FutureWarning',
+    'ignore::RuntimeWarning'
+    ]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["fairchem.core"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+```
+
+</details>
+
+
+
+
+## 仮想環境の作成
+
+bash環境で以下を実行する。
+
+```sh
+conda create -y -n uma217 python=3.12
+conda activate uma217
+
+pip install torch==2.8.0+cu128 --index-url https://download.pytorch.org/whl/cu128
+pip install fairchem-core==2.17.0
+```
+> 仮想環境名は任意。ここでは fairchem-core 2.17 に合わせて `uma217` とした。
+
+> pipで数分でインストールが完了した。uvを利用すればさらに速いものと思われる。
+
+## UMAの重みファイルの取得
+
+Hugging Faceから重みファイルをダウンロードする（アカウントが必要なので無ければ登録・作成する）。
+ここではUMAのSmallモデルを利用する。2026年3月現在の最新バージョンは`uma-s-1.2`である。
+
+https://huggingface.co/facebook/UMA
+
+`uma-s-1p2.pt` をローカル環境の適当なところに置く。ファイル容量は前バージョンの `uma-s-1p1.pt` から倍増して 2.17 GB程度となっている。
+
+# テスト計算
+
+例によって、All-Benzene Multi-Macrocyclic Nanocarbonの鎖を4つにした712原子からなる構造（下図）をUMAで計算を実施してみた。
+
+![image.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/62506c43-2df3-4cf7-8015-9234e376a692.png)
+
+`fmax=0.03` の条件で最適化したところ、ステップ数は275であった。所用時間は次の通り。比較のために過去の計算結果も掲載した。
+
+|  | CPU<sup>a, b</sup> | GPU<sup>b</sup> |  GPU<sup>c</sup> |  GPU<sup>d</sup> |GPU<sup>e</sup> |
+|:-----------|:------------:|:------------:|:------------:|:------------:|:------------:|
+| **Time**       | 46分31秒        | 1分41秒         | 1分08秒 |  1分06秒 |   1分08秒 | 
+| **Step**     | 276      | 276       | 275 | 276 | 275 |
+| **Energy(eV)** | -452542.746219      | -452542.742874        | -452542.700321         | -452542.698745 | -452542.663232 |
+
+> <sup>a</sup> AMD Ryzen 7 5800X3D (8-Core Processor) で実行。
+> <sup>b</sup> fairchem-core 2.2.0, PyTorch 2.6.0, RTX3070Ti上で実行。ポテンシャルは uma-sm.pt を使用。
+> <sup>c</sup> fairchem-core 2.12.0, PyTorch 2.8.0, RTX5070Ti上で実行。ポテンシャルは uma-s-1p1.pt を使用。
+> <sup>e</sup> fairchem-core 2.17.0, PyTorch 2.8.0, RTX5070Ti上で実行。ポテンシャルは uma-s-1p1.pt を使用。
+> <sup>e</sup> fairchem-core 2.17.0, PyTorch 2.8.0, RTX5070Ti上で実行。ポテンシャルは uma-s-1p2.pt を使用。
+
+fairchem-coreのバージョンアップによって推論速度が向上したとのことであったが、特段速くなっていないように思われる。推論モードをturboにすれば速い場合があるかもしれない（未検証）。
+
+> 計算実行時における`nvidia-smi`のスナップショット。RTX 5070 Tiはパワーがあるのでそこそこの消費電力になっている。今の時期は窓を開放すれば空冷できるので、計算には良い時期と言える。
+> ```
+> +-----------------------------------------------------------------------------------------+
+> | NVIDIA-SMI 575.64.01              Driver Version: 576.88         CUDA Version: 12.9     |
+> |-----------------------------------------+------------------------+----------------------+
+> | GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+> | Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+> |                                         |                        |               MIG M. |
+> |=========================================+========================+======================|
+> |   0  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+> | 31%   59C    P1            204W /  300W |    8164MiB /  16303MiB |     86%      Default |
+> |                                         |                        |                  N/A |
+> +-----------------------------------------+------------------------+----------------------+
+> 
+> +-----------------------------------------------------------------------------------------+
+> | Processes:                                                                              |
+> |  GPU   GI   CI              PID   Type   Process name                        GPU Memory |
+> |        ID   ID                                                               Usage      |
+> |=========================================================================================|
+> |    0   N/A  N/A            4459      C   /python3.12                           N/A      |
+> +-----------------------------------------------------------------------------------------+
+> 
+> ```
+
+# 論文の補足資料について
+
+ UMA-S-1.2へのアップデートに合わせて、[arΧivの論文](https://arxiv.org/abs/2506.23971v2)もv2にアップデートされている。この補足資料が興味深い。
+
+補足資料の「**G Diatomics**」の項目に二原子ポテンシャルの挙動を示したプロットが掲載されているが、初期モデル（UMA-1.0 / 1.1）は酷く不安定な挙動を示していることが分かる（下図、論文より引用）。
+![image.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/e220eefe-d5bf-447e-bd37-3550f600ea8b.png)
+
+これが UMA-S-1.2 では大幅に改善されている（下図、論文より引用）。二原子のデータ（dimer calculations）を訓練セットに追加することで問題を改善したとのことで、MAE（平均絶対誤差）が1/40になったと報告されている。
+![image.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/f42646f9-91ec-4858-8361-67903949cdb4.png)
+
+単原子が解離するような系、特に表面上での反応や吸着などの計算を実施する場合は、従来のモデルではなく今回の UMA-S-1.2 を利用すべきであろう。モデルとしては従来のものとは別物と考えた方が良さそうである。
+
+> このデータが追加された経緯は不明だが、外部から指摘されたことで修正したのではないかと思われる。モデルとしては格段に精度が向上していると考えられる。
+> 同種二原子のポテンシャル曲線だけでなく、異種二原子のポテンシャル曲線も学習されていることが望ましい。表面反応などでは特に精度面で影響が大きいと思われるので、学習データに含まれているべきである。
+> （UMAの異種二原子のポテンシャル曲線は筆者の手元では未検証）
+
+* * *
+
+UMA-S-1.2 の現状の限界についても言及がある。例えば、下記の通り。
+
+- 約5.5 Å以上の長距離ではエネルギー挙動が完全には正しくない
+- N₂の解離付近に小さなバリアが現れる
+
+長距離でのポテンシャル面が不正確になる可能性はあるが、実用上は解離して遠く離れたような構造を計算することは少ないため、直ちに問題にはならなさそうである。今後の改善に期待したい。
+
+> MLIP一般の問題として、UMAでもカットオフ半径の影響などにより 6 Å程度離れた位置でポテンシャル面がフラット化し、エネルギーが不連続になるアーティファクト的な領域が発生することは筆者の手元でも確認している。今回リリースされたモデルでも、この問題は根本的には解決していないように思われる。

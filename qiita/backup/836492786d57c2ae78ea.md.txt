@@ -1,0 +1,554 @@
+# はじめに
+
+論文執筆の際、英文の推敲にAIを使う場合と、論文に掲載する図をAIで作る場合では、同じ「AI利用」でも投稿規定上の扱いが異なることがあります。図版についても、本文中の模式図、TOC画像／Graphical Abstract（以下、必要に応じてGAと表記）、雑誌の表紙（カバーアート）では、それぞれ異なる条件が設けられている場合があります。
+
+> 例えばACSでは、AI生成画像を表紙に使うための条件が定められている一方、TOC画像にはAI生成画像を使わないよう求めています。[^acs-ai]
+
+本稿では、主要な科学系出版社・学協会の投稿規定を調べ、研究内容を説明する図や原稿の作成にAIを利用できる範囲について、2026年9月末時点での情報を整理します。
+
+> **基本調査の実施日：2026年9月24日**
+
+## 1．調査範囲
+
+今回調査したのは、次の7系統の出版社・学協会です。
+
+| 調査対象 | 今回扱う主な分野 | 調査の単位 |
+|---|---|---|
+| Springer Nature | 科学全般、化学、生命科学、物理、材料 | 出版社の共通方針、Nature Portfolio・Springer・BMCの方針、代表誌の規定 |
+| AAAS／Science journals | 科学全般、生命科学、医学、ロボティクス | Science系列の共通編集方針、AI利用ガイドライン |
+| ACS Publications | 化学全般、物理化学、触媒、材料、化学生物学、生化学 | 共通のAI利用方針、代表誌のAuthor Guidelines |
+| RSC | 化学全般、物理化学、材料、エネルギー、化学生物学 | 共通のAuthor responsibilities、一部の個別誌の案内 |
+| APS | 物理全般、量子、物性、統計物理、生物物理 | Physical Review系列共通の編集方針・AI方針 |
+| AIP Publishing | 応用物理、化学物理、光学、生物物理、生体工学 | AIP PublishingのAI方針と著者向け規定 |
+| Elsevier（Cell Pressを含む） | 化学、生命科学、材料、エネルギー、化学工学、物理 | 出版社共通方針を確認し、Cell Pressについては同じ節の中で分けて整理 |
+
+調査では、出版社や学協会が公開している共通方針を中心に、必要に応じて代表的な専門誌の個別規定も確認しました。以下の表には、個別誌の規定まで確認したものと、系列全体の共通方針のみを確認したものが含まれています。両者を混同しないよう、各節で確認範囲を明記します。表の順番に優劣などの意味はありません。
+
+> NatureとScienceは出版主体が異なるため、本稿では別々に扱います。
+>
+> Scienceについては、公式の編集方針ページから保存した英語本文と、同ページが参照する「Science journals’ guidelines for AI usage」の英語PDF（全2ページ）を照合しました。以下のScience欄は、この2点を根拠としています。[^science-policy][^science-ai]
+>
+> Elsevierについては出版社共通の方針を確認した上で、Cell PressやScienceDirect上の個別誌について一部を追加で確認しています。個別誌のページには全文を直接取得できなかったものもあるため、その場合は確認範囲を明記しています。
+
+なお、今回扱うのは主に、著者による研究、原稿作成、図版制作へのAI利用です。Scienceについては、同じガイドラインに査読への回答や改稿についての規定もあるため、これらも取り上げます。査読者やエディター自身によるAI利用は、今回の比較対象には含めません。
+
+AIを著者として扱うことができないこと、またAIが生成・編集した文章や図を含め、提出物の内容について最終的な責任を負うのは著者であることは、各社にほぼ共通する前提です。[^science-ai][^acs-chembio][^aip-authors]
+
+:::note warn
+どの雑誌についても、「規定に記載がない」ことをそのまま「使用してよい」と解釈することはできません。同じ出版社でも、共通方針と個別誌の案内では記載の詳しさが異なる場合があります。両者が食い違って見える場合には、投稿時点の最新規定を確認し、必要であれば編集部へ問い合わせる必要があります。
+:::
+
+## 2．図の区分
+
+本稿では、便宜上、図版を次のように分けます。出版社が共通して用いている正式な分類ではありません。
+
+| 用途 | 例 | 規定を読むときの確認点 |
+|---|---|---|
+| 研究データを示す図 | 顕微鏡像、スペクトル、計算結果のグラフ | 元データとの対応、処理による情報の変更、再現性 |
+| 説明用の図・模式図 | 反応機構、装置図、研究の流れ | 科学的な正確さ、素材の出所、生成工程 |
+| TOC画像／Graphical Abstract | 論文の要点を視覚的に示す図 | 専用の作成条件、AI利用の可否、申告方法 |
+| 表紙・カバーアート | 研究を象徴的・視覚的に表現する作品 | 表紙専用の許可、権利関係、AI利用の申告 |
+
+TOC画像とGraphical Abstractは、必ずしも別の種類の画像ではありません。RSCでは「table of contents entry (graphical abstract)」と呼んでおり、ACSでもTOC graphicがabstract graphicを兼ねる雑誌があります。一方、ElsevierやCell PressではGraphical Abstractという名称を独立した提出物として用いています。
+
+したがって本稿では、両者をおおむね「TOC画像／Graphical Abstract」という一つの用途として扱い、出版社固有の名称が重要な場合だけ区別します。
+
+これに対して表紙は、TOC画像やGAとは明確に用途が異なります。例えばACS Nanoでは、表紙画像について、graphical abstractやdata figureのようなものではなく、芸術性を持ちながら科学的に正確な表現とするよう求めています。[^acs-nano]
+
+> なお、表紙（カバーアート）は、その号に掲載されるすべての論文に用意されるものではなく、通常は一部の論文が対象となります。著者から候補作品を募集する場合や、編集部から依頼・選定される場合があり、その扱いは雑誌によって異なります。
+
+* * *
+
+以下では、上述の用途の違いを前提として規定を比較します。
+
+## 3．早見表
+
+まず、図版制作に関係する主な規定をまとめます。細かな条件や例外は各節で説明します。
+
+| 出版社・系列 | 説明用のAI図版 | AI生成画像を含むTOC／GA | AIを使った表紙 | 特に注意する点 |
+|---|---|---|---|---|
+| Springer Nature／Nature Portfolio | 検証可能な元資料に基づき、開示・人による検証などの条件を満たす場合は利用可能 | 個別誌の条件も確認 | 個別確認 | 検証可能な元データ・資料を持たない不透明な生成画像は不可[^nature-ai][^sn-visual] |
+| AAAS／Science journals | 説明目的の画像・図の生成、修正、編集、整形等は原則不可。例外はエディターと協議 | 専用の許容条項は確認できず。説明用の図に当たる場合は原則不可 | 個別確認。AI生成画像を含む場合は画像一般の規定も適用 | 研究データ・結果の可視化については、編集・整形を条件付きで認めている[^science-policy][^science-ai] |
+| ACS | 開示などを条件に扱う方針あり | **TOC graphicへのAI生成画像の使用は不可** | **条件付きで可** | 本文図、TOC graphic、表紙を分けて規定[^acs-ai] |
+| RSC | 説明・装飾目的のAI図版を条件付きで認める | Chemical Scienceでは条件付きで利用可能。その他の雑誌は個別確認 | Chemical Scienceなどの個別規定で条件を明記 | 学習データのライセンスと、出力の商用再利用条件を確認[^rsc-authors][^rsc-chemsci-guide] |
+| APS | 図生成・データ可視化は条件付きで利用可能 | 用途と掲載場所を確認 | APSは主要画像・表紙・宣伝画像にAI生成アートを原則使用しない | 論文中のデータ可視化と、表紙・宣伝画像を分けている[^aps-ai] |
+| AIP Publishing | 共通AI方針だけでは説明・装飾用画像の一律の可否は決められない | Highlight Imageを含め個別確認 | 個別確認 | 元の研究データや一次画像の意味を変える生成・改変は不可[^aip-ai] |
+| Elsevier共通方針 | 概念図、フローチャート、模式図などは条件付きで可 | 汎用の生成AI画像ツールによるGA作成は不可 | エディターと出版社の事前許可が必要 | 説明図、データ可視化、一次研究画像、GA、表紙を分けて規定[^elsevier-ai][^elsevier-update] |
+| Cell Press | 説明図へのAI利用を認める条項を一部確認 | 汎用の生成AI画像ツールを使わない規定を一部確認 | 原則不使用。研究そのものにAI利用が不可欠な場合に例外を検討 | 個別ページは一部確認。表紙規定はElsevier共通方針だけでは判断しない[^cell-policy][^chem-policy][^cell-cover] |
+
+:::note info
+表中の表記は、次の意味で使用しています。規定は更新される可能性があるため、投稿時には必ず公式の最新案内を確認してください。
+
+| 表記 | 意味 |
+|---|---|
+| 許容 | 著者の責任のもとで利用を認める明示的な記載がある |
+| 条件付き | 開示、権利確認、検証などの条件を満たした場合に利用できる |
+| 原則不可 | 禁止または不使用を原則とする記載がある。例外がある場合は併記 |
+| 個別確認 | 共通方針だけでは、その用途の可否を確定できない |
+:::
+
+## 4．出版社・学協会ごとの規定
+
+### 4.1　Springer Nature
+
+Springer Natureの現行AI方針は、AIを使ったかどうかだけではなく、**どのように使ったか**を基準とするリスク評価型の枠組みを採用しています。文法や表現の改善と、研究上の主張・解釈をAIに委ねることを区別し、人による確認と説明責任を重視しています。[^nature-ai][^sn-visual]
+
+文章については、文法・言語の修正、可読性や文章の流れの改善、書式調整、翻訳、著者自身が書いた文章の要約などを低リスクの利用として扱っています。一方、AIに独自にResultsやDiscussionを書かせたり、科学的な主張や解釈そのものを生成させたりすることは認めていません。[^sn-visual]
+
+図版についても同様に、元となるデータ、資料、計算結果、著者が作成した内容などが検証可能であれば、AIによる生成・解析・可視化・加工を認める余地があります。その場合、使用したAI、用途、関与の程度をAI Declarationと図のキャプションまたは凡例で開示し、人が内容を検証する必要があります。[^sn-visual]
+
+一方、検証可能な元データや資料に基づかず、テキストプロンプトだけから生成したような画像は、内容の正確性や出所を確認できないため認められていません。[^sn-visual]
+
+> この共通方針だけから、各誌のGAや表紙について一律に使用可と判断することはできません。これらについては、投稿先の個別規定も確認する必要があります。
+
+#### 分野別の代表誌と確認範囲
+
+Nature Portfolioの誌名・系列は公式の雑誌一覧を参照し、分野は本稿の便宜上まとめています。下表のNature専門誌について、すべてのGA・表紙規定を個別に確認したわけではありません。[^nature-directory]
+
+| 分野 | 代表誌 | 今回の確認範囲 |
+|---|---|---|
+| 科学全般 | Nature、Nature Communications | Nature Portfolio共通方針。Nature Communicationsは個別ページでも共通方針の適用を案内[^ncomms-policy] |
+| 化学・触媒 | Nature Chemistry、Nature Catalysis、Nature Chemical Biology | 共通方針を確認。各誌のGA・表紙は個別確認 |
+| 生命科学・研究手法 | Nature Methods、Nature Biotechnology | 共通方針を確認。表紙の個別条件は未確認 |
+| 物理・材料 | Nature Physics、Nature Materials、Nature Photonics | 共通方針を確認。GA・表紙の提出条件は別途確認 |
+| ナノ材料 | Nano-Micro Letters | 個別投稿規定と、そこから参照されるSpringerの方針を確認[^nml-guide][^springer-policy] |
+| 生命科学・ナノ技術 | Journal of Nanobiotechnology | 個別投稿案内と、参照先のBMC編集方針を確認[^jnb-guide][^bmc-policy] |
+
+::: note warn
+
+#### 同じ出版社の雑誌でも個別の投稿規定まで同じとは限らない
+
+例えばNano-Micro Lettersは、TOC画像を著者による独自の未発表作品とするよう求めています。また、個別の投稿案内では、LLMの利用をMethodsなどに記載する一方、著者が書いた文章のcopy editingだけにAIを使った場合には申告不要としています。画像についてはSpringerのAI方針を参照するよう案内しています。[^nml-guide]
+
+ただし、現行のSpringer Nature共通方針では、文法・言語編集などの低リスク利用についても、AIの利用内容を明確に説明し、著者が責任を負うことを確認するよう求めています。[^sn-visual] 個別誌の案内と共通方針の記載が一致しない場合には、投稿時点の最新規定を確認し、必要であれば編集部へ問い合わせる方が確実です。
+
+なお、研究データを示す画像には、AI方針とは別に画像の完全性に関する規定も適用されます。Nature Portfolioは元画像の保存や処理内容の説明を求め、情報を隠したり意味を変えたりする加工を認めていません。[^nature-images]
+
+:::
+
+* * *
+
+### 4.2　AAAS／Science
+
+Science journalsの共通編集方針では、AI生成画像やその他のマルチメディアについて、**エディターの明示的な許可がない限り認めない**としています。AIや機械学習そのものを研究対象とする原稿に含まれる画像・動画などについては例外が検討されますが、個別判断となり、投稿時の開示が必要です。[^science-policy]
+
+この規定は、「AIが一度で生成した完成画像だけが禁止される」という意味ではありません。英語版のガイドラインでは、説明を目的とする画像や図について、AIによる生成だけでなく、調整、修正、編集、整形も原則として認めていません。一方、研究データや研究結果の可視化については、編集・整形を条件付きで認めています。[^science-ai]
+
+#### 研究・原稿作成時の扱い
+
+次の表は、[ガイドライン](https://www.science.org/cms/asset/cea1081d-3aa4-42a2-96b7-72290067116a/sept26_science_journals_guidelines_ai_use.pdf)の「Doing the research」と「Preparing the manuscript」にある項目を整理したものです。「申告不要」とある場合も、著者が出力の正確性について責任を負わなくてよいという意味ではありません。[^science-policy][^science-ai]
+
+| 段階 | AIに任せる作業 | 扱い | ガイドラインに記載された申告先・条件 |
+|---|---|---|---|
+| 研究 | コードの作成、機能を変更するコード編集 | 条件付き | Methodsに用途を説明し、モデル名とバージョンを記載 |
+| 研究 | データの生成・解析 | 条件付き | Methodsに用途を説明し、モデル名とバージョンを記載 |
+| 研究 | 文献検索 | 許容 | 申告不要 |
+| 原稿作成 | 言葉を明確にするための推敲・修正・編集・書式調整 | 許容 | 申告不要 |
+| 原稿作成 | 原稿の執筆・草稿作成 | 条件付き | 謝辞にモデル名とバージョンを記載 |
+| 原稿作成 | 原稿本文の翻訳 | 条件付き | 謝辞にモデル名とバージョンを記載 |
+| 原稿作成 | 原稿で報告するデータの書式調整 | 許容 | 申告不要 |
+| 原稿作成 | 説明のみを目的とする画像・模式図などの生成・調整・修正・編集・整形 | 原則不可 | 例外はエディターと協議 |
+| 原稿作成 | 研究データ・結果の可視化の編集・整形 | 条件付き | 謝辞にモデル名とバージョンを記載 |
+| 原稿作成 | コードの整理・書式調整 | 許容 | 機能を変更しない限り申告不要 |
+| 原稿作成 | 参考文献を集めるための補助 | 許容 | 申告不要 |
+| 原稿作成 | AI生成内容を、AIに由来しない独自研究の結果のように提示 | 不可 | 認められない |
+
+「研究データの生成」を認める記述は、最後の禁止項目とあわせて読む必要があります。AIを研究手法の一部として用いることと、その出力をAIに由来しない研究成果であるかのように提示することは、同じ扱いではありません。[^science-ai]
+
+また、可視化について条件付きで認められているのは、ガイドラインに記載された研究データ・結果の可視化に対する「編集・整形」です。元データを入力すれば、画像生成モデルに完成図を自由に生成させてよい、とまでは書かれていません。共通編集方針のImages節でも、画像は元データを正確に反映すること、画像の一部を選択的に操作・改変しないことが別に定められています。[^science-policy][^science-ai]
+
+> 例えば、数値データを汎用の画像生成AIに渡し、「それらしいグラフ」を画像として直接生成させる方法まで明示的に許可されているわけではありません。説明用の図に当たる場合には「原則不可」とする規定に抵触します。
+>
+> 一方、AIに可視化用のコードを書かせ、そのコードを著者が確認した上で、matplotlibやggplot2などの通常の描画ライブラリを使って元データを描画する場合は事情が異なります。ガイドラインでは「Writing code」が条件付きで認められており、Methodsにモデル名とバージョンを記載するよう求めています。[^science-ai]
+>
+> ただし、「AIが書いたmatplotlibコードで実測値を描画する」という具体例そのものがガイドラインに記載されているわけではありません。以下は規定の区分から読み取れる範囲を整理したものです。
+> 
+> | ケース | Science方針から読み取れる扱い |
+> |---|---|
+> | AIに研究用・可視化用コードを書かせる | 「Writing code」に該当する場合は条件付きで可。Methodsで申告 |
+> | AI生成コードを著者が検証し、元の実測値を通常の描画ライブラリで描画する | コード生成とデータ可視化の規定を確認。少なくとも汎用画像生成AIによる直接生成とは区別される |
+> | 研究データ・結果を示す既存グラフの編集・整形にAIを使う | 条件付きで可。謝辞で申告 |
+> | 汎用画像生成AIに、データをもとに完成したグラフ画像を直接生成させる | 明示的な許可は確認できず、図の性質によっては説明図の原則禁止に抵触する |
+> | 画像生成AIで模式図・説明図を作る | 原則不可。例外はエディターと協議 |
+> | 元データに存在しない点や画像情報をAIで補い、それを実測・観測結果として示す | 認められない |
+> | AI生成物を非AI由来の研究成果として提示する | 明示的に不可 |
+
+#### カバーレターと本文内の申告を分ける
+
+Web上の編集方針では、研究、執筆、原稿の表現にAIを使用した場合、**カバーレターに加え、Methodsまたは謝辞**にも記載するよう案内しています。ただし、記載場所や必要な情報は用途によって異なるとして、詳細については上記のガイドラインを参照するよう求めています。[^science-policy]
+
+一方、ガイドラインには申告不要と明記された作業もあります。そのため本稿では、用途別の表にはガイドラインの個別条件を記載し、カバーレターについてはWeb本文の案内を別途併記しています。**AIを使った場合、用途を問わずカバーレター、Methods、謝辞の3か所すべてに記載しなければならない、という意味には取りません。**[^science-policy][^science-ai]
+
+#### 査読への回答と改稿は、原稿作成時とは扱いが異なる
+
+初稿を作成するときの条件が、査読後の作業にもそのまま適用されるとは限りません。ガイドラインでは、著者側の作業について次の項目が別に設けられています。[^science-ai]
+
+| ガイドラインでの区分 | 作業 | 扱い・条件 |
+|---|---|---|
+| 査読への回答（Responding to the reviews） | 査読コメントの全部または一部をLLMなどに入力し、回答を作成・補強する | 不可 |
+| 査読への回答（Responding to the reviews） | 著者が作成した回答文の言葉を整える・修正する | 条件付き。入力を保存せず、モデルの学習にも使わないシステムであること。回答文中にツール名と使い方を記載 |
+| 原稿の改稿（Revising the manuscript） | 原稿の全部または一部をLLMなどに入力する | 不可 |
+
+判断が難しいのは「原稿の改稿」の扱いです。ガイドラインには、原稿作成時の言語的な推敲を認める記載がある一方、改稿時には原稿の全部または一部をLLMなどへ入力することを不可とする記載もあります。**改稿時の校正をどこまで認めるのか、あるいは入力できる内容をどのように線引きするのかについて、詳しい注記はありません。**
+
+ここでは両者の違いをそのまま残し、該当する作業については編集部へ確認すべき事項として扱います。「自分の原稿であれば、どの段階でも同じ条件で入力できる」、あるいは「ローカル環境で動かすAIなら禁止事項の対象外になる」とまでは、この資料から判断できません。[^science-ai]
+
+#### 分野別の位置づけと、表紙への適用
+
+共通編集方針の冒頭には、対象となる6誌と、それぞれの投稿案内へのリンクが掲載されています。以下は各誌の位置づけを整理したもので、表紙制作へのAI利用を雑誌ごとに確認した一覧ではありません。[^science-policy]
+
+| 分野 | 代表誌 | AI規定を確認する際のポイント |
+|---|---|---|
+| 科学全般 | Science、Science Advances | 系列共通方針と各誌の投稿案内を確認 |
+| 生命科学・医学 | Science Signaling、Science Immunology、Science Translational Medicine | 説明図と研究データの可視化を区別 |
+| ロボティクス | Science Robotics | 図・動画の制作方法と、エディターの許可の要否を確認 |
+
+今回確認した2つの資料には、TOC画像／GAや表紙に限ってAI利用を認める独立した条項は見当たりません。説明目的の画像には原則として制限があり、AI生成画像・動画を使用するにはエディターの明示的な許可が必要です。研究データの可視化に認められている範囲を、そのまま表紙制作にも適用することはできません。[^science-policy][^science-ai]
+
+* * *
+
+### 4.3　ACS
+
+ACSは、今回調べた出版社の中でも、TOC graphicと表紙におけるAI利用の違いが比較的明確です。共通のAI利用方針では、Graphics節で両者を分けて扱っています。[^acs-ai]
+
+**TOC graphicにはAI生成画像を使用できませんが、表紙については一定の条件を満たせば使用できます。**
+
+TOC graphicでAI生成画像を認めていない理由の一つとして、画像のすぐ近くにAI利用を説明するキャプションを置けないことが挙げられています。一方、表紙にAI生成画像を使用する場合は、使用したツールとその用途を表紙の説明文に記載する必要があります。さらに、そのツールの利用規約が生成物の商用利用を認めていること、生成サービス側が出力の所有権を持たないことも著者が確認するよう求められています。[^acs-ai]
+
+#### 代表誌の個別規定も確認する
+
+以下は、各誌のAuthor Guidelinesを確認した結果です。分野分けは本稿の便宜上行っています。
+
+| 分野 | 雑誌 | 個別規定で確認できたこと |
+|---|---|---|
+| 化学全般 | Journal of the American Chemical Society（JACS） | 共通AI方針への案内に加え、表紙説明文でのAI利用開示を明記[^jacs-guide] |
+| 化学・学際領域 | ACS Central Science | 表紙のAI利用開示を明記。表紙はGAやデータ図とは異なる表現を求める[^acs-central] |
+| 物理化学 | The Journal of Physical Chemistry Letters | 表紙のAI利用開示を明記[^jpcl-guide] |
+| 触媒 | ACS Catalysis | 共通AI方針への参照と、本文でのAI利用開示を確認[^acs-catalysis] |
+| ナノ材料 | ACS Nano | 共通AI方針への参照を確認。表紙節には画像、説明文、レイヤー付き作品についての案内あり[^acs-nano] |
+| 化学生物学 | ACS Chemical Biology | 共通AI方針への参照を確認。表紙節とは別の箇所にAI利用の条項あり[^acs-chembio] |
+| 生化学 | Biochemistry | 表紙のAI利用開示を明記[^biochemistry-guide] |
+
+表紙に関する節でAI利用について改めて触れられていない雑誌でも、それだけを見て「制限はない」と判断することはできません。ACS NanoやACS Chemical Biologyのように、別の項目から共通AI方針を参照している場合があります。[^acs-nano][^acs-chembio]
+
+また、表紙にはAI利用の可否とは別に、作品そのものの仕様や提出形式についての条件があります。JACSなどでは、提出方法や表紙画像に添える短い説明文についても指定されています。TOC graphicと表紙は用途や求められる表現が異なるため、同じ画像をそのまま流用することを前提にせず、別の提出物として規定を確認した方が分かりやすくなります。[^jacs-guide]
+
+> JACSでは、著者は表紙画像とともに、画像の内容を説明する50語未満の短いcaptionをsupplementary filesとして提出するよう求められています。AIを利用した場合は、その利用もcover descriptionで開示します。[^jacs-guide]
+
+* * *
+
+### 4.4　RSC
+
+RSCのAuthor responsibilitiesには、説明・装飾を目的とした図にAIを使用する場合の条件が明記されています。そのため、RSC全体を「AI画像は禁止」とまとめるのは正確ではありません。[^rsc-authors]
+
+RSCでは、AIを画像作成に利用する場合、使用するAIツールがライセンスされたデータセットで学習されていること、生成物を商用利用できることを著者が確認するよう求めています。説明・装飾目的のAI図版では、図のキャプションにAI利用の概要を記載し、謝辞にはツール名と具体的なモデルまたはバージョンを記載します。[^rsc-authors]
+
+Chemical Scienceの個別規定では、この条件が本文図だけでなく、**table of contents entry（graphical abstract）と表紙にも明記されています。** TOC graphicについては著者自身による独自の未発表作品とすることに加え、AIを利用する場合は、学習データのライセンスと生成物の商用再利用条件を確認するよう求めています。表紙についても同様の条件があります。[^rsc-chemsci-guide]
+
+したがって、「学術論文に使う画像だから非商用利用の範囲でよい」「モデルの重みが公開されているので問題ない」といった判断はできません。モデルがどのように公開されているかという問題と、学習データの権利関係、さらに生成物をどの条件で利用できるかという問題はそれぞれ別です。
+
+> 利用可能なAIモデルやサービスが具体的に列挙されているわけではありません。各ツールがこれらの条件を満たすかどうかは、著者側で確認する必要があります。
+
+#### 分野別の代表誌
+
+下表は、RSCの公式案内をもとに主要誌を整理したものです。本稿ではChemical ScienceについてTOCと表紙の個別条件まで確認し、その他の雑誌については主に共通方針と雑誌案内を参照しています。[^rsc-directory]
+
+| 分野 | 代表誌 | 今回の確認範囲 |
+|---|---|---|
+| 化学全般・総説 | Chemical Science、Chemical Communications、Chemical Society Reviews | 共通の著者責任規定。Chemical ScienceはTOC・表紙の個別条項も確認 |
+| 物理化学・生物物理化学 | Physical Chemistry Chemical Physics（PCCP） | 共通方針と雑誌案内 |
+| 材料・エネルギー | Materials Horizons、Energy & Environmental Science、Journal of Materials Chemistry A／C | 共通方針。個別のTOC・表紙条件は別途確認 |
+| 生体材料 | Biomaterials Science、Journal of Materials Chemistry B | 共通方針。画像用途に応じて個別確認 |
+| 化学生物学 | RSC Chemical Biology | 共通方針と、雑誌ページからの参照を確認[^rsc-chembio] |
+
+もう一つ注意したいのは、**新しい画像を作成することと、既存画像を改変することでは扱いが異なる**点です。RSCは、生成AIやAI支援ツールを使って、提出する既存画像の要素を追加、削除、移動、隠蔽することを認めていません。AIによる画像処理そのものが研究手法に含まれる場合には例外があり、Experimental／Materials and Methodsでの説明が必要です。[^rsc-authors]
+
+> したがって、説明用のAI図版を条件付きで作成できるからといって、既報論文などの既存画像を生成AIで修復・描き足ししてよいことにはなりません。
+
+* * *
+
+### 4.5　APS
+
+APSは2026年6月17日、AI利用ポリシーの更新を発表しました。今回の比較では、更新後の[Appropriate Use of AI Tools](https://journals.aps.org/authors/appropriate-use-ai-tools)を参照しています。公式発表では、原稿作成や研究におけるAI利用について、実質的な利用を開示し、人による判断と責任を維持する方針が示されています。[^aps-update]
+
+現行方針では、AIをデータ可視化に利用すること自体は認められています。ただし、著者はAI生成の図やグラフィックが正確であり、第三者の著作権、ライセンス、帰属表示などに問題がないことを確認する必要があります。[^aps-ai]
+
+一方、APSは現時点で、**主要画像、表紙画像、ウェブサイトや宣伝用の画像にAI生成アートを使用しない**としています。例外として、信頼できる第三者から提供された素材や、論文中で認められているAIによるデータ可視化を挙げています。[^aps-ai]
+
+#### 分野別の代表誌
+
+APSでは系列誌に共通する編集方針が示されています。以下は公式の雑誌一覧をもとに主な分野ごとに整理したもので、雑誌ごとのAI利用可否を個別に評価した表ではありません。[^aps-editorial][^aps-directory]
+
+| 分野 | 代表誌 | 確認するポイント |
+|---|---|---|
+| 物理全般・総説 | Physical Review Letters、Physical Review X、Reviews of Modern Physics | 共通のAI方針に加え、各誌の投稿要件を確認 |
+| 原子・分子・光・量子 | Physical Review A、PRX Quantum | コード、計算、図の作成にAIがどの程度関与したかを確認 |
+| 物性・材料・応用 | Physical Review B、Physical Review Materials、Physical Review Applied | データ可視化と表紙・宣伝用画像を区別 |
+| 統計物理・複雑系 | Physical Review E | 図や解析にAIを利用した場合の扱いを確認 |
+| 生物物理・定量生物学 | PRX Life | 生命科学と物理・数理が重なる領域でも共通方針を参照[^prx-life] |
+
+なお、ここでいう「信頼できる第三者」が、一般的な画像生成サービスまで含むとは規定から判断できません。この例外を利用できると考える場合には、素材の出所や権利関係を示した上で編集部に確認する方が確実です。
+
+* * *
+
+### 4.6　AIP Publishing
+
+AIP Publishingは、著者自身が作成した内容を読みやすくするなど、原稿準備のためのAI利用を認めており、この範囲では開示を求めていません。一方、研究の知見や結論に影響する可能性のある利用は、Methodsで詳しく説明するよう求めています。[^aip-ai]
+
+画像については、元となる研究データや結果を生成AIで作成・改変・操作したり、元画像の正確さや解釈を変えるような加工を加えたりすることは認められていません。**ただし、この規定だけから、説明用の図、TOC相当の画像、表紙への生成AI利用が包括的に許可されていると判断することもできません。**[^aip-ai]
+
+#### 分野別の代表誌
+
+下表では、AIP Publishingの著者向け案内をもとに各誌の個別項目も確認しています。共通のAI方針に加えて、論文種別や提出物について雑誌ごとの条件が設けられている場合があります。[^aip-instructions]
+
+| 分野 | 代表誌 | 今回の確認範囲 |
+|---|---|---|
+| 応用物理 | Applied Physics Letters、Applied Physics Reviews | 共通AI方針と各誌の著者向け案内 |
+| 化学物理 | The Journal of Chemical Physics、Chemical Physics Reviews | 同上 |
+| 光学・フォトニクス | APL Photonics | 同上 |
+| 生体工学・生物物理 | APL Bioengineering、Biophysics Reviews | 同上 |
+
+AIP Publishingには、オンライン上で論文を代表する**Highlight Image**についての案内があります。本文中の図を使うことも、研究内容を表す別の画像を作成することもでき、この画像はオンライン目次で論文タイトルの上に表示されます。また、論文が表紙に選ばれた場合には、Highlight Imageが表紙画像として使われることがあります。[^aip-instructions]
+
+ただし、これはHighlight Imageの提出方法と掲載先についての規定です。**Highlight Imageを提出できることと、生成AIで作成したHighlight Imageが認められていることは別です。** AI生成画像としての可否は、AIP PublishingのAI方針と投稿先の個別規定をあわせて確認する必要があります。
+
+なお、ここで扱っているのはAIP Publishingの方針が適用される雑誌です。同じ掲載プラットフォームを利用しているという理由だけで、別の学協会が発行する雑誌にも同じ条件が適用されるとは限りません。
+
+* * *
+
+### 4.7　Elsevier
+
+ElsevierのAI利用に関する共通方針には、2026年6月更新と記載されています。さらに同年8月18日には、変更点を解説する公式記事も公開されました。以下では、まずElsevier全体に適用される共通方針を確認し、その上でCell Pressと、それ以外の代表誌に分けて見ていきます。[^elsevier-ai][^elsevier-update]
+
+#### 4.7.1　Elsevierの共通ポリシー
+
+本文中の説明図にAIを利用できることと、GAや表紙をAIで制作できることは別です。Elsevierの現行方針では、画像の種類や用途によって扱いを明確に分けています。[^elsevier-ai][^elsevier-update]
+
+| 図の用途・種類 | 扱い | 主な条件 |
+|---|---|---|
+| 本文の説明図・模式図 | 条件付きで可 | 内容を著者が検証し、各図のキャプションと原稿のAI利用申告欄で開示 |
+| データの可視化 | 条件付きで可 | 元データから再現可能な解析・計算・統計的方法によって直接得られること。研究手法として使った場合はMethodsで説明 |
+| 顕微鏡像などの一次研究画像 | AIによる生成・改変は不可 | AI画像処理自体が研究手法である場合は、Methodsに再現可能な形で説明 |
+| Graphical Abstract | 汎用の生成AI画像ツールは不可 | 科学図版専用ツールや専門的な作図ツールを利用し、出版に必要な権利も確認 |
+| カバーアート | 事前許可を得た場合に認められることがある | 提出前にエディターと出版社の許可を得る。第三者素材の利用許諾・出典も確認 |
+
+GAについて注意したいのは、BioRenderやMind the Graphなどの科学図版向けツールが案内されているからといって、あらゆる生成AIサービスが許可されているわけではないことです。Elsevierは、汎用の生成AI画像ツールをGA作成に使用しないよう明記しています。[^elsevier-ai]
+
+また、最終工程で専用の作図ソフトを使っていても、その前段階で汎用生成AIによって画像素材を作っている場合に、その工程まで許容されるとは限りません。制作工程全体で何を使用したかを確認する必要があります。
+
+#### 4.7.2　Cell Press：表紙には個別の制限がある
+
+Cell Pressの各誌については、本文中の説明図へのAI利用を認める規定や、汎用の生成AI画像ツールによるGA作成を認めない規定を確認できました。ただし、ここで確認できたのは公式ページが検索結果に表示した抜粋を含む範囲であり、一部のページは全文を直接照合できていません。[^cell-policy][^chem-policy][^matter-policy]
+
+表紙については、CellとJouleの公式案内に、**生成AIやAI支援ツールを表紙制作に使用しない**という原則が示されています。例外が検討されるのは、AIの利用が論文で報告する研究そのものに不可欠だった場合です。この点についても、今回は検索結果に表示された公式ページの記載をもとに確認しています。[^cell-cover][^joule-cover]
+
+| 分野 | 代表誌 | 今回確認できた個別規定の範囲 |
+|---|---|---|
+| 生命科学 | Cell | Journal policiesの説明図に関する規定、表紙へのAI利用を原則認めない方針と例外条件を一部確認[^cell-policy][^cell-cover] |
+| 化学 | Chem | Journal policiesのGAに関する規定、表紙の例外条件を一部確認[^chem-policy][^chem-cover] |
+| 材料 | Matter | Journal policiesの説明図に関する規定、表紙の例外条件を一部確認[^matter-policy][^matter-cover] |
+| エネルギー | Joule | 表紙へのAI利用を原則認めない方針と例外条件を一部確認[^joule-cover] |
+
+ここでいう例外は、「表紙制作のためにAIが必要だった」という意味ではありません。条件となっているのは、**論文で報告する研究そのものにAIの利用が不可欠であったこと**です。したがって、Elsevier共通方針にある表紙の事前許可制度だけを根拠に、Cell Pressを「AIで表紙を制作できる系列」とみなすことはできません。[^cell-cover][^chem-cover][^matter-cover][^joule-cover]
+
+また、これらの規定だけでは、LLMを使ったBlenderの操作や材質ノードの作成まで、どの範囲が制限の対象になるかは確定できません。制作工程が境界に当たる場合は、具体的な手順を示した上で編集部に確認する必要があります。
+
+#### 4.7.3　Cell Press以外の代表誌
+
+Cell Press以外については、化学工学、生体材料、物理分野の代表誌を対象に各誌のGuide for Authorsを確認しました。こちらもページ本文を直接取得できないものがあり、下表は公式ページの検索結果に表示された記載を含め、確認できた範囲を示しています。
+
+| 分野 | 代表誌 | 個別のGuide for Authorsで確認できたこと |
+|---|---|---|
+| 化学工学 | Chemical Engineering Journal | 説明図の作成にAIを利用できる規定を一部確認[^cej-guide] |
+| 生体材料 | Biomaterials | 説明図の作成にAIを利用できる規定を一部確認[^biomaterials-guide] |
+| 物理・総説 | Physics Reports | 原稿作成時に生成AIを利用した場合、投稿時に申告する規定を一部確認[^physics-reports-guide] |
+
+この表は、各誌がAIによる表紙制作を個別に許可していることを示すものではありません。Elsevierの共通方針を前提としながら、GAや表紙については実際に投稿する雑誌の個別規定も確認する必要があります。
+
+## 5．本文の推敲・執筆とAI利用の申告先
+
+図版とは別に、文章作成へのAI利用を申告する必要があるか、またどこに記載するかも出版社によって異なります。特に、文章を読みやすくするための校正と、AIに草稿や科学的説明を書かせる場合とでは扱いが異なるため、分けて確認します。
+
+### 本文の作成・推敲
+
+| 出版社・系列 | 軽微な校正・表現の改善 | 草稿作成・構成変更など |
+|---|---|---|
+| Nature Portfolio／Springer Nature | 文法・言語編集、可読性改善、書式調整、翻訳などは低リスク利用として認める。ただし現行共通方針では利用内容の説明と著者責任の確認を求める | アウトライン作成や著者の入力に基づく草稿作成などは慎重な利用が必要。独立した科学的主張・解釈の生成は不可[^nature-ai][^sn-visual] |
+| Springerの個別誌の例：Nano-Micro Letters | 個別案内ではAI assisted copy editingを申告不要としている。ただし現行のSpringer Nature共通方針との記載差に注意 | LLMを原稿作成に利用した場合は開示が必要。投稿時に最新の共通方針と個別誌の案内を確認[^springer-policy][^nml-guide][^sn-visual] |
+| Science系列 | 原稿作成時に言葉を明確にするための修正・編集・書式調整は申告不要 | 原稿の執筆・草稿作成や翻訳では、モデル名とバージョンを謝辞に記載。査読への回答・改稿には別規定あり[^science-ai] |
+| ACS | 共通方針はAI利用の開示を求めており、軽微な校正を一律に除外する規定は確認できない | AIによる文章・画像生成は謝辞で開示し、研究内容や方法に深く関わる場合はMethodsなどに詳細を記載[^acs-ai][^acs-central] |
+| RSC | 「AI assisted copy editing」のみであれば申告不要 | 原稿生成などにAIを使った場合は、投稿時のカバーレターと本文中で申告。使い方・プロンプトはExperimental／Methods、ツール名・モデル／版は謝辞に記載[^rsc-authors] |
+| APS | 文章を整える、短くするなどの軽い編集は申告不要 | 科学的主張・説明の草稿、解析、計算、結果に実質的な影響を与えるコード生成などは開示が必要[^aps-ai][^aps-update] |
+| AIP Publishing | 著者自身が作成した内容を読みやすくするなど、原稿準備のための利用は申告不要 | 研究の知見や結論に影響する可能性がある利用はMethodsで詳しく説明[^aip-ai] |
+| Elsevier共通方針 | 文法・綴り・句読点の基本的な確認は申告不要 | 文構造や原稿構成を実質的に変更する利用は申告。著者による検証と責任が前提[^elsevier-ai][^elsevier-update] |
+
+このように、「英文校正ならAIを使っても申告不要」と出版社をまたいで一律に考えることはできません。何が単なる校正に当たり、どこから草稿作成や内容への実質的な関与になるのかは、実際にAIへ任せた作業と各社の定義を照らし合わせる必要があります。
+
+特にSpringer Natureでは、現行の共通方針が低リスクの言語編集にも開示を求めている一方、Nano-Micro Lettersなどの個別案内にはcopy editingを申告不要とする記載が残っています。こうした差がある場合には、投稿時点の最新方針を再確認する必要があります。[^sn-visual][^nml-guide]
+
+### どこに何を書くか
+
+| 出版社・系列 | 主な記載場所 | 確認しておきたい内容 |
+|---|---|---|
+| Nature Portfolio／Springer Nature | AI Declaration。AI生成・AI支援の図版はキャプションまたは凡例にも記載 | 使用したAI、用途、関与の程度、人による確認。投稿先の個別規定も確認[^nature-ai][^sn-visual] |
+| Science系列 | Web上の編集方針ではカバーレターに加え、Methodsまたは謝辞への記載を案内。ガイドラインでは草稿・翻訳・研究データ可視化の編集は謝辞、研究コード・データ生成・解析はMethodsと用途別に指定 | 申告対象の作業ではモデル名とバージョンを記載。申告不要の用途もあるため、一律に3か所すべてへ記載するわけではない[^science-policy][^science-ai] |
+| ACS | 文章・画像生成は謝辞、実質的な研究利用はMethodsなど。AIを用いた図はキャプションにも記載し、表紙では表紙説明文にも開示 | いつ、何のために、どのようにAIを使ったか。表紙ではツール名と制作上の役割も記載[^acs-ai][^acs-chembio][^biochemistry-guide] |
+| RSC | カバーレター、Experimental／Materials and Methods、謝辞。説明・装飾目的のAI図版ではキャプションにも記載 | Experimental／Methodsには使い方やプロンプト、謝辞にはツール名とモデルまたはバージョン。Methodsがない場合は必要事項を謝辞に記載[^rsc-authors] |
+| APS | 研究そのものへの利用はMethods、図生成は図のキャプション、それ以外の開示対象となる利用は謝辞 | ツール名とバージョン、AIが何を行ったか、著者がどのように指示・検証したか[^aps-ai] |
+| AIP Publishing | 研究の知見や結論に影響し得る利用はMethods | ツールの正式名称、バージョン、提供元、用途、使用理由[^aip-ai] |
+| Elsevier共通方針 | 原稿作成への利用は、参考文献の直前に独立したAI利用申告欄を設ける。説明図は各図のキャプションにも記載し、研究手法としての利用はMethodsで説明 | ツール名、用途、著者による確認。図や研究手法ではモデル・ツールのバージョンや提供元なども確認[^elsevier-ai][^elsevier-update] |
+
+Elsevierについては、上表は出版社の共通方針をまとめたものです。Cell Pressを含め、申告欄の名称や投稿システム上の指定については、実際の投稿先のAuthor Guidelinesも確認する必要があります。
+
+また、投稿時にエディターへ提出する**カバーレター**と、表紙画像の内容や制作方法を説明する**表紙説明文（cover caption / cover description）**は別のものです。ScienceやRSCが原稿作成時のAI利用について求めるカバーレターでの申告と、ACSが表紙制作について求める説明文への記載を混同しないよう注意が必要です。
+
+## 6．「一発生成でなければよい」のか
+
+今回確認した規定には、「AIの出力を人が一定割合修正すれば使用できる」といった共通基準はありませんでした。
+
+人が内容を確認し、必要に応じて修正することは重要ですが、それだけで用途ごとの禁止事項や著作権・ライセンス上の条件がなくなるわけではありません。実際の制作では、**AIをどの工程で使い、何を生成・変更させたのか**を分けて考える必要があります。
+
+以下は出版社が示した公式の分類ではなく、制作記録を残したり、編集部へ問い合わせたりするときの整理例です。
+
+| 制作工程 | 記録・説明しておきたいこと | それだけでは使用可と判断できない理由 |
+|---|---|---|
+| テキストから完成画像を生成 | AIに入力した研究情報、生成された部分、内容の検証方法 | 画像の用途ごとにAI生成の可否が異なり、著作権や利用条件も確認する必要がある |
+| AI生成画像に人が文字や矢印を追加 | AIが生成した部分と、その後に人が加えた部分 | 人が手を加えても、元のAI生成部分の由来や条件は変わらない |
+| AI生成の背景やテクスチャを3Dシーンに使用 | 使用した素材、生成方法、素材・出力の利用条件 | 最終的に3Dソフトでレンダリングしても、途中で使ったAI生成素材の条件は残る |
+| LLMにBlender用のコードやノード構成を作らせる | 生成したコードやノード、入力した構造データ、人が確認・修正した範囲 | コード生成に関する申告要件と、完成した図の用途に対する規定を別々に確認する必要がある |
+| 研究データからグラフを描くコードをAIに作らせる | 元データ、処理・描画コード、数値と最終図の照合結果 | コード生成を研究利用として申告するよう求める出版社があり、データ処理や解釈までAIに任せると扱いが変わる |
+| 既存画像を生成AIで修復・描き足す | 変更した箇所、変更前の原画像、使用したツール | 特に一次研究画像では、生成AIによる追加・削除・改変を明示的に禁じる規定がある |
+
+例えばElsevierでは、本文中の説明図には一定の条件のもとで生成AIを利用できますが、Graphical Abstractには汎用の生成AI画像ツールを使用できません。したがって、本文図として認められる制作方法が、そのままGAにも認められるとは限りません。[^elsevier-ai][^elsevier-update]
+
+Blender MCPのようにLLMが3Dソフトを操作する方法は、ツール名だけでは扱いを決めにくい例です。AIに任せた作業を、構造データの読み込み、形状の作成、材質の設定、コード生成、テクスチャ生成、最終的なレンダリングなどに分けて記録しておくと、どの規定が関係するかを説明しやすくなります。
+
+Scienceのガイドラインでは、研究に用いるコードの作成は条件付きで認められており、モデル名とバージョンをMethodsに記載するよう求めています。一方、説明だけを目的とした画像や図については、AIによる生成だけでなく、修正、編集、整形も原則として認めていません。研究データや結果の可視化には別の規定があります。[^science-ai]
+
+そのため、LLMにBlenderの操作コードや材質ノードを作らせた場合も、単に「AIが生成したのは画像ではなくコードだから問題ない」とは言い切れません。AIによるコード生成としての扱いに加え、そのコードから作られる最終的な図が、研究データの可視化なのか、説明・装飾を目的とした画像なのかも関係します。
+
+> Scienceの資料には、Blenderの操作コードや材質ノードを使った制作工程を直接扱った記載はありません。このような境界的なケースでは、具体的な制作工程を示して編集部に確認するのが確実です。[^science-ai]
+
+同じことは他社にも当てはまります。APSでは、結果に実質的な影響を与えるコード生成やデバッグを「substantive use」の例に挙げ、開示を求めています。RSCでも、コードの修正を含め、原稿作成に生成AIを利用した場合は、AI assisted copy editingだけの場合を除いて原則として申告対象になります。[^aps-ai][^rsc-authors]
+
+**「画像のピクセルをAIが直接生成していない」ことだけを理由に、申告や規定の確認が不要になるわけではありません。**
+
+一方、AIが書いたコードを実行し、元の数値データを通常の描画ライブラリでグラフ化する場合と、画像生成モデルに完成図を直接描かせる場合は同じではありません。前者ではAIの直接の出力はコードであり、最終的な図を元データと処理手順から再現できます。この違いを踏まえた上で、コード生成とデータ可視化の両方の規定を確認する必要があります。
+
+また、AIを研究手法として用いる場合と、研究結果の見栄えを整えるために用いる場合も区別が必要です。AIを正式な研究手法として利用することを認めている出版社でも、AIが生成した内容を実測・観測された研究データであるかのように示すことは認めていません。人が後から修正したかどうかや、最終的な画像の完成度とは別の問題です。[^aip-authors][^nature-images]
+
+## 7．制作前に確認しておくこと
+
+ここまで見てきたように、AI利用の可否は、使用するツールだけでなく、画像の用途や制作工程によっても変わります。編集部へ問い合わせる場合も、単に「AIを使ってよいですか」と尋ねるのではなく、何を作るために、どの工程で、どのようにAIを使うのかを具体的に伝えた方が回答を得やすくなります。
+
+以下は、そのために著者側で整理しておきたい項目です。すべての出版社が、これらを投稿時に提出するよう求めているわけではありません。
+
+| 確認するもの | 手元に残しておく内容 |
+|---|---|
+| 投稿先と画像の用途 | 雑誌名、論文種別、本文図・TOC画像／GA・表紙などの区別 |
+| 事前許可・例外条件 | 問い合わせ先、説明した制作工程、編集部や出版社から得た回答 |
+| 適用した規定 | 共通方針と個別誌の規定のURL、確認日 |
+| AIの利用内容 | ツール名、モデル名、バージョン、入力内容、AI出力を使用した箇所 |
+| 元となった資料 | 自作の構造データ、計算結果、下絵、元画像など |
+| 入力先と機密性 | 未公開資料を送信したサービス、データの保存・学習への利用条件、第三者へ送信する権限の有無 |
+| 人による確認 | 数値、分子構造、文章、図の内容を何と照合し、どこを修正したか |
+| 権利関係 | AI出力の利用条件、参照画像や素材のライセンス・利用許諾。必要な場合は学習データに関する条件 |
+| 再現・再制作に必要な記録 | コード、プロンプト、シーンファイル、各種設定、編集前後の画像など |
+
+AIサービスに何を入力できるかについては、二つの問題を分けて考える必要があります。一つは、入力した内容が保存されるか、モデルの学習に使われるかといったサービス側の条件です。もう一つは、投稿規定上、その資料をAIに入力してよいかという問題です。
+
+Scienceのガイドラインでは、著者自身が作成した査読への回答文をAIで言語的に修正する場合、入力内容を保存せず、モデルの学習にも使用しないシステムであることが条件とされています。一方、査読コメントの全部または一部をAIへ入力し、回答を生成・補強させること自体は認められていません。したがって、「入力内容が学習に使われない」ことだけを確認しても、すべての用途が許可されるわけではありません。[^science-ai]
+
+---
+
+既存の表紙やTOC画像を参考に制作する場合には、AI利用とは別に著作権やライセンスにも注意が必要です。**過去の作品を参考資料として見ることと、その画像を記事や論文に転載したり、加工して再利用したりすることは別です。**
+
+> 例えばACSの投稿規定では、既に公表された図や画像を再利用する場合、出典の明記や権利者に応じた利用許諾が必要になります。実際に転載・改変する場合は、対象となる画像の権利関係を個別に確認する必要があります。[^acs-nano]
+
+## 8．まとめ
+
+今回の調査では、まず出版社・学協会ごとの共通方針を確認し、その上で代表的な雑誌の個別規定を調べる形で、7系統の方針を整理しました。同じ出版社の中でも、AIの扱いは図の用途によって異なります。ElsevierについてもCell Pressを分けて扱い、共通方針だけから各誌の表紙におけるAI利用の可否を判断しない構成としました。
+
+図版の制作を考える上で特に注意したいのは、**本文図、TOC画像／Graphical Abstract、表紙を同じものとして扱わないこと**です。ある用途でAI利用が認められていても、別の用途では禁止されていたり、エディターの事前許可が必要だったりする場合があります。制作を始める前に、まず何のために使う画像なのかを決め、その用途に当てはまる規定を確認する必要があります。
+
+また、AIの出力に人が手を加えたかどうかだけで、使用の可否が決まるわけでもありません。AIを使った工程、科学的な正確さ、素材や生成物の権利、必要な申告をそれぞれ確認する必要があります。
+
+AIの進歩は目覚ましく、簡単な指示だけでも、これまで以上に幅広い文章や画像を作れるようになっています。一方で、**技術的にできることと、論文や表紙に使用できることは同じではありません。** 実際に利用する際には、投稿先の最新の規定をあらかじめ十分に確認しておくことが重要です。
+
+> 今回調べた7系統の出版社を並べて比較すると、「AIを使ってTOC／Graphical Abstractを作る」という目的に限れば、RSCが最も寛容でした（条件付きでの利用を認める方式）。
+> 今度、Chemical ScienceやPCCPなどのRSC系の雑誌をターゲットに、架空もしくは実在の論文のTOCをローカルモデルで製作するデモンストレーションをしてみようかと思います。
+
+## 9. 補足資料
+
+### 9.1 規定の更新日と確認日
+
+規定を閲覧した日と、その規定自体が更新された日は同じではありません。また、ページ全体の更新日が表示されていても、その日にAI関連の条項が変更されたとは限りません。
+
+| 資料 | 確認できた日付 | 日付の意味 |
+|---|---|---|
+| ACS共通AI方針 | 2024年12月13日 | ページに表示された最終更新日[^acs-ai] |
+| JACS Author Guidelines | 2026年8月27日 | Author Guidelines全体の最終更新日。AI条項だけの改訂日を示すものではない[^jacs-guide] |
+| APSのAI方針更新に関する公式発表 | 2026年6月17日 | APSがAI方針の更新を発表した日[^aps-update] |
+| Science共通編集方針と、そこから参照される英語PDF | 2026年9月24日 | 今回、保存したWeb本文とPDF全2ページを照合した日。公式の改訂日・施行日ではない[^science-policy][^science-ai] |
+| Elsevier共通AI方針 | 2026年6月 | 規定ページに表示された更新年月。個々の条項の改訂日や施行日までは示されていない[^elsevier-ai] |
+| ElsevierのAI方針更新に関する公式解説 | 2026年8月18日 | 更新内容を説明する公式記事の公開日。すべての条項の施行日を示すものではない[^elsevier-update] |
+| Elsevier共通方針、Cell Press・代表誌の追加調査 | 2026年9月24日 | 共通方針と各誌の規定を追加で確認した日。各ページの最終更新日ではない |
+| 上記以外の参照ページ | 最終改訂日を確認できないものあり | 2026年9月23日以降に確認した現行ページを含む。ページ上で改訂日が示されていないものもある |
+
+> ScienceのPDFファイル名には「sept26」という文字列が含まれていますが、今回確認したPDF本文には改訂日や施行日の表示がありません。そのため、ファイル名だけを根拠に「2026年9月に規定が改訂された」とは判断していません。[^science-ai]
+
+AIに関する方針は短期間でも変更される可能性があります。過去の解説記事や保存した資料だけで判断せず、実際に投稿する段階で、投稿先の最新のAuthor Guidelinesや編集方針をあらためて確認する必要があります。
+
+### 9.2 参考資料一覧
+
+以下は、今回参照した公式規定、著者向け案内、投稿ポリシーです。Scienceについては、公式編集方針の保存版と、同ページから参照される英語PDFを判定の根拠としています。Elsevierの公式解説は共通方針を補足する資料として使用し、Cell Press・個別誌については確認範囲を各注に記載しました。
+
+[^nature-ai]: Nature Portfolio, [Artificial Intelligence (AI)](https://www.nature.com/nature-portfolio/editorial-policies/ai). 共通のAI方針。2026年9月27日再確認。
+[^sn-visual]: Springer Nature, [AI use in manuscript preparation](https://www.springernature.com/gp/policies/editorial-policies/ai-manuscript-preparation). 原稿作成とAI生成・AI支援のvisual contentに関する現行方針。2026年9月27日再確認。
+[^nature-directory]: Nature, [Journals A–Z](https://www.nature.com/siteindex). 誌名・系列の確認。分野分けは本記事による整理。
+[^ncomms-policy]: Nature Communications, [Editorial policies](https://www.nature.com/ncomms/for-authors/editorial-policies). 共通方針の適用を案内。
+[^nature-images]: Nature Portfolio, [Image integrity and standards](https://www.nature.com/nature-portfolio/editorial-policies/image-integrity). 元画像と処理に関する規定。
+[^nml-guide]: Nano-Micro Letters, [Submission guidelines](https://link.springer.com/journal/40820/submission-guidelines). TOC、LLMの開示、生成AI画像の参照先を確認。
+[^springer-policy]: Springer, [Journal policies](https://link.springer.com/brands/springer/journal-policies). Artificial intelligence (AI)節などを参照。
+[^jnb-guide]: Journal of Nanobiotechnology, [Submission guidelines](https://link.springer.com/journal/12951/submission-guidelines). 個別誌の投稿案内とBMC編集方針への参照を確認。
+[^bmc-policy]: BMC, [Editorial policies](https://link.springer.com/brands/bmc/editorial-policies). 系列共通の編集方針。
+
+[^science-policy]: Science journals, [Editorial policies](https://www.science.org/content/page/science-journals-editorial-policies). 公式ページから保存した英語本文を2026年9月24日に確認。冒頭の適用範囲、Authorship、Image and Text IntegrityのAI条項・Images条項などを参照。最終改訂日の表示は確認できませんでした。
+[^science-ai]: Science journals, [Science journals’ guidelines for AI usage：英語PDF](https://www.science.org/cms/asset/cea1081d-3aa4-42a2-96b7-72290067116a/sept26_science_journals_guidelines_ai_use.pdf). 上記の編集方針ページが参照する資料。2026年9月24日、全2ページの本文と表を確認。研究・原稿作成は1ページ、査読への回答は1〜2ページ、改稿は2ページに記載。紙面に改訂日・施行日の表示はありません。
+
+[^acs-ai]: ACS Publications, [Artificial Intelligence (AI) Best Practices and Policies](https://researcher-resources.acs.org/publish/aipolicy). 最終更新表示：2024年12月13日。2026年9月27日再確認。
+[^jacs-guide]: Journal of the American Chemical Society, [Author Guidelines](https://researcher-resources.acs.org/publish/author_guidelines?coden=jacsat). 更新表示：2026年8月27日。
+[^acs-central]: ACS Central Science, [Author Guidelines](https://researcher-resources.acs.org/publish/author_guidelines?coden=acscii).
+[^jpcl-guide]: The Journal of Physical Chemistry Letters, [Author Guidelines](https://researcher-resources.acs.org/publish/author_guidelines?coden=jpclcd).
+[^acs-catalysis]: ACS Catalysis, [Author Guidelines](https://researcher-resources.acs.org/publish/author_guidelines?coden=accacs).
+[^acs-nano]: ACS Nano, [Author Guidelines](https://researcher-resources.acs.org/publish/author_guidelines?coden=ancac3).
+[^acs-chembio]: ACS Chemical Biology, [Author Guidelines](https://researcher-resources.acs.org/publish/author_guidelines?coden=acbcct).
+[^biochemistry-guide]: Biochemistry, [Author Guidelines](https://researcher-resources.acs.org/publish/author_guidelines?coden=bichaw).
+
+[^rsc-authors]: Royal Society of Chemistry, [Author responsibilities](https://www.rsc.org/publishing/journals/processes-and-policies/author-responsibilities). AI general guidance and best practice節。2026年9月27日再確認。
+[^rsc-chemsci-guide]: Chemical Science, [Author guidelines](https://www.rsc.org/publishing/publish-with-us/publish-a-journal-article/chemical-science). Figures, graphics and images、Table of contents entry、Journal cover artwork節などを参照。2026年9月27日再確認。
+[^rsc-directory]: Royal Society of Chemistry, [Journals](https://www.rsc.org/publishing/journals). 誌名・分野の案内を参照。
+[^rsc-chembio]: Royal Society of Chemistry, [RSC Chemical Biology](https://www.rsc.org/publishing/journals/rsc-chemical-biology). 雑誌案内と共通方針への参照を確認。
+
+[^aps-ai]: APS Journals, [Appropriate Use of AI Tools](https://journals.aps.org/authors/appropriate-use-ai-tools). 2026年9月27日再確認。
+[^aps-update]: American Physical Society, [American Physical Society releases updated AI policy for APS journals](https://www.aps.org/about/news/2026/06/releases-updated-ai-policy-journals), 2026年6月17日。
+[^aps-editorial]: APS Journals, [Editorial Policies and Practices](https://journals.aps.org/authors/editorial-policies).
+[^aps-directory]: APS Journals, [All Journals](https://journals.aps.org/all_journals). 誌名・分野の案内を参照。
+[^prx-life]: PRX Life, [About](https://journals.aps.org/prxlife/about). 対象分野を確認。
+
+[^aip-ai]: AIP Publishing, [AI Policy](https://publishing.aip.org/resources/researchers/policies-and-ethics/ai-policy/). 2026年9月27日再確認。
+[^aip-instructions]: AIP Publishing, [Author Instructions](https://publishing.aip.org/resources/researchers/author-instructions/). Highlight ImageとAdditional Journal Specific Instructionsを参照。2026年9月27日再確認。
+[^aip-authors]: AIP Publishing, [Author policies and ethics](https://publishing.aip.org/resources/researchers/policies-and-ethics/authors/). 著者責任とデータの適切な取扱いに関する規定。
+
+[^elsevier-ai]: Elsevier, [Generative AI policies for journals](https://www.elsevier.com/about/policies-and-standards/generative-ai-policies-for-journals). 2026年9月27日に再確認。著者向け方針、画像・図版の分類、GA・表紙の条件、申告方法とFAQを参照。末尾に2026年6月更新との表示があります。具体的な改訂日・施行日は示されていません。
+[^elsevier-update]: Elsevier Connect, [Updated generative AI policies for journals: supporting responsible use while protecting trust](https://www.elsevier.com/connect/updated-generative-ai-policies-for-journals-supporting-responsible-use-while-protecting-trust), 2026年8月18日。出版社による更新解説であり、正式な規定本文は上記の共通方針を参照。
+[^cell-policy]: Cell, [Journal policies](https://www.cell.com/cell/information-for-authors/journal-policies). 2026年9月24日、公式ページの検索掲載文で、説明図の生成AI利用をElsevier方針に沿って認める記載を確認。ページ本文は取得制限のため全文未照合。
+[^cell-cover]: Cell, [Cover submission guidelines](https://www.cell.com/cell/information-for-authors/cover-submission). 2026年9月24日、公式ページの検索掲載文で、表紙の生成AI・AI支援ツール不使用原則と、AI利用が研究に不可欠な場合の例外条件を確認。ページ本文は全文未照合。
+[^chem-policy]: Chem, [Journal policies](https://www.cell.com/chem/information-for-authors/journal-policies). 2026年9月24日、公式ページの検索掲載文で、汎用の生成AI画像ツールによるGA作成を認めない記載を確認。ページ本文は全文未照合。
+[^chem-cover]: Chem, [Cover submission guidelines](https://www.cell.com/chem/information-for-authors/cover-submission). 2026年9月24日、公式ページの検索掲載文で、AI利用が原稿の研究に不可欠な場合の例外条件を確認。その他の条件を含むページ全文は未照合。
+[^matter-policy]: Matter, [Journal policies](https://www.cell.com/matter/information-for-authors/journal-policies). 2026年9月24日、公式ページの検索掲載文で、説明図の生成AI利用をElsevier方針に沿って認め、図の説明で申告を求める記載を確認。ページ本文は全文未照合。
+[^matter-cover]: Matter, [Cover submission guidelines](https://www.cell.com/matter/information-for-authors/cover-submission). 2026年9月24日、公式ページの検索掲載文で、AI利用が原稿の研究に不可欠な場合の例外条件を確認。その他の条件を含むページ全文は未照合。
+[^joule-cover]: Joule, [Cover submission guidelines](https://www.cell.com/joule/information-for-authors/cover-submission). 2026年9月24日、公式ページの検索掲載文で、表紙の生成AI・AI支援ツール不使用原則と、AI利用が原稿の研究に不可欠な場合の例外条件を確認。ページ本文は全文未照合。
+[^cej-guide]: Chemical Engineering Journal, [Guide for Authors](https://www.sciencedirect.com/journal/chemical-engineering-journal/publish/guide-for-authors). 2026年9月24日、公式ページの検索掲載文で説明図へのAI利用を認める条項を確認。ページ本文は取得制限のため全文未照合。GA・表紙の個別許可を確認したものではありません。
+[^biomaterials-guide]: Biomaterials, [Guide for Authors](https://www.sciencedirect.com/journal/biomaterials/publish/guide-for-authors). 2026年9月24日、公式ページの検索掲載文で説明図へのAI利用を認める条項を確認。ページ本文は全文未照合。GA・表紙の個別許可を確認したものではありません。
+[^physics-reports-guide]: Physics Reports, [Guide for Authors](https://www.sciencedirect.com/journal/physics-reports/publish/guide-for-authors). 2026年9月24日、公式ページの検索掲載文で原稿作成時の生成AI利用を投稿時に申告する条項を確認。ページ本文は全文未照合。

@@ -1,0 +1,48 @@
+---
+layout: "qiita-mirror"
+title: "【Python】png,jpeg,gif画像をeps形式に変換する"
+qiita_id: "100057e9823f9878eeb9"
+qiita_url: "https://qiita.com/h-nabata/items/100057e9823f9878eeb9"
+qiita_created: "2022-09-05T22:52:57+09:00"
+qiita_updated: "2022-09-05T22:52:57+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "プログラミング・可視化"
+mirror_tags: ["Python", "EPS", "画像変換", "pillow"]
+permalink: "/qiita/100057e9823f9878eeb9.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="1:1-2:138">PillowライブラリのImageモジュールにより，png，jpeg，gifなどの画像をeps形式に変換することができます．<br>
+Pillowをインストールしているのであれば，怪しいフリーソフトをダウンロードする必要はありません．</p>
+<div class="code-frame" data-lang="py" data-sourcepos="4:1-16:3">
+<div class="code-lang"><span class="bold">img2eps.py</span></div>
+<div class="highlight"><pre><code><span class="kn">import</span> <span class="n">os</span>
+<span class="kn">from</span> <span class="n">PIL</span> <span class="kn">import</span> <span class="n">Image</span>
+
+<span class="n">image_path</span> <span class="o">=</span> <span class="sh">'</span><span class="s">C:/Users/</span><span class="sh">'</span> <span class="o">+</span> <span class="n">os</span><span class="p">.</span><span class="nf">getlogin</span><span class="p">()</span> <span class="o">+</span> <span class="sh">'</span><span class="s">/Downloads/</span><span class="sh">'</span>
+<span class="n">image_file</span> <span class="o">=</span> <span class="p">[</span><span class="sh">'</span><span class="s">ABC.png</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">DEF.jpg</span><span class="sh">'</span><span class="p">,</span> <span class="sh">'</span><span class="s">GHI.gif</span><span class="sh">'</span><span class="p">]</span>
+
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nf">range</span><span class="p">(</span><span class="nf">len</span><span class="p">(</span><span class="n">image_file</span><span class="p">)):</span>
+    <span class="n">im</span> <span class="o">=</span> <span class="n">Image</span><span class="p">.</span><span class="nf">open</span><span class="p">(</span><span class="n">image_path</span> <span class="o">+</span> <span class="n">image_file</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+    <span class="c1"># print(im.mode)
+</span>    <span class="n">fig</span> <span class="o">=</span> <span class="n">im</span><span class="p">.</span><span class="nf">convert</span><span class="p">(</span><span class="sh">'</span><span class="s">RGB</span><span class="sh">'</span><span class="p">)</span>
+    <span class="n">fig</span><span class="p">.</span><span class="nf">save</span><span class="p">(</span><span class="n">image_path</span> <span class="o">+</span> <span class="n">image_file</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="nf">split</span><span class="p">(</span><span class="sh">'</span><span class="s">.</span><span class="sh">'</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="sh">'</span><span class="s">.eps</span><span class="sh">'</span><span class="p">,</span> <span class="n">lossless</span> <span class="o">=</span> <span class="bp">True</span><span class="p">)</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="18:1-19:140">ダウンロードフォルダ内にある 'ABC.png', 'DEF.jpg', 'GHI.gif' という3つの画像をすべてeps形式に変換して保存します．<br>
+Imageモジュールが読めるのであれば，その他の拡張子でも応用可能です．適宜改変してご利用ください．</p>
+<blockquote data-sourcepos="21:1-21:79">
+<p data-sourcepos="21:2-21:79">個人的にTeX文書を書く機会があったので，作成しました．</p>
+</blockquote>
+<hr data-sourcepos="23:1-23:3">
+<h3 data-sourcepos="24:1-24:16">
+<span id="参考" class="fragment"></span><a href="#%E5%8F%82%E8%80%83"><i class="fa fa-link"></i></a>【参考】</h3>
+<ul data-sourcepos="25:1-26:126">
+<li data-sourcepos="25:1-25:182"><a href="https://www.tutorialexample.com/python-pillow-convert-png-to-eps-a-completed-guide-pillow-tutorial/" rel="nofollow noopener" target="_blank"><strong>Python Pillow Convert PNG to EPS: A Completed Guide</strong>  –  Pillow Tutorial</a></li>
+<li data-sourcepos="26:1-26:126"><a href="https://pillow.readthedocs.io/en/stable/reference/Image.html" rel="nofollow noopener" target="_blank"><strong>Image Module</strong>  –  Pillow (PIL Fork) 9.2.0 documentation</a></li>
+</ul>
+
+</div>
+
+
+{% endraw %}

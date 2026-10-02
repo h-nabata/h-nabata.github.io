@@ -1,0 +1,126 @@
+距離行列（distance matrix）とは、データセットに含まれる各要素間の距離を表した行列のことです。データ解析、クラスタリング、機械学習の前処理など、さまざまな場面で広く用いられています。
+本記事ではランダムに生成した3次元データを用いてPython環境で距離行列を作成し、実行時間を比較します。
+
+```python:ランダムに生成した3次元データ
+import numpy as np
+
+np.random.seed(42)
+data = np.random.rand(1000, 3)
+```
+
+## 距離行列の作成例
+
+### 1. scipyを用いた方法
+
+```python
+from scipy.spatial import distance
+
+dist_matrix = distance.cdist(data, data, metric='euclidean')
+```
+
+### 2. sklearnを用いた方法
+
+```python
+from sklearn.metrics import pairwise_distances
+
+dist_matrix = pairwise_distances(data, metric='euclidean')
+```
+
+### 3. numpyを用いた方法
+
+```python
+import numpy as np
+
+def numpy_distance_matrix(data):
+    sum_sq = np.sum(np.square(data), axis=1)
+    dist_matrix = np.sqrt(np.maximum(sum_sq[:, np.newaxis] + sum_sq - 2 * data.dot(data.T), 0))
+    return dist_matrix
+
+dist_matrix = numpy_distance_matrix(data)
+```
+
+> numpyには距離行列を与える関数が組み込み関数としては実装されていないため、ここではベクトル計算として実装している。
+
+### 4. numbaを用いた方法
+
+```python
+from numba import jit
+import numpy as np
+
+@jit(nopython=True)
+def numba_distance_matrix(data):
+    n = data.shape[0]
+    dist_matrix = np.zeros((n, n))
+    for i in range(n):
+        for j in range(n):
+            dist_matrix[i, j] = np.sqrt(np.sum((data[i] - data[j])**2))
+    return dist_matrix
+
+dist_matrix = numba_distance_matrix(data)
+```
+
+### 5. 純粋なPythonによる実装（mathライブラリ）
+
+```python:純粋なPythonによる実装（mathライブラリ）
+import math
+
+def plain_Python(data):
+    n = len(data)
+    distance_matrix = [[0.0 for _ in range(n)] for _ in range(n)]
+    for i in range(n):
+        for j in range(n):
+            tmp_distance_sq = 0.0
+            for k in range(3):
+                tmp_distance_sq += (data[i][k] - data[j][k]) ** 2
+            distance_matrix[i][j] = math.sqrt(tmp_distance_sq)
+    return distance_matrix
+```
+
+### 6. 純粋なPythonによる実装（numpyライブラリ）
+
+```python:純粋なPythonによる実装（numpyライブラリ）
+import numpy as np
+
+def plain_Python2(data):
+    n = data.shape[0]
+    dist_matrix = np.zeros((n, n))
+    for i in range(n):
+        for j in range(n):
+            dist_matrix[i, j] = np.sqrt(np.sum((data[i] - data[j])**2))
+    return dist_matrix
+```
+
+## 実行速度の比較（3次元データ）
+
+各手法を同じデータ（1000個の3次元点列）に適用した際の平均実行速度を以下の表にまとめました。シード値を固定しない場合でも結果はあまり変わりません。
+
+| | ライブラリ・手法          | 実行時間 (秒) |
+| ----- | ----------------- | --------- |
+| 1. | scipy             | 0.004471        |
+| 2. | sklearn           | 0.006393        |
+| 3. | numpy             | 0.010576        |
+| 4. | numba利用         | 0.095734        |
+| 5. | math + forループ | 1.880585      |
+| 6. | numpy + forループ | 4.866355      |
+
+> 10回の平均値として算出。実行時間は環境やバージョンにより変動するので、あくまで目安として考えてください。（特にnumbaに関してはチューニング次第でさらに速くなる可能性があります）
+> | | 実行環境（参考） |
+> | ----- | ----------------- |
+> | Python | 3.9.12 |
+> | CPU | AMD Ryzen 7 5800X3D 8-Core Processor |
+> | RAM | 32 GB (DDR4-3600) |
+> | scipy | 1.7.3 |
+> | sklearn | 1.0.2 |
+> | numpy | 1.21.5 |
+> | numba | 0.55.1 |
+
+## まとめ
+
+- scipyとsklearnが最も高速かつ実用的。
+- numpyのベクトル演算も高速だが、大規模データでは注意が必要。
+- numbaは高速化が期待されるが、実際の速度は環境により大きく異なる。
+- 純粋Pythonのforループ実装は速度が非常に遅く、実用的ではない。
+
+目的やデータの規模に応じて適切な手法を選択することが重要です。
+C言語等で実装するのが速くて良いですが、Pythonで距離行列を何度も計算する必要がある場合はとりあえずscipyを使っておけば良さそうです。for文ベタ書きならJITコンパイラが実装されているJulia言語などでも速そうです。
+

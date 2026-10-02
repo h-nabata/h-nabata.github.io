@@ -1,0 +1,336 @@
+---
+layout: "qiita-mirror"
+title: "【Python】igraphでグラフ・ネットワークを生成・描画する"
+qiita_id: "a17b41fd4e72b2855e8a"
+qiita_url: "https://qiita.com/h-nabata/items/a17b41fd4e72b2855e8a"
+qiita_created: "2023-02-03T01:25:36+09:00"
+qiita_updated: "2023-02-03T13:41:38+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "プログラミング・可視化"
+mirror_tags: ["Python", "Network", "iGraph", "樹形図"]
+permalink: "/qiita/a17b41fd4e72b2855e8a.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<h1 data-sourcepos="1:1-1:144">
+<span id="igraphについて" class="fragment"></span><a href="#igraph%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6"><i class="fa fa-link"></i></a>igraphについて　<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F24e1ed19-472d-0528-ec87-6728fc8a54ea.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=95d9322b5293796ab043a630629f426b" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/bf45c6f4ebed2a5db4d7fe3c.png" alt="image.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/24e1ed19-472d-0528-ec87-6728fc8a54ea.png" loading="lazy" decoding="async"></a>
+</h1>
+<p data-sourcepos="2:1-3:50">グラフの作成・操作を行うライブラリ（内部はC/C++系）。2023年2月現在の最新バージョンは 0.10.4 。<br>
+【参考】<a href="https://igraph.org/" rel="nofollow noopener" target="_blank">公式サイト</a></p>
+<blockquote data-sourcepos="5:1-5:114">
+<p data-sourcepos="5:3-5:114">RやPythonで利用可能なigraphパッケージが公開されている。今回はPython版を利用する。</p>
+</blockquote>
+<p data-sourcepos="7:1-7:186"><code>pip install igraph</code> または <code>conda install -c conda-forge python-igraph</code> によりインストール可能（<a href="https://igraph.readthedocs.io/en/stable/" rel="nofollow noopener" target="_blank">公式ドキュメント</a>）。</p>
+<blockquote data-sourcepos="9:1-9:241">
+<p data-sourcepos="9:3-9:241">かつてはPyPIにおいて "igraph" と "python-igraph" という2つのパッケージが競合してしまい、pipでは正しくインストールできないという問題が生じていたが、現在では解消されている。</p>
+</blockquote>
+<h1 data-sourcepos="11:1-11:29">
+<span id="ネットワークの生成" class="fragment"></span><a href="#%E3%83%8D%E3%83%83%E3%83%88%E3%83%AF%E3%83%BC%E3%82%AF%E3%81%AE%E7%94%9F%E6%88%90"><i class="fa fa-link"></i></a>ネットワークの生成</h1>
+<p data-sourcepos="12:1-12:177">以下のようなスクリプトにより、グラフの頂点の数、辺の数とそれによって接続される節点を指定してネットワークを作成できる。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="13:1-28:3">
+<div class="code-lang"><span class="bold">スクリプト①</span></div>
+<div class="highlight"><pre><code><span class="kn">import</span> <span class="n">matplotlib.pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+<span class="kn">import</span> <span class="n">igraph</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="p">.</span><span class="nf">subplots</span><span class="p">()</span>
+
+<span class="n">g</span> <span class="o">=</span> <span class="n">igraph</span><span class="p">.</span><span class="nc">Graph</span><span class="p">()</span>
+<span class="n">g</span><span class="p">.</span><span class="nf">add_vertices</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">g</span><span class="p">.</span><span class="nf">add_edges</span><span class="p">([(</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)])</span>
+
+<span class="nf">print</span><span class="p">(</span><span class="n">g</span><span class="p">)</span>
+
+<span class="n">my_layout</span> <span class="o">=</span> <span class="n">g</span><span class="p">.</span><span class="nf">layout_auto</span><span class="p">()</span>
+<span class="n">igraph</span><span class="p">.</span><span class="nf">plot</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">layout</span> <span class="o">=</span> <span class="n">my_layout</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span> <span class="n">ax</span><span class="p">)</span>
+<span class="n">plt</span><span class="p">.</span><span class="nf">show</span><span class="p">()</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="29:1-29:24">実行結果は以下。</p>
+<div class="code-frame" data-lang="" data-sourcepos="30:1-34:3">
+<div class="code-lang"><span class="bold">出力①</span></div>
+<div class="highlight"><pre><code>IGRAPH U--- 3 2 --
++ edges:
+0--1 1--2
+</code></pre></div>
+</div>
+<p data-sourcepos="35:1-36:253"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F491c4b9c-9c1b-bb84-cc29-feff0ff02b3b.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=cf96adf8a7a77fec2be835935b551a4b" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/653bc040174ab6a4a07be39b.png" alt="Figure_1.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/491c4b9c-9c1b-bb84-cc29-feff0ff02b3b.png" loading="lazy" decoding="async"></a><br>
+ネットワークそのものは、このようにして生成することができる。なお、<code>print</code>の代わりに<code>summary</code>とするとエッジの出力が省略される。大規模グラフの確認の際には<code>summary</code>を使うのがよい。</p>
+<h1 data-sourcepos="38:1-38:32">
+<span id="頂点辺節点の追加" class="fragment"></span><a href="#%E9%A0%82%E7%82%B9%E8%BE%BA%E7%AF%80%E7%82%B9%E3%81%AE%E8%BF%BD%E5%8A%A0"><i class="fa fa-link"></i></a>頂点、辺、節点の追加</h1>
+<p data-sourcepos="39:1-39:84">これに対して、さらに頂点、辺、節点を増やすことができる。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="41:1-68:3">
+<div class="code-lang"><span class="bold">スクリプト②</span></div>
+<div class="highlight"><pre><code><span class="kn">import</span> <span class="n">matplotlib.pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+<span class="kn">import</span> <span class="n">igraph</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="p">.</span><span class="nf">subplots</span><span class="p">()</span>
+
+<span class="n">g</span> <span class="o">=</span> <span class="n">igraph</span><span class="p">.</span><span class="nc">Graph</span><span class="p">()</span>
+<span class="n">g</span><span class="p">.</span><span class="nf">add_vertices</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">g</span><span class="p">.</span><span class="nf">add_edges</span><span class="p">([(</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)])</span>
+
+<span class="c1"># added
+</span><span class="n">g</span><span class="p">.</span><span class="nf">add_edges</span><span class="p">([(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">)])</span>
+<span class="n">g</span><span class="p">.</span><span class="nf">add_vertices</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">g</span><span class="p">.</span><span class="nf">add_edges</span><span class="p">([(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">3</span><span class="p">)])</span>
+
+<span class="nf">print</span><span class="p">(</span><span class="n">g</span><span class="p">)</span>
+
+<span class="c1"># specifing the plot style
+</span><span class="n">visual_style</span> <span class="o">=</span><span class="p">{</span>
+    <span class="sh">"</span><span class="s">vertex_color</span><span class="sh">"</span><span class="p">:</span> <span class="sh">"</span><span class="s">yellow</span><span class="sh">"</span><span class="p">,</span>
+    <span class="sh">"</span><span class="s">vertex_size</span><span class="sh">"</span><span class="p">:</span><span class="mf">0.2</span><span class="p">,</span>
+    <span class="sh">"</span><span class="s">vertex_label</span><span class="sh">"</span><span class="p">:[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">5</span><span class="p">]</span>
+<span class="p">}</span>
+
+<span class="n">my_layout</span> <span class="o">=</span> <span class="n">g</span><span class="p">.</span><span class="nf">layout_auto</span><span class="p">()</span>
+<span class="n">igraph</span><span class="p">.</span><span class="nf">plot</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">layout</span> <span class="o">=</span> <span class="n">my_layout</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span> <span class="n">ax</span><span class="p">,</span> <span class="o">**</span><span class="n">visual_style</span><span class="p">)</span>
+<span class="n">plt</span><span class="p">.</span><span class="nf">show</span><span class="p">()</span>
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="" data-sourcepos="70:1-74:3">
+<div class="code-lang"><span class="bold">出力②</span></div>
+<div class="highlight"><pre><code>IGRAPH U--- 6 7 --
++ edges:
+0--1 1--2 0--2 2--3 3--4 4--5 3--5
+</code></pre></div>
+</div>
+<p data-sourcepos="75:1-75:124"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F88ddb075-4017-05af-f863-50038fe39d31.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=f812bc28b56ad1a4916f8d1114a4c5ed" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/b1afc5165836f2dafc81b3e4.png" alt="Figure_2.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/88ddb075-4017-05af-f863-50038fe39d31.png" loading="lazy" decoding="async"></a></p>
+<h1 data-sourcepos="77:1-77:32">
+<span id="頂点辺節点の削除" class="fragment"></span><a href="#%E9%A0%82%E7%82%B9%E8%BE%BA%E7%AF%80%E7%82%B9%E3%81%AE%E5%89%8A%E9%99%A4"><i class="fa fa-link"></i></a>頂点、辺、節点の削除</h1>
+<p data-sourcepos="78:1-79:108">ここで、上記スクリプト②において、例えば <code>g.delete_edges(3)</code> という行を末尾に追加すると、<code>2--3</code> の辺が消える。<br>
+複数の辺を消去するには <code>g.delete_edges([(0,2),(2,3),(3,4)])</code> のように指定すればよい。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="81:1-109:3">
+<div class="code-lang"><span class="bold">スクリプト③</span></div>
+<div class="highlight"><pre><code><span class="kn">import</span> <span class="n">matplotlib.pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+<span class="kn">import</span> <span class="n">igraph</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="p">.</span><span class="nf">subplots</span><span class="p">()</span>
+
+<span class="n">g</span> <span class="o">=</span> <span class="n">igraph</span><span class="p">.</span><span class="nc">Graph</span><span class="p">()</span>
+<span class="n">g</span><span class="p">.</span><span class="nf">add_vertices</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">g</span><span class="p">.</span><span class="nf">add_edges</span><span class="p">([(</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">)])</span>
+
+<span class="n">g</span><span class="p">.</span><span class="nf">add_edges</span><span class="p">([(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">)])</span>
+<span class="n">g</span><span class="p">.</span><span class="nf">add_vertices</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<span class="n">g</span><span class="p">.</span><span class="nf">add_edges</span><span class="p">([(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">3</span><span class="p">)])</span>
+
+<span class="nf">print</span><span class="p">(</span><span class="n">g</span><span class="p">)</span>
+
+<span class="n">visual_style</span> <span class="o">=</span><span class="p">{</span>
+    <span class="sh">"</span><span class="s">vertex_color</span><span class="sh">"</span><span class="p">:</span> <span class="sh">"</span><span class="s">yellow</span><span class="sh">"</span><span class="p">,</span>
+    <span class="sh">"</span><span class="s">vertex_size</span><span class="sh">"</span><span class="p">:</span><span class="mf">0.2</span><span class="p">,</span>
+    <span class="sh">"</span><span class="s">vertex_label</span><span class="sh">"</span><span class="p">:[</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">,</span><span class="mi">5</span><span class="p">]</span>
+<span class="p">}</span>
+
+<span class="c1"># added
+</span><span class="n">g</span><span class="p">.</span><span class="nf">delete_edges</span><span class="p">([(</span><span class="mi">0</span><span class="p">,</span><span class="mi">2</span><span class="p">),(</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">),(</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">)])</span>
+
+<span class="n">my_layout</span> <span class="o">=</span> <span class="n">g</span><span class="p">.</span><span class="nf">layout_auto</span><span class="p">()</span>
+<span class="n">igraph</span><span class="p">.</span><span class="nf">plot</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">layout</span> <span class="o">=</span> <span class="n">my_layout</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span> <span class="n">ax</span><span class="p">,</span> <span class="o">**</span><span class="n">visual_style</span><span class="p">)</span>
+<span class="n">plt</span><span class="p">.</span><span class="nf">show</span><span class="p">()</span>
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="" data-sourcepos="111:1-115:3">
+<div class="code-lang"><span class="bold">出力③</span></div>
+<div class="highlight"><pre><code>IGRAPH U--- 6 7 --
++ edges:
+0--1 1--2 0--2 2--3 3--4 4--5 3--5
+</code></pre></div>
+</div>
+<p data-sourcepos="116:1-117:65"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F0fe4ccb5-9da6-99ac-301c-fecd37ad805d.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=680783837fd3912d3e679130c4e860ef" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/97ffd5715dd396e398b69b96.png" alt="Figure_3.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/0fe4ccb5-9da6-99ac-301c-fecd37ad805d.png" loading="lazy" decoding="async"></a><br>
+0--2、2--3、3--4 の3辺が切断されたことが分かる。</p>
+<h1 data-sourcepos="119:1-119:47">
+<span id="ネットワークを確率的に生成する" class="fragment"></span><a href="#%E3%83%8D%E3%83%83%E3%83%88%E3%83%AF%E3%83%BC%E3%82%AF%E3%82%92%E7%A2%BA%E7%8E%87%E7%9A%84%E3%81%AB%E7%94%9F%E6%88%90%E3%81%99%E3%82%8B"><i class="fa fa-link"></i></a>ネットワークを確率的に生成する</h1>
+<p data-sourcepos="120:1-120:149"><code>Graph.GRG(頂点数、距離の閾値)</code> によって、指定された頂点数を有するグラフを確率的に生成することができる。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="122:1-141:3">
+<div class="code-lang"><span class="bold">スクリプト④</span></div>
+<div class="highlight"><pre><code><span class="kn">import</span> <span class="n">matplotlib.pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+<span class="kn">import</span> <span class="n">igraph</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="p">.</span><span class="nf">subplots</span><span class="p">()</span>
+
+<span class="n">g</span> <span class="o">=</span> <span class="n">igraph</span><span class="p">.</span><span class="nc">Graph</span><span class="p">()</span>
+<span class="n">g</span> <span class="o">=</span> <span class="n">igraph</span><span class="p">.</span><span class="n">Graph</span><span class="p">.</span><span class="nc">GRG</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">)</span>
+
+<span class="n">igraph</span><span class="p">.</span><span class="nf">summary</span><span class="p">(</span><span class="n">g</span><span class="p">)</span>
+
+<span class="n">visual_style</span> <span class="o">=</span><span class="p">{</span>
+    <span class="sh">"</span><span class="s">vertex_size</span><span class="sh">"</span><span class="p">:</span><span class="mf">0.05</span><span class="p">,</span>
+    <span class="sh">"</span><span class="s">edge_width</span><span class="sh">"</span><span class="p">:</span><span class="mf">0.5</span>
+<span class="p">}</span>
+
+<span class="n">my_layout</span> <span class="o">=</span> <span class="n">g</span><span class="p">.</span><span class="nf">layout_auto</span><span class="p">()</span>
+<span class="n">igraph</span><span class="p">.</span><span class="nf">plot</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">layout</span> <span class="o">=</span> <span class="n">my_layout</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span> <span class="n">ax</span><span class="p">,</span> <span class="o">**</span><span class="n">visual_style</span><span class="p">)</span>
+<span class="n">plt</span><span class="p">.</span><span class="nf">show</span><span class="p">()</span>
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="" data-sourcepos="143:1-146:3">
+<div class="code-lang"><span class="bold">出力④</span></div>
+<div class="highlight"><pre><code>IGRAPH U--- 100 517 --
++ attr: x (v), y (v)
+</code></pre></div>
+</div>
+<p data-sourcepos="147:1-147:124"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F83f86cf3-4a5a-d485-e295-89f3b1753a0c.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=0f8246024523a81e8cf2b6eeedba3246" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/848ec348a82339c68d88faae.png" alt="Figure_4.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/83f86cf3-4a5a-d485-e295-89f3b1753a0c.png" loading="lazy" decoding="async"></a></p>
+<h1 data-sourcepos="149:1-149:50">
+<span id="ネットワークをツリー状に生成する" class="fragment"></span><a href="#%E3%83%8D%E3%83%83%E3%83%88%E3%83%AF%E3%83%BC%E3%82%AF%E3%82%92%E3%83%84%E3%83%AA%E3%83%BC%E7%8A%B6%E3%81%AB%E7%94%9F%E6%88%90%E3%81%99%E3%82%8B"><i class="fa fa-link"></i></a>ネットワークをツリー状に生成する</h1>
+<p data-sourcepos="150:1-150:168"><code>Graph.Tree(頂点数、木の分岐数)</code> によって、指定された頂点数および分岐数の木構造を有するグラフを生成することができる。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="152:1-173:3">
+<div class="code-lang"><span class="bold">スクリプト⑤</span></div>
+<div class="highlight"><pre><code><span class="kn">import</span> <span class="n">matplotlib.pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+<span class="kn">import</span> <span class="n">igraph</span>
+
+<span class="nf">print</span><span class="p">(</span><span class="n">igraph</span><span class="p">.</span><span class="n">__version__</span><span class="p">)</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="p">.</span><span class="nf">subplots</span><span class="p">()</span>
+
+<span class="n">g</span> <span class="o">=</span> <span class="n">igraph</span><span class="p">.</span><span class="nc">Graph</span><span class="p">()</span>
+<span class="n">g</span> <span class="o">=</span> <span class="n">igraph</span><span class="p">.</span><span class="n">Graph</span><span class="p">.</span><span class="nc">Tree</span><span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+
+<span class="n">igraph</span><span class="p">.</span><span class="nf">summary</span><span class="p">(</span><span class="n">g</span><span class="p">)</span>
+
+<span class="n">visual_style</span> <span class="o">=</span><span class="p">{</span>
+    <span class="sh">"</span><span class="s">vertex_size</span><span class="sh">"</span><span class="p">:</span><span class="mf">0.5</span><span class="p">,</span>
+    <span class="sh">"</span><span class="s">edge_width</span><span class="sh">"</span><span class="p">:</span><span class="mf">0.5</span>
+<span class="p">}</span>
+
+<span class="n">my_layout</span> <span class="o">=</span> <span class="n">g</span><span class="p">.</span><span class="nf">layout_auto</span><span class="p">()</span>
+<span class="n">igraph</span><span class="p">.</span><span class="nf">plot</span><span class="p">(</span><span class="n">g</span><span class="p">,</span> <span class="n">layout</span> <span class="o">=</span> <span class="n">my_layout</span><span class="p">,</span> <span class="n">target</span><span class="o">=</span> <span class="n">ax</span><span class="p">,</span> <span class="o">**</span><span class="n">visual_style</span><span class="p">)</span>
+<span class="n">plt</span><span class="p">.</span><span class="nf">show</span><span class="p">()</span>
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="" data-sourcepos="175:1-177:3">
+<div class="code-lang"><span class="bold">出力⑤</span></div>
+<div class="highlight"><pre><code>IGRAPH U--- 100 99 --
+</code></pre></div>
+</div>
+<p data-sourcepos="178:1-180:124"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F7d56666b-33ab-9f61-c758-7980fe6ee7ff.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=00f686b1dcbc4b329e133dbf48ec6ce7" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/41dbbebcffbeec0cdda53688.png" alt="Figure_5.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/7d56666b-33ab-9f61-c758-7980fe6ee7ff.png" loading="lazy" decoding="async"></a><br>
+また、<code>g = igraph.Graph.Tree(100, 3)</code> とすると、以下のような三又に分岐したグラフが得られる。<br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F7469a7fd-dbe4-715c-2f1c-f30ca5cf8e71.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=0dd5ba8e1f398226d2c621441015183e" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/f3de0d515096f1b680d8321c.png" alt="Figure_6.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/7469a7fd-dbe4-715c-2f1c-f30ca5cf8e71.png" loading="lazy" decoding="async"></a></p>
+<h1 data-sourcepos="182:1-182:26">
+<span id="有向グラフの生成" class="fragment"></span><a href="#%E6%9C%89%E5%90%91%E3%82%B0%E3%83%A9%E3%83%95%E3%81%AE%E7%94%9F%E6%88%90"><i class="fa fa-link"></i></a>有向グラフの生成</h1>
+<p data-sourcepos="183:1-183:245">有向非巡回グラフ(Directed Acyclic Graph: DAG)の場合、以下のようにしてトポロジカルソートを取得することができる。<code>igraph.Vertex.indegree()</code> によって各ノードの次数を求めることができる。</p>
+<blockquote data-sourcepos="185:1-185:200">
+<p data-sourcepos="185:3-185:200">「有向非巡回グラフ」とは、閉路のない有向グラフのこと。ある頂点から有向線分の向きに辺を辿るとき、同じ頂点に戻れないという特徴がある。</p>
+</blockquote>
+<div class="code-frame" data-lang="py" data-sourcepos="187:1-214:3">
+<div class="code-lang"><span class="bold">スクリプト⑥</span></div>
+<div class="highlight"><pre><code><span class="kn">import</span> <span class="n">matplotlib.pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+<span class="kn">import</span> <span class="n">igraph</span>
+
+<span class="n">g</span> <span class="o">=</span> <span class="n">igraph</span><span class="p">.</span><span class="nc">Graph</span><span class="p">(</span>
+    <span class="n">edges</span><span class="o">=</span><span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">)],</span>
+    <span class="n">directed</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="k">assert</span> <span class="n">g</span><span class="p">.</span><span class="n">is_dag</span>
+<span class="n">results</span> <span class="o">=</span> <span class="n">g</span><span class="p">.</span><span class="nf">topological_sorting</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="sh">'</span><span class="s">out</span><span class="sh">'</span><span class="p">)</span>
+<span class="nf">print</span><span class="p">(</span><span class="sh">'</span><span class="s">Topological sort of g (out):</span><span class="sh">'</span><span class="p">,</span> <span class="o">*</span><span class="n">results</span><span class="p">)</span>
+
+<span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nf">range</span><span class="p">(</span><span class="n">g</span><span class="p">.</span><span class="nf">vcount</span><span class="p">()):</span>
+    <span class="nf">print</span><span class="p">(</span><span class="sh">'</span><span class="s">degree of {}: {}</span><span class="sh">'</span><span class="p">.</span><span class="nf">format</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">g</span><span class="p">.</span><span class="n">vs</span><span class="p">[</span><span class="n">i</span><span class="p">].</span><span class="nf">indegree</span><span class="p">()))</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="p">.</span><span class="nf">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
+<span class="n">igraph</span><span class="p">.</span><span class="nf">plot</span><span class="p">(</span>
+        <span class="n">g</span><span class="p">,</span>
+        <span class="n">target</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span>
+        <span class="n">vertex_size</span><span class="o">=</span><span class="mf">0.4</span><span class="p">,</span>
+        <span class="n">edge_width</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+        <span class="n">vertex_label</span><span class="o">=</span><span class="nf">range</span><span class="p">(</span><span class="n">g</span><span class="p">.</span><span class="nf">vcount</span><span class="p">()),</span>
+        <span class="n">vertex_color</span><span class="o">=</span><span class="sh">"</span><span class="s">white</span><span class="sh">"</span><span class="p">,</span>
+    <span class="p">)</span>
+
+<span class="n">plt</span><span class="p">.</span><span class="nf">show</span><span class="p">()</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="216:1-216:181">
+<p data-sourcepos="216:3-216:181">ここで、<code>edges</code>を定義する際に <code>(0, 1), (1, 0)</code> などのように、同じノードの組に対して逆向きの2辺を指定することはできないので注意。</p>
+</blockquote>
+<div class="code-frame" data-lang="" data-sourcepos="218:1-226:3">
+<div class="code-lang"><span class="bold">出力⑥</span></div>
+<div class="highlight"><pre><code>Topological sort of g (out): 0 1 2 4 3 5
+degree of 0: 0
+degree of 1: 1
+degree of 2: 1
+degree of 3: 2
+degree of 4: 1
+degree of 5: 2
+</code></pre></div>
+</div>
+<p data-sourcepos="227:1-227:124"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F48a43953-8e43-fb9d-2b8c-305dc2fa4b99.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=1cbd621204f80280d71740683b23a846" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/74ae55e8794343b31f5489a5.png" alt="Figure_7.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/48a43953-8e43-fb9d-2b8c-305dc2fa4b99.png" loading="lazy" decoding="async"></a></p>
+<blockquote data-sourcepos="229:1-229:130">
+<p data-sourcepos="229:3-229:130">参考：<a href="https://qiita.com/maebaru/items/5b6cb981777624ab843c" id="reference-1f2965aeaff5293051ce">有向非巡回グラフ（DAG）とトポロジカルソート</a></p>
+</blockquote>
+<h1 data-sourcepos="231:1-231:32">
+<span id="重み付きグラフの生成" class="fragment"></span><a href="#%E9%87%8D%E3%81%BF%E4%BB%98%E3%81%8D%E3%82%B0%E3%83%A9%E3%83%95%E3%81%AE%E7%94%9F%E6%88%90"><i class="fa fa-link"></i></a>重み付きグラフの生成</h1>
+<p data-sourcepos="233:1-233:295">igraphを用いて、各辺が重み付けされたグラフを解析することができる。重み付きグラフで最短経路を取得する場合、 <code>g.get_shortest_paths()</code> 関数の引数として、各辺の重み <code>weights=g.es["weight"]</code> と出力方法 <code>output="epath"</code> を渡す。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="235:1-278:3">
+<div class="code-lang"><span class="bold">スクリプト⑦</span></div>
+<div class="highlight"><pre><code><span class="kn">import</span> <span class="n">matplotlib.pyplot</span> <span class="k">as</span> <span class="n">plt</span>
+<span class="kn">import</span> <span class="n">igraph</span>
+
+
+<span class="n">g</span> <span class="o">=</span> <span class="n">igraph</span><span class="p">.</span><span class="nc">Graph</span><span class="p">(</span>
+    <span class="mi">8</span><span class="p">,</span>
+    <span class="p">[(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">7</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">),</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">),</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">7</span><span class="p">),</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">5</span><span class="p">),</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">6</span><span class="p">),</span> <span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">7</span><span class="p">),</span> <span class="p">(</span><span class="mi">6</span><span class="p">,</span> <span class="mi">7</span><span class="p">)]</span>
+<span class="p">)</span>
+
+<span class="c1"># adding weights to the edges
+</span><span class="n">g</span><span class="p">.</span><span class="n">es</span><span class="p">[</span><span class="sh">"</span><span class="s">weight</span><span class="sh">"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">6</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">]</span>
+
+<span class="n">results</span> <span class="o">=</span> <span class="n">g</span><span class="p">.</span><span class="nf">get_shortest_paths</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">to</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span> <span class="n">weights</span><span class="o">=</span><span class="n">g</span><span class="p">.</span><span class="n">es</span><span class="p">[</span><span class="sh">"</span><span class="s">weight</span><span class="sh">"</span><span class="p">],</span> <span class="n">output</span><span class="o">=</span><span class="sh">"</span><span class="s">epath</span><span class="sh">"</span><span class="p">)</span>
+<span class="nf">print</span><span class="p">(</span><span class="o">*</span><span class="n">results</span><span class="p">)</span>
+
+<span class="k">if</span> <span class="nf">len</span><span class="p">(</span><span class="n">results</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+    <span class="c1"># Add up the weights across all edges on the shortest path
+</span>    <span class="n">distance</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">results</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span>
+        <span class="n">distance</span> <span class="o">+=</span> <span class="n">g</span><span class="p">.</span><span class="n">es</span><span class="p">[</span><span class="n">e</span><span class="p">][</span><span class="sh">"</span><span class="s">weight</span><span class="sh">"</span><span class="p">]</span>
+    <span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">Shortest weighted distance is: </span><span class="sh">"</span><span class="p">,</span> <span class="n">distance</span><span class="p">)</span>
+<span class="k">else</span><span class="p">:</span>
+    <span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">End node could not be reached!</span><span class="sh">"</span><span class="p">)</span>
+
+<span class="n">g</span><span class="p">.</span><span class="n">es</span><span class="p">[</span><span class="sh">'</span><span class="s">width</span><span class="sh">'</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>
+<span class="n">g</span><span class="p">.</span><span class="n">es</span><span class="p">[</span><span class="n">results</span><span class="p">[</span><span class="mi">0</span><span class="p">]][</span><span class="sh">'</span><span class="s">width</span><span class="sh">'</span><span class="p">]</span> <span class="o">=</span> <span class="mf">2.5</span>
+
+<span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="p">.</span><span class="nf">subplots</span><span class="p">()</span>
+<span class="n">igraph</span><span class="p">.</span><span class="nf">plot</span><span class="p">(</span>
+    <span class="n">g</span><span class="p">,</span>
+    <span class="n">target</span><span class="o">=</span><span class="n">ax</span><span class="p">,</span>
+    <span class="n">layout</span><span class="o">=</span><span class="sh">'</span><span class="s">circle</span><span class="sh">'</span><span class="p">,</span>
+    <span class="n">vertex_color</span><span class="o">=</span><span class="sh">'</span><span class="s">steelblue</span><span class="sh">'</span><span class="p">,</span>
+    <span class="n">vertex_label</span><span class="o">=</span><span class="nf">range</span><span class="p">(</span><span class="n">g</span><span class="p">.</span><span class="nf">vcount</span><span class="p">()),</span>
+    <span class="n">edge_width</span><span class="o">=</span><span class="n">g</span><span class="p">.</span><span class="n">es</span><span class="p">[</span><span class="sh">'</span><span class="s">width</span><span class="sh">'</span><span class="p">],</span>
+    <span class="n">edge_label</span><span class="o">=</span><span class="n">g</span><span class="p">.</span><span class="n">es</span><span class="p">[</span><span class="sh">"</span><span class="s">weight</span><span class="sh">"</span><span class="p">],</span>
+    <span class="n">edge_color</span><span class="o">=</span><span class="sh">'</span><span class="s">#666</span><span class="sh">'</span><span class="p">,</span>
+    <span class="n">edge_align_label</span><span class="o">=</span><span class="bp">True</span><span class="p">,</span>
+    <span class="n">edge_background</span><span class="o">=</span><span class="sh">'</span><span class="s">white</span><span class="sh">'</span>
+<span class="p">)</span>
+
+<span class="n">plt</span><span class="p">.</span><span class="nf">show</span><span class="p">()</span>
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="" data-sourcepos="280:1-283:3">
+<div class="code-lang"><span class="bold">出力⑦</span></div>
+<div class="highlight"><pre><code>[1, 5, 8]
+Shortest weighted distance is:  8
+</code></pre></div>
+</div>
+<p data-sourcepos="284:1-285:122"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Fc73bf2c7-688c-c1c8-f535-cb4f316ef26f.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=ecd32f3d7e60056701c46877a7846d93" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/374779277fc7ccc5694fedeb.png" alt="Figure_9.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/c73bf2c7-688c-c1c8-f535-cb4f316ef26f.png" loading="lazy" decoding="async"></a><br>
+ノード0からノード5に至る経路のうち、総コストが最小となる経路が正しく得られている。</p>
+<h1 data-sourcepos="287:1-287:14">
+<span id="参考資料" class="fragment"></span><a href="#%E5%8F%82%E8%80%83%E8%B3%87%E6%96%99"><i class="fa fa-link"></i></a>参考資料</h1>
+<p data-sourcepos="289:1-289:58"><a href="https://qiita.com/scapegoat_11_/items/d99cbcfea053d9fcd8d2" class="mirror-link-card">https://qiita.com/scapegoat_11_/items/d99cbcfea053d9fcd8d2</a>
+</p>
+<p data-sourcepos="291:1-291:79">↓ 公式ドキュメントにあるグラフの見本、サンプルコード</p>
+<p data-sourcepos="293:1-293:60"><a href="https://igraph.readthedocs.io/en/stable/tutorials/index.html" class="mirror-link-card">https://igraph.readthedocs.io/en/stable/tutorials/index.html</a>
+</p>
+<p data-sourcepos="295:1-295:71"><a href="https://igraph.readthedocs.io/en/stable/tutorials/topological_sort.html" class="mirror-link-card">https://igraph.readthedocs.io/en/stable/tutorials/topological_sort.html</a>
+</p>
+<p data-sourcepos="297:1-297:82"><a href="https://igraph.readthedocs.io/en/stable/tutorials/shortest_path_visualisation.html" class="mirror-link-card">https://igraph.readthedocs.io/en/stable/tutorials/shortest_path_visualisation.html</a>
+</p>
+
+</div>
+
+
+{% endraw %}

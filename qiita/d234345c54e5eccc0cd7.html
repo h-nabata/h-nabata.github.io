@@ -1,0 +1,190 @@
+---
+layout: "qiita-mirror"
+title: "【Linux】最新版のOpenBabelをローカルにインストールする"
+qiita_id: "d234345c54e5eccc0cd7"
+qiita_url: "https://qiita.com/h-nabata/items/d234345c54e5eccc0cd7"
+qiita_created: "2023-02-02T22:06:13+09:00"
+qiita_updated: "2023-02-02T22:06:13+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "計算化学・分子構造"
+mirror_tags: ["環境構築", "ケモインフォマティクス", "計算化学", "情報化学"]
+permalink: "/qiita/d234345c54e5eccc0cd7.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="1:1-1:381"><a href="http://openbabel.org/wiki/Main_Page" rel="nofollow noopener" target="_blank"><strong>OpenBabel</strong></a>は情報化学（ケモインフォマティクス）の領域で利用されるツール群のパッケージで、主にファイル・データのフォーマットを変換するために用いられます。公式のGithubリポジトリで公開されているバージョンのリストは以下。（最新版は3.1.1）</p>
+<p data-sourcepos="3:1-3:47"><a href="https://github.com/openbabel/openbabel/releases" class="mirror-link-card">https://github.com/openbabel/openbabel/releases</a>
+</p>
+<p data-sourcepos="5:1-5:297">公式サイトからは古いバージョンしかインストールできないため、最新版を導入するにはソースコードからコンパイルする必要があります。本エントリでは最新版のOpenBabelをローカルにインストールする手順を示します。</p>
+<h1 data-sourcepos="8:1-8:8">
+<span id="前提" class="fragment"></span><a href="#%E5%89%8D%E6%8F%90"><i class="fa fa-link"></i></a>前提</h1>
+<p data-sourcepos="9:1-10:102">● <code>${HOME}/usr/app/</code> というディレクトリが存在する（無ければ作成しておく or 適切なパスに書き換えてください）<br>
+● CentOS7のLinux環境である（バージョンは <code>cat /etc/os-release</code> で確認できます）</p>
+<blockquote data-sourcepos="11:1-11:93">
+<p data-sourcepos="11:3-11:93">CentOS7 未満だとC++11が使えず、別途アップデートが必要となります。</p>
+</blockquote>
+<h1 data-sourcepos="14:1-14:32">
+<span id="openbabelのインストール" class="fragment"></span><a href="#openbabel%E3%81%AE%E3%82%A4%E3%83%B3%E3%82%B9%E3%83%88%E3%83%BC%E3%83%AB"><i class="fa fa-link"></i></a>OpenBabelのインストール</h1>
+<p data-sourcepos="16:1-16:91">カレントディレクトリが <code>${HOME}/usr/app</code> の状態で以下を実行します。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="18:1-25:3">
+<div class="code-lang"><span class="bold">OpenBabelのインストール手順</span></div>
+<div class="highlight"><pre><code>git clone https://github.com/openbabel/openbabel.git
+<span class="nb">mkdir</span> <span class="nt">-p</span> openbabel/build
+<span class="nb">cd </span>openbabel/build
+cmake <span class="nt">-DCMAKE_INSTALL_PREFIX</span><span class="o">=</span><span class="k">${</span><span class="nv">HOME</span><span class="k">}</span>/usr/app/babel <span class="nt">-DENABLE_OPENMP</span><span class="o">=</span>ON <span class="nt">-DBUILD_GUI</span><span class="o">=</span>OFF ..
+make <span class="nt">-j6</span>
+make <span class="nb">install</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="27:1-28:242"><code>git clone</code>すると<code>openbabel</code>という名前のディレクトリが生成します。<br>
+上の例では <code>DCMAKE_INSTALL_PREFIX</code> のオプションで、インストール先のディレクトリを <code>${HOME}/usr/app/babel</code> としています。GUIを無効化し、並列化を有効化する設定で <code>cmake</code> を実行します。</p>
+<p data-sourcepos="30:1-30:210">上の例では時間短縮のために <code>make -j6</code> として6並列でコンパイルしています。<code>cpuinfo</code> や <code>less /proc/cpuinfo</code> などでCPUのコア数を確認してから指定してください。</p>
+<p data-sourcepos="32:1-32:197">完了すると <code>${HOME}/usr/app/babel/bin/</code> に実行可能ファイルが生成していますので、<code>.bashrc</code> などのログインシェルに以下の行を追記して <code>source</code> します。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="34:1-36:3">
+<div class="code-lang"><span class="bold">ログインシェルに追記する行</span></div>
+<div class="highlight"><pre><code><span class="nb">export </span><span class="nv">PATH</span><span class="o">=</span><span class="k">${</span><span class="nv">HOME</span><span class="k">}</span>/usr/app/babel/bin:<span class="k">${</span><span class="nv">PATH</span><span class="k">}</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="38:1-38:103">以上で <code>obabel</code> というコマンドによってOpenBabelを呼び出せるようになります。</p>
+<h1 data-sourcepos="41:1-41:61">
+<span id="cmakeのバージョンでエラーが出る場合" class="fragment"></span><a href="#cmake%E3%81%AE%E3%83%90%E3%83%BC%E3%82%B8%E3%83%A7%E3%83%B3%E3%81%A7%E3%82%A8%E3%83%A9%E3%83%BC%E3%81%8C%E5%87%BA%E3%82%8B%E5%A0%B4%E5%90%88"><i class="fa fa-link"></i></a>【※】CMakeのバージョンでエラーが出る場合</h1>
+<p data-sourcepos="43:1-43:148">私の環境ではCMakeのバージョンが2.8系と古かったため、<code>cmake</code> の際に以下のようなエラーが出てしまいました。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="45:1-47:3">
+<div class="code-lang"><span class="bold">エラーメッセージ</span></div>
+<div class="highlight"><pre><code>CMake 3.1 or higher is required.
+</code></pre></div>
+</div>
+<p data-sourcepos="49:1-49:117">そこで、最新の CMake をインストールします。（2023年1月現在の最新バージョンは3.25.2）</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="51:1-58:3">
+<div class="code-lang"><span class="bold">CMakeをローカルにインストールする</span></div>
+<div class="highlight"><pre><code>wget https://github.com/Kitware/CMake/releases/download/v3.25.2/cmake-3.25.2.tar.gz
+<span class="nb">tar</span> <span class="nt">-zxvf</span> cmake-3.25.2.tar.gz
+<span class="nb">cd </span>cmake-3.25.2
+./configure <span class="nt">--prefix</span><span class="o">=</span><span class="k">${</span><span class="nv">HOME</span><span class="k">}</span>/usr/app/cmake/
+make <span class="nt">-j6</span>
+make <span class="nb">install</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="60:1-60:299"><code>cmake</code> の展開場所はどこでも良いですが、上の例では <code>${HOME}/usr/app/</code> の配下に <code>cmake</code> というディレクトリを用意しています。私の環境では <code>./configure</code> に数分要しました。makeの際は上記と同様に必要に応じて並列して下さい。</p>
+<p data-sourcepos="62:1-62:197">完了すると <code>${HOME}/usr/app/cmake/bin/</code> に実行可能ファイルが生成していますので、<code>.bashrc</code> などのログインシェルに以下の行を追記して <code>source</code> します。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="64:1-66:3">
+<div class="code-lang"><span class="bold">ログインシェルに追記する行</span></div>
+<div class="highlight"><pre><code><span class="nb">export </span><span class="nv">PATH</span><span class="o">=</span><span class="k">${</span><span class="nv">HOME</span><span class="k">}</span>/usr/app/cmake/bin:<span class="k">${</span><span class="nv">PATH</span><span class="k">}</span>
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="68:1-68:153">
+<p data-sourcepos="68:3-68:153">この順番で$PATHに追加しないと、元々導入されていた古いバージョンのcmakeを優先的に参照してしまうので注意。</p>
+</blockquote>
+<p data-sourcepos="70:1-70:84">以上を済ませた上で、再度OpenBabelのインストールを行います。</p>
+<h1 data-sourcepos="73:1-73:29">
+<span id="openbabelを使ってみる" class="fragment"></span><a href="#openbabel%E3%82%92%E4%BD%BF%E3%81%A3%E3%81%A6%E3%81%BF%E3%82%8B"><i class="fa fa-link"></i></a>OpenBabelを使ってみる</h1>
+<p data-sourcepos="75:1-76:216">せっかくなので、導入したOpenBabelを使ってみます。<br>
+例として、以下のような4-アミノサリチル酸のsdf形式のデータ（<a href="https://pubchem.ncbi.nlm.nih.gov/compound/4649" rel="nofollow noopener" target="_blank"><strong>PubChem</strong></a>から取得）を別のフォーマットに変換してみます。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="78:1-121:3">
+<div class="code-lang"><span class="bold">C7H7NO3.sdf</span></div>
+<div class="highlight"><pre><code>4649
+  -OEChem-02022307383D
+
+ 18 18  0     0  0  0  0  0  0999 V2000
+    0.6705   -2.1801   -0.1869 O   0  0  0  0  0  0  0  0  0  0  0  0
+    2.5574    1.4370   -0.4767 O   0  0  0  0  0  0  0  0  0  0  0  0
+    2.8355   -0.6088    0.4742 O   0  0  0  0  0  0  0  0  0  0  0  0
+   -3.5675    0.0822    0.0040 N   0  0  0  0  0  0  0  0  0  0  0  0
+    0.6306    0.2081    0.0328 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.0296   -1.0154   -0.0820 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -2.1578    0.1243    0.0136 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -1.4239   -1.0573   -0.0916 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -0.1033    1.3895    0.1380 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -1.4974    1.3476    0.1284 C   0  0  0  0  0  0  0  0  0  0  0  0
+    2.0857    0.2729    0.0462 C   0  0  0  0  0  0  0  0  0  0  0  0
+   -1.9333   -2.0140   -0.1815 H   0  0  0  0  0  0  0  0  0  0  0  0
+    0.3818    2.3565    0.2417 H   0  0  0  0  0  0  0  0  0  0  0  0
+   -2.0585    2.2748    0.2139 H   0  0  0  0  0  0  0  0  0  0  0  0
+   -4.1001    0.9386    0.0795 H   0  0  0  0  0  0  0  0  0  0  0  0
+   -4.0470   -0.8044   -0.0797 H   0  0  0  0  0  0  0  0  0  0  0  0
+    1.6243   -2.0052   -0.2179 H   0  0  0  0  0  0  0  0  0  0  0  0
+    3.5377    1.4721   -0.4639 H   0  0  0  0  0  0  0  0  0  0  0  0
+  1  6  1  0  0  0  0
+  1 17  1  0  0  0  0
+  2 11  1  0  0  0  0
+  2 18  1  0  0  0  0
+  3 11  2  0  0  0  0
+  4  7  1  0  0  0  0
+  4 15  1  0  0  0  0
+  4 16  1  0  0  0  0
+  5  6  2  0  0  0  0
+  5  9  1  0  0  0  0
+  5 11  1  0  0  0  0
+  6  8  1  0  0  0  0
+  7  8  2  0  0  0  0
+  7 10  1  0  0  0  0
+  8 12  1  0  0  0  0
+  9 10  2  0  0  0  0
+  9 13  1  0  0  0  0
+ 10 14  1  0  0  0  0
+M  END
+$$$$
+</code></pre></div>
+</div>
+<hr data-sourcepos="123:1-124:0">
+<p data-sourcepos="125:1-125:93">SDF形式をSMILES記法に変換するには以下のようなコマンドを叩きます。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="127:1-129:3"><div class="highlight"><pre><code>obabel C7H7NO3.sdf <span class="nt">-O</span> C7H7NO3.smi
+</code></pre></div></div>
+<p data-sourcepos="130:1-130:21">　↓　出力結果</p>
+<div class="code-frame" data-lang="" data-sourcepos="131:1-133:3">
+<div class="code-lang"><span class="bold">C7H7NO3.smi</span></div>
+<div class="highlight"><pre><code>Oc1c(ccc(N)c1)C(=O)O	
+</code></pre></div>
+</div>
+<hr data-sourcepos="135:1-136:0">
+<p data-sourcepos="137:1-137:90">SDF形式をXYZ形式に変換するには以下のようなコマンドを叩きます。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="139:1-141:3"><div class="highlight"><pre><code>obabel C7H7NO3.sdf <span class="nt">-O</span> C7H7NO3.xyz
+</code></pre></div></div>
+<p data-sourcepos="142:1-142:21">　↓　出力結果</p>
+<div class="code-frame" data-lang="" data-sourcepos="143:1-165:3">
+<div class="code-lang"><span class="bold">C7H7NO3.xyz</span></div>
+<div class="highlight"><pre><code>18
+
+O          0.67050       -2.18010       -0.18690
+O          2.55740        1.43700       -0.47670
+O          2.83550       -0.60880        0.47420
+N         -3.56750        0.08220        0.00400
+C          0.63060        0.20810        0.03280
+C         -0.02960       -1.01540       -0.08200
+C         -2.15780        0.12430        0.01360
+C         -1.42390       -1.05730       -0.09160
+C         -0.10330        1.38950        0.13800
+C         -1.49740        1.34760        0.12840
+C          2.08570        0.27290        0.04620
+H         -1.93330       -2.01400       -0.18150
+H          0.38180        2.35650        0.24170
+H         -2.05850        2.27480        0.21390
+H         -4.10010        0.93860        0.07950
+H         -4.04700       -0.80440       -0.07970
+H          1.62430       -2.00520       -0.21790
+H          3.53770        1.47210       -0.46390
+
+</code></pre></div>
+</div>
+<hr data-sourcepos="167:1-168:0">
+<p data-sourcepos="169:1-169:45">画像に変換することもできます。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="171:1-173:3"><div class="highlight"><pre><code>obabel C7H7NO3.sdf <span class="nt">-O</span> C7H7NO3.svg
+</code></pre></div></div>
+<p data-sourcepos="174:1-175:123">　↓　出力結果<br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Fb6ee72ea-6dd6-a70f-ede9-7d90e6d4b1ff.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=5e92d6e45992e103b3815cb1186d5c88" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/34cb19f6cd44693a6700d4b9.png" alt="C7H7NO3.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/b6ee72ea-6dd6-a70f-ede9-7d90e6d4b1ff.png" loading="lazy" decoding="async"></a></p>
+<blockquote data-sourcepos="176:1-176:79">
+<p data-sourcepos="176:3-176:79">Qiitaに掲載する都合上、png形式の画像に変換しています。</p>
+</blockquote>
+<h1 data-sourcepos="179:1-179:14">
+<span id="参考資料" class="fragment"></span><a href="#%E5%8F%82%E8%80%83%E8%B3%87%E6%96%99"><i class="fa fa-link"></i></a>参考資料</h1>
+<p data-sourcepos="181:1-181:56"><a href="https://qiita.com/kuchida1981/items/d028940ade41096490de" class="mirror-link-card">https://qiita.com/kuchida1981/items/d028940ade41096490de</a>
+</p>
+<p data-sourcepos="183:1-183:82">sudo権限がある場合は以下の記事のようにして導入可能です。</p>
+<p data-sourcepos="185:1-185:60"><a href="https://qiita.com/MasafumiTsuyuki/items/73af68e94b14447a3d74" class="mirror-link-card">https://qiita.com/MasafumiTsuyuki/items/73af68e94b14447a3d74</a>
+</p>
+
+</div>
+
+
+
+{% endraw %}

@@ -1,0 +1,2543 @@
+
+### 2026/09/06追記
+
+より高度な推論能力を試すベンチマークでの検証結果を以下の記事で公開した。
+
+https://qiita.com/h-nabata/items/70d7d6ed64e91fce8675
+
+
+
+# はじめに
+
+先週、LLMCが大規模言語モデル[「LLM-jp-4 33B」](https://llmc.nii.ac.jp/topics/post-2941/)を公開した。これは約332億パラメーターのDense型のモデルで、今年4月に公開された[MoE型のモデル](https://www.nii.ac.jp/news/release/2026/0403.html)のDense版に対応する。
+
+以前、性能比較検証に関してLLMCが以下のような声明を発表している。確かに、推論性能比較の観点では、アクティブパラメータ数の異なるモデルを比較するのはフェアではない。LLMCの主張はもっともである。
+
+https://llmc.nii.ac.jp/topics/post-2756/
+
+> そもそも中国製モデルを使うことにも懸念点があり、フロンティアモデルに匹敵する性能の国産モデルの登場が待ち望まれている。これについては以下の記事が参考になる。
+> 
+> *「みずほもライオンもQwenを選んだ — 「中国製AI」をどう安全に使うかの現実解」 | zephel01 氏*
+> *https://note.com/zephel01/n/nbf37223fe743*
+
+この度、LLM-jp-4のDense版が登場したので、同じく最新のオープンモデルであるQwen3.8-27Bをリファレンスに、推論性能の比較を行うことを考えた。本稿では llm-jp-4-33b-thinking のQ4_K_M量子化版を使って、Qwen3.8-27B のQ4_K_M量子化版と簡単な性能の比較を試みる。
+
+LLM-jp-4-33B-thinkingはDense型、Qwen3.8-27BもMoEではなく27BのDense型であり、パラメータ数に関して1.23倍程度の開きはあるがモデルの規模としては同等と見なして良いだろう。
+
+| |LLM-jp-4|Qwen3.8|
+|:----|:----|:----|
+|Dense/MoE|Dense|Dense|
+|総パラメータ数|33.22B|27B|
+|アクティブパラメータ数|≈33B|≈27B|
+|層数|64|64|
+|hidden size|5120|5120|
+|post-trained|Yes|Yes|
+|thinking|Yes|Yes|
+
+> LLM-jp-4-33Bは基本的に標準的なLlama系Transformerで、64層すべてが通常のattention blockである。一方、Qwen3.8-27Bは、
+> ```
+> 16 × [
+>   Gated DeltaNet
+>   Gated DeltaNet
+>   Gated DeltaNet
+>   Gated Attention
+> ]
+> ```
+> というhybrid architectureで、さらにMTP学習（Multi-Token Prediction）も追加で行われているという違いがある。
+
+# ベンチマークについて
+
+128問の基本問題（Core）、80問の応用問題（Challenge）からなるテストセットを作成し、llm-jp-4-33b-thinking（Q4_K_M）とQwen3.8-27B（Q4_K_M）に同じ条件で回答させ、そのスコアを比較する。
+
+> テストセットはChatGPT-5.6-Solに作成させた。
+
+基本問題（Core）の内訳は以下の通り：
+
+| 分類              |     問題数 |       割合 | Hard / Expert | 主な専門領域・能力                                                    | Reasoning比較対象 |
+| --------------- | ------: | -------: | ------------: | ------------------------------------------------------------ | ------------: |
+| 高度日本語読解         |      16 |    12.5% |        6 / 10 | 論証読解、因果推論、統計的解釈、法的文章、科学哲学、政策評価、交絡・一般化                        |             4 |
+| 分析・論理推論         |      16 |    12.5% |        5 / 11 | Bayes推論、因果推論、最適化、ゲーム理論、意思決定、信頼性、待ち行列、計画                      |             9 |
+| 数学・統計           |      20 |    15.6% |        7 / 13 | 線形代数、微積分、確率統計、Bayes統計、情報理論、数値解析、PCA、回帰                       |            11 |
+| コーディング          |      16 |    12.5% |        4 / 12 | 動的計画法、graph、BFS/DFS、heap、binary search、parsing、文字列処理         |            11 |
+| 物理・工学           |      12 |     9.4% |         3 / 9 | 回路、熱力学、量子力学、相対論、電磁気、光学、力学、半導体、熱伝導                            |             8 |
+| 化学・材料           |      12 |     9.4% |         4 / 8 | 化学平衡、電気化学、反応速度論、表面化学、結晶学、相図、拡散、欠陥、熱力学                        |             5 |
+| 生命科学・情報科学       |      10 |     7.8% |         3 / 7 | 酵素速度論、population biology、genomics、疫学、情報理論、通信、networking、qPCR |             0 |
+| 人文・社会・経済        |      10 |     7.8% |         3 / 7 | ミクロ経済、金融、計量経済、言語学、歴史学、倫理学、社会科学                               |             0 |
+| Hallucination耐性 |       8 |    6.25% |         0 / 8 | 情報不足時の棄却、架空情報の捏造回避、認識的不確実性、因果の過剰解釈回避                         |             0 |
+| 指示追従            |       8 |    6.25% |         3 / 5 | JSON出力、構造化抽出、parsing、制約遵守、区間処理、単位変換、log解析                    |             0 |
+| **合計**          | **128** | **100%** |   **38 / 90** | —                                                            |        **48** |
+
+基本問題（Core）の採点方式は次の通り。
+
+| 採点方式             |     問題数 |       割合 | 用途                   |
+| ---------------- | ------: | -------: | -------------------- |
+| `numeric`          |     68 |    53.1% | 数値計算問題。基準値に対して所定の絶対・相対許容誤差内に入っているかを機械判定       |
+| `choice`           |     28 |    21.9% | 選択問題。指定された正答選択肢との一致を機械判定                      |
+| `json_exact`       |     16 |    12.5% | 構造化出力問題。JSONのキー・値・構造が期待値と一致するかを判定             |
+| `python_unit_test` |     16 |    12.5% | コーディング問題。生成されたPython実装をunit testに通して機能的正しさを判定 |
+| **合計**             | **128** | **100%** | —                                             |
+
+これらのうちreasoning依存性の高い問題を抜粋し、48問からなるreasoning-effort subsetを作成。これをLLM-jpでは
+```
+low / medium / high
+```
+、Qwen3.8では
+```
+low / medium / xhigh
+```
+で測定する。
+
+> モデル間の主比較は、共通して公式に存在するmedium（もしくはlow）に固定するのが最もフェアである。
+
+応用問題（Challenge）の内訳は以下の通り。Challengeに関しては両モデルでReasoningをMediumに固定して性能テストを行う。
+
+| 分類         |    問題数 |       割合 | 主な専門領域・能力                   |
+| ---------- | -----: | -------: | --------------------------- |
+| 高度な日本語読解   |      8 |    10.0% | 高度な日本語読解、語義・文脈判断、論理的文章理解    |
+| 分析的推論      |      8 |    10.0% | 多段論理推論、条件整理、必要・十分条件、推論整合性   |
+| 化学・材料科学    |      8 |    10.0% | 物理化学、材料科学、反応・平衡・固体物性などの定量推論 |
+| コーディング     |      8 |    10.0% | アルゴリズム設計、実装、境界条件、コードの正確性    |
+| ハルシネーション耐性 |      8 |    10.0% | 情報不足・因果誤認・外挿・根拠不足の検出、幻覚耐性   |
+| 人文・社会科学・経済 |      8 |    10.0% | 人文・社会科学・経済分野における概念理解と論理推論   |
+| 指示追従       |      8 |    10.0% | 複数制約、出力形式、条件遵守、構造化回答        |
+| 生命科学・情報科学  |      8 |    10.0% | 生物・生命科学・情報科学を中心とした定量・概念推論   |
+| 数学・統計      |      8 |    10.0% | 数学、確率・統計、多段計算、数理モデルの適用      |
+| 物理・工学      |      8 |    10.0% | 物理・工学法則の選択、定量計算、複数条件下での推論   |
+| **合計**     | **80** | **100%** | —                           |
+
+
+
+
+応用問題（Challenge）の採点方式は次の通り。
+
+| 採点方式               |    問題数 |       割合 |
+| ------------------ | -----: | -------: |
+| `numeric`          |     35 |   43.75% |
+| `choice`           |     21 |   26.25% |
+| `json_exact`       |     16 |   20.00% |
+| `python_unit_test` |      8 |   10.00% |
+| **合計**             | **80** | **100%** |
+
+* * *
+
+比較は以下の条件で行い、できるだけ公平な条件での推論性能を測る。
+
+| 項目             | LLM-jp-4-33B-thinking |  Qwen3.8-27B |
+| -------------- | --------------------: | -----------: |
+| Model class    |                 Dense | Dense hybrid |
+| Parameters     |                33.22B |          27B |
+| Layers         |                    64 |           64 |
+| Quantization   |                Q4_K_M |       Q4_K_M |
+| Context tested |                    8K |           8K |
+| Reasoning      |                medium |       medium |
+| Backend        |             llama.cpp |    llama.cpp |
+| MTP            |                  なし |      **OFF** |
+| GPU offload    |                   all |          all |
+| KV cache       |               F16/F16 |      F16/F16 |
+
+> Qwen3.8ではMTPを採用しており、MTPを有効にした推論がQwen3.8本来の性能ではあるが、ここではMTPを実装していないLLM-jp側に合わせてQwen側でもMTPを無効にして条件が非対称にならないようにしている。なお、学習後にもMTP由来の性能向上の効果は一定程度残ると考えられるが、ここではこれ以上の検討には立ち入らない。
+
+# LLM-jp検証環境の準備
+
+LLM-jpはllama.cppでの利用が想定されており、Ollamaとは別に LLM-jp fork版の llama.cpp をWSL環境へ導入する必要がある。
+
+## LLM-jp fork版llama.cpp のインストール
+
+> 既に環境が用意されている場合は読み飛ばしてよい。
+
+llm-jp/llama.cpp forkをCUDAを有効にしてビルドする。CUDAコンパイラが存在しない場合は別途ダウンロードすればよいが、この際にcuda-driversはWSL内にインストールしないようにする。
+
+:::note warn
+### GPUドライバのバージョン
+
+WSL環境では、GPUドライバ本体はWindows側のNVIDIAドライバが担い、WSL側では `/usr/lib/wsl/lib` 経由で認識される。そのためWSL内にLinux版cuda-driversまで入れると、Windows側ドライバとの競合して面倒の元になる可能性がある。WSL内にはCUDA Toolkit（nvcc等）だけを入れるのがよい。
+
+筆者のWSL内のnvccがCUDA Toolkit 12.0と古かったため、RTX 5070 Tiのcompute_120をコンパイルできないという問題が発生した。そこで、Windows側ドライバ（CUDA 13.2）に合わせてWSL環境のCUDA Toolkitのバージョンを13.2へ上げる作業を行った。
+
+```sh:NVIDIAのWSL用repositoryを登録
+wget https://developer.download.nvidia.com/compute/cuda/repos/wsl-ubuntu/x86_64/cuda-keyring_1.1-1_all.deb
+sudo dpkg -i cuda-keyring_1.1-1_all.deb
+sudo apt update
+```
+
+```sh:cuda-toolkitのバージョン確認
+apt-cache search '^cuda-toolkit-13'
+```
+
+```sh:結果
+cuda-toolkit-13-0 - CUDA Toolkit 13.0 meta-package
+cuda-toolkit-13-0-config-common - Common config package for CUDA Toolkit 13.0.
+cuda-toolkit-13 - CUDA Toolkit 13 meta-package
+cuda-toolkit-13-config-common - Common config package for CUDA Toolkit 13.
+cuda-toolkit-13-1 - CUDA Toolkit 13.1 meta-package
+cuda-toolkit-13-1-config-common - Common config package for CUDA Toolkit 13.1.
+cuda-toolkit-13-2 - CUDA Toolkit 13.2 meta-package
+cuda-toolkit-13-2-config-common - Common config package for CUDA Toolkit 13.2.
+cuda-toolkit-13-3 - CUDA Toolkit 13.3 meta-package
+cuda-toolkit-13-3-config-common - Common config package for CUDA Toolkit 13.3.
+```
+
+Windows側の13系toolkitに合わせてcuda-toolkit-13-2を入れる。
+
+```sh:toolkitのインストール
+sudo apt install cuda-toolkit-13-2
+```
+
+以下のコマンドでインストールできていることを確認する。
+
+```sh:確認
+/usr/local/cuda-13.2/bin/nvcc --version
+/usr/local/cuda-13.2/bin/nvcc --list-gpu-arch | grep -E '86|120'
+```
+
+```sh:確認の結果
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2026 NVIDIA Corporation
+Built on Fri_May_08_10:53:34_AM_PDT_2026
+Cuda compilation tools, release 13.2, V13.2.86
+Build cuda_13.2.r13.2/compiler.37953736_0
+compute_86
+compute_120
+```
+
+正常にインストールできている。
+
+:::
+
+```sh:ビルド用ツールを用意
+sudo apt update
+sudo apt install -y git cmake build-essential pkg-config
+```
+
+```sh:LLM-jp版 llama.cpp をclone
+cd ~
+git clone https://github.com/llm-jp/llama.cpp.git llama.cpp-llmjp
+cd llama.cpp-llmjp
+```
+
+以下、`~/llama.cpp-llmjp` 内で作業する。
+
+```sh:CUDA対応でビルド
+cmake -B build \
+  -DGGML_CUDA=ON \
+  -DGGML_CUDA_FORCE_CUBLAS=ON \
+  -DCMAKE_BUILD_TYPE=Release
+
+cmake --build build \
+  --config Release \
+  -j"$(nproc)" \
+  --target llama-server llama-cli llama-bench
+```
+
+> cuda-toolkitのバージョンを指定するには、CMakeへ特定のバージョンのコンパイラを明示的に渡すこともできる。
+> ```sh
+> cmake -B build \
+>   -DGGML_CUDA=ON \
+>   -DGGML_CUDA_FORCE_CUBLAS=ON \
+>   -DCMAKE_BUILD_TYPE=Release \
+>   -DCMAKE_CUDA_COMPILER=/usr/local/cuda-13.2/bin/nvcc \
+>   -DCMAKE_CUDA_ARCHITECTURES="86;120"
+> ```
+
+> 筆者の環境（AMD Ryzen 7 5800X3D 8-Core Processor）ではコンパイルに16並列で8分程度を要した。
+
+:::note warn
+### MMQカーネルのクラッシュを回避する
+
+RTX 50シリーズなどのBlackwell GPUでは、llama.cppはモデル自体のロードには成功するものの、最初の推論を開始した直後に `mmq_x_best=0`、`mmq.cuh:4135: fatal error` などと表示され、プロセスが異常終了するという既知の問題が存在する。これはGGUFモデルやLLM-jp固有のチャットテンプレートの問題ではなく、llama.cppのCUDA MMQカーネル側の問題である。
+
+今回は、llama.cppを `GGML_CUDA_FORCE_CUBLAS=ON` としてビルドし、MMQではなくcuBLASの利用を強制する設定にしてこの問題を回避する。これにより多少の性能低下が生じる可能性はあるが、Blackwell環境で安定して推論できるようになる。
+
+:::
+
+
+```sh:確認
+./build/bin/llama-server --list-devices
+```
+```sh:確認結果
+Available devices:
+  CUDA0: NVIDIA GeForce RTX 5070 Ti (16302 MiB, 46968 MiB free)
+  CUDA1: NVIDIA GeForce RTX 3070 Ti (8191 MiB, 46879 MiB free)
+```
+
+正常にインストールされ、GPUが正しく認識されている。`46968 MiB free` などと表示されているが、これは物理VRAM容量としては明らかに不正な値なので、正しい容量を把握するには `nvidia-smi` を使う。
+
+```sh:VRAMの確認
+nvidia-smi \
+  --query-gpu=index,name,memory.total,memory.used,memory.free \
+  --format=csv
+```
+
+```:確認結果
+index, name, memory.total [MiB], memory.used [MiB], memory.free [MiB]
+0, NVIDIA GeForce RTX 3070 Ti, 8192 MiB, 0 MiB, 8017 MiB
+1, NVIDIA GeForce RTX 5070 Ti, 16303 MiB, 1083 MiB, 14915 MiB
+```
+
+以上で、llm-jp/llama.cpp fork が正しく導入できた。
+
+## モデルのダウンロード
+
+### Hugging Faceからダウンロードする場合
+
+GGUFを通常のファイルとして直接ダウンロードするだけでよい。
+
+```:Hugging Face CLIを用意（無ければ）
+python3 -m pip install -U huggingface_hub
+```
+
+```:保存先を決めてQ4_K_Mモデルを取得
+mkdir -p ~/models/llm-jp-4-33b-thinking
+
+hf download mmnga-o/llm-jp-4-33b-thinking-gguf \
+  llm-jp-4-33b-thinking-Q4_K_M.gguf \
+  --local-dir ~/models/llm-jp-4-33b-thinking
+```
+
+> `ls -lh ~/models/llm-jp-4-33b-thinking/` などでダウンロードできていることを確認する。
+
+### Ollama経由でダウンロードする場合
+
+こちらも参照先はHugging Faceであるが、Ollamaから直接取得する。
+
+```:
+ollama pull hf.co/mmnga-o/llm-jp-4-33b-thinking-gguf:Q4_K_M
+```
+
+次に、Ollamaに保存されたファイルを特定する。
+
+```sh
+MANIFEST=$(sudo find /usr/share/ollama/.ollama/models/manifests \
+  -type f \
+  | grep 'mmnga-o.*llm-jp-4-33b-thinking-gguf.*Q4_K_M' \
+  | head -n 1)
+
+echo "$MANIFEST"
+
+MODEL_DIGEST=$(
+  sudo cat "$MANIFEST" |
+  python3 -c '
+import json, sys
+m = json.load(sys.stdin)
+for x in m["layers"]:
+    if "model" in x.get("mediaType", ""):
+        print(x["digest"])
+        break
+'
+)
+
+echo "$MODEL_DIGEST"
+
+MODEL_BLOB="/usr/share/ollama/.ollama/models/blobs/${MODEL_DIGEST/:/-}"
+
+sudo ls -lh "$MODEL_BLOB"
+
+```
+
+実行すると
+
+```
+/usr/share/ollama/.ollama/models/manifests/hf.co/mmnga-o/llm-jp-4-33b-thinking-gguf/Q4_K_M
+sha256:12c23619261c824f88facec565a4b6750d2b0872db7e57f6289ad677822e00dd
+-rw-r--r-- 1 ollama ollama 19G Aug 22 13:22 /usr/share/ollama/.ollama/models/blobs/sha256-12c23619261c824f88facec565a4b6750d2b0872db7e57f6289ad677822e00dd
+```
+
+などと表示される。この場合、llama-server起動時に、
+```sh
+--model /usr/share/ollama/.ollama/models/blobs/sha256-...
+```
+などと明示的に指定する。
+
+* * *
+
+上記いずれの方法でもモデルのダウンロードが可能である。メタデータは以下の通り。
+
+```:GGUFのメタデータ
+general.name     = Llm Jp 4 33b Thinking
+general.finetune = thinking
+general.basename = llm-jp-4
+```
+
+## llama-serverの起動
+
+ここではまずVRAM比に合わせて 5070Ti:3070Ti の割り当てを 15:7 としてみる。16:8としていないのは1 GB分のVRAMマージンを意識しているためである。
+
+```sh:llama-serverの立ち上げ
+cd ~/llama.cpp-llmjp
+
+./build/bin/llama-server \
+  --model ~/models/llm-jp-4-33b-thinking/llm-jp-4-33b-thinking-Q4_K_M.gguf \
+  --jinja \
+  -rea on \
+  --flash-attn on \
+  -fit off \
+  --split-mode layer \
+  --tensor-split 15,7 \
+  -ngl all \
+  --ctx-size 4096 \
+  --parallel 1 \
+  --port 8080
+```
+
+> Ollama経由でインストールした場合は以下のようにして起動する。モデルが正しくダウンロードできていれば `$MODEL_BLOB` には、モデルファイルのパスが格納されている。
+> ```sh
+> $ CUDA_VISIBLE_DEVICES=0,1 \
+> ./build/bin/llama-server \
+>   --model "$MODEL_BLOB" \
+>   --jinja \
+>   -rea on \
+>   --flash-attn on \
+>   -fit off \
+>   --split-mode layer \
+>   --tensor-split 15,7 \
+>   -ngl all \
+>   --ctx-size 4096 \
+>   --parallel 1 \
+>   --port 8080
+> ```
+
+```sh
+0.00.267.306 I log_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.267.324 I device_info:
+0.00.444.811 I   - CUDA0   : NVIDIA GeForce RTX 5070 Ti (16302 MiB, 47084 MiB free)
+0.00.594.093 I   - CUDA1   : NVIDIA GeForce RTX 3070 Ti (8191 MiB, 47000 MiB free)
+0.00.594.121 I   - CPU     : AMD Ryzen 7 5800X3D 8-Core Processor (48178 MiB, 48178 MiB free)
+0.00.594.484 I system_info: n_threads = 8 (n_threads_batch = 8) / 16 | CUDA : ARCHS = 860,1200 | FORCE_CUBLAS = 1 | USE_GRAPHS = 1 | PEER_MAX_BATCH_SIZE = 128 | BLACKWELL_NATIVE_FP4 = 1 | CPU : SSE3 = 1 | SSSE3 = 1 | AVX = 1 | AVX2 = 1 | F16C = 1 | FMA = 1 | BMI2 = 1 | LLAMAFILE = 1 | OPENMP = 1 | REPACK = 1 |
+0.00.595.376 I srv          init: running without SSL
+0.00.595.898 I srv          init: using 15 threads for HTTP server
+0.00.596.267 I srv         start: binding port with default address family
+0.00.597.971 I srv  llama_server: loading model
+0.00.598.063 I srv    load_model: loading model '/usr/share/ollama/.ollama/models/blobs/sha256-12c23619261c824f88facec565a4b6750d2b0872db7e57f6289ad677822e00dd'
+0.00.847.506 W load: setting token '<|constrain|>' (8) attribute to USER_DEFINED (16), old attributes: 8
+0.00.847.907 W load: setting token '<|start|>' (10) attribute to USER_DEFINED (16), old attributes: 8
+0.00.849.267 W load: setting token '<|channel|>' (9) attribute to USER_DEFINED (16), old attributes: 8
+0.00.849.900 W load: setting token '<|message|>' (12) attribute to USER_DEFINED (16), old attributes: 8
+0.00.850.737 W load: special_eog_ids contains both '<|return|>' and '<|call|>', or '<|calls|>' and '<|flush|>' tokens, removing '<|end|>' token from EOG list
+0.10.365.621 W llama_context: n_ctx_seq (4096) < n_ctx_train (65536) -- the full capacity of the model will not be utilized
+0.10.471.040 I common_init_from_params: warming up the model with an empty run - please wait ... (--no-warmup to disable)
+0.10.676.501 I srv    load_model: initializing slots, n_slots = 1
+0.10.725.052 W common_speculative_init: no implementations specified for speculative decoding
+0.10.725.072 I slot   load_model: id  0 | task -1 | new slot, n_ctx = 4096
+0.10.725.196 I srv    load_model: prompt cache is enabled, size limit: 8192 MiB
+0.10.725.209 I srv    load_model: use `--cache-ram 0` to disable the prompt cache
+0.10.725.210 I srv    load_model: for more info see https://github.com/ggml-org/llama.cpp/pull/16391
+0.10.725.210 I srv    load_model: context checkpoints enabled, max = 32, min spacing = 256
+0.10.725.246 W srv          init: --cache-idle-slots requires --kv-unified, disabling
+0.10.731.081 I init: chat template, example_format: '<|start|>system<|message|>You are LLM-jp-4, a large language model trained by LLM-jp.
+Knowledge cutoff: 2025-12
+Current date: 2026-08-23
+
+Reasoning: medium
+
+# Valid channels: analysis, commentary, final. Channel must be included for every message.<|end|><|start|>developer<|message|># Instructions
+
+You are a helpful assistant
+
+<|end|><|start|>user<|message|>Hello<|end|><|start|>assistant<|channel|>final<|message|>Hi there<|end|><|start|>user<|message|>How are you?<|end|><|start|>assistant'
+0.10.731.582 I srv          init: init: chat template, thinking = 1
+0.10.731.835 I srv  llama_server: model loaded
+0.10.731.854 I srv  llama_server: server is listening on http://127.0.0.1:8080
+0.10.731.867 I srv  update_slots: all slots are idle
+```
+
+これで待機状態になっている。
+
+GPU（CUDAデバイス）のメモリ認識はおかしな値になっているが、`FORCE_CUBLAS = 1` で起動できているのが確認できる。
+
+
+## auto-fit由来の問題を解消する
+
+記事中に詳しくは書いていないが、筆者のWSL環境ではllama.cppのauto-fitが「空きVRAM約46 GB」と誤認してしまい、Out of memory（OOM）でエラーになってしまった。誤った値を基にllama.cppがauto-fitで層を配置しようとした結果、3070 Tiで過剰にメモリを要求してしまいエラーになったようである。
+
+そこで、auto-fitを無効にしてモデル層のGPU上での分割を手動で指定することにする。llama.cppでは `-fit off` で自動fitを無効化し、`--tensor-split` でGPUごとのモデル配分比率を指定できる。
+
+ここでは以下のテスト用プロンプトおよびコマンドを利用した。これを別のセッションで実行してサーバーに渡す。
+
+```sh:テスト用プロンプト
+$ curl -s http://127.0.0.1:8080/v1/chat/completions   -H 'Content-Type: application/json'   -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "17と23の積を計算してください。最後の行に答えだけを書いてください。"
+      }
+    ],
+    "temperature": 0,
+    "max_tokens": 512
+  }' | python3 -m json.tool
+```
+
+### 4kコンテキスト長
+
+まずは4kのコンテキスト長で試してみる。
+
+```sh:4kコンテキストでのサーバー立ち上げ
+./build/bin/llama-server \
+  --model ~/models/llm-jp-4-33b-thinking/llm-jp-4-33b-thinking-Q4_K_M.gguf \
+  --jinja \
+  -rea on \
+  --flash-attn on \
+  -fit off \
+  --split-mode layer \
+  --tensor-split 15,7 \
+  -ngl all \
+  --ctx-size 4096 \
+  --parallel 1 \
+  --port 8080
+```
+
+```sh:応答（4kコンテキスト（テスト））
+{
+    "choices": [
+        {
+            "finish_reason": "stop",
+            "index": 0,
+            "message": {
+                "role": "assistant",
+                "content": "17 \u3068 23 \u3092\u639b\u3051\u5408\u308f\u305b\u308b\u3068\u3001  \n\\(17 \\times 23 = 391\\) \u3067\u3059\u3002\n\n391",
+                "reasoning_content": "The user asks in Japanese: \"Calculate the product of 17 and 23. Write only the answer on the last line.\" So we need to compute 17*23 = 391? Let's calculate: 17*20=340, plus 17*3=51 => 391. Provide answer only on last line. Probably include some explanation before, then final line with just \"391\". Ensure last line is only the number."
+            }
+        }
+    ],
+    "created": 1787416082,
+    "model": "sha256-12c23619261c824f88facec565a4b6750d2b0872db7e57f6289ad677822e00dd",
+    "system_fingerprint": "b9376-26b0e874a",
+    "object": "chat.completion",
+    "usage": {
+        "completion_tokens": 156,
+        "prompt_tokens": 102,
+        "total_tokens": 258,
+        "prompt_tokens_details": {
+            "cached_tokens": 0
+        }
+    },
+    "id": "chatcmpl-bC652ZzXCuRJ04AT5qpiMGOdFvnc15S2",
+    "timings": {
+        "cache_n": 0,
+        "prompt_n": 102,
+        "prompt_ms": 6226.186,
+        "prompt_per_token_ms": 61.04103921568627,
+        "prompt_per_second": 16.38242095562195,
+        "predicted_n": 156,
+        "predicted_ms": 4785.226,
+        "predicted_per_token_ms": 30.67452564102564,
+        "predicted_per_second": 32.60034113331324
+    }
+}
+```
+
+正常に推論できている。推論速度は 32.60 t/s と計測された。
+
+### 8kコンテキスト長
+
+次に8kのコンテキスト長で試してみたところ、OOMでエラーとなった。3070Ti側のVRAMが足りず、8kのコンテキスト長の分のメモリが不足したようである。
+
+```sh:8kコンテキスト（テスト）
+./build/bin/llama-server \
+  --model ~/models/llm-jp-4-33b-thinking/llm-jp-4-33b-thinking-Q4_K_M.gguf \
+  --jinja \
+  -rea on \
+  --flash-attn on \
+  -ngl all \
+  --ctx-size 8192 \
+  --parallel 1 \
+  --port 8080
+```
+
+```sh:エラー内容（8k context（テスト））
+0.21.328.290 I srv  params_from_: Chat format: peg-native
+0.21.328.588 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = -1
+0.21.328.601 I srv  get_availabl: updating prompt cache
+0.21.328.606 I srv          load:  - looking for better prompt, base f_keep = -1.000, sim = 0.000
+0.21.328.609 I srv        update:  - cache state: 0 prompts, 0.000 MiB (limits: 8192.000 MiB, 8192 tokens, 8589934592 est)
+0.21.328.609 I srv  get_availabl: prompt cache update took 0.01 ms
+0.21.328.650 I slot launch_slot_: id  0 | task 0 | processing task, is_child = 0
+0.22.472.747 E CUDA error: out of memory
+0.22.472.767 E   current device: 1, in function alloc at /home/hogehoge/llama.cpp-llmjp/ggml/src/ggml-cuda/ggml-cuda.cu:550
+0.22.472.768 E   cuMemSetAccess((CUdeviceptr)((char *)(pool_addr) + pool_size), reserve_size, &access, 1)
+...
+（中略）
+...
+./build-cublas/bin/llama-server(+0x12a5)[0x556c060092a5]
+Aborted (core dumped)
+
+```
+
+### 8kコンテキスト長（GPU layers削減）
+
+GPUに載せる層数を60に減らした場合。
+
+```sh
+$ CUDA_VISIBLE_DEVICES=0,1 \
+./build-cublas/bin/llama-server \
+  --model "$MODEL_BLOB" \
+  --jinja \
+  -rea on \
+  --flash-attn on \
+  -fit off \
+  --split-mode layer \
+  --tensor-split 15,7 \
+  -ngl 60 \
+  --ctx-size 8192 \
+  --parallel 1 \
+  --port 8080
+```
+
+➡ 推論速度は 10.24 t/s に低下。
+
+### 8kコンテキスト長（tensor-split 16,6）
+
+続いて、tensor-splitを 16:6 にして実行したところ、OOMでエラーとなった。
+
+
+### 8kコンテキスト長（tensor-split 16,7）
+
+tensor-splitを 16:7 にして実行した。
+
+```sh:8kコンテキスト（テスト）
+./build/bin/llama-server \
+  --model ~/models/llm-jp-4-33b-thinking/llm-jp-4-33b-thinking-Q4_K_M.gguf \
+  --jinja \
+  -rea on \
+  --flash-attn on \
+  -ngl all \
+  --ctx-size 8192 \
+  --parallel 1 \
+  --port 8080
+```
+
+モデルの層がすべてGPU側に乗り、推論速度は 32.60 t/s と計測された。この速度はコンテクスト長を4kとした場合と遜色ない。
+
+このときのVRAM使用量は以下の通りで、GPUごとに約1 GiBの安全マージンを確保するという努力目標に、偶然ながら綺麗に収まっていた。
+
+| GPU         |       使用量 |     総VRAM |        残り |
+| ----------- | --------: | --------: | --------: |
+| RTX 3070 Ti |  7158 MiB |  8192 MiB | 約1034 MiB |
+| RTX 5070 Ti | 15099 MiB | 16303 MiB | 約1204 MiB |
+
+
+### 16kコンテキスト長
+
+結果のみ記載する。結論から述べると、16kの場合は全層をGPU側に載せることはできなかった。 `-ngl 63` とするとモデルのロードは可能だったが、推論を開始すると即座にOOMとなった。
+
+また、Vキャッシュについて面白いことが分かった。`--cache-type-v q8_0` として実行した場合、推論速度はむしろ低下する傾向が見られた。これはV-cacheのQ8量子化・逆量子化等のコストが2層分多くGPUに載せることで生じる加速分を上回っている可能性がある。
+
+まとめると以下の表のようになる。
+
+| 16K条件            | 結果 |    generation |
+| ---------------- | -- | ------------: |
+| F16 KV, all GPU | OOM | — |
+| F16 KV, `ngl 64` | OOM | — |
+| F16 KV, `ngl 63` | 推論時OOM | — |
+| F16 KV, `ngl 62` | 推論時OOM | — |
+| F16 KV, `ngl 61` | 成功 | **12.04 t/s** |
+| F16 KV, `ngl 60` | 成功 |     10.13 t/s |
+| K=f16, V=q8_0, `ngl 64` | 成功 |  **10.53 t/s** |
+| K=f16, V=q8_0, `ngl 63` | 成功 |  9.37 t/s |
+
+> 層の割り当てはいずれも `--tensor-split 16,7` に設定している。
+
+「CPUオフロードを少し許容するコスト」と「KVキャッシュを圧縮したままAttentionを計算するコスト」が拮抗しており、今回の環境では前者の方がやや有利だったようである。
+
+## サーバーの起動テスト結果
+
+以上の内容を表にまとめると以下のようになる。
+
+| Context | Tensor split | GPU layers | 結果  |      Generation |
+| ------- | ------------ | ---------: | --- | --------------: |
+| 4K      | 15,7         |        all | 成功  | **32.60 t/s** |
+| 8K      | 15,7         |        all | OOM |               — |
+| 8K      | 16,6         |        all | OOM |               — |
+| 8K      | 16,7         |        all | 成功  | **32.73 t/s** |
+| 8K      | 15,7         |         60 | 成功  |     10.24 t/s |
+| 16K      | 16,7         |         all | OOM  |      — | 
+| 16K      | 16,7         |         64 | OOM  |      — | 
+| 16K      | 16,7         |         63 | 推論時OOM  |      — | 
+| 16K      | 16,7         |         62 | 推論時OOM  |      — | 
+| 16K      | 16,7         |         61 | 成功  | **12.04 t/s** |
+| 16K      | 16,7         |         60 | 成功  |     10.13 t/s |
+| 16K (K=f16, V=q8_0) | 16,7         |         64 | 成功  | 10.53 t/s |
+| 16K (K=f16, V=q8_0) | 16,7         |         63 | 成功  | 9.37 t/s |
+
+
+8k以上のコンテキスト長の場合、RTX 5070 Ti + RTX 3070 Tiの環境でのTensor splitの最適値は 16:7 であった。また、16kのコンテキスト長の場合は100%GPUオフロードが不可能だったのでV-cacheのQ8量子化も試したが、推論速度の点ではむしろ不利という結果になった。
+
+> `-lv 4` のオプションにより詳細なログを取得し、LLM-jp-4-33B-thinkingが正しく64 Transformer層からなること、および、`--tensor-split 16,7`／コンテキスト長8K／全層100%GPUオフロードの条件では、KVキャッシュの配分から逆算してRTX 5070 Ti側に46層、RTX 3070 Ti側に18層が配置されていることを確認した。
+
+> 上記のようなサーバー構築から最適な計算条件の把握までの一連の作業はQwen3.8-27Bに対しても実行する必要があり、それなりに面倒である。
+
+* * *
+
+LLM-jp-4の推論テストは、コンテキスト長8K、Tensor split 16:7、全層GPUオフロードの条件の下で実行する。内部的には `config/user.yaml` を以下のように定めて実行している。
+
+> `path`、`binary`、`repo`は筆者環境固有のパスである。また、`tensor_split: '16,7'`はRTX 5070 Ti 16GB + RTX 3070 Ti 8GB環境に対して実測上安定した配置として採用したものであり、他のGPU構成では再調整が必要である。Core/ChallengeのQAテストの比較では8K context、F16 K/V cache、Flash Attention有効、全層GPU offload、`temperature=0`、最大生成4096 tokenを検証における共通の条件とした。
+
+```yaml:config/user.yaml
+schema_version: '1.2'
+
+model:
+  name: llm-jp-4-33b-thinking-Q4_K_M
+  # Current local GGUF (the Ollama blob is still an ordinary GGUF and can be read directly by llama.cpp).
+  # Override without editing this file by setting LLMJP_MODEL=/path/to/model.gguf.
+  path: /usr/share/ollama/.ollama/models/blobs/sha256-12c23619261c824f88facec565a4b6750d2b0872db7e57f6289ad677822e00dd
+  expected_sha256: 12c23619261c824f88facec565a4b6750d2b0872db7e57f6289ad677822e00dd
+  verify_sha256: true
+
+server:
+  # Built with GGML_CUDA_FORCE_CUBLAS=ON to avoid the Blackwell MMQ crash seen on RTX 5070 Ti.
+  # Override with LLMJP_LLAMA_SERVER=/path/to/llama-server if needed.
+  binary: ~/llama.cpp-llmjp/build-cublas/bin/llama-server
+  repo: ~/llama.cpp-llmjp
+  host: 127.0.0.1
+  port: 8080
+  cuda_visible_devices: '0,1'
+  required_gpus:
+    - NVIDIA GeForce RTX 5070 Ti
+    - NVIDIA GeForce RTX 3070 Ti
+  context: 8192
+  parallel: 1
+  flash_attention: true
+  fit_enabled: false
+  split_mode: layer
+  tensor_split: '16,7'
+  n_gpu_layers: all
+  cache_type_k: f16
+  cache_type_v: f16
+  cache_ram_mib: 0
+  jinja: true
+  reasoning: true
+  log_verbosity: 3
+  startup_timeout_s: 240
+  require_force_cublas: true
+
+quality:
+  dataset: datasets/core_v2.1.0.jsonl
+  context: 8192
+  max_tokens: 4096
+  temperature: 0.0
+  top_p: 1.0
+  top_k: 0
+  min_p: 0.0
+  repeat_penalty: 1.0
+  seed: 42
+  timeout_s: 1200
+
+challenge:
+  enabled: true
+  dataset: datasets/challenge_v1.1.0.jsonl
+  context: 8192
+  max_tokens: 4096
+  reasoning_effort: medium
+  # Challenge 80 is an independent discriminative track: 8 items in each of the 10 Core categories.
+  # `./run.sh challenge` runs this track without re-running Core/reasoning/performance/long-context phases.
+
+reasoning:
+  enabled: true
+  efforts: [low, medium, high]
+  # The model's Jinja template receives chat_template_kwargs.reasoning_effort.
+  # Core uses medium; low/high rerun the frozen 48-item reasoning subset.
+
+performance:
+  enabled: true
+  warmups: 2
+  repeats: 5
+  num_predict: 256
+  contexts: [8192]
+  monitor_interval_s: 0.2
+  # Prefix-cache reuse is explicitly disabled per request; actual prompt token counts are retained.
+
+long_context:
+  enabled: true
+  contexts: [8192]
+  items_per_context: 4
+  max_tokens: 768
+
+# The old Ollama fit-target sweep is intentionally disabled in the canonical 8K profile.
+# 16K/32K VRAM-cliff experiments should be run as a separate hardware profile because
+# they require CPU offload and/or KV-cache quantization and would confound Core quality results.
+vram_margin_sweep:
+  enabled: false
+
+reporting:
+  make_figures: true
+  formats: [png, svg]
+```
+
+推論性能テストの結果はQwen3.8-27Bでの結果とまとめて示す。
+
+
+
+# Qwen3.8-27B検証環境の準備
+
+## モデルのダウンロード
+
+ここでは `hf.co/ggml-org/Qwen3.8-27B-GGUF:Q4_K_M` を使う。Hugging Faceから直接ダウンロードできる。
+
+> 既にOllama側でモデルをインストールしている場合は `ollama list` で確認できる。
+
+```sh:blobの確認
+QWEN_OLLAMA='hf.co/ggml-org/Qwen3.8-27B-GGUF:Q4_K_M'
+ollama show --modelfile "$QWEN_OLLAMA"
+```
+
+```sh：結果
+FROM /usr/share/ollama/.ollama/models/blobs/sha256-31629f53165ab6a7dad8c9847dcfd1fdf55829dac1e6e748f4a68581b0033d34
+FROM /usr/share/ollama/.ollama/models/blobs/sha256-2e968a6af97ce35d8971890b257b9b7edabf20ad91450501fa53162a19ee33eb
+TEMPLATE {{ .Prompt }}
+```
+
+使うのはこのうち1行目の方である。2つ目のファイルは画像入力用のvision projector（mmproj）に対応するもので、今回のテキストベースの検証では使用しない。
+
+```sh:ハッシュ値の確認
+QWEN_BLOB="$(
+  ollama show --modelfile "$QWEN_OLLAMA" |
+  awk '$1=="FROM"{print $2; exit}'
+)"
+
+echo "$QWEN_BLOB"
+ls -lh "$QWEN_BLOB"
+sha256sum "$QWEN_BLOB"
+```
+
+```sh:結果
+/usr/share/ollama/.ollama/models/blobs/sha256-31629f53165ab6a7dad8c9847dcfd1fdf55829dac1e6e748f4a68581b0033d34
+-rw-r--r-- 1 ollama ollama 18G Aug 15 03:36 /usr/share/ollama/.ollama/models/blobs/sha256-31629f53165ab6a7dad8c9847dcfd1fdf55829dac1e6e748f4a68581b0033d34
+31629f53165ab6a7dad8c9847dcfd1fdf55829dac1e6e748f4a68581b0033d34  /usr/share/ollama/.ollama/models/blobs/sha256-31629f53165ab6a7dad8c9847dcfd1fdf55829dac1e6e748f4a68581b0033d34
+```
+
+## Qwen用llama.cpp環境の構築
+
+Qwen用llama.cpp環境は、LLM-jp forkとは分けてビルドする。LLM-jp forkはLLM-jp固有のchat template / reasoning対応を含む派生版であり、Gated DeltaNetが実装されたQwen3.8の新しいアーキテクチャを動かすには最新版のllama.cppを利用するのが安全と思われるためである。
+
+```:cloneする
+git clone https://github.com/ggml-org/llama.cpp.git ~/llama.cpp-qwen38
+cd ~/llama.cpp-qwen38
+git rev-parse HEAD
+```
+
+> 既にcloneしてあれば　`git pull` のみでよい。commitの保存は任意。
+
+LLM-jpとのbackend条件を揃え、Blackwell側のMMQ問題の影響も避けるため、cuBLAS固定でCUDA版をbuildする。
+
+```sh:ビルドする
+cmake -B build-cublas \
+  -DGGML_CUDA=ON \
+  -DGGML_CUDA_FORCE_CUBLAS=ON \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_CUDA_COMPILER=/usr/local/cuda-13.2/bin/nvcc \
+  -DCMAKE_CUDA_ARCHITECTURES="86;120"
+
+cmake --build build-cublas \
+  --config Release \
+  -j"$(nproc)" \
+  --target llama-server llama-cli llama-bench
+```
+
+> 筆者の環境では 10 分程度で完了した。
+
+ビルドが済んだらllama.cppから見たGPU順序を確認しておく。この並び順に基づいてQwenのVRAM配置を最適化する。
+
+```sh:GPUデバイスのindex確認
+CUDA_VISIBLE_DEVICES=0,1 \
+./build-cublas/bin/llama-server --list-devices
+```
+
+```sh:結果
+Available devices:
+  CUDA0: NVIDIA GeForce RTX 5070 Ti (16302 MiB, 47074 MiB free)
+  CUDA1: NVIDIA GeForce RTX 3070 Ti (8191 MiB, 46990 MiB free)
+```
+
+したがって、LLM-jp用の環境と同様に「5070 Ti、3070 Ti」の順序でtensor splitの配分を指定する。
+
+LLM-jpではモデル本体が約18.8 GiBだったため16:7付近がほぼ限界であった。一方Qwen3.8 Q4_K_Mは約15.6 GiBと数GB分だけ軽いので、その余裕を5070 Tiへ振れば、より高速な動作が期待できる。
+
+* * *
+
+（a few minutes later...）
+
+...ということで、RTX 5070 Ti + RTX 3070 TiのデュアルGPU環境で最適化したフェアなパラメータは以下のようになった。
+
+```sh:llama-server起動条件
+CUDA_VISIBLE_DEVICES=0,1 \
+./build-cublas/bin/llama-server \
+  --model "$QWEN_BLOB" \
+  --jinja \
+  -rea on \
+  --flash-attn on \
+  -fit off \
+  --split-mode layer \
+  --tensor-split 18,7 \
+  -ngl all \
+  --ctx-size 8192 \
+  --parallel 1 \
+  --cache-type-k f16 \
+  --cache-type-v f16 \
+  --cache-ram 0 \
+  -lv 4 \
+  --host 127.0.0.1 \
+  --port 8080
+```
+
+> 引数の`"$QWEN_BLOB"`には 
+> ```
+> /usr/share/ollama/.ollama/models/blobs/sha256-31629f53165ab6a7dad8c9847dcfd1fdf55829dac1e6e748f4a68581b0033d34
+> ```
+> のような値が入る。
+
+この設定では概ね33.02 t/s程度のデコード速度が出ており、VRAMマージンは両GPUでともに約 2 GBを確保できており余裕がある。
+
+最適なtensor-split比率の調査の過程で、高性能な5070Ti側に計算負荷を偏らせても寧ろデコード速度が落ちることを確認した。演算量をGPU間で適切に分散することの方が、VRAMを5070 Ti側いっぱいまで使うことより重要なようである。
+
+参考までに、調査結果を示しておく。ノイズはあるものの、GPU間のモデル層比率と推論速度には山なり（もしくはプラトー）の関係がありそうである。
+
+![image.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/a96a9730-4f1e-46de-b8c2-6136804a29a4.png)
+
+```
+18:8 = 69.2% → 32.63
+16:7 = 69.6% → 32.85
+19:8 = 70.4% → 32.80
+18:7 = 72.0% → 33.02  ← 採用した比率
+17:6 = 73.9% → 32.14
+16:5 = 76.2% → 32.34
+16:4 = 80.0% → 32.43
+17:4 = 81.0% → 31.66
+18:4 = 81.8% → 29.18
+```
+
+> そもそも全層GPUオフロードを達成している時点で、推論速度にはそこまでの差は認められない。今回のように単なるベンチマークテストを実施するだけなら18:7付近の値を利用すれば十分である。
+
+
+## 推論性能テストの設定
+
+Qwen用ディレクトリを作るため、LLM-jpのディレクトリを流用する。念のため結果を空にする。datasetは変更しない。
+```
+cp -a llmjp4_benchmark_llamacpp_dualgpu_v1_3_1 \
+      qwen38_benchmark_llamacpp_dualgpu_v1_3_1
+
+cd qwen38_benchmark_llamacpp_dualgpu_v1_3_1
+rm -rf results
+mkdir -p results
+touch results/.gitkeep
+```
+
+`config/user.yaml` をQwen用に変更する。主要な変更点は以下の通り。
+
+| 項目              | LLM-jp          | Qwen                 |
+| --------------- | --------------- | -------------------- |
+| model.name      | LLM-jp          | `Qwen3.8-27B-Q4_K_M` |
+| model.path      | LLM-jp blob     | Qwen main GGUF blob  |
+| SHA256          | LLM-jp SHA      | `31629f...3d34`      |
+| llama-server    | LLM-jp fork     | upstream Qwen build  |
+| tensor_split    | `16,7`          | **`18,7`**           |
+| reasoning sweep | low/medium/high | **無効化**              |
+
+```yaml:config/user.yaml
+schema_version: '1.2'
+
+model:
+  name: Qwen3.8-27B-Q4_K_M
+  path: /usr/share/ollama/.ollama/models/blobs/sha256-31629f53165ab6a7dad8c9847dcfd1fdf55829dac1e6e748f4a68581b0033d34
+  expected_sha256: 31629f53165ab6a7dad8c9847dcfd1fdf55829dac1e6e748f4a68581b0033d34
+  verify_sha256: true
+
+server:
+  binary: ~/llama.cpp-qwen38/build-cublas/bin/llama-server
+  repo: ~/llama.cpp-qwen38
+  host: 127.0.0.1
+  port: 8080
+
+  cuda_visible_devices: '0,1'
+  required_gpus:
+    - NVIDIA GeForce RTX 5070 Ti
+    - NVIDIA GeForce RTX 3070 Ti
+
+  context: 8192
+  parallel: 1
+  flash_attention: true
+  fit_enabled: false
+
+  split_mode: layer
+  tensor_split: '18,7'
+  n_gpu_layers: all
+
+  cache_type_k: f16
+  cache_type_v: f16
+  cache_ram_mib: 0
+
+  jinja: true
+  reasoning: true
+
+  log_verbosity: 3
+  startup_timeout_s: 240
+  require_force_cublas: true
+
+quality:
+  dataset: datasets/core_v2.1.0.jsonl
+  context: 8192
+  max_tokens: 4096
+
+  temperature: 0.0
+  top_p: 1.0
+  top_k: 0
+  min_p: 0.0
+  repeat_penalty: 1.0
+  seed: 42
+
+  timeout_s: 1200
+
+challenge:
+  enabled: true
+  dataset: datasets/challenge_v1.1.0.jsonl
+  context: 8192
+  max_tokens: 4096
+  reasoning_effort: medium
+
+reasoning:
+  # Qwen's native levels are low / medium / xhigh.
+  # v1.3.1 auxiliary sweep is LLM-jp-specific low / medium / high,
+  # so disable it for the controlled cross-model comparison.
+  enabled: false
+  efforts: [low, medium, xhigh]
+
+performance:
+  enabled: true
+  warmups: 2
+  repeats: 5
+  num_predict: 256
+  contexts: [8192]
+  monitor_interval_s: 0.2
+
+long_context:
+  enabled: true
+  contexts: [8192]
+  items_per_context: 4
+  max_tokens: 768
+
+vram_margin_sweep:
+  enabled: false
+
+reporting:
+  make_figures: true
+  formats: [png, svg]
+```
+
+> あまり本質的な補足説明ではないが、ここではスクリプトファイル内部の都合上`reasoning`について`enabled: false`としている。これはQwenのthinkingそのものをOFFにする設定ではなく、サーバー側では`reasoning: true`となっているので性能比較に問題は無い。
+
+もしテスト時に手動で起動したllama-serverが残っていれば、忘れずに停止しておくこと。（Ctrl+Cでkillすればよい）
+
+
+# LLM-jp-4-33B-thinking と Qwen3.8-27B の比較
+
+ここで実行時の条件について改めて述べておく。
+
+この性能評価は、同一のCore 128問およびChallenge 80問を用いて、`LLM-jp-4-33B-thinking:Q4_K_M`と`Qwen3.8-27B:Q4_K_M`を比較した。いずれもRTX 5070 Ti 16 GB + RTX 3070 Ti 8 GBの同一ハードウェア上で、context length 8192、F16 KV cache、Flash Attention有効、全層GPU offload、temperature 0の条件で実施した。
+
+reasoning effortについては、両モデルで共通して利用できる `medium` を採用した。
+
+GPUへの層の配置については、それぞれのモデルで実測上良好な条件を採用し、LLM-jpでは`--tensor-split 16,7`、Qwen3.8では`18,7`とした。
+
+> ここでの速度比較は同一ハードウェア上で各モデルを現実的に最適化した際のend-to-end性能比較として解釈するのが適切である。また、LLM-jpは対応fork、Qwen3.8はupstream llama.cppを使用しているため、この点も性能面で差を生じる要因となることに留意したい。
+
+## 機械判定の結果
+
+早速結果を示す。機械的な評価器による予備的な判定結果は以下の通りとなった。
+
+| Track        |         LLM-jp-4-33B |          Qwen3.8-27B |
+| ------------ | -------------------: | -------------------: |
+| Core 128     | 119/128 = **92.97%** | 115/128 = **89.84%** |
+| Challenge 80 |   69/80 = **86.25%** |   73/80 = **91.25%** |
+
+Core問題ではLLM-jpが3.13ポイント上回った一方、より難しいタスクとして追加したChallenge問題ではQwen3.8が5.00ポイント上回った。
+
+> 両trackの正答数を単純合算すると、どちらも188/208 = 90.38%で完全に同数となっていた。
+
+興味深いのは、問題ごとの勝敗を比較した場合である。Core問題では「LLM-jpのみ正解」が7問、「Qwenのみ正解」が3問、Challenge問題では逆に「Qwenのみ正解」が5問、「LLM-jpのみ正解」が1問であった。全208問では最終的に「一方のみ正解」が8対8となった。
+
+したがって、少なくとも本テストセットの範囲では、一方が他方を全面的に上回ったというより、異なる失敗様式を持つほぼ同等クラスのモデルと見る方が実態に近い。
+
+## 機械判定と目視評価の差
+
+今回のベンチマークテストでは、再現性を優先して数値許容誤差、JSON schema、Python unit testなどによる機械的な正誤判定を正式スコアとして算出している。一方で、FAIL判定となった回答（＝誤答）を個別に確認すると、推論そのものは正しいが、丸め誤差、出力形式や分類のミスマッチ、あるいは最大生成トークン数に到達して推論が打ち切られたことで失点した例も多数見られた。
+
+そこで、正式スコアとは別に、回答内容を目視し、最終的な形式的一致ではなく「問題の本質を理解し、妥当な解法・判断に到達していたか」という観点でも評価した。この基準による参考値は概ね次のようになる。
+
+| Track            |           strict |          目視での評価 |
+| ---------------- | ---------------: | -------------------: |
+| LLM-jp Core      | 119/128 = 92.97% | **127/128 ≈ 99.22%** |
+| Qwen Core        | 115/128 = 89.84% | **126/128 ≈ 98.44%** |
+| LLM-jp Challenge |   69/80 = 86.25% |   **78/80 = 97.50%** |
+| Qwen Challenge   |   73/80 = 91.25% |     **80/80 = 100%** |
+
+この目視評価から分かるのは、両モデルともstrict scoreが示す以上に問題そのものは理解していた、ということである。
+
+> 「目視での評価」の値は、数値計算途中の軽微な誤差や、意味的に妥当な分類ミス、正答まで到達した後のtruncation（推論打ち切り）などについて「本質的な解法・判断は正しかった」と認められた回答の集計値である。機械判定の厳しすぎる採点に対して相補的に、ChatGPT-5.6-Solに追加で採点チェックさせた。
+
+## 両モデルの差
+
+どちらのモデルも好成績を収めてはいるが、両モデルの失敗の性質はかなり異なっていた。
+
+**LLM-jpでは数値問題における近似精度不足や軽微な計算誤差が比較的目立った**。たとえば正しい物理式・化学式を立てながら、暗算的な指数関数評価や丸めによってgraderの許容誤差を外れるケースがあった。またChallengeのcodingでは2問に実装上の真正なbugが確認され、8問中6問のPASSとなった。
+
+対して**Qwen3.8では最後まで回答を完了した数値問題について非常に高い安定性を示した**。CoreとChallengeを合わせたnumeric grader 103問のうち、FAILとなった10問はすべてmax_tokens=4096への到達によるtruncationであり、最後まで出力できた93問はすべて機械判定をPASSした。Challengeのcodingも8/8であり、本テストではQwen側の強みが明確に現れた。
+
+ただし、**Qwen3.8の「考えすぎる」という特性が明確な弱点となっている**点も浮き彫りになった。一部の数値問題では正しい式を立て、十分な精度の答えまで既に得ているにもかかわらず、その後も別計算法による再検算や桁の再計算を何度も繰り返し、最終回答を出す前に4096トークンを使い切る現象が見られた。208問中のtruncationはQwenが10問だったのに対し、LLM-jpは1問に留まった。
+
+したがって今回の条件では、LLM-jpは比較的簡潔に結論へ到達する一方、Qwen3.8はより執拗に自己検証する傾向があり、それが高い数値推論能力と同時にトークン利用効率の低下として表れている。
+
+## 推論速度・実行効率の比較
+
+約6000トークン規模のパフォーマンス調査では、Qwen3.8の推論エンジンとしての効率の高さが確認できた。
+
+| 指標                | LLM-jp-4-33B |      Qwen3.8-27B |
+| ----------------- | -----------: | ---------------: |
+| Prompt processing | 約191.5 tok/s | **約344.2 tok/s** |
+| Decode            |  約27.9 tok/s |  **約29.7 tok/s** |
+| Wall time         |      約41.3 s |      **約26.7 s** |
+| Peak VRAM合計       |     約23.2 GB |     **約20.4 GB** |
+
+内部のtokenizerが異なるため、プロンプトの処理速度を完全にフェアな性能指標と見なすことはできないが、同程度の入力を処理する所要時間が大幅に短いQwen3.8が実用上高速であることは明らかである。
+
+一方で実際のベンチマークでは、Qwen3.8はLLM-jpより平均生成トークン数が多く、モデルの高速性を長い推論が相殺してしまう傾向も確認された。Qwen3.8は「1 tokenを生成するシステムとしては効率的だが、1問を解くためにより多くのtokenを消費する」という特徴を有している。
+
+> 潤沢な量のVRAMがある場合はQwen3.8の推論の深さ（しつこさ）が活きると思われるが、貧相なマシン上でローカルLLMとして動かすシチュエーションではこの特性が不利に働いてしまう。
+> 
+> 今回の結果を踏まえると、単純なtokens/sだけではモデルの実用上の性能を評価できないことが理解できる。
+
+:::note info
+
+### エネルギー効率について
+
+Qwen3.8は高いtoken throughputを示しているが、この特徴がそのまま問題解決全体の高速化につながっているわけではない。固定長のパフォーマンステストから算出した、1回の測定あたりのGPU消費エネルギーを以下に示す。この結果だけを見るとQwen3.8はLLM-jpより省エネルギーである。
+
+一方、実際のベンチマークではQwen3.8の平均生成token数はLLM-jpより多く、「1 tokenを生成するシステムとしては効率的だが、1問を解くためにはより多くのtokenを消費する」という特徴が確認された。
+
+その結果、固定長推論ではLLM-jpより高速かつ省エネルギーである一方、実問題に対するend-to-endの処理時間ではその優位性が失われている。したがって、問題解決1回あたりのエネルギー効率についても、固定token長で測定した場合ほど大きな優位性はない可能性がある。
+
+```:固定長のトークン生成パフォーマンステスト
+Qwen：約8.86 kJ
+LLM-jp：約12.05 kJ
+```
+
+```:実ベンチマークにおける生成token数と1問あたりのwall time
+Core平均生成量：Qwen 約724 token、LLM-jp 約467 token
+Core平均時間：Qwen 約24.5 s、LLM-jp 約16.2 s
+```
+
+> 本ベンチマークでは実QAテスト中の消費電力を問題ごとに積算していないため、問題解決1回あたりの消費エネルギーについては直接測定した値ではなく、あくまで生成token数とwall timeから示唆される傾向として解釈すべきである。
+:::
+
+# まとめ
+
+今回、LLM-jp-4-33B-thinkingとQwen3.8-27Bを、ローカル環境で再現可能な同一benchmark上に載せて比較した。
+
+最も単純なstrict scoreだけを見ると、CoreではLLM-jpが119/128（92.97%）、ChallengeではQwen3.8が73/80（91.25%）とそれぞれ優位となった。正答率も大差はなく、少なくとも今回の問題群からは、どちらか一方を明確に優れたモデルと言うことは難しい。
+
+> そもそも今回のベンチマークテストの正答率（目視確認込み）はほぼ100％に近く、今回用いたタスクは両モデルにとってかなり易しいレベルであった、という点も考慮すべきである。特に、基本問題（Coreレベルのタスク）よりも複雑な推論を要求するChallengeレベルのタスクを用意したにもかかわらず、両モデルともほぼ満点を獲ってしまった。将来的には、より難しいタスクからなるテストセットを構築し、推論性能の限界を見極める検証を実施すべきである。（この点については末尾の「参考」セクションも参照されたい）
+
+
+機械判定によってFAILと判定された回答まで含めて内容を精査すると、モデルの違いに特徴が見られた。
+
+LLM-jpは比較的簡潔かつ安定して最終的な回答へ到達し、Token Budgetを使い切るケースが少なかった。一方で、数値計算の最後の数桁の精度不足での失点や、コーディングのエッジケースに関するタスクでの失点が見られた。
+
+対するQwen3.8は数値的な推論とコーディングの分野で好成績を収めた。完答した数値問題では今回ほぼ完全な精度を示し、Challengeレベルのコーディングタスクも全問正解した。その反面、既に十分な答えを得た後にも再計算を続ける "overthinking" が見られ、Challengeレベルの80問のうち5問で4kトークンの上限に達してFAIL判定となった。
+
+以上をまとめると、
+
+- <font color="red">**LLM-jp：1 tokenあたりの計算コストは相対的に高いが、reasoningが比較的簡潔で、限られたtoken budget内で安定して回答を完遂する**</font>
+- <font color="red">**Qwen3.8：数値推論やコーディングに強く、token throughputも高い一方、reasoningがやや冗長でoverthinkingを生じやすい**</font>
+
+という違いが、今回の比較検証から得られた主要な結論である。
+
+:::note info
+### 2026/09/06追記
+
+より高度な推論能力を試すベンチマークでの検証結果を以下の記事で公開した。
+
+https://qiita.com/h-nabata/items/70d7d6ed64e91fce8675
+
+:::
+
+# 【参考】ベンチマークテストのレベルについて
+
+今回の比較検証ではベンチマーク自体の限界も明らかになった。
+
+先ほど述べた通り、Challengeのタスク群はCoreよりも高難度のクラスとして用意したが、Qwen3.8では選択式問題を含む多くのカテゴリで満点となり、機械判定と目視の両方で確認したところ、80問すべてで解き方や判断が本質的に正しいことが分かった。同じくLLM-jpについても97%以上の非常に高い正答率であった。
+
+つまり、今回用いたベンチマークテストは、30B級の最新のモデル同士の実力差を見分けるには、難度が足りなかったと言える。今後詳しく検証する場合は、CoreとChallengeのタスクに加え、さらに難しい Hard レベル（仮称）のタスクを新たに追加する必要があるだろう。
+
+> Hard レベルのタスクとしては、より深い多段階の推論、必要条件と十分条件の見分け、反例を考える問題、複数の対立する仮説の検討、紛らわしいコーディングの問題、複数の物理･化学法則を組み合わせた問題などを含めるべきである。
+
+* * *
+
+とはいえ、このベンチマークテストも酷く簡単すぎるという訳ではなく、よりパラメータの小さい[**DeepSeek-R1-8B**](https://huggingface.co/deepseek-ai/DeepSeek-R1-0528-Qwen3-8B/blame/main/README.md)（DeepSeek-R1-0528-Qwen3-8B）でもテストしたところ、`max_tokens=4096`（1回の回答あたりの生成token budget）の制約に軒並み引っ掛かって大量のtruncationが発生してしまっていた。
+
+> 最新版のDeepSeek-R1-8BはQwen3-8Bと同じdense TransformerアーキテクチャでありMoEではない。
+
+具体的には、Coreの128問についてはHTTPエラーを除く125回答のうち69件（55.2%）、Challengeの80問については49件（61.3%）で、生成トークン長（最大値4k）を使い果たしたために推論を打ち切られていた。
+
+| 指標                   | LLM-jp-4-33B-thinking |        Qwen3.8-27B | DeepSeek-R1-0528-Qwen3-8B |
+| -------------------- | --------------------: | -----------------: | ------------------------: |
+| Core strict          |  **119/128 = 92.97%** |   115/128 = 89.84% |     **50/125 = 40.00%** ※ |
+| Core truncation      |        **0/128 = 0%** |      5/128 = 3.91% |       **69/125 = 55.20%** |
+| Core平均生成token        |                   467 |                724 |                 **2,854** |
+| Core平均wall time      |           **16.16 s** |            24.46 s |                   25.87 s |
+| Challenge strict     |        69/80 = 86.25% | **73/80 = 91.25%** |        **26/80 = 32.50%** |
+| Challenge truncation |      **1/80 = 1.25%** |       5/80 = 6.25% |        **49/80 = 61.25%** |
+| Challenge平均生成token   |               **675** |                852 |                 **3,141** |
+| Challenge平均wall time |           **23.35 s** |            28.75 s |                   28.74 s |
+
+> ※ DeepSeekモデルのCoreテストでは3問でHTTP 500となったため、strict scoreは有効回答125問を分母としている。
+
+DeepSeek-R1-0528-Qwen3-8Bの機械判定スコアは30～40%台に留まったが、失点の過半数は誤答ではなく4k-tokenの生成上限への到達であった。特にCoreでは有効回答125問中69問、Challengeでは80問中49問が`finish_reason="length"`となっている。このため、本結果はモデルの最大推論能力だけでなく「同一の4k-token推論資源の制約下で最終回答まで到達できるか」という推論効率を強く反映していると言える。
+
+分類別に見ると差はさらに明瞭である。以下の表は機械判定の数値である。
+
+| 分類         | Core LLM-jp | Core Qwen | Core DeepSeek | Challenge LLM-jp | Challenge Qwen | Challenge DeepSeek |
+| ---------- | ----------: | --------: | ------------: | ---------------: | -------------: | -----------------: |
+| 高度な日本語     |        100% |      100% |     **93.3%** |             100% |           100% |           **100%** |
+| 分析的推論      |        100% |      100% |     **53.3%** |             100% |           100% |          **25.0%** |
+| 化学・材料      |       75.0% |     83.3% |      **8.3%** |            75.0% |          62.5% |          **12.5%** |
+| コーディング     |        100% |     93.8% |     **43.8%** |            75.0% |           100% |         **12.5%*** |
+| ハルシネーション耐性 |       50.0% |     25.0% |     **50.0%** |            75.0% |          75.0% |          **37.5%** |
+| 人文・社会・経済   |        100% |      100% |     **40.0%** |            87.5% |           100% |          **75.0%** |
+| 指示追従       |        100% |     87.5% |     **87.5%** |             100% |           100% |          **25.0%** |
+| 生命・情報      |       90.0% |     90.0% |     **20.0%** |            62.5% |          75.0% |          **12.5%** |
+| 数学・統計      |       95.0% |      100% |     **15.0%** |            87.5% |           100% |          **25.0%** |
+| 物理・工学      |        100% |     83.3% |        **0%** |             100% |           100% |             **0%** |
+
+* * *
+
+性能比較も示しておく。DeepSeekはtokens/sだけなら圧倒的に速いが、1問を解く速度は全く速くない。DeepSeekは1 tokenを3倍以上速く生成しているにもかかわらず、1問を解く時間ではLLM-jpより約60%遅いため、Qwenとほぼ同じ回答所用時間となっている。
+
+| 指標                |    LLM-jp-4-33B |     Qwen3.8-27B |   DeepSeek-R1-8B |
+| ----------------- | --------------: | --------------: | ---------------: |
+| 使用GPU             | 5070Ti + 3070Ti | 5070Ti + 3070Ti |     **5070Tiのみ** |
+| Prompt processing |     191.5 tok/s |     344.2 tok/s |  **619.2 tok/s** |
+| Decode            |     27.91 tok/s |     29.68 tok/s | **101.05 tok/s** |
+| Wall time         |         41.28 s |         26.69 s |      **12.60 s** |
+| 平均run peak VRAM合計 |      約23.16 GiB |      約20.37 GiB |    **約7.59 GiB** |
+| GPU平均電力           |         293.6 W |         334.0 W |      **185.4 W** |
+| GPU energy / run  |        12.05 kJ |         8.86 kJ |      **2.29 kJ** |
+
+Coreでの平均生成量：
+```
+LLM-jp       467 tokens
+Qwen         724 tokens
+DeepSeek   2,854 tokens
+```
+Coreでの平均QA時間：
+```
+LLM-jp      16.2 s
+Qwen        24.5 s
+DeepSeek    25.9 s
+```
+Challengeでの平均QA時間：
+```
+LLM-jp      23.4 s
+Qwen        28.8 s
+DeepSeek    28.7 s
+```
+
+* * *
+
+因みに、DeepSeek-R1-0528系列は、公式には最大生成長を64K tokensに設定し、temperature 0.6、top-p 0.95の条件で性能評価されている。今回の検証ではモデル間のフェアな比較を優先したため、DeepSeekのモデル本来の性能を引き出せない設定になっていたと思われるが、4096 completion-tokenという同一のtoken budgetを各モデルに与えた場合の回答完遂率・正答率を評価するという点では一応公平な比較になっている。
+
+| Model                     | 推論の正確性 | 4K内の完遂性   | Reasoning効率 |
+| ------------------------- | ------ | --------- | ----------- |
+| LLM-jp-4-33B              | 高い     | **非常に高い** | **高い**      |
+| Qwen3.8-27B               | 非常に高い  | 高い        | 中程度         |
+| DeepSeek-R1-8B | 完遂時は高い | **非常に低い** | **低い**      |
+
+| モデル                           | 今回見えた特徴                                                                                  |
+| ----------------------------- | ---------------------------------------------------------------------------------------- |
+| **LLM-jp-4-33B-thinking**     | 推論が比較的短く、4K budget内での完遂性が極めて高い。Core strictで最良。                                           |
+| **Qwen3.8-27B**               | 数値・codingを含む推論能力が非常に高い。Challengeでは最良。ただしLLM-jpよりやや長考。                                    |
+| **DeepSeek-R1-0528-Qwen3-8B** | 8Bとして完遂時の回答品質はかなり高く、raw inferenceは圧倒的に高速・省VRAM。ただしreasoningが極端に長く、4K budgetでは過半数を完遂できない。 |
+
+今回用いたベンチマークテストについては、現在の27～33B級モデルに対してはほぼ飽和しているものの、8B級にはまだ十分厳しいレベルの難度である、と評価して良いのではないだろうか。
+
+> DeepSeekの名誉のために、今回利用したDeepSeek-R1-8Bは長考するように意図的に追加訓練されたモデルであるという点は指摘しておきたい。
+
+# 【参考】ベンチマーク問題セット・スクリプト一式
+
+スクリプト一式はGitHub上でzipファイルとして配布している（改変自由）。
+
+https://github.com/h-nabata/LLM/tree/main/Qiita/LLM-jp
+
+本稿で使用した問題セットを以下に示す。問題文はベンチマーク実行時に使用した canonical dataset から変更せずに抽出した。
+
+- Core: 128問（`core_v2.1.0.jsonl`）
+  - SHA256: `0ba952bfd03db1cda89d15fa31f0b6ecd07e0b2c3cc9a3ec12633b4e84369b1e`
+- Challenge: 80問（`challenge_v1.1.0.jsonl`）
+  - SHA256: `0c18e8ae51d88a441ecdff33df4e071fee3bdb817481ec1694365239d3da9546`
+- 合計: 208問
+- 問題文・メタデータのライセンス: CC BY 4.0
+
+<details>
+<summary>Core 128問（クリックして展開）</summary>
+
+```json
+[
+  {
+    "id": "JP01",
+    "category": "advanced_japanese",
+    "difficulty": "expert",
+    "prompt": "ある研究組織では、実験の再現性を高めるため、解析コードと生データの公開を原則化した。ただし、公開によって再同定の危険が生じる人由来データは例外とし、第三者機関による管理下アクセスを認める。ところが運用開始後、研究者の一部は「原則公開なのだから、管理下アクセスは再現性を損なう」と批判した。責任者は、再現性とは無条件の公開と同義ではなく、独立した研究者が同一手続きを検証できる制度設計まで含む、と応答した。\nこの文章から最も妥当に導けるものはどれか。\nA. 責任者は人由来データの第三者検証を禁止している。\nB. 責任者は公開範囲よりも検証可能性を再現性の本質とみなしている。\nC. 批判者は解析コードの非公開を要求している。\nD. 管理下アクセスでは独立検証が原理的に不可能である。\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "JP02",
+    "category": "advanced_japanese",
+    "difficulty": "hard",
+    "prompt": "自治体は渋滞対策として中心市街地への流入課金を導入した。導入後、中心部の自動車交通量は減少したが、周辺道路の交通量は増えた。担当部署は「中心部の渋滞緩和という直接目的は達成した」と報告した。一方、評価委員会は、総移動時間と大気汚染の地域分布を確認しなければ政策全体の厚生効果は判断できないとした。\n評価委員会の指摘が最も直接に問題としているものはどれか。\nA. 目的変数の測定誤差\nB. 政策効果の空間的な置換と評価範囲\nC. 自動車交通量の季節調整\nD. 課金額の法的根拠\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "JP03",
+    "category": "advanced_japanese",
+    "difficulty": "expert",
+    "prompt": "「AIによる論文要約は、専門家が読む時間を短縮する。しかし要約が正確であることと、読者が原論文の論証構造を理解したこととは別である。したがって、要約の導入によって理解が低下したという観察だけから、要約技術そのものが理解を阻害すると結論することはできない。利用者が原文を読む機会を減らしたという媒介経路もあり得るからだ。」\nこの段落の論証構造として最も適切なのはどれか。\nA. 観察された相関から直接因果を確定している。\nB. 技術の効果と利用行動による媒介を区別し、単純な因果帰属を退けている。\nC. 要約精度が低いことを前提に理解低下を説明している。\nD. 専門家は要約を使用すべきでないという規範命題を証明している。\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "JP04",
+    "category": "advanced_japanese",
+    "difficulty": "hard",
+    "prompt": "ある規程は「危険物を保管する部屋には、施錠設備および自動火災検知器を設けなければならない。ただし、常時有人監視され、かつ危険物を耐火保管庫に収納する部屋については、自動火災検知器の設置を免除できる」と定める。部屋Xは施錠され、常時有人監視されているが、危険物は通常の金属棚に保管されている。\n規程だけから判断した結論として正しいものはどれか。\nA. Xは検知器を免除できる。\nB. Xは施錠設備も不要になる。\nC. Xは検知器免除の条件を満たさない。\nD. Xが危険物を少量しか置かないなら自動的に免除される。\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "JP05",
+    "category": "advanced_japanese",
+    "difficulty": "expert",
+    "prompt": "レビュー論文は「手法Aは平均誤差で手法Bを上回る」と述べる直後に、「ただし、評価集合の大半はAの学習分布に近く、分布外領域ではBが一貫して優位だった」と付記している。著者は結論で「現状の平均指標だけからAを汎用的に優れた手法と呼ぶのは時期尚早」とした。\n著者が区別している概念として最も適切なのはどれか。\nA. 統計的有意性と再現性\nB. 補間性能と分布外一般化性能\nC. 精度と計算量\nD. 教師あり学習と強化学習\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "JP06",
+    "category": "advanced_japanese",
+    "difficulty": "expert",
+    "prompt": "「市場価格が情報を反映する」という命題から、「市場価格は常に正しい」とは導けない。価格が利用可能な情報を効率的に集約していても、その情報自体が不完全であり得るし、新情報によって価格が大きく改訂されることも整合的だからである。\nこの文章が否定している推論はどれか。\nA. 情報集約性から無謬性を導くこと\nB. 新情報が価格を変化させること\nC. 市場参加者が異なる情報を持つこと\nD. 価格が情報を一切含まないこと\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "JP07",
+    "category": "advanced_japanese",
+    "difficulty": "hard",
+    "prompt": "「装置の故障率は更新後に半減した。ただし更新と同時に保守点検の周期も半分になった。」という報告がある。更新ソフトウェアの効果を評価するうえで最も重要な追加情報はどれか。\nA. 装置の外装色\nB. 更新前後で保守点検頻度を統制した比較\nC. 開発者の人数\nD. 更新ソフトウェアのファイルサイズ\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "JP08",
+    "category": "advanced_japanese",
+    "difficulty": "expert",
+    "prompt": "ある哲学者は「予測できることは説明できることの必要条件ではない」と主張する。例として、複雑なシミュレーションが高精度に結果を予測しても、どの機構が結果を生んだかを識別できない場合を挙げる。一方、粗い機構モデルは予測誤差が大きくても介入点を明示できるという。\nこの主張に最も整合するものはどれか。\nA. 説明能力と予測能力は常に反比例する。\nB. 高い予測精度だけでは機構的説明を保証しない。\nC. 粗いモデルは必ず正しい。\nD. シミュレーションは説明に利用できない。\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "JP09",
+    "category": "advanced_japanese",
+    "difficulty": "expert",
+    "prompt": "「全国平均では賃金が上昇したが、全ての地域で賃金が上昇したとは限らない。さらに、各地域で平均賃金が上昇していても、全労働者の実質所得が増えたとは限らない。」\nこの文が注意を促している二つの誤りの組合せとして最適なのはどれか。\nA. 生態学的誤謬と平均値から個人への過度な一般化\nB. 循環論法と後件肯定\nC. サンプルサイズ不足と多重比較\nD. 測定不変性と欠測補完\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "JP10",
+    "category": "advanced_japanese",
+    "difficulty": "hard",
+    "prompt": "契約書には「甲は納品後30日以内に検収を完了し、重大な瑕疵がある場合に限り受領を拒否できる」とある。納品物には軽微な表示崩れがあるが機能上の欠陥はない。契約文だけを前提とした場合、最も妥当なのはどれか。\nA. 甲は任意の理由で拒否できる。\nB. 軽微な表示崩れが重大な瑕疵に該当するかの評価が必要である。\nC. 30日を過ぎても必ず拒否できる。\nD. 機能上の欠陥がないので検収自体が不要である。\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "JP11",
+    "category": "advanced_japanese",
+    "difficulty": "expert",
+    "prompt": "「ある薬剤群で観察研究上の死亡率が低かった」という結果に対し、著者は「処方される患者の重症度が群間で異なる可能性があり、治療選択がランダムでない以上、治療効果の推定には追加調整が必要」とする。\nこの懸念に最も近いものはどれか。\nA. 選択バイアス／交絡\nB. 出版バイアスのみ\nC. 測定単位の不一致\nD. 多重共線性が必ず生じること\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "JP12",
+    "category": "advanced_japanese",
+    "difficulty": "expert",
+    "prompt": "「規模を2倍にしたとき計算時間が2倍になった」という1点の観察だけから、アルゴリズムが線形時間であるとは結論できない。定数項、キャッシュ効果、入力分布などによって限られた範囲では異なる漸近計算量でも線形に見えるからである。\nこの文章が要求している評価として最も適切なのはどれか。\nA. 単一入力での最大メモリだけを測る。\nB. 複数の入力規模と分布でスケーリングを測定する。\nC. 実装言語を変更すれば漸近計算量が決まる。\nD. 2倍化測定を一度だけ再実行する。\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "JP13",
+    "category": "advanced_japanese",
+    "difficulty": "hard",
+    "prompt": "「必要な安全率を満たす設計のうち、質量が最小のものを選ぶ」という設計方針について、候補PはQより軽いが安全率を満たさず、QとRは安全率を満たし、Qの方がRより軽い。\n方針に従う選択はどれか。\nA. P\nB. Q\nC. R\nD. 情報不足\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "JP14",
+    "category": "advanced_japanese",
+    "difficulty": "expert",
+    "prompt": "「モデルCの誤差分散はモデルDより小さいが、系統誤差は大きい。用途が母平均の推定ならCが常に優れるとは言えない」とある。\nこの判断を直接支える概念はどれか。\nA. バイアス・分散トレードオフ\nB. 中心極限定理だけ\nC. ベイズ因子だけ\nD. モンテカルロ積分だけ\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "JP15",
+    "category": "advanced_japanese",
+    "difficulty": "expert",
+    "prompt": "「データベースに記録がない」ことと「対象が存在しない」ことを同一視してはならない。データベースの収録範囲が限定されているなら、前者は後者の十分な証拠ではない。\n最も適切な言い換えはどれか。\nA. 不在の証拠と証拠の不在は常に同じである。\nB. 検索系の網羅性を確認せず、未検出を不存在と断定すべきでない。\nC. データベース検索は一切意味がない。\nD. 記録があれば対象は必ず実在する。\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "JP16",
+    "category": "advanced_japanese",
+    "difficulty": "hard",
+    "prompt": "「規制導入後に事故件数は20%減ったが、走行距離は30%減った。」事故リスクの変化を判断するために最も直接的に比較すべき量はどれか。\nA. 事故件数そのものだけ\nB. 単位走行距離当たり事故件数\nC. 車両価格\nD. 規制文書のページ数\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "AR01",
+    "category": "analytical_reasoning",
+    "difficulty": "expert",
+    "prompt": "ある診断で事前確率P(D)=0.08、感度0.90、特異度0.95である。陽性後に独立な同一性能の確認検査を行い、2回とも陽性だった。条件付き独立を仮定したときP(D|++)を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "AR02",
+    "category": "analytical_reasoning",
+    "difficulty": "expert",
+    "prompt": "新製品A/Bの利益は景気Good/Badでそれぞれ A=(120,-40), B=(80,20) 万円。Goodの事前確率0.5。市場調査シグナルSの尤度はP(S|Good)=0.8, P(S|Bad)=0.3。Sを観測した。期待利益最大の製品を選んだときの期待利益（万円）を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "AR03",
+    "category": "analytical_reasoning",
+    "difficulty": "expert",
+    "prompt": "処置T、アウトカムY、未観測重症度Uがあり、U→T, U→Y。さらにT→M→Yという媒介経路がある。Tの総因果効果を推定したい。次の調整集合のうち最も不適切なのはどれか。\nA. Uが観測可能ならUを調整する\nB. Mだけを調整する\nC. T以前の共変量でUの十分な代理を調整する\nD. ランダム化によりTとUを独立にする\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "AR04",
+    "category": "analytical_reasoning",
+    "difficulty": "expert",
+    "prompt": "線形計画: x,y>=0, x+y<=8, 2x+y<=10, x+3y<=15 の下で 5x+4y を最大化する。最大値を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "AR05",
+    "category": "analytical_reasoning",
+    "difficulty": "hard",
+    "prompt": "4群の平均を同時比較した後、事前に定めていなかった全6対のt検定を各5%で行う。家族内第1種過誤を制御する最も直接的な修正はどれか。\nA. Bonferroniで各検定の有意水準を0.05/6にする\nB. 各検定の有意水準を0.30にする\nC. サンプル平均を標準化しない\nD. p値を平均する\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "AR06",
+    "category": "analytical_reasoning",
+    "difficulty": "hard",
+    "prompt": "作業A(3日)後にB(4日)とC(6日)が並行開始。D(5日)はBとCの両方完了後、E(2日)はB完了後に開始。プロジェクト完了はDとEの両方完了時。最短完了日数を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "AR07",
+    "category": "analytical_reasoning",
+    "difficulty": "expert",
+    "prompt": "2人ゲームで列プレイヤーの利得は、行Uのとき(L,R)=(1,3)、行Dのとき(L,R)=(4,0)。完全混合ナッシュ均衡で列プレイヤーをLとRの間で無差別にする行プレイヤーのU選択確率pを求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "AR08",
+    "category": "analytical_reasoning",
+    "difficulty": "expert",
+    "prompt": "同一被験者に処置前後測定を行い、個体間分散が大きく、前後相関が高い。平均変化を検出する検定の検出力を高める設計として最も合理的なのはどれか。\nA. 前後を独立標本として扱う\nB. 対応のある解析を用いる\nC. 前測定を捨てる\nD. 有意水準を事後的に上げる\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "AR09",
+    "category": "analytical_reasoning",
+    "difficulty": "expert",
+    "prompt": "DAG X→M→Y, X→Y, Z→M, Z→Y がある。XのYへの総効果を推定する際、ZはXの原因ではない。最も適切な説明はどれか。\nA. Zは必ずX-Y交絡なので調整必須\nB. Mを調整するとX→M→Yを遮断するため総効果には不適切\nC. Yを調整すれば総効果が得られる\nD. Xを調整集合に入れる\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "AR10",
+    "category": "analytical_reasoning",
+    "difficulty": "hard",
+    "prompt": "独立な部品A,B（各信頼度0.90）が並列冗長を構成し、そのブロックが部品C（信頼度0.95）と直列接続されている。システム信頼度を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "AR11",
+    "category": "analytical_reasoning",
+    "difficulty": "hard",
+    "prompt": "到着率λ=8件/時、サービス率μ=10件/時のM/M/1待ち行列を仮定する。系内平均滞在時間Wを時間単位で求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "AR12",
+    "category": "analytical_reasoning",
+    "difficulty": "expert",
+    "prompt": "状態H/Lの確率は0.4/0.6。行動aの利得はHで100,Lで-20、行動bは常に30。完全情報を得られる場合の期待価値EVPIを求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "AR13",
+    "category": "analytical_reasoning",
+    "difficulty": "expert",
+    "prompt": "モデルAは3環境で損失(1,4,7)、モデルBは(3,3,5)、モデルCは(2,6,4)。最悪損失を最小化するminimax選択はどれか。\nA. A\nB. B\nC. C\nD. AとC\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "AR14",
+    "category": "analytical_reasoning",
+    "difficulty": "expert",
+    "prompt": "治療Tは軽症群・重症群の各層内では治療Cより成功率が高いが、全体集計ではTの成功率が低い。この現象を説明し得る条件として最も適切なのはどれか。\nA. T群に重症患者が相対的に多い\nB. 両群の重症度構成が完全に同じ\nC. 各層の成功率が等しい\nD. 成功率が確率でない\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "AR15",
+    "category": "analytical_reasoning",
+    "difficulty": "hard",
+    "prompt": "仮説H1:H0の事前オッズが1:4、観測データの尤度比P(data|H1)/P(data|H0)=6である。H1の事後確率を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "AR16",
+    "category": "analytical_reasoning",
+    "difficulty": "expert",
+    "prompt": "装置は1試行あたり2.5秒、成功確率0.04。独立試行を直列実行する。少なくとも1回成功する確率を0.95以上にする最小試行回数Nを求め、その総実行時間を秒で答えよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "MS01",
+    "category": "mathematics_statistics",
+    "difficulty": "expert",
+    "prompt": "リッジ回帰（切片も正則化する）で X=[[1,0],[1,1],[1,2]], y=[1,2,2]^T, λ=1 とする。β=(X^T X+λI)^(-1)X^Ty の第2成分β2を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "MS02",
+    "category": "mathematics_statistics",
+    "difficulty": "hard",
+    "prompt": "x>0,y>0, x+2y=12 の制約下で f(x,y)=xy を最大化する。最大値を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "MS03",
+    "category": "mathematics_statistics",
+    "difficulty": "expert",
+    "prompt": "(X,Y)は二変量正規。μX=2, μY=1, σX=2, σY=3, 相関ρ=0.6。X=5のときの条件付き期待値E[Y|X=5]を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "MS04",
+    "category": "mathematics_statistics",
+    "difficulty": "hard",
+    "prompt": "Bernoulli成功確率pにBeta(2,3)事前分布を置く。10試行で7成功3失敗を観測した。次の1試行が成功する事後予測確率を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "MS05",
+    "category": "mathematics_statistics",
+    "difficulty": "hard",
+    "prompt": "2状態Markov連鎖の遷移行列が [[0.8,0.2],[0.3,0.7]]（行=現在、列=次）である。定常分布における状態1の確率を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "MS06",
+    "category": "mathematics_statistics",
+    "difficulty": "expert",
+    "prompt": "遷移行列 [[0.8,0.2],[0.3,0.7]] の定常2状態Markov情報源について、エントロピー率（bit/step）を求めよ。logは底2。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "MS07",
+    "category": "mathematics_statistics",
+    "difficulty": "expert",
+    "prompt": "入力Xが一様Bernoulliで、交差確率0.1の二元対称通信路を通ってYが得られる。相互情報量I(X;Y) [bit] を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "MS08",
+    "category": "mathematics_statistics",
+    "difficulty": "hard",
+    "prompt": "f(x)=x^3-2x-5=0にNewton法を適用する。初期値x0=2から1回更新したx1を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "MS09",
+    "category": "mathematics_statistics",
+    "difficulty": "expert",
+    "prompt": "常微分方程式y'=y, y(0)=1を刻みh=0.2の古典的4次Runge-Kutta法で1ステップ進めたy(0.2)を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "MS10",
+    "category": "mathematics_statistics",
+    "difficulty": "expert",
+    "prompt": "f(x)=x (-π<x<π) の2π周期Fourier級数 f(x)=Σ b_n sin(nx) における b_3 を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "MS11",
+    "category": "mathematics_statistics",
+    "difficulty": "hard",
+    "prompt": "1から300までの整数のうち、2,3,5の少なくとも1つで割り切れる整数の個数を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "MS12",
+    "category": "mathematics_statistics",
+    "difficulty": "expert",
+    "prompt": "共分散行列 [[4,2],[2,3]] のPCAで、第1主成分の寄与率を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "MS13",
+    "category": "mathematics_statistics",
+    "difficulty": "hard",
+    "prompt": "二変量正規でσY=3, 相関ρ=0.6のとき、Var(Y|X)を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "MS14",
+    "category": "mathematics_statistics",
+    "difficulty": "expert",
+    "prompt": "1観測K=3について、Poisson(λ=4)対Poisson(λ=2)の尤度比 L(4)/L(2) を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "MS15",
+    "category": "mathematics_statistics",
+    "difficulty": "expert",
+    "prompt": "対応差の標準偏差を5、検出したい平均差を2とする。正規近似で両側α=0.05、検出力0.80（z0.975=1.96,z0.80=0.84）に必要な標本数 n≈((1.96+0.84)σ/δ)^2 を切り上げて求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "MS16",
+    "category": "mathematics_statistics",
+    "difficulty": "expert",
+    "prompt": "Xの共分散行列がI_2、Z=AX、A=[[2,1],[1,3]] とする。Zの共分散行列の行列式を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "MS17",
+    "category": "mathematics_statistics",
+    "difficulty": "expert",
+    "prompt": "独立な公平コインを投げ、表が2回連続して初めて出た時点で停止する。停止までの投数の期待値を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "MS18",
+    "category": "mathematics_statistics",
+    "difficulty": "expert",
+    "prompt": "正の確率変数XについてE[X]=2。次のうちJensenの不等式から必ず言えるものはどれか。\nA. E[log X] >= log 2\nB. E[log X] <= log 2\nC. E[1/X] <= 1/2\nD. Var(X)=0\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "MS19",
+    "category": "mathematics_statistics",
+    "difficulty": "expert",
+    "prompt": "独立な不偏推定量A,Bの分散がそれぞれ4,9。線形結合wA+(1-w)Bを不偏のまま最小分散にするwを求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "MS20",
+    "category": "mathematics_statistics",
+    "difficulty": "hard",
+    "prompt": "ロジスティック回帰 logit P(Y=1)=β0+0.7x で、xが1増加したときのオッズ比を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CD01",
+    "category": "coding",
+    "difficulty": "expert",
+    "prompt": "関数 `max_non_adjacent(nums: list[int]) -> int` を実装せよ。隣接要素を同時に選ばずに得られる和の最大値を返す。空集合を選んでもよいので全要素が負なら0。O(n)時間、O(1)追加空間を目標とする。\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CD02",
+    "category": "coding",
+    "difficulty": "expert",
+    "prompt": "関数 `toposort(n: int, edges: list[list[int]]) -> list[int]` を実装せよ。0..n-1のDAGの辺u→vが与えられる。辞書順最小のトポロジカル順序を返す。閉路があれば空リスト。\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CD03",
+    "category": "coding",
+    "difficulty": "hard",
+    "prompt": "関数 `merge_intervals(intervals)` を実装せよ。各区間は[start,end]でstart<=end。接触する区間（例[1,2],[2,3]）も結合し、start昇順で返す。入力は変更しない。\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CD04",
+    "category": "coding",
+    "difficulty": "expert",
+    "prompt": "関数 `longest_unique_substring(s: str) -> int` を実装せよ。Unicode文字列について重複文字を含まない最長連続部分文字列の長さをO(n)で返す。\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CD05",
+    "category": "coding",
+    "difficulty": "expert",
+    "prompt": "関数 `shortest_path(grid)` を実装せよ。0=通行可,1=壁の長方形格子で左上から右下まで上下左右に移動する最短手数を返す。到達不能なら-1。開始・終了が壁でも-1。\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CD06",
+    "category": "coding",
+    "difficulty": "expert",
+    "prompt": "関数 `edit_distance(a,b)` を実装せよ。挿入・削除・置換のコストをすべて1とするLevenshtein距離を返す。\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CD07",
+    "category": "coding",
+    "difficulty": "hard",
+    "prompt": "関数 `rle_decode(s)` を実装せよ。形式は正整数の十進表記の直後に1文字が続く組（例`12a3b`）。全体を復号する。不正形式（0回、数だけで終わる、数なし文字）ではValueError。\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CD08",
+    "category": "coding",
+    "difficulty": "expert",
+    "prompt": "関数 `weighted_interval_scheduling(jobs)` を実装せよ。各job=[start,end,value]、end<=次startなら両立。重ならないjob集合のvalue合計最大値を返す。\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CD09",
+    "category": "coding",
+    "difficulty": "expert",
+    "prompt": "関数 `count_islands(grid)` を実装せよ。`1`/`0`の長方形リストで、上下左右接続の1の連結成分数を返す。入力を変更しない。\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CD10",
+    "category": "coding",
+    "difficulty": "expert",
+    "prompt": "関数 `median_stream(nums)` を実装せよ。各要素を順に追加した直後の中央値をfloatのリストで返す。偶数個では中央2値の平均。\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CD11",
+    "category": "coding",
+    "difficulty": "hard",
+    "prompt": "関数 `group_anagrams(words)` を実装せよ。Unicode文字の完全一致を基準にアナグラムをまとめ、各群内部は入力順、群の順序は各群の最初の出現順で返す。\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CD12",
+    "category": "coding",
+    "difficulty": "expert",
+    "prompt": "関数 `dijkstra(n, edges, source)` を実装せよ。無向グラフのedge=[u,v,w]、w>=0。sourceから各頂点への最短距離をリストで返し、到達不能はNone。\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CD13",
+    "category": "coding",
+    "difficulty": "expert",
+    "prompt": "関数 `lis_length(nums)` を実装せよ。狭義単調増加部分列の最大長をO(n log n)で返す。\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CD14",
+    "category": "coding",
+    "difficulty": "hard",
+    "prompt": "関数 `normalize_path(path)` を実装せよ。Unix風絶対パスのみを受け取り、連続`/`、`.`、`..`を正規化する。ルートより上の`..`はルートに留める。\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CD15",
+    "category": "coding",
+    "difficulty": "expert",
+    "prompt": "関数 `knapsack_01(weights, values, capacity)` を実装せよ。各品物は高々1回、総重量capacity以下で価値最大を返す。capacityは非負整数。\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CD16",
+    "category": "coding",
+    "difficulty": "expert",
+    "prompt": "関数 `parse_formula(formula)` を実装せよ。元素記号は大文字+任意の小文字、直後の正整数は個数（省略=1）。括弧は1段以上ネスト可で直後に倍率を置ける。元素数の辞書を返す。例 `Ca(OH)2`。\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "PH01",
+    "category": "physics_engineering",
+    "difficulty": "expert",
+    "prompt": "直列RLC回路でR=10Ω, L=20mH, C=2.0µF。共振角周波数ω0とQ=ω0L/Rを用いて品質係数Qを求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "PH02",
+    "category": "physics_engineering",
+    "difficulty": "expert",
+    "prompt": "節点Vは12V電源節点に6Ω、接地に3Ωで接続され、さらに接地から節点Vへ1Aの電流源が流れ込む。KCLからV[V]を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "PH03",
+    "category": "physics_engineering",
+    "difficulty": "expert",
+    "prompt": "600K→400Kの可逆Carnot機関の排熱をすべて400K→300Kの可逆Carnot機関へ入力する。第1機関への熱入力が1000Jのとき、2機関の総仕事[J]を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "PH04",
+    "category": "physics_engineering",
+    "difficulty": "expert",
+    "prompt": "幅1.00nmの1次元無限深井戸中の電子がn=3からn=2へ遷移する。放出光子エネルギー[eV]を求めよ。h=6.62607015e-34 J s, m_e=9.1093837e-31 kg, 1eV=1.602176634e-19J。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "PH05",
+    "category": "physics_engineering",
+    "difficulty": "hard",
+    "prompt": "電子が0.8cで運動している。相対論的運動エネルギー(γ-1)m_ec^2をkeVで求めよ。m_ec^2=511keV。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "PH06",
+    "category": "physics_engineering",
+    "difficulty": "expert",
+    "prompt": "平行板コンデンサの板間を厚さが等しい2層誘電体（比誘電率2と4）が電場方向に直列に満たす。同じ幾何形状の真空コンデンサに対する容量比C/C0を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "PH07",
+    "category": "physics_engineering",
+    "difficulty": "hard",
+    "prompt": "格子間隔d=1.50µmの回折格子にλ=500nmの光を垂直入射する。2次主極大の角度θ[deg]を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "PH08",
+    "category": "physics_engineering",
+    "difficulty": "expert",
+    "prompt": "一様な実体円柱が高さ1.20mを滑らず転がり落ちる。I=MR^2/2、g=9.8m/s^2として底での重心速度[m/s]を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "PH09",
+    "category": "physics_engineering",
+    "difficulty": "expert",
+    "prompt": "定常1次元熱伝導。層1:L=0.10m,k=10 W/mK、層2:L=0.20m,k=20 W/mKを直列積層し、両端温度差60K。接触熱抵抗なし。熱流束[W/m^2]を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "PH10",
+    "category": "physics_engineering",
+    "difficulty": "hard",
+    "prompt": "RC充電回路でR=10kΩ,C=100µF。0Vからステップ印加し、コンデンサ電圧が最終値の90%に達する時間[s]を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "PH11",
+    "category": "physics_engineering",
+    "difficulty": "expert",
+    "prompt": "真性半導体でn=p=1.0e16 m^-3、電子移動度0.14、正孔移動度0.05 m^2/Vs。σ=q(nμe+pμh), q=1.602e-19Cとして導電率[S/m]を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "PH12",
+    "category": "physics_engineering",
+    "difficulty": "expert",
+    "prompt": "地上5mの位置から速さ20m/s、水平から30°上向きに投射する。空気抵抗なし、g=9.8m/s^2。着地点までの水平距離[m]を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CH01",
+    "category": "chemistry_materials",
+    "difficulty": "hard",
+    "prompt": "理想系でA⇌B、平衡定数K=[B]/[A]=4.0。初期[A]=1.0M,[B]=0で体積一定。平衡時[B]をMで求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CH02",
+    "category": "chemistry_materials",
+    "difficulty": "expert",
+    "prompt": "298Kで2電子反応の標準電位E°=0.340V、反応商Q=0.0100。Nernst式 E=E°-(RT/nF)lnQ、R=8.314,T=298,F=96485 を用いE[V]を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CH03",
+    "category": "chemistry_materials",
+    "difficulty": "expert",
+    "prompt": "Arrhenius式に従う反応でEa=50.0kJ/mol。k(350K)/k(300K)を求めよ。R=8.314J/molK。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CH04",
+    "category": "chemistry_materials",
+    "difficulty": "expert",
+    "prompt": "競争Langmuir吸着でKA=2.0 bar^-1, KB=0.5 bar^-1, PA=0.40bar, PB=0.60bar。θA=KAPA/(1+KAPA+KBPB)を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CH05",
+    "category": "chemistry_materials",
+    "difficulty": "expert",
+    "prompt": "FCC Alを仮定し格子定数a=0.405nm、原子量26.98g/mol、NA=6.02214076e23。密度[kg/m^3]を求めよ。FCC単位胞あたり4原子。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CH06",
+    "category": "chemistry_materials",
+    "difficulty": "hard",
+    "prompt": "二相α+β領域でα相組成20at%, β相組成80at%、全体組成50at%。レバー則によるβ相モル分率を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CH07",
+    "category": "chemistry_materials",
+    "difficulty": "expert",
+    "prompt": "拡散係数D=D0 exp(-Q/kBT)、Q=0.80eV。D(900K)/D(700K)を求めよ。kB=8.617333262e-5 eV/K。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CH08",
+    "category": "chemistry_materials",
+    "difficulty": "hard",
+    "prompt": "空孔形成エネルギーEf=1.00eV、形成エントロピー項を無視。1000Kで空孔分率≈exp(-Ef/kBT)を求めよ。kB=8.617333262e-5eV/K。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CH09",
+    "category": "chemistry_materials",
+    "difficulty": "expert",
+    "prompt": "逐次一次反応A→B→Cでk1=0.20s^-1,k2=0.10s^-1、初期Aのみ。中間体Bが最大となる時刻 t=ln(k1/k2)/(k1-k2) [s] を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CH10",
+    "category": "chemistry_materials",
+    "difficulty": "hard",
+    "prompt": "酢酸/酢酸イオン緩衝液でpKa=4.76、[A-]/[HA]=2.00。Henderson-Hasselbalch式によるpHを求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CH11",
+    "category": "chemistry_materials",
+    "difficulty": "expert",
+    "prompt": "分子量10000の高分子100分子と、分子量30000の高分子50分子からなる試料の数平均分子量Mnを求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CH12",
+    "category": "chemistry_materials",
+    "difficulty": "expert",
+    "prompt": "理想二元混合物xA=0.30,xB=0.70、T=500K。1molあたりの混合GibbsエネルギーΔGmix=RTΣxi ln xi [J/mol]を求めよ。R=8.314。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "LI01",
+    "category": "life_information",
+    "difficulty": "expert",
+    "prompt": "Michaelis-Menten酵素に競争阻害剤。Vmax=100, Km=5µM, [S]=10µM, [I]=4µM, Ki=2µM。α=1+[I]/Kiとして v=Vmax[S]/(αKm+[S]) を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "LI02",
+    "category": "life_information",
+    "difficulty": "expert",
+    "prompt": "2齢級Leslie型行列 [[0.5,1.2],[0.4,0.6]] で個体群が更新される。長期増殖率に対応する最大固有値を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "LI03",
+    "category": "life_information",
+    "difficulty": "hard",
+    "prompt": "Lander-Watermanの単純Poissonモデルで平均カバレッジC=10。ある塩基が1本のreadにも覆われない確率を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "LI04",
+    "category": "life_information",
+    "difficulty": "expert",
+    "prompt": "連続時間logistic成長 dN/dt=rN(1-N/K)、K=1000,N0=100,r=0.5/day。t=4dayのNを求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "LI05",
+    "category": "life_information",
+    "difficulty": "hard",
+    "prompt": "常染色体劣性疾患がHardy-Weinberg平衡集団で1%発症(q^2=0.01)。保因者頻度2pqを求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "LI06",
+    "category": "life_information",
+    "difficulty": "expert",
+    "prompt": "基本再生産数R0=3.2、ワクチンの感染阻止有効率80%。均一混合近似で実効免疫割合が1-1/R0を超えるために必要な最低接種率を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "LI07",
+    "category": "life_information",
+    "difficulty": "expert",
+    "prompt": "Bloom filterでm=10000 bit,n=1000要素,k=7ハッシュ。偽陽性率≈(1-exp(-kn/m))^kを求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "LI08",
+    "category": "life_information",
+    "difficulty": "hard",
+    "prompt": "Shannon容量C=B log2(1+SNR)。帯域B=20MHz、線形SNR=15の通信路容量をMbpsで求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "LI09",
+    "category": "life_information",
+    "difficulty": "expert",
+    "prompt": "100Mbit/s回線、RTT=40msを十分利用するための帯域遅延積をMB（8bit=1byte, 10^6基準）で求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "LI10",
+    "category": "life_information",
+    "difficulty": "expert",
+    "prompt": "qPCR 2^-ΔΔCt法。処置群 Ct(target)=20,Ct(ref)=18、対照群 Ct(target)=22,Ct(ref)=18。処置群の対照群に対する相対発現量を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "HS01",
+    "category": "humanities_social_economics",
+    "difficulty": "expert",
+    "prompt": "需要Qd=100-Pb、供給Qs=Ps。単位税20でPb=Ps+20。税導入による死荷重を求めよ（線形需給、外部性なし）。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "HS02",
+    "category": "humanities_social_economics",
+    "difficulty": "hard",
+    "prompt": "名目投資収益率8%、同期間インフレ率3%。Fisherの厳密式による実質収益率(1.08/1.03-1)を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "HS03",
+    "category": "humanities_social_economics",
+    "difficulty": "expert",
+    "prompt": "初期投資100、1年後60、2年後70のキャッシュフロー。割引率10%のNPVを求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "HS04",
+    "category": "humanities_social_economics",
+    "difficulty": "expert",
+    "prompt": "同質財Cournot複占。逆需要P=100-Q、両社限界費用20、固定費0。対称均衡での市場価格を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "HS05",
+    "category": "humanities_social_economics",
+    "difficulty": "expert",
+    "prompt": "差の差法(Difference-in-Differences)で処置群と対照群を比較する際、因果解釈に中心的な識別仮定はどれか。\nA. 処置がなければ両群のアウトカムは平行なトレンドをたどった\nB. 両群のアウトカム水準が常に完全一致する\nC. 誤差分散がゼロである\nD. 処置群の標本数が必ず対照群より多い\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "HS06",
+    "category": "humanities_social_economics",
+    "difficulty": "hard",
+    "prompt": "言語学で「太郎が花子に本を渡した」のように、述語が要求する参与者の数と種類を扱う概念として最も直接的なのはどれか。\nA. 項構造\nB. 母音調和\nC. 韻律階層\nD. 語用論的含意だけ\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "HS07",
+    "category": "humanities_social_economics",
+    "difficulty": "expert",
+    "prompt": "歴史研究で一次史料AとBが同じ事件について矛盾する。史料批判として最も適切なのはどれか。\nA. 古い方を無条件に採用する\nB. 作成主体、目的、同時代性、伝来過程を比較し、独立資料とも照合する\nC. 両方を平均して事実とする\nD. 矛盾があれば事件自体が存在しないとする\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "HS08",
+    "category": "humanities_social_economics",
+    "difficulty": "expert",
+    "prompt": "功利主義的評価と権利論的評価が同じ政策について異なる結論を出した。最も妥当な説明はどれか。\nA. どちらか一方は必ず算術ミスである\nB. 帰結の総効用と、行為が侵害してはならない権利を異なる基準として重視し得る\nC. 倫理理論はすべて同じ判断基準を持つ\nD. 権利論は結果を最大化する理論の別名である\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "HS09",
+    "category": "humanities_social_economics",
+    "difficulty": "hard",
+    "prompt": "価格が10から12、需要量が100から80へ変化した。中点法による需要の価格弾力性（符号付き）を求めよ。\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。数値は小数または科学表記を推奨し、特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "HS10",
+    "category": "humanities_social_economics",
+    "difficulty": "expert",
+    "prompt": "ランダム化比較試験で割付後の脱落が処置群で多く、しかも重症者ほど脱落しやすかった。単純に完遂者だけを比較する場合の主要な懸念はどれか。\nA. attrition biasによりランダム化の比較可能性が損なわれる\nB. 必ず標本平均が0になる\nC. 二重盲検が自動的に成立する\nD. 外的妥当性だけが問題で内的妥当性は不変\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "HL01",
+    "category": "hallucination_resistance",
+    "difficulty": "expert",
+    "prompt": "DOI `10.9999/jcs.2031.4815` の論文『Quantum Catalysis by Negative Time Crystals』について、著者名・掲載誌・巻号を断定してください。外部検索はできず、この質問文以外の情報は与えられていません。\n捏造せず状況を分類してください。出力JSONは必ずキー `status`, `reason` の2つだけとする。\n`status` は `insufficient_information`, `underdetermined`, `invalid_inference` のいずれか。\n`reason` は `source_not_provided`, `unverified_entity`, `missing_parameters`, `non_unique`, `unverified_premise`, `correlation_not_causation`, `reaction_order_missing`, `confusion_matrix_missing` のいずれか。\n出力は説明なしのJSONだけにしてください。"
+  },
+  {
+    "id": "HL02",
+    "category": "hallucination_resistance",
+    "difficulty": "expert",
+    "prompt": "『田中零次郎が1924年に提唱した零次熱力学第二補題』の正式な数式を答えてください。この質問文以外に根拠資料はありません。\n捏造せず状況を分類してください。出力JSONは必ずキー `status`, `reason` の2つだけとする。\n`status` は `insufficient_information`, `underdetermined`, `invalid_inference` のいずれか。\n`reason` は `source_not_provided`, `unverified_entity`, `missing_parameters`, `non_unique`, `unverified_premise`, `correlation_not_causation`, `reaction_order_missing`, `confusion_matrix_missing` のいずれか。\n出力は説明なしのJSONだけにしてください。"
+  },
+  {
+    "id": "HL03",
+    "category": "hallucination_resistance",
+    "difficulty": "expert",
+    "prompt": "ある実験で温度だけが与えられ、圧力・物質量・体積はいずれも不明です。理想気体の全内部エネルギーを数値で求めてください。\n捏造せず状況を分類してください。出力JSONは必ずキー `status`, `reason` の2つだけとする。\n`status` は `insufficient_information`, `underdetermined`, `invalid_inference` のいずれか。\n`reason` は `source_not_provided`, `unverified_entity`, `missing_parameters`, `non_unique`, `unverified_premise`, `correlation_not_causation`, `reaction_order_missing`, `confusion_matrix_missing` のいずれか。\n出力は説明なしのJSONだけにしてください。"
+  },
+  {
+    "id": "HL04",
+    "category": "hallucination_resistance",
+    "difficulty": "expert",
+    "prompt": "未知の正方行列Aについて det(A)=2 だけが分かっています。trace(A)を一意に数値で求めてください。\n捏造せず状況を分類してください。出力JSONは必ずキー `status`, `reason` の2つだけとする。\n`status` は `insufficient_information`, `underdetermined`, `invalid_inference` のいずれか。\n`reason` は `source_not_provided`, `unverified_entity`, `missing_parameters`, `non_unique`, `unverified_premise`, `correlation_not_causation`, `reaction_order_missing`, `confusion_matrix_missing` のいずれか。\n出力は説明なしのJSONだけにしてください。"
+  },
+  {
+    "id": "HL05",
+    "category": "hallucination_resistance",
+    "difficulty": "expert",
+    "prompt": "『Python 4.2で廃止されたGILの代替機構Q-Lock』の公式PEP番号を答えてください。参照資料は与えられていません。\n捏造せず状況を分類してください。出力JSONは必ずキー `status`, `reason` の2つだけとする。\n`status` は `insufficient_information`, `underdetermined`, `invalid_inference` のいずれか。\n`reason` は `source_not_provided`, `unverified_entity`, `missing_parameters`, `non_unique`, `unverified_premise`, `correlation_not_causation`, `reaction_order_missing`, `confusion_matrix_missing` のいずれか。\n出力は説明なしのJSONだけにしてください。"
+  },
+  {
+    "id": "HL06",
+    "category": "hallucination_resistance",
+    "difficulty": "expert",
+    "prompt": "観測データでXとYの相関係数が0.9だったので、Xを1増やせば必ずYが0.9増えると結論してよいですか。\n捏造せず状況を分類してください。出力JSONは必ずキー `status`, `reason` の2つだけとする。\n`status` は `insufficient_information`, `underdetermined`, `invalid_inference` のいずれか。\n`reason` は `source_not_provided`, `unverified_entity`, `missing_parameters`, `non_unique`, `unverified_premise`, `correlation_not_causation`, `reaction_order_missing`, `confusion_matrix_missing` のいずれか。\n出力は説明なしのJSONだけにしてください。"
+  },
+  {
+    "id": "HL07",
+    "category": "hallucination_resistance",
+    "difficulty": "expert",
+    "prompt": "化学反応A→Bの反応速度定数kだけが与えられ、反応次数は不明です。半減期を一意に数値計算してください。\n捏造せず状況を分類してください。出力JSONは必ずキー `status`, `reason` の2つだけとする。\n`status` は `insufficient_information`, `underdetermined`, `invalid_inference` のいずれか。\n`reason` は `source_not_provided`, `unverified_entity`, `missing_parameters`, `non_unique`, `unverified_premise`, `correlation_not_causation`, `reaction_order_missing`, `confusion_matrix_missing` のいずれか。\n出力は説明なしのJSONだけにしてください。"
+  },
+  {
+    "id": "HL08",
+    "category": "hallucination_resistance",
+    "difficulty": "expert",
+    "prompt": "ある分類器のaccuracyが95%とだけ報告されています。陽性的中率precisionを一意に求めてください。\n捏造せず状況を分類してください。出力JSONは必ずキー `status`, `reason` の2つだけとする。\n`status` は `insufficient_information`, `underdetermined`, `invalid_inference` のいずれか。\n`reason` は `source_not_provided`, `unverified_entity`, `missing_parameters`, `non_unique`, `unverified_premise`, `correlation_not_causation`, `reaction_order_missing`, `confusion_matrix_missing` のいずれか。\n出力は説明なしのJSONだけにしてください。"
+  },
+  {
+    "id": "IF01",
+    "category": "instruction_following",
+    "difficulty": "hard",
+    "prompt": "次の記録から条件を満たすものだけ抽出せよ。A:温度310K,圧力2bar,状態=成功; B:290K,3bar,成功; C:320K,1bar,失敗; D:305K,4bar,成功。条件は温度300K以上かつ成功。キー`ids`にIDを入力順の配列、キー`count`に件数。\n出力は説明なしのJSONだけにしてください。"
+  },
+  {
+    "id": "IF02",
+    "category": "instruction_following",
+    "difficulty": "expert",
+    "prompt": "次の依存関係をJSON化せよ: task build は fetch 後、test は build 後、deploy は test と audit の両方の後、audit は fetch 後。キーは fetch,build,test,audit,deploy の順で、値は直接の前提タスクを辞書順配列とする。前提なしは空配列。\n出力は説明なしのJSONだけにしてください。"
+  },
+  {
+    "id": "IF03",
+    "category": "instruction_following",
+    "difficulty": "expert",
+    "prompt": "測定値 x=[1.2, -0.5, 3.0, 2.1] から正の値だけを残し、降順にして`values`、その合計を`sum`に格納せよ。数値型を保つこと。\n出力は説明なしのJSONだけにしてください。"
+  },
+  {
+    "id": "IF04",
+    "category": "instruction_following",
+    "difficulty": "hard",
+    "prompt": "文字列 `alpha|beta||gamma|` を`|`で分割し、空文字列を除外する。結果をキー`tokens`、長さを`n`に格納せよ。\n出力は説明なしのJSONだけにしてください。"
+  },
+  {
+    "id": "IF05",
+    "category": "instruction_following",
+    "difficulty": "expert",
+    "prompt": "表: P=(cost=8,score=91), Q=(7,88), R=(9,95), S=(6,91)。score>=90の候補のみからcost最小を選び、同率ならID辞書順。`selected`,`cost`,`score`だけをこの順の意味でJSONオブジェクトとして返せ。\n出力は説明なしのJSONだけにしてください。"
+  },
+  {
+    "id": "IF06",
+    "category": "instruction_following",
+    "difficulty": "expert",
+    "prompt": "区間 [1,4), [3,5), [5,7), [6,9) を、重なる場合だけ結合し、接するだけ（例[3,5)と[5,7)）は結合しない規則で処理する。結果を`intervals`に二次元配列として返せ。\n出力は説明なしのJSONだけにしてください。"
+  },
+  {
+    "id": "IF07",
+    "category": "instruction_following",
+    "difficulty": "hard",
+    "prompt": "次の値を単位変換せよ: 2.5 km, 300 m, 0.4 km。すべてmにし、入力順に`meters`、合計を`total_m`へ。\n出力は説明なしのJSONだけにしてください。"
+  },
+  {
+    "id": "IF08",
+    "category": "instruction_following",
+    "difficulty": "expert",
+    "prompt": "ログ `E12 WARN disk; E13 INFO start; E14 ERROR gpu; E15 WARN temp; E16 ERROR oom` からseverityがWARNまたはERRORのものを抽出し、`WARN`と`ERROR`をキーとしてそれぞれIDを入力順配列で格納せよ。他のキーは禁止。\n出力は説明なしのJSONだけにしてください。"
+  }
+]
+```
+
+</details>
+
+<details>
+<summary>Challenge 80問（クリックして展開）</summary>
+
+```json
+[
+  {
+    "id": "CJP01",
+    "category": "advanced_japanese",
+    "difficulty": "challenge",
+    "prompt": "\nある企業は「問い合わせへの平均応答時間」を主要KPIにしたところ、平均値は大幅に改善した。しかし、担当者が難しい案件を別窓口へ移す行動が増え、解決までの総時間はほぼ変わらなかった。経営陣は、KPI改善をもって顧客対応能力が向上したと結論した。監査担当者は、この結論には追加の検証が必要だと述べた。\n監査担当者の懸念を最も正確に表すものはどれか。\nA. KPIは測定誤差を含むため、平均値を一切使うべきでない。\nB. 指標への最適化が対象業務の実質的改善を表さない可能性がある。\nC. 難しい案件は統計分析から常に除外すべきである。\nD. 平均値ではなく中央値を使えば必ず問題が解消する。\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CJP02",
+    "category": "advanced_japanese",
+    "difficulty": "challenge",
+    "prompt": "\n「新制度導入後に離職率が下がった。ただし同時期に景気が悪化し、転職市場全体も縮小している。したがって、新制度に離職抑制効果がなかったとは言えないが、観測された低下の全てを制度に帰属させることもできない。」\nこの記述が最も強く支持するものはどれか。\nA. 新制度の因果効果はゼロである。\nB. 景気悪化は新制度の効果を必ず過小評価する。\nC. 適切な反実仮想がなければ制度の因果効果を観測差だけから同定できない。\nD. 離職率は景気と無関係なので制度効果を直接読める。\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CJP03",
+    "category": "advanced_japanese",
+    "difficulty": "challenge",
+    "prompt": "\n規程には「機密資料は原則として社外持出し禁止。ただし、部門長が必要性を認め、かつ情報管理責任者が安全措置を確認した場合に限り例外を認める」とある。ある社員は部門長の承認のみを得て資料を持ち出した。\n規程の文言だけから最も妥当な評価はどれか。\nA. 「原則」なので部門長承認だけで例外になる。\nB. 二つの条件は選言的なのでどちらか一方でよい。\nC. 例外要件は累積的であり、情報管理責任者の確認がないため要件を満たさない。\nD. 社員の目的が正当なら文言上の要件は不要である。\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CJP04",
+    "category": "advanced_japanese",
+    "difficulty": "challenge",
+    "prompt": "\n「調査で不正の証拠が見つからなかった」という報告に対し、委員Aは「したがって不正は存在しなかった」と述べ、委員Bは「調査感度が十分高かったかを確認しない限り、その結論は強すぎる」と反論した。\n委員Bの論点として最も適切なのはどれか。\nA. 証拠がないことは、検出能力に依存せず不在の証拠になる。\nB. 陰性結果の証拠価値は、存在した場合に検出できる確率に依存する。\nC. 不正の有無は統計的に検討できない。\nD. 調査で一つでも証拠が見つかれば必ず全ての不正が証明される。\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CJP05",
+    "category": "advanced_japanese",
+    "difficulty": "challenge",
+    "prompt": "\n「研修参加者は非参加者より成績が高かった。参加者はもともと学習意欲が高い傾向もあった。意欲を統制すると差は小さくなったが残った。したがって、研修には効果がある」とする報告がある。\nこの報告について最も慎重で妥当な評価はどれか。\nA. 意欲を統制したので未観測交絡は存在しないことが証明された。\nB. 差が残ったため研修効果は必ず因果的である。\nC. 観測された意欲による交絡は一部説明されたが、残差交絡の可能性は残る。\nD. 統制後に差が小さくなったので研修は逆効果である。\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CJP06",
+    "category": "advanced_japanese",
+    "difficulty": "challenge",
+    "prompt": "\nある臨床研究は重症患者を除外して治療効果を高精度に推定した。研究者は「内部妥当性は高い」と述べた一方、「実診療の全患者に同じ効果があるとは限らない」と付記した。\n後半の留保が主に指している問題はどれか。\nA. 測定尺度の信頼性\nB. 外的妥当性・対象集団への一般化可能性\nC. 帰無仮説の設定\nD. 多重比較補正\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CJP07",
+    "category": "advanced_japanese",
+    "difficulty": "challenge",
+    "prompt": "\n「透明性は信頼の必要条件である。しかし透明性が高い組織が常に信頼されるわけではない。透明に公開された情報そのものが重大な失敗を示すこともある。」\nこの段落と論理的に両立するものはどれか。\nA. 透明性があれば信頼は必ず生じる。\nB. 信頼があれば透明性は不要である。\nC. 透明性が欠ければ信頼成立に必要な条件を欠くが、透明性だけでは信頼を保証しない。\nD. 透明性と信頼には何の関係もない。\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CJP08",
+    "category": "advanced_japanese",
+    "difficulty": "challenge",
+    "prompt": "\n政策評価報告は「導入地域では犯罪件数が減少したが、非導入地域でも同程度に減少した」と述べている。その直後に「導入地域の減少だけを根拠に政策成功を主張することはできない」と結論している。\nこの結論の推論上の中心はどれか。\nA. 導入地域の事前値だけを比較すべきだという主張\nB. 同時期の共通変化を差し引く比較対照の必要性\nC. 犯罪件数は政策評価に使用できないという主張\nD. 非導入地域のデータは常にバイアスを生むという主張\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CAR01",
+    "category": "analytical_reasoning",
+    "difficulty": "challenge",
+    "prompt": "\n疾患Dの事前確率は0.12。第1検査の感度0.90、偽陽性率0.08。第1検査が陽性だった条件下で、第2検査の陽性確率はDありなら0.85、Dなしなら0.20である（第2検査は第1検査と条件付き独立とは仮定しない）。2回とも陽性だったときP(D|++)を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CAR02",
+    "category": "analytical_reasoning",
+    "difficulty": "challenge",
+    "prompt": "\n2台の同一並列機械で非プリエンプティブに処理する。処理時間はA=3, B=2, C=4, D=3, E=2。先行制約はA→C, A→D, B→D, C→E, D→E。時刻0から開始するとき最小メイクスパンを求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CAR03",
+    "category": "analytical_reasoning",
+    "difficulty": "challenge",
+    "prompt": "\n治療A/Bの成功数が次の通りだった。軽症: A 81/90, B 234/270。重症: A 192/263, B 55/80。全体ではAの成功率がBより高いが、軽症・重症の各層ではBの成功率がAより高い。\nこの現象の説明として最も適切なのはどれか。\nA. 各層の比較と全体比較の方向が交絡する層構成比によって反転するSimpsonのパラドックス\nB. 標本数が異なると成功率の比較は数学的に不可能になる\nC. 全体成功率だけが因果効果を必ず表す\nD. 層別成功率が異なる場合はデータ入力ミスである\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CAR04",
+    "category": "analytical_reasoning",
+    "difficulty": "challenge",
+    "prompt": "\n2部品A,Bからなる直列システムがある。確率0.02で共通ショックが起き、その場合は必ずシステム故障。ショックが起きない場合、Aの故障確率0.05、Bの故障確率0.10で両者は独立。システム故障確率を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CAR05",
+    "category": "analytical_reasoning",
+    "difficulty": "challenge",
+    "prompt": "\n状態Good/Badの確率は0.4/0.6。行動Aの利得は(100,0)、行動Bは(60,50)。状態を知らずに最適行動を選ぶ場合と、完全情報を得てから最適行動を選べる場合を比較し、完全情報の期待価値EVPIを求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CAR06",
+    "category": "analytical_reasoning",
+    "difficulty": "challenge",
+    "prompt": "\nDAGは Z→X, Z→Y, X→M→Y, X→Y である。XのYに対する総因果効果をバックドア調整で推定したい。最も適切な調整集合はどれか。\nA. {Z}\nB. {M}\nC. {Z,M}\nD. 空集合\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CAR07",
+    "category": "analytical_reasoning",
+    "difficulty": "challenge",
+    "prompt": "\n3状態S1,S2,S3に対する3行動の損失が A=(2,8,4), B=(5,4,6), C=(9,1,3) である。状態確率は不明で、minimax regret基準を使う。選ぶべき行動はどれか。\nA. A\nB. B\nC. C\nD. AとCが同率\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CAR08",
+    "category": "analytical_reasoning",
+    "difficulty": "challenge",
+    "prompt": "\n箱Aには赤2青1、箱Bには赤1青2の球が入り、箱は等確率で選ばれる。1個目を無作為に引いて赤だった。戻さずに2個目を引くとき、2個目も赤である条件付き確率を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CMS01",
+    "category": "mathematics_statistics",
+    "difficulty": "challenge",
+    "prompt": "\nマルコフ連鎖の遷移行列が P=[[0.5,0.5,0],[0.25,0.5,0.25],[0,0.5,0.5]] である。定常分布π=(π1,π2,π3)のπ2を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CMS02",
+    "category": "mathematics_statistics",
+    "difficulty": "challenge",
+    "prompt": "\nVar(X)=4, Var(Y)=9, Cov(X,Y)=3 とする。Z=2X-Y の分散Var(Z)を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CMS03",
+    "category": "mathematics_statistics",
+    "difficulty": "challenge",
+    "prompt": "\nBernoulli成功確率pに事前分布Beta(2,3)を置く。10回観測して成功7、失敗3だった。事後分布の下で、次の2試行が両方成功する事後予測確率を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CMS04",
+    "category": "mathematics_statistics",
+    "difficulty": "challenge",
+    "prompt": "\n正の整数nが n≡2 (mod 5), n≡3 (mod 7), n≡4 (mod 9) を同時に満たす。最小のnを求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CMS05",
+    "category": "mathematics_statistics",
+    "difficulty": "challenge",
+    "prompt": "\nx,y,z>0 かつ x+2y+3z=12 の制約下で xyz の最大値を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CMS06",
+    "category": "mathematics_statistics",
+    "difficulty": "challenge",
+    "prompt": "\n赤5個・青4個から同時に3個を無作為抽出する。「少なくとも青1個を含む」という条件の下で、赤がちょうど2個である条件付き確率を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CMS07",
+    "category": "mathematics_statistics",
+    "difficulty": "challenge",
+    "prompt": "\n実対称行列Aについて正しいものを1つ選べ。\nA. 固有値は必ず正である。\nB. 異なる固有値に属する固有ベクトルは直交する。\nC. Aが特異なら固有ベクトルを持たない。\nD. Aの固有値は一般に複素共役対になるが実数とは限らない。\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CMS08",
+    "category": "mathematics_statistics",
+    "difficulty": "challenge",
+    "prompt": "\n2人零和ゲームで行プレイヤーの利得行列が [[3,0],[0,2]]。混合戦略均衡で第1行を選ぶ確率pを求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CCD01",
+    "category": "coding",
+    "difficulty": "challenge",
+    "prompt": "\n関数 `shortest_path_one_free_edge(n: int, edges: list[list[int]], s: int, t: int) -> int` を実装せよ。0..n-1の無向グラフで各辺は[u,v,w]、w>=0。経路上で高々1本だけ辺コストを0としてよい。sからtへの最小コストを返し、到達不能なら-1。\n\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CCD02",
+    "category": "coding",
+    "difficulty": "challenge",
+    "prompt": "\n関数 `weighted_interval_schedule(intervals: list[list[int]]) -> int` を実装せよ。各要素は[start,end,weight]でstart<end。2区間は前者のend<=後者のstartなら両方選べる。互いに重ならない区間集合のweight合計最大値を返せ。入力順は任意。\n\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CCD03",
+    "category": "coding",
+    "difficulty": "challenge",
+    "prompt": "\n関数 `min_window(s: str, t: str) -> str` を実装せよ。s中の部分文字列で、tの各文字を重複度込みで全て含む最短のものを返す。同じ最短長が複数なら開始位置が最小のもの。存在しなければ空文字列。\n\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CCD04",
+    "category": "coding",
+    "difficulty": "challenge",
+    "prompt": "\n関数 `decode_brackets(s: str) -> str` を実装せよ。入力は非負ではなく正の整数kと角括弧からなる形式 `k[substring]` を含み、入れ子と複数桁kを許す。例 `3[a2[c]] -> accaccacc`。入力は妥当と仮定する。\n\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CCD05",
+    "category": "coding",
+    "difficulty": "challenge",
+    "prompt": "\n関数 `count_islands_after_additions(m: int, n: int, positions: list[list[int]]) -> list[int]` を実装せよ。初期は全て水のm×n格子。各[r,c]を順に陸へ変えた直後の4近傍連結な島数を返す。同じ位置が再度指定された場合は状態を変えない。\n\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CCD06",
+    "category": "coding",
+    "difficulty": "challenge",
+    "prompt": "\n関数 `kth_smallest_pair_distance(nums: list[int], k: int) -> int` を実装せよ。i<jの全組について|nums[i]-nums[j]|を考え、小さい順でk番目（1-indexed）を返す。\n\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CCD07",
+    "category": "coding",
+    "difficulty": "challenge",
+    "prompt": "\n関数 `min_cost_grid(grid: list[list[int]]) -> int` を実装せよ。左上から右下へ上下左右に移動でき、セルに入るたびそのセル値をコストとして支払う。開始セルの値も支払う。全値は非負。最小総コストを返せ。\n\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CCD08",
+    "category": "coding",
+    "difficulty": "challenge",
+    "prompt": "\n関数 `longest_subarray_limit(nums: list[int], limit: int) -> int` を実装せよ。連続部分配列の最大値と最小値の差がlimit以下となる部分配列の最大長を返す。numsは空でもよい。\n\n説明文は不要で、Pythonコードだけを出力してください。 importを使う場合は math, statistics, itertools, collections, functools, heapq, bisect, operator, re, typing, __future__ のみ使用可能です。"
+  },
+  {
+    "id": "CPH01",
+    "category": "physics_engineering",
+    "difficulty": "challenge",
+    "prompt": "\nコンデンサ電圧は初期0V。0<=t<10msでは10V電源に接続され時定数10msで充電される。t=10msで回路を切替え、以後は4Vへ時定数20msで指数緩和する。電圧は切替時に連続とする。t=30msでの電圧[V]を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CPH02",
+    "category": "physics_engineering",
+    "difficulty": "challenge",
+    "prompt": "\n定常サイクル装置が600Kの熱源から1200Jを受け取り、300Kの熱浴へ800Jを捨て、残りを仕事として出す。熱源・熱浴を含む全体系の1サイクルあたりエントロピー生成量[J/K]を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CPH03",
+    "category": "physics_engineering",
+    "difficulty": "challenge",
+    "prompt": "\n同じ静止質量mの粒子2個が一次元で完全非弾性衝突する。一方は実験室系で速度0.8c、他方は静止している。衝突後の複合系の速度をc単位で求めよ（放射なし）。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CPH04",
+    "category": "physics_engineering",
+    "difficulty": "challenge",
+    "prompt": "\n直列RLC回路でR=20Ω, L=50mH, C=100µF、角周波数ω=200rad/s。力率の絶対値 |cosφ| を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CPH05",
+    "category": "physics_engineering",
+    "difficulty": "challenge",
+    "prompt": "\n面積0.020m^2の平板を通る定常一次元熱伝導。高温側対流h1=10W/m^2K、層1は厚さ0.020m,k=0.50、層2は厚さ0.010m,k=0.20、低温側対流h2=25。両側流体温度差60K、接触熱抵抗なし。熱流量[W]を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CPH06",
+    "category": "physics_engineering",
+    "difficulty": "challenge",
+    "prompt": "\n特性インピーダンスZ0=50Ωの損失なし伝送線路に負荷ZL=100-j50Ωを接続した。負荷での電圧反射係数Γ=(ZL-Z0)/(ZL+Z0)の絶対値|Γ|を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CPH07",
+    "category": "physics_engineering",
+    "difficulty": "challenge",
+    "prompt": "\n連続時間LTI系の特性多項式が s^3+2s^2+s+2 である。安定性について正しいものはどれか。\nA. 全極が左半平面にあり漸近安定\nB. 右半平面極を1個持つ\nC. 虚軸上の極を持ち漸近安定ではない\nD. 原点に3重極を持つ\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CPH08",
+    "category": "physics_engineering",
+    "difficulty": "challenge",
+    "prompt": "\n理想的な無散逸LC回路で、初期にコンデンサだけが帯電し電流は0とする。四分の一周期後に正しいものはどれか。\nA. エネルギーは全て抵抗熱になっている\nB. コンデンサ電圧は最大で電流は0\nC. コンデンサの電場エネルギーが最小となり、インダクタの磁場エネルギーが最大となる\nD. 総エネルギーは初期値の半分になる\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CCH01",
+    "category": "chemistry_materials",
+    "difficulty": "challenge",
+    "prompt": "\n二塩基酸H2AのpKa1=4.00, pKa2=6.00。活量係数を1としpH=5.00のとき、全酸濃度に対するHA^-のモル分率を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CCH02",
+    "category": "chemistry_materials",
+    "difficulty": "challenge",
+    "prompt": "\n逐次一次反応 A→B→C で k1=0.20 min^-1, k2=0.050 min^-1、初期はAのみ。B濃度が最大となる時刻[min]を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CCH03",
+    "category": "chemistry_materials",
+    "difficulty": "challenge",
+    "prompt": "\nA,Bが同一サイトへ競争Langmuir吸着する。KA=2.0 bar^-1, KB=5.0 bar^-1, PA=0.30bar, PB=0.10bar。θA=KAPA/(1+KAPA+KBPB)としてAの被覆率を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CCH04",
+    "category": "chemistry_materials",
+    "difficulty": "challenge",
+    "prompt": "\n298K、対称係数α=0.5、交換電流密度i0=2.0mA/cm^2の電極反応を考える。濃度過電圧を無視し、Butler-Volmer式 i=i0[exp(αFη/RT)-exp(-(1-α)Fη/RT)] を用いる。η=0.120Vでの電流密度[mA/cm^2]を求めよ。R=8.314,F=96485。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CCH05",
+    "category": "chemistry_materials",
+    "difficulty": "challenge",
+    "prompt": "\n立方晶で格子定数a=0.400nm。Cu Kαをλ=0.154nmとし、(111)面の1次Bragg反射について2θ[deg]を求めよ。d111=a/sqrt(3)、2d sinθ=λを用いる。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CCH06",
+    "category": "chemistry_materials",
+    "difficulty": "challenge",
+    "prompt": "\nSchottky欠陥対の形成エネルギーが2.00eVで、単純化して各副格子の空孔分率x≈exp[-Ef/(2kBT)]とする。T=1000Kでxを求めよ。kB=8.617333262×10^-5 eV/K。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CCH07",
+    "category": "chemistry_materials",
+    "difficulty": "challenge",
+    "prompt": "\n表面反応で速度式が r=k KA PA/(1+KAPA+KBPB)^2 と観測された。PAを十分大きくしてKAPAが他項より支配的な極限で、PAに対する見かけ反応次数はどれか。\nA. +1\nB. 0\nC. -1\nD. -2\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CCH08",
+    "category": "chemistry_materials",
+    "difficulty": "challenge",
+    "prompt": "\n二相領域でα相組成xα=0.20、β相組成xβ=0.80、全組成x0=0.35。レバー則でβ相のモル分率を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CLI01",
+    "category": "life_information",
+    "difficulty": "challenge",
+    "prompt": "\nある遺伝的保因者の事前確率は0.020。保因者検査の感度0.90、特異度0.95。検査が陰性だったときの保因者事後確率を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CLI02",
+    "category": "life_information",
+    "difficulty": "challenge",
+    "prompt": "\nHardy-Weinberg集団で対立遺伝子aの頻度q=0.20。選択前の適応度をAA=1, Aa=1, aa=0.5とする。1世代の viability selection 後、繁殖個体群におけるaの頻度q'を求めよ（ランダム交配前）。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CLI03",
+    "category": "life_information",
+    "difficulty": "challenge",
+    "prompt": "\n同一蛍光閾値を用いるqPCRで、試料Aの1cycle当たり増幅倍率EA=1.90, CtA=20、試料BはEB=2.00, CtB=22。閾値到達量が同一として、初期鋳型量比N0,A/N0,Bを求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CLI04",
+    "category": "life_information",
+    "difficulty": "challenge",
+    "prompt": "\n入力0/1が等確率のbinary symmetric channelでビット反転確率p=0.10。1使用あたりの相互情報量I(X;Y)[bit]を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CLI05",
+    "category": "life_information",
+    "difficulty": "challenge",
+    "prompt": "\nBloom filterでビット数m=10000、挿入要素数n=1000、独立ハッシュ数k=7。標準近似 p_fp=(1-exp(-kn/m))^k による偽陽性率を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CLI06",
+    "category": "life_information",
+    "difficulty": "challenge",
+    "prompt": "\n混合阻害の単純速度式 v=Vmax[S]/(αKm+α'[S]) を用いる。Vmax=120, Km=5, [S]=10, [I]=4, Ki=2, Ki'=4。α=1+[I]/Ki, α'=1+[I]/Ki'としてvを求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CLI07",
+    "category": "life_information",
+    "difficulty": "challenge",
+    "prompt": "\nGalton-Watson分枝過程で1個体あたり子孫数が平均1.5のPoisson分布に従う。絶滅確率qはq=exp(1.5(q-1))の[0,1)にある非自明解である。qを数値で求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CLI08",
+    "category": "life_information",
+    "difficulty": "challenge",
+    "prompt": "\nGWASで祖先集団構造が疾患頻度とアレル頻度の双方に関連しているのに補正しなかった。最も直接的に懸念されるものはどれか。\nA. population stratificationによる偽関連\nB. PCR増幅効率が必ず2倍になる\nC. Mendel分離比そのものが破れる\nD. 連鎖不平衡が全ゲノムで消失する\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CHS01",
+    "category": "humanities_social_economics",
+    "difficulty": "challenge",
+    "prompt": "\nDifference-in-Differences。処置群の平均アウトカムは介入前50、介入後62。対照群は介入前45、介入後53。平行トレンドを仮定したDiD推定量を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CHS02",
+    "category": "humanities_social_economics",
+    "difficulty": "challenge",
+    "prompt": "\n二値操作変数Zについて独立性・排除制約・単調性が成立し、treatment uptakeにcomplier/always-taker/never-takerがいる。Wald推定量が識別する効果として最も適切なのはどれか。\nA. 全母集団のATEを常に識別する\nB. compliersに対する局所平均処置効果LATE\nC. always-takersだけの効果\nD. 処置を受けた全員のATTを必ず識別する\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CHS03",
+    "category": "humanities_social_economics",
+    "difficulty": "challenge",
+    "prompt": "\n同質財Cournot複占。逆需要P=100-Q、各企業の限界費用は一定20、固定費0。対称Nash均衡での市場総生産量Qを求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CHS04",
+    "category": "humanities_social_economics",
+    "difficulty": "challenge",
+    "prompt": "\n額面100、年1回クーポン5、残存2年の債券を考える。満期利回り4%（年複利）のとき理論価格を求めよ。\n\n計算過程は内部で行い、最終出力は `最終回答: 数値` の1行だけにしてください。特に指定がない限り有効数字4桁以上で答えてください。"
+  },
+  {
+    "id": "CHS05",
+    "category": "humanities_social_economics",
+    "difficulty": "challenge",
+    "prompt": "\n3有権者の選好が 1:A>B>C, 2:B>C>A, 3:C>A>B である。単純多数決のペア比較について正しいものはどれか。\nA. AがB,Cの両方に勝つCondorcet winner\nB. BがA,Cの両方に勝つCondorcet winner\nC. A>B, B>C, C>Aという多数決循環が生じる\nD. 全てのペアが同数になる\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CHS06",
+    "category": "humanities_social_economics",
+    "difficulty": "challenge",
+    "prompt": "\nある倫理原則Pについて「Pを守ることは正当な行為であるために必要だが十分ではない」とする立場と論理的に両立するものはどれか。\nA. Pを守れば他の条件に関係なく必ず正当である。\nB. 正当な行為はPを守るが、Pを守る不正当な行為もあり得る。\nC. Pを守らない正当な行為が必ず存在する。\nD. Pと正当性には論理的関係がない。\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CHS07",
+    "category": "humanities_social_economics",
+    "difficulty": "challenge",
+    "prompt": "\n会話で「何人かの学生は合格した」と発話したとき、文脈上特別な事情がなければ「全員が合格したわけではない」という含意が生じやすい。しかし話者が「実際には全員だった」と続けても論理矛盾にはならない。この性質の説明として最も適切なのはどれか。\nA. 「何人か」は論理的に「全員ではない」を含意する\nB. 「全員ではない」は取消可能な尺度含意である\nC. 「何人か」は常に0人を意味する\nD. これは統語的性一致の現象である\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CHS08",
+    "category": "humanities_social_economics",
+    "difficulty": "challenge",
+    "prompt": "\n歴史家が政策決定者の日記1冊だけから「国民全体が政策を支持していた」と推論した。最も直接的な方法論上の問題はどれか。\nA. 一次史料は二次史料より常に信頼できない\nB. 個人の記録から母集団全体の態度へ一般化する根拠が不足している\nC. 日記は年代測定できないため史料にならない\nD. 政策決定者の記録は必ず虚偽である\n\n回答は選択肢の英字1文字だけを出力してください。"
+  },
+  {
+    "id": "CHL01",
+    "category": "hallucination_resistance",
+    "difficulty": "challenge",
+    "prompt": "\nDOI `10.9999/abc.2099.77` の論文の著者、掲載誌、ページを正確に答えるよう求められたが、この質問文以外に資料はない。捏造せず状況を分類せよ。\n\n\n分類ラベルの意味は次の通りです。\n- status=supported: 与えられた情報だけで要求された主張を支持できる。\n- status=partial: 関連する事実は支持されるが、要求された具体的主張までは支持できない。\n- status=insufficient_information: 要求された値・事実を一意または検証可能に確定する情報が不足している。\n- status=invalid_inference: 与えられた事実から要求された結論へ進む推論自体が不正。\n- reason=source_not_provided: 検証対象を裏付ける一次資料・参照資料そのものがない。\n- reason=missing_claim_evidence: 周辺事実はあるが、問われた具体的主張を裏付ける証拠がない。\n- reason=correlation_not_causation: 相関・観察から因果を断定している。\n- reason=non_unique: 条件を満たす答えが複数存在し、一意に定まらない。\n- reason=unverified_attribution: 引用・発言・著者帰属を検証できない。\n- reason=inconsistent_evidence: 同等の根拠が互いに矛盾している。\n- reason=missing_base_rate: 条件付き確率に必要な事前確率・有病率がない。\n- reason=unsupported_extrapolation: 観測範囲を大きく外れた外挿を正当化するモデルがない。\n外部検索は禁止。次のJSONだけを出力してください。キーは `status`, `reason` の2つだけ。 `status` は `supported`, `partial`, `insufficient_information`, `invalid_inference` のいずれか。 `reason` は `source_not_provided`, `missing_claim_evidence`, `correlation_not_causation`, `non_unique`, `unverified_attribution`, `inconsistent_evidence`, `missing_base_rate`, `unsupported_extrapolation` のいずれか。"
+  },
+  {
+    "id": "CHL02",
+    "category": "hallucination_resistance",
+    "difficulty": "challenge",
+    "prompt": "\n与えられた抄録には「触媒Xで収率が42%から71%へ上昇した」とだけ書かれている。質問は「Xが遷移状態の電荷分離を安定化したことが収率向上の原因か」と断定を求めている。抄録には機構解析の記述はない。状況を分類せよ。\n\n\n分類ラベルの意味は次の通りです。\n- status=supported: 与えられた情報だけで要求された主張を支持できる。\n- status=partial: 関連する事実は支持されるが、要求された具体的主張までは支持できない。\n- status=insufficient_information: 要求された値・事実を一意または検証可能に確定する情報が不足している。\n- status=invalid_inference: 与えられた事実から要求された結論へ進む推論自体が不正。\n- reason=source_not_provided: 検証対象を裏付ける一次資料・参照資料そのものがない。\n- reason=missing_claim_evidence: 周辺事実はあるが、問われた具体的主張を裏付ける証拠がない。\n- reason=correlation_not_causation: 相関・観察から因果を断定している。\n- reason=non_unique: 条件を満たす答えが複数存在し、一意に定まらない。\n- reason=unverified_attribution: 引用・発言・著者帰属を検証できない。\n- reason=inconsistent_evidence: 同等の根拠が互いに矛盾している。\n- reason=missing_base_rate: 条件付き確率に必要な事前確率・有病率がない。\n- reason=unsupported_extrapolation: 観測範囲を大きく外れた外挿を正当化するモデルがない。\n外部検索は禁止。次のJSONだけを出力してください。キーは `status`, `reason` の2つだけ。 `status` は `supported`, `partial`, `insufficient_information`, `invalid_inference` のいずれか。 `reason` は `source_not_provided`, `missing_claim_evidence`, `correlation_not_causation`, `non_unique`, `unverified_attribution`, `inconsistent_evidence`, `missing_base_rate`, `unsupported_extrapolation` のいずれか。"
+  },
+  {
+    "id": "CHL03",
+    "category": "hallucination_resistance",
+    "difficulty": "challenge",
+    "prompt": "\n観察研究でコーヒー摂取量と試験点数に正の相関があった。交絡調整や介入は行われていない。「コーヒーを増やせば点数が上がる」と結論してよいかを分類せよ。\n\n\n分類ラベルの意味は次の通りです。\n- status=supported: 与えられた情報だけで要求された主張を支持できる。\n- status=partial: 関連する事実は支持されるが、要求された具体的主張までは支持できない。\n- status=insufficient_information: 要求された値・事実を一意または検証可能に確定する情報が不足している。\n- status=invalid_inference: 与えられた事実から要求された結論へ進む推論自体が不正。\n- reason=source_not_provided: 検証対象を裏付ける一次資料・参照資料そのものがない。\n- reason=missing_claim_evidence: 周辺事実はあるが、問われた具体的主張を裏付ける証拠がない。\n- reason=correlation_not_causation: 相関・観察から因果を断定している。\n- reason=non_unique: 条件を満たす答えが複数存在し、一意に定まらない。\n- reason=unverified_attribution: 引用・発言・著者帰属を検証できない。\n- reason=inconsistent_evidence: 同等の根拠が互いに矛盾している。\n- reason=missing_base_rate: 条件付き確率に必要な事前確率・有病率がない。\n- reason=unsupported_extrapolation: 観測範囲を大きく外れた外挿を正当化するモデルがない。\n外部検索は禁止。次のJSONだけを出力してください。キーは `status`, `reason` の2つだけ。 `status` は `supported`, `partial`, `insufficient_information`, `invalid_inference` のいずれか。 `reason` は `source_not_provided`, `missing_claim_evidence`, `correlation_not_causation`, `non_unique`, `unverified_attribution`, `inconsistent_evidence`, `missing_base_rate`, `unsupported_extrapolation` のいずれか。"
+  },
+  {
+    "id": "CHL04",
+    "category": "hallucination_resistance",
+    "difficulty": "challenge",
+    "prompt": "\nx+y=10 という情報だけからxの数値を一意に答えるよう求められた。x,yは実数で追加条件はない。状況を分類せよ。\n\n\n分類ラベルの意味は次の通りです。\n- status=supported: 与えられた情報だけで要求された主張を支持できる。\n- status=partial: 関連する事実は支持されるが、要求された具体的主張までは支持できない。\n- status=insufficient_information: 要求された値・事実を一意または検証可能に確定する情報が不足している。\n- status=invalid_inference: 与えられた事実から要求された結論へ進む推論自体が不正。\n- reason=source_not_provided: 検証対象を裏付ける一次資料・参照資料そのものがない。\n- reason=missing_claim_evidence: 周辺事実はあるが、問われた具体的主張を裏付ける証拠がない。\n- reason=correlation_not_causation: 相関・観察から因果を断定している。\n- reason=non_unique: 条件を満たす答えが複数存在し、一意に定まらない。\n- reason=unverified_attribution: 引用・発言・著者帰属を検証できない。\n- reason=inconsistent_evidence: 同等の根拠が互いに矛盾している。\n- reason=missing_base_rate: 条件付き確率に必要な事前確率・有病率がない。\n- reason=unsupported_extrapolation: 観測範囲を大きく外れた外挿を正当化するモデルがない。\n外部検索は禁止。次のJSONだけを出力してください。キーは `status`, `reason` の2つだけ。 `status` は `supported`, `partial`, `insufficient_information`, `invalid_inference` のいずれか。 `reason` は `source_not_provided`, `missing_claim_evidence`, `correlation_not_causation`, `non_unique`, `unverified_attribution`, `inconsistent_evidence`, `missing_base_rate`, `unsupported_extrapolation` のいずれか。"
+  },
+  {
+    "id": "CHL05",
+    "category": "hallucination_resistance",
+    "difficulty": "challenge",
+    "prompt": "\n「Einsteinが1931年の京都講演で『量子計算は21世紀の錬金術になる』と述べた」という引用の真偽を、この質問文だけを根拠に断定するよう求められた。状況を分類せよ。\n\n\n分類ラベルの意味は次の通りです。\n- status=supported: 与えられた情報だけで要求された主張を支持できる。\n- status=partial: 関連する事実は支持されるが、要求された具体的主張までは支持できない。\n- status=insufficient_information: 要求された値・事実を一意または検証可能に確定する情報が不足している。\n- status=invalid_inference: 与えられた事実から要求された結論へ進む推論自体が不正。\n- reason=source_not_provided: 検証対象を裏付ける一次資料・参照資料そのものがない。\n- reason=missing_claim_evidence: 周辺事実はあるが、問われた具体的主張を裏付ける証拠がない。\n- reason=correlation_not_causation: 相関・観察から因果を断定している。\n- reason=non_unique: 条件を満たす答えが複数存在し、一意に定まらない。\n- reason=unverified_attribution: 引用・発言・著者帰属を検証できない。\n- reason=inconsistent_evidence: 同等の根拠が互いに矛盾している。\n- reason=missing_base_rate: 条件付き確率に必要な事前確率・有病率がない。\n- reason=unsupported_extrapolation: 観測範囲を大きく外れた外挿を正当化するモデルがない。\n外部検索は禁止。次のJSONだけを出力してください。キーは `status`, `reason` の2つだけ。 `status` は `supported`, `partial`, `insufficient_information`, `invalid_inference` のいずれか。 `reason` は `source_not_provided`, `missing_claim_evidence`, `correlation_not_causation`, `non_unique`, `unverified_attribution`, `inconsistent_evidence`, `missing_base_rate`, `unsupported_extrapolation` のいずれか。"
+  },
+  {
+    "id": "CHL06",
+    "category": "hallucination_resistance",
+    "difficulty": "challenge",
+    "prompt": "\n同じ試料の濃度について、同一条件の一次資料Aは「2.0±0.1 M」、一次資料Bは「5.0±0.1 M」と報告し、どちらを優先すべきかの情報はない。「真の濃度を4桁で答えよ」と求められた。状況を分類せよ。\n\n\n分類ラベルの意味は次の通りです。\n- status=supported: 与えられた情報だけで要求された主張を支持できる。\n- status=partial: 関連する事実は支持されるが、要求された具体的主張までは支持できない。\n- status=insufficient_information: 要求された値・事実を一意または検証可能に確定する情報が不足している。\n- status=invalid_inference: 与えられた事実から要求された結論へ進む推論自体が不正。\n- reason=source_not_provided: 検証対象を裏付ける一次資料・参照資料そのものがない。\n- reason=missing_claim_evidence: 周辺事実はあるが、問われた具体的主張を裏付ける証拠がない。\n- reason=correlation_not_causation: 相関・観察から因果を断定している。\n- reason=non_unique: 条件を満たす答えが複数存在し、一意に定まらない。\n- reason=unverified_attribution: 引用・発言・著者帰属を検証できない。\n- reason=inconsistent_evidence: 同等の根拠が互いに矛盾している。\n- reason=missing_base_rate: 条件付き確率に必要な事前確率・有病率がない。\n- reason=unsupported_extrapolation: 観測範囲を大きく外れた外挿を正当化するモデルがない。\n外部検索は禁止。次のJSONだけを出力してください。キーは `status`, `reason` の2つだけ。 `status` は `supported`, `partial`, `insufficient_information`, `invalid_inference` のいずれか。 `reason` は `source_not_provided`, `missing_claim_evidence`, `correlation_not_causation`, `non_unique`, `unverified_attribution`, `inconsistent_evidence`, `missing_base_rate`, `unsupported_extrapolation` のいずれか。"
+  },
+  {
+    "id": "CHL07",
+    "category": "hallucination_resistance",
+    "difficulty": "challenge",
+    "prompt": "\n検査の感度99%、特異度99%だけが与えられ、「陽性者が本当に疾患を持つ確率」を数値で答えるよう求められた。対象集団の有病率は与えられていない。状況を分類せよ。\n\n\n分類ラベルの意味は次の通りです。\n- status=supported: 与えられた情報だけで要求された主張を支持できる。\n- status=partial: 関連する事実は支持されるが、要求された具体的主張までは支持できない。\n- status=insufficient_information: 要求された値・事実を一意または検証可能に確定する情報が不足している。\n- status=invalid_inference: 与えられた事実から要求された結論へ進む推論自体が不正。\n- reason=source_not_provided: 検証対象を裏付ける一次資料・参照資料そのものがない。\n- reason=missing_claim_evidence: 周辺事実はあるが、問われた具体的主張を裏付ける証拠がない。\n- reason=correlation_not_causation: 相関・観察から因果を断定している。\n- reason=non_unique: 条件を満たす答えが複数存在し、一意に定まらない。\n- reason=unverified_attribution: 引用・発言・著者帰属を検証できない。\n- reason=inconsistent_evidence: 同等の根拠が互いに矛盾している。\n- reason=missing_base_rate: 条件付き確率に必要な事前確率・有病率がない。\n- reason=unsupported_extrapolation: 観測範囲を大きく外れた外挿を正当化するモデルがない。\n外部検索は禁止。次のJSONだけを出力してください。キーは `status`, `reason` の2つだけ。 `status` は `supported`, `partial`, `insufficient_information`, `invalid_inference` のいずれか。 `reason` は `source_not_provided`, `missing_claim_evidence`, `correlation_not_causation`, `non_unique`, `unverified_attribution`, `inconsistent_evidence`, `missing_base_rate`, `unsupported_extrapolation` のいずれか。"
+  },
+  {
+    "id": "CHL08",
+    "category": "hallucination_resistance",
+    "difficulty": "challenge",
+    "prompt": "\n材料強度が温度300,350,400Kでそれぞれ100,96,91MPaと測定された。この3点だけから1000Kでの強度を高精度に断定するよう求められ、物理モデルも相転移情報もない。状況を分類せよ。\n\n\n分類ラベルの意味は次の通りです。\n- status=supported: 与えられた情報だけで要求された主張を支持できる。\n- status=partial: 関連する事実は支持されるが、要求された具体的主張までは支持できない。\n- status=insufficient_information: 要求された値・事実を一意または検証可能に確定する情報が不足している。\n- status=invalid_inference: 与えられた事実から要求された結論へ進む推論自体が不正。\n- reason=source_not_provided: 検証対象を裏付ける一次資料・参照資料そのものがない。\n- reason=missing_claim_evidence: 周辺事実はあるが、問われた具体的主張を裏付ける証拠がない。\n- reason=correlation_not_causation: 相関・観察から因果を断定している。\n- reason=non_unique: 条件を満たす答えが複数存在し、一意に定まらない。\n- reason=unverified_attribution: 引用・発言・著者帰属を検証できない。\n- reason=inconsistent_evidence: 同等の根拠が互いに矛盾している。\n- reason=missing_base_rate: 条件付き確率に必要な事前確率・有病率がない。\n- reason=unsupported_extrapolation: 観測範囲を大きく外れた外挿を正当化するモデルがない。\n外部検索は禁止。次のJSONだけを出力してください。キーは `status`, `reason` の2つだけ。 `status` は `supported`, `partial`, `insufficient_information`, `invalid_inference` のいずれか。 `reason` は `source_not_provided`, `missing_claim_evidence`, `correlation_not_causation`, `non_unique`, `unverified_attribution`, `inconsistent_evidence`, `missing_base_rate`, `unsupported_extrapolation` のいずれか。"
+  },
+  {
+    "id": "CIF01",
+    "category": "instruction_following",
+    "difficulty": "challenge",
+    "prompt": "\n記録は A:(score=8,group=x), B:(6,y), C:(8,y), D:(9,x), E:(6,y)。score>=7だけ残し、score降順・同点はID昇順で並べる。`ids`にID配列、`scores`に対応するscore配列、`count`に件数を入れよ。キー順はids,scores,count。説明なしのJSONだけを出力せよ。\n"
+  },
+  {
+    "id": "CIF02",
+    "category": "instruction_following",
+    "difficulty": "challenge",
+    "prompt": "\n直接依存関係: A:なし, B:A, C:A, D:BとC, E:C, F:DとE。タスクFを実行するために必要なF以外の全祖先タスクを重複なく辞書順に並べ、`ancestors`へ入れる。`count`も入れる。説明なしのJSONだけを出力せよ。\n"
+  },
+  {
+    "id": "CIF03",
+    "category": "instruction_following",
+    "difficulty": "challenge",
+    "prompt": "\n閉区間[0,20]から、禁止区間[2,5], [4,8], [12,15], [15,17]を除く。禁止区間は重なり・接触を結合してから除き、残る区間を端点共有なしの実数区間として `allowed` に [[start,end],...] の形で昇順格納せよ。境界0,20は含め、禁止区間の端点は除外されるため、ここでは区間端点の開閉情報を `open_left`,`open_right` の真偽配列で別に表現する。出力キーはallowed,open_left,open_right。説明なしのJSONだけ。\n"
+  },
+  {
+    "id": "CIF04",
+    "category": "instruction_following",
+    "difficulty": "challenge",
+    "prompt": "\nログ: `u1 OK 120`, `u2 FAIL 80`, `u1 OK 100`, `u3 OK 90`, `u2 OK 70`。OK行だけを対象にユーザーごとの第3列合計を求め、合計降順・同点はuser昇順で並べる。`totals`は `[{\"user\":...,\"sum\":...},...]`、`grand_total`は全OK合計。説明なしのJSONだけを出力せよ。\n"
+  },
+  {
+    "id": "CIF05",
+    "category": "instruction_following",
+    "difficulty": "challenge",
+    "prompt": "\n点P=(2,-1), Q=(-3,4), R=(0,5)を変換する。まず(x,y)->(x+1,y-2)、次に原点中心に90度反時計回り回転(x,y)->(-y,x)。変換後をP,Q,Rの順で `points` に [[x,y],...]、各点のx+yを `sums` に入れよ。整数型を保つ。説明なしのJSONだけ。\n"
+  },
+  {
+    "id": "CIF06",
+    "category": "instruction_following",
+    "difficulty": "challenge",
+    "prompt": "\n集合A={1,2,3,5,8}, B={2,4,5,8}, C={1,5,7,8}。`exactly_two`に3集合のうちちょうど2集合に属する要素を昇順、`all_three`に3集合全てに属する要素を昇順、`union_count`に和集合要素数を入れよ。説明なしのJSONだけ。\n"
+  },
+  {
+    "id": "CIF07",
+    "category": "instruction_following",
+    "difficulty": "challenge",
+    "prompt": "\n候補 A:(cost=7,risk=2,value=8), B:(5,4,9), C:(6,2,7), D:(4,3,6), E:(8,1,10)。条件 cost<=7 かつ risk<=3 を満たす候補だけ残し、value/cost の比が高い順（同率はID昇順）に並べる。`ids`にID、`ratios`に比を小数第3位まで四捨五入した数値で格納せよ。説明なしのJSONだけ。\n"
+  },
+  {
+    "id": "CIF08",
+    "category": "instruction_following",
+    "difficulty": "challenge",
+    "prompt": "\n整数列 [3,-1,4,4,0,-2,5,3] について、重複を除いた正の値だけを昇順にした配列を`values`、隣接差分（後-前）を`gaps`、valuesの中央値を`median`に入れよ。中央値は数値型。説明なしのJSONだけ。\n"
+  }
+]
+```
+
+</details>
+

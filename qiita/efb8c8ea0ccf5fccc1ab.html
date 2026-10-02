@@ -1,0 +1,312 @@
+---
+layout: "qiita-mirror"
+title: "WSL-Ubuntu + RTX 5070 Ti で fairchem-core (UMA) をGPUで動かす"
+qiita_id: "efb8c8ea0ccf5fccc1ab"
+qiita_url: "https://qiita.com/h-nabata/items/efb8c8ea0ccf5fccc1ab"
+qiita_created: "2025-11-24T04:41:11+09:00"
+qiita_updated: "2025-11-24T04:41:11+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "計算化学・分子構造"
+mirror_tags: ["Python", "GPU", "計算化学", "ニューラルネットワークポテンシャル", "fairchem"]
+permalink: "/qiita/efb8c8ea0ccf5fccc1ab.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="1:1-1:677">デスクトップPCのGPUを RTX 3070 Ti → RTX 5070 Ti に換装したので、性能のチェックを兼ねてMetaの<a href="https://scontent-nrt1-2.xx.fbcdn.net/v/t39.2365-6/520537587_1080318074038402_8373516189142708029_n.pdf?_nc_cat=107&amp;ccb=1-7&amp;_nc_sid=3c67a6&amp;_nc_ohc=KfaQAQBbyH4Q7kNvwEr5__-&amp;_nc_oc=AdmcIJWd3moj1xtBNzyJH-Q09VjKarDHf2-LrmYfYTsL74TZFbTY6Q3CFDgXCzZwju4&amp;_nc_zt=14&amp;_nc_ht=scontent-nrt1-2.xx&amp;_nc_gid=_RId3sr3EFbnBzEh0OUmXA&amp;oh=00_AfgDsiEnSBHQGtfR42nnHjq2E6VI55vimHomL0VPHI5b5g&amp;oe=69292279" rel="nofollow noopener" target="_blank">UMAポテンシャル</a>を動かしてみる。以前の記事に倣い、最新の<a href="https://github.com/facebookresearch/fairchem" rel="nofollow noopener" target="_blank">fairchem-coreライブラリ</a>を導入する。</p>
+<p data-sourcepos="3:1-3:53"><a href="/qiita/788f97e09c8593ac3951.html" class="mirror-link-card">https://qiita.com/h-nabata/items/788f97e09c8593ac3951</a>
+</p>
+<blockquote data-sourcepos="5:1-5:138">
+<p data-sourcepos="5:3-5:138">本稿ではWSL-Ubuntuのセットアップ等には触れていないので、必要に応じて他の記事を参考にされたい。</p>
+</blockquote>
+<hr data-sourcepos="7:1-8:0">
+<p data-sourcepos="9:1-9:143">fairchem-core 2.12 では dependencies に <code>"torch~=2.8.0"</code> とあるので、PyTorchは 2.8.0 のバージョンを入れる必要がある。</p>
+<div data-sourcepos="11:1-17:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<p data-sourcepos="12:1-12:31"><strong>インストールの流れ</strong></p>
+<ol data-sourcepos="14:1-16:49">
+<li data-sourcepos="14:1-14:45">conda仮想環境を Python 3.12 で作成</li>
+<li data-sourcepos="15:1-15:59">PyTorch 2.8.0 のGPU対応版をインストールする</li>
+<li data-sourcepos="16:1-16:49">fairchem-core 2.12 をインストールする</li>
+</ol>
+</div>
+</div>
+<div data-sourcepos="19:1-27:3" class="note warn">
+<span class="fa fa-fw fa-exclamation-circle"></span><div>
+<p data-sourcepos="20:1-20:49"><strong>GPUドライバのバージョンについて</strong></p>
+<p data-sourcepos="22:1-23:240">現バージョンの fairchem-core は CUDA 13 が必須ではない。<code>nvidia-smi</code> コマンドで <code>CUDA Version: 12.9</code> などと表示されるので、これ以下のバージョンのCUDAに対応していれば問題ない。<br>
+GPUドライバのバージョンが古いと cu130 対応の PyTorch が動作しないことがある。このような場合は12.x系対応のPyTorchを入れるか、システムのGPUドライバを更新することで対応する。</p>
+<blockquote data-sourcepos="24:1-24:131">
+<p data-sourcepos="24:3-24:131">ただし、システムのGPUドライバを更新すると他の仮想環境に影響が及ぶ可能性があるので注意。</p>
+</blockquote>
+</div>
+</div>
+<details><summary>【参考】fairchem-core 2.12 の依存関係</summary>
+<div class="code-frame" data-lang="" data-sourcepos="31:1-118:3">
+<div class="code-lang"><span class="bold">pyproject.toml</span></div>
+<div class="highlight"><pre><code>[build-system]
+requires = ["hatchling", "hatch-vcs", "hatch-fancy-pypi-readme&gt;=24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fairchem-core"
+description = "Machine learning models for chemistry and materials science by the FAIR Chemistry team"
+license = {text = "MIT License"}
+dynamic = ["version", "readme"]
+requires-python = "&gt;=3.10, &lt;3.14"
+dependencies = [
+    "torch~=2.8.0",
+    "numpy&gt;=2.0,&lt;2.3",
+    "lmdb==1.6.2",
+    "numba&gt;=0.61.2",
+    "e3nn&gt;=0.5",
+    "huggingface_hub&gt;=0.27.1",
+    "ase&gt;=3.26.0",
+    "ase-db-backends&gt;=0.10.0",
+    "monty&gt;=v2025.1.3",
+    "clusterscope==0.0.18",
+    "requests",
+    "orjson",
+    "tqdm",
+    "submitit",
+    "hydra-core",
+    "torchtnt",
+    "pyyaml",
+    "wandb",
+    "websockets",
+]
+
+[project.optional-dependencies]  # add optional dependencies, e.g. to be installed as pip install fairchem.core[dev]
+dev = ["pre-commit", "pytest", "pytest-cov", "coverage", "syrupy", "ruff==0.5.1"]
+docs = ["jupyter-book", "jupytext", "sphinx","sphinx-autoapi==3.3.3", "astroid&lt;4", "umap-learn", "vdict", "ipywidgets", "jupyter_book==1.0.4"]
+adsorbml = ["dscribe","x3dase","scikit-image"]
+extras = ["ray[default]", "pymatgen", "quacc[phonons]&gt;=0.15.3", "pandas"]
+
+[project.scripts]
+fairchem = "fairchem.core._cli:main"
+
+[project.urls]
+repository = "https://github.com/facebookresearch/fairchem"
+home = "https://opencatalystproject.org/"
+documentation = "https://fair-chem.github.io/"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+root = "../../"
+git_describe_command = 'git describe --tags --match fairchem_core-*'
+
+[tool.hatch.build]
+directory = "../../dist-core"
+
+[tool.hatch.build.targets.sdist]
+only-include = ["src/fairchem/core", "src/fairchem/experimental"]
+
+[tool.hatch.build.targets.wheel]
+sources = ["src"]
+only-include = ["src/fairchem/core", "src/fairchem/experimental"]
+
+[tool.hatch.metadata.hooks.fancy-pypi-readme]
+content-type = "text/markdown"
+fragments = [
+  { path = "src/fairchem/core/README.md" },
+  { path = "src/fairchem/core/LICENSE.md" },
+]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts  =  "-p no:warnings -x --quiet -rxXs --color yes"
+filterwarnings  = [
+    'ignore::UserWarning',
+    'ignore::FutureWarning',
+    'ignore::RuntimeWarning'
+    ]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["fairchem.core"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+</code></pre></div>
+</div>
+</details>
+<h1 data-sourcepos="124:1-124:23">
+<span id="仮想環境の作成" class="fragment"></span><a href="#%E4%BB%AE%E6%83%B3%E7%92%B0%E5%A2%83%E3%81%AE%E4%BD%9C%E6%88%90"><i class="fa fa-link"></i></a>仮想環境の作成</h1>
+<p data-sourcepos="126:1-126:28">bash環境で実行する。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="128:1-130:3"><div class="highlight"><pre><code>conda create <span class="nt">-n</span> <span class="s2">"uma212"</span> <span class="s2">"python=3.12"</span> <span class="nt">-y</span>
+</code></pre></div></div>
+<blockquote data-sourcepos="131:1-131:98">
+<p data-sourcepos="131:3-131:98">仮想環境名は任意。ここでは fairchem-core 2.12 に合わせて <code>uma212</code> とした。</p>
+</blockquote>
+<hr data-sourcepos="133:1-134:0">
+<p data-sourcepos="135:1-135:124">以下、仮想環境 <code>uma212</code> 内で作業する。（本稿ではインストール時の詳細なログは省略する）</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="137:1-139:3"><div class="highlight"><pre><code>conda activate uma212
+</code></pre></div></div>
+<h1 data-sourcepos="141:1-141:24">
+<span id="gpu版pytorchの導入" class="fragment"></span><a href="#gpu%E7%89%88pytorch%E3%81%AE%E5%B0%8E%E5%85%A5"><i class="fa fa-link"></i></a>GPU版PyTorchの導入</h1>
+<div class="code-frame" data-lang="sh" data-sourcepos="143:1-145:3"><div class="highlight"><pre><code>pip <span class="nb">install </span><span class="nv">torch</span><span class="o">==</span>2.8.0+cu128 <span class="nt">--index-url</span> https://download.pytorch.org/whl/cu128
+</code></pre></div></div>
+<blockquote data-sourcepos="146:1-146:65">
+<p data-sourcepos="146:3-146:65"><code>index-url</code> オプションはあった方が無難である。</p>
+</blockquote>
+<h1 data-sourcepos="148:1-148:24">
+<span id="fairchem-coreの導入" class="fragment"></span><a href="#fairchem-core%E3%81%AE%E5%B0%8E%E5%85%A5"><i class="fa fa-link"></i></a>fairchem-coreの導入</h1>
+<div class="code-frame" data-lang="sh" data-sourcepos="150:1-152:3"><div class="highlight"><pre><code>pip <span class="nb">install </span>fairchem-core<span class="o">==</span>2.12.0
+</code></pre></div></div>
+<blockquote data-sourcepos="153:1-153:122">
+<p data-sourcepos="153:3-153:122">最新版を入れるだけであればバージョン指定は不要。ここでは念のために指定している。</p>
+</blockquote>
+<h1 data-sourcepos="155:1-155:35">
+<span id="umaの重みファイルの取得" class="fragment"></span><a href="#uma%E3%81%AE%E9%87%8D%E3%81%BF%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E3%81%AE%E5%8F%96%E5%BE%97"><i class="fa fa-link"></i></a>UMAの重みファイルの取得</h1>
+<p data-sourcepos="157:1-158:118">Hugging Faceから重みファイルをダウンロードする（アカウントが必要なので無ければ登録・作成する）。<br>
+ここではUMAのSmallモデルを利用する。2025年11月現在最新のバージョンは<code>uma-s-1.1</code>である。</p>
+<p data-sourcepos="160:1-160:35"><a href="https://huggingface.co/facebook/UMA" class="mirror-link-card">https://huggingface.co/facebook/UMA</a>
+</p>
+<p data-sourcepos="162:1-162:104"><code>uma-s-1p1.pt</code> をローカル環境の適当なところに置く。ファイル容量は 1 GB程度。</p>
+<blockquote data-sourcepos="164:1-164:122">
+<p data-sourcepos="164:3-164:122">興味のある方はMediumモデルもダウンロードしておく。こちらのファイル容量は 10 GB程度。</p>
+</blockquote>
+<h1 data-sourcepos="166:1-166:17">
+<span id="テスト計算" class="fragment"></span><a href="#%E3%83%86%E3%82%B9%E3%83%88%E8%A8%88%E7%AE%97"><i class="fa fa-link"></i></a>テスト計算</h1>
+<p data-sourcepos="168:1-168:294"><a href="/qiita/788f97e09c8593ac3951.html">以前の記事</a>で取り扱った、4ユニットのシクロパラフェニレン（CPP）からなる712原子の系（下図）について、同様に構造最適化をしてみた。閾値は 0.03 eV/Å（<code>fmax=0.03</code>）とした。</p>
+<p data-sourcepos="170:1-170:121"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Fb49b43f2-a61a-4616-92d2-b54b395f30bd.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=f51a91c6efd08464ff1d84febb6b1761" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/a2698471d96d8462fbf7c556.png" alt="image.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/b49b43f2-a61a-4616-92d2-b54b395f30bd.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="172:1-172:166">所用時間は次の通り。GPU利用時はCPU利用時に比べて桁違いに速いが、<strong>RTX3070Ti→RTX5070Tiでも1.5倍程度の加速</strong>が確認できた。</p>
+<table data-sourcepos="174:1-178:101">
+<thead>
+<tr data-sourcepos="174:1-174:77">
+<th style="text-align: left" data-sourcepos="174:2-174:3"></th>
+<th style="text-align: center" data-sourcepos="174:5-174:25">CPU <sup>a, b</sup>
+</th>
+<th style="text-align: center" data-sourcepos="174:27-174:50">RTX3070Ti <sup>b</sup>
+</th>
+<th style="text-align: center" data-sourcepos="174:52-174:76">RTX5070Ti <sup>c</sup>
+</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="176:1-176:79">
+<td style="text-align: left" data-sourcepos="176:2-176:25"><strong>所要時間</strong></td>
+<td style="text-align: center" data-sourcepos="176:27-176:45">46分31秒</td>
+<td style="text-align: center" data-sourcepos="176:47-176:65">1分41秒</td>
+<td style="text-align: center" data-sourcepos="176:67-176:77">1分08秒</td>
+</tr>
+<tr data-sourcepos="177:1-177:56">
+<td style="text-align: left" data-sourcepos="177:2-177:26"><strong>ステップ数</strong></td>
+<td style="text-align: center" data-sourcepos="177:28-177:37">276</td>
+<td style="text-align: center" data-sourcepos="177:39-177:49">276</td>
+<td style="text-align: center" data-sourcepos="177:51-177:55">275</td>
+</tr>
+<tr data-sourcepos="178:1-178:101">
+<td style="text-align: left" data-sourcepos="178:2-178:29"><strong>エネルギー値(eV)</strong></td>
+<td style="text-align: center" data-sourcepos="178:31-178:51">-452542.746219</td>
+<td style="text-align: center" data-sourcepos="178:53-178:75">-452542.742874</td>
+<td style="text-align: center" data-sourcepos="178:77-178:100">-452542.700321</td>
+</tr>
+</tbody>
+</table>
+<blockquote data-sourcepos="180:1-182:110">
+<p data-sourcepos="180:3-182:110"><sup>a</sup> AMD Ryzen 7 5800X3D (8-Core Processor) で実行。<br>
+<sup>b</sup> fairchem-core 2.2.0, PyTorch 2.6.0 で実行。ポテンシャルは uma-sm.pt を使用。<br>
+<sup>c</sup> fairchem-core 2.12.0, PyTorch 2.8.0 で実行。ポテンシャルは uma-s-1p1.pt を使用。</p>
+</blockquote>
+<blockquote data-sourcepos="184:1-184:186">
+<p data-sourcepos="184:3-184:186">最適化構造のエネルギーに約 4.1 kJ/mol の差が生じているのは、UMAポテンシャルもしくはPyTorchのバージョン違いによるものと考えられる。</p>
+</blockquote>
+<p data-sourcepos="186:1-186:168">以下の通り、GPUのメモリ使用量は7.6 GBで、温度は最高で60-61℃程度であった。原子数が2倍になっても計算は回りそうである。</p>
+<div class="code-frame" data-lang="" data-sourcepos="188:1-200:3">
+<div class="code-lang"><span class="bold">実行中のGPU使用状況</span></div>
+<div class="highlight"><pre><code>+-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 575.64.01              Driver Version: 576.88         CUDA Version: 12.9     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+| 31%   60C    P1            206W /  300W |    7762MiB /  16303MiB |     83%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+</code></pre></div>
+</div>
+<details><summary>【参考】利用したスクリプト</summary>
+<div class="code-frame" data-lang="py" data-sourcepos="205:1-235:3">
+<div class="code-lang"><span class="bold">opt.py</span></div>
+<div class="highlight"><pre><code><span class="kn">from</span> <span class="n">ase.io</span> <span class="kn">import</span> <span class="n">read</span><span class="p">,</span> <span class="n">write</span>
+<span class="kn">from</span> <span class="n">ase.optimize</span> <span class="kn">import</span> <span class="n">LBFGS</span>
+<span class="kn">from</span> <span class="n">fairchem.core</span> <span class="kn">import</span> <span class="n">FAIRChemCalculator</span>
+<span class="kn">from</span> <span class="n">fairchem.core.units.mlip_unit</span> <span class="kn">import</span> <span class="n">load_predict_unit</span>
+
+<span class="n">uma_predictor</span> <span class="o">=</span> <span class="nf">load_predict_unit</span><span class="p">(</span>
+    <span class="n">path</span><span class="o">=</span><span class="sh">"</span><span class="s">/path/to/uma-s-1p1.pt</span><span class="sh">"</span><span class="p">,</span>
+    <span class="n">device</span><span class="o">=</span><span class="sh">"</span><span class="s">cuda</span><span class="sh">"</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">calc</span> <span class="o">=</span> <span class="nc">FAIRChemCalculator</span><span class="p">(</span>
+    <span class="n">uma_predictor</span><span class="p">,</span>
+    <span class="n">task_name</span><span class="o">=</span><span class="sh">"</span><span class="s">omol</span><span class="sh">"</span><span class="p">,</span> <span class="c1"># options: "omol", "omat", "odac", "oc20", "omc"
+</span><span class="p">)</span>
+
+<span class="n">mol</span> <span class="o">=</span> <span class="nf">read</span><span class="p">(</span><span class="sh">'</span><span class="s">cpp.xyz</span><span class="sh">'</span><span class="p">)</span>
+<span class="n">mol</span><span class="p">.</span><span class="n">info</span> <span class="o">=</span> <span class="p">{</span><span class="sh">"</span><span class="s">charge</span><span class="sh">"</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="sh">"</span><span class="s">spin</span><span class="sh">"</span><span class="p">:</span> <span class="mi">1</span><span class="p">}</span>
+
+<span class="n">mol</span><span class="p">.</span><span class="n">calc</span> <span class="o">=</span> <span class="n">calc</span>
+
+<span class="n">energy</span> <span class="o">=</span> <span class="n">mol</span><span class="p">.</span><span class="nf">get_potential_energy</span><span class="p">()</span>
+<span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">Initial energy [eV]:</span><span class="sh">"</span><span class="p">,</span> <span class="n">energy</span><span class="p">)</span>
+
+<span class="n">opt</span> <span class="o">=</span> <span class="nc">LBFGS</span><span class="p">(</span><span class="n">mol</span><span class="p">,</span> <span class="n">trajectory</span><span class="o">=</span><span class="sh">'</span><span class="s">cpp.traj</span><span class="sh">'</span><span class="p">,</span> <span class="n">logfile</span><span class="o">=</span><span class="sh">'</span><span class="s">cpp.log</span><span class="sh">'</span><span class="p">)</span>
+<span class="n">opt</span><span class="p">.</span><span class="nf">run</span><span class="p">(</span><span class="mf">0.03</span><span class="p">,</span> <span class="mi">1000</span><span class="p">)</span>
+
+<span class="n">energy</span> <span class="o">=</span> <span class="n">mol</span><span class="p">.</span><span class="nf">get_potential_energy</span><span class="p">()</span>
+<span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">Final energy [eV]:</span><span class="sh">"</span><span class="p">,</span> <span class="n">energy</span><span class="p">)</span>
+<span class="nf">write</span><span class="p">(</span><span class="sh">"</span><span class="s">cpp_opt.xyz</span><span class="sh">"</span><span class="p">,</span> <span class="n">mol</span><span class="p">,</span> <span class="nb">format</span><span class="o">=</span><span class="sh">"</span><span class="s">xyz</span><span class="sh">"</span><span class="p">)</span>
+</code></pre></div>
+</div>
+</details>
+<h1 data-sourcepos="239:1-239:50">
+<span id="参考mediumモデルを利用した場合" class="fragment"></span><a href="#%E5%8F%82%E8%80%83medium%E3%83%A2%E3%83%87%E3%83%AB%E3%82%92%E5%88%A9%E7%94%A8%E3%81%97%E3%81%9F%E5%A0%B4%E5%90%88"><i class="fa fa-link"></i></a>【参考】Mediumモデルを利用した場合</h1>
+<p data-sourcepos="241:1-242:147">上記の系でMediumモデルを利用すると、GPUメモリがほぼ枯渇し、最適化の100ステップを過ぎた辺りからPyTorchのCUDAメモリアロケータが断片化（fragmentation）を起こし、テンソルの再割り当てに時間がかかるようになった。<br>
+結果として、1点あたり約 1.3 秒で進んでいた計算が、途中から約 1 分近くかかるようになり急激に遅延した。</p>
+<p data-sourcepos="244:1-244:300"><code>nvidia-smi</code>で確認すると、GPU使用率はともに100％近くまで達しているが、遅延発生時では消費電力と温度が大幅に低下しており、GPUが実際の計算ではなくメモリの割り当て待ちによってビジー状態になっていることが分かる。</p>
+<div class="code-frame" data-lang="" data-sourcepos="246:1-258:3">
+<div class="code-lang"><span class="bold">正常に稼働している時</span></div>
+<div class="highlight"><pre><code>+-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 575.64.01              Driver Version: 576.88         CUDA Version: 12.9     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+| 52%   63C    P1            265W /  300W |   15186MiB /  16303MiB |     97%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="" data-sourcepos="260:1-272:3">
+<div class="code-lang"><span class="bold">アロケーション詰まりが発生している時</span></div>
+<div class="highlight"><pre><code>+-----------------------------------------------------------------------------------------+
+| NVIDIA-SMI 575.64.01              Driver Version: 576.88         CUDA Version: 12.9     |
+|-----------------------------------------+------------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id          Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |           Memory-Usage | GPU-Util  Compute M. |
+|                                         |                        |               MIG M. |
+|=========================================+========================+======================|
+|   0  NVIDIA GeForce RTX 5070 Ti     On  |   00000000:2B:00.0  On |                  N/A |
+| 31%   36C    P1             58W /  300W |   15848MiB /  16303MiB |    100%      Default |
+|                                         |                        |                  N/A |
++-----------------------------------------+------------------------+----------------------+
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="274:1-274:150">
+<p data-sourcepos="274:3-274:150">特に後者ではGPU温度がidle時とほとんど変わらないくらいまで下がっている（＝GPUがほとんど働いていない）。</p>
+</blockquote>
+<p data-sourcepos="276:1-277:160">一方、100〜200原子程度の系ではMediumモデルでも問題なく動作した。<br>
+DFTレベルで検算可能なサイズ（数百原子以下）であれば、RTX 5070 Ti でも安定して UMAのMediumモデルを扱えると思われる。</p>
+
+</div>
+
+
+{% endraw %}

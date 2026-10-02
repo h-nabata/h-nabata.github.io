@@ -1,0 +1,371 @@
+Windowsユーザー＆Julia触りたての方（Pythonはある程度使える想定）向けのメモです。
+使用しているJuliaは**v1.5.1**で、エディタは**Atom**を使っています。
+【2021/12/15加筆；v1.7.0でも同様に動作することを確認しました】
+
+#・プログラミング言語「Julia」
+
+「[**Julia**](https://julialang.org)」は2012年に公開された比較的若いプログラミング言語で、Pythonのような書きやすさとCのような処理（計算）速度を兼ね備えた次世代を担う言語と目されています。Juliaは数値計算やfor文の処理がPythonに比べて格段に速く、機械学習関係のライブラリも整備されつつあります。最近ではJuliaの日本語版解説本が出版されるなど、じわじわと脚光を浴びており、10年も経てばPython並みにメジャーな言語になると期待されています。
+
+>(※注)
+>Pythonのライブラリは充実し過ぎているため、Juliaのライブラリの少なさが目に付くことも少なくありません。しかし、Pythonが今年で大体20歳を迎えるのに対してJuliaはまだ8歳くらいですし、開発コミュニティの規模を考えれば見劣りするのはある程度仕方がないと言えます。Juliaのライブラリは今後充実してくることでしょう。
+
+使用人口の少ない今こそJuliaを習得する好機！ということで、今回はテキストエディタ「[**Atom**](https://atom.io/)」でJuliaを動かしてみることにします。Atomは[**公式サイト**](https://atom.io/)からダウンロードできます。この記事ではAtomについては深く立ち入りません。Atomの詳しい使い方や設定方法については「[**ATOM Editor をそろそろ始めようか**](https://qiita.com/spiegel-im-spiegel/items/3d41d98dacc107d73431)」に掲載されているブックマーク等を参考にしてみて下さい。
+
+>(※注)
+>Visual Studio Code の方が扱いやすいという声も多数ありますので、ご自分で色々なIDEを試してみて下さい。
+
+
+#・Juliaの導入&環境変数の設定
+### Atom上でJuliaを動かすまでにやること
+1. Juliaのインストール
+2. Juliaのパスを通す
+3. （Atomエディタの場合）パッケージ「language-julia」をインストールする
+
+***
+
+Julia本体は[**公式サイト**](https://julialang.org/downloads/)からダウンロード可能です。自分のPC環境に合ったパッケージを選んで下さい。Jupyterを利用されている方は「[**Juliaの開発環境構築**](https://qiita.com/msekino/items/dbfe11ad05f20fd3efd3)」という記事を参考に導入してみて下さい。
+
+>当方のPCの環境は Windows 10 Pro (バージョン 1903) なので、私はWindows用の「64-bit (installer)」を選びました。ダウンロードしたJuliaはv1.5.1です。
+【2021/12/15加筆；v1.7.0でも同様にインストール可能です】
+
+Atomをインストール済みの人は早速動かしてみたくなるでしょうが、そのまま実行すると以下のようなエラーが出てきます。
+
+```
+'julia' �́A�����R�}���h�܂��͊O���R�}���h�A
+����\�ȃv���O�����܂��̓o�b�` �t�@�C���Ƃ��ĔF������Ă��܂���B
+```
+
+これはAtomがjuliaの実行ファイルの置かれた場所を見つけられないために出てくるメッセージです。これを解消するためには、以下のような手順でjulia.exeのパスを環境変数に登録する必要があります。
+
+>① コントロールパネルを開く（プログラム → Windowsシステムツール から選択できる）
+>② システムとセキュリティ → システム に移動
+>③ システムの詳細設定 をクリックしてプロパティを開く
+>④「環境設定」をクリック →「環境変数」をクリック
+>⑤ ユーザー環境変数の一覧から変数「PATH」（もしくは「Path」）を選択して「編集」ボタンをクリック
+>⑥「新規」をクリックして、julia.exeがあるフォルダの絶対パス（「C:\Users\name\AppData\Local\Programs\Julia 1.5.1\bin」など）を入力して、OKボタンをクリック
+
+以上の手順を踏むことで、Atomがjulia.exeを見つけられるようになります。
+
+この他に、Atom側で「**julia-client**」や「**language-julia**」といったパッケージをインストールしておきます。これで、Atom上でJuliaが使用可能になります。
+
+>juliaのバージョン指定が複雑でなければインストール時に「Add to PATH」にチェックを入れてパスに追加しても良いでしょう。
+
+#・Juliaを使ってみる
+
+それでは早速Juliaを動かしてみましょう。使い方の例を簡単に掲載しておきます。
+###・ご挨拶
+
+```Julia
+println("Hello, Julia!")
+# print    改行なし出力
+# println  改行あり出力
+```
+>print関数やprintln関数で文字列を表示できます。
+
+```Julia
+print("Hello, "); print("Julia!")
+# 出力結果は Hello, Julia!
+```
+>セミコロンで繋げば出力を1行で表示することができます。
+
+###・printf関数
+```Julia
+using Printf
+num = 2020
+str = "hogehoge"
+@printf "num: %d str: %s" num str
+```
+printf関数は出力フォーマットを制御できる便利な関数ですが、Juliaでは `using Printf` と書いておかないと使えません。
+>(※注)
+> `using printf` とパッケージ名を小文字で書いてしまうと `Package printf not found in current path` と怒られるので要注意です。
+
+###・for文（例：FizzBuzz）
+
+```Julia
+for i in 1:15
+    if i % 15 == 0
+        println("fizzbuzz")
+    elseif i % 5 == 0
+        println("buzz")
+    elseif i % 3 == 0
+        println("fizz")
+    else
+        println(i)
+    end
+end
+```
+
+>Pythonとは異なり、Juliaでは制御構文をインデントで制御する必要はありません。ここでは見やすさのためにインデントを付けてあります。条件分岐は `elseif` を使い、if文は `end` で閉じます。
+
+###・1行for文
+
+```Julia
+for n = 1:10; println(n); end
+```
+
+>`; end` が抜けていると怒られます。Juliaでは必ず構文ブロックを end で締め括らなければなりません。
+
+###・文字列の取り扱い
+```Julia
+str = "Hello, World!"
+println(str)
+println(str[1:5]) # スライス表記
+println(str[end-5:end]) # 末尾の6文字を表示
+println(lowercase(str)) # 小文字に変換
+println(uppercase(str)) # 大文字に変換
+```
+>後ろから$n$番目という指定は `[end-(n-1)]` で可能です。
+
+###・リスト
+```Julia
+fruits = ["apple", "banana", "cherry"]
+println(fruits[1])
+# 出力結果は apple
+println(fruits[end-1])
+# 出力結果は banana
+println(fruits[end-1:end])
+# 出力結果は ["banana", "cherry"] というリスト
+```
+>listのindexは0からではなく**1**からなので要注意です。
+
+###・2次元配列
+```Julia
+array = [1 2; 3 4; 5 6]
+println(array[3,2])
+# 出力結果は 6
+```
+>Pythonなどでは `array = [[1, 2], [3, 4], [5, 6]]` と書きますが、Juliaでは要素(列)は空白で区切り、行はセミコロンで区切ります。
+
+
+###・日本語の変数名
+```Julia
+数字1 = 3
+数字2 = 5
+足し算 = 数字1 + 数字2
+println(足し算)
+```
+>Juliaでは変数名に日本語を含められます。…が、個人的にはあまり使いたくありません。
+
+###・関数
+```Julia
+# 試し割り法による素因数分解
+function factorization(n)
+    a = []
+    while n % 2 == 0
+        push!(a,2)
+        n //= 2
+    end
+    p = 3
+    while p * p <= n
+        if n % p == 0
+            push!(a,p)
+            n //= p
+        else
+            p += 2
+        end
+    end
+    if n != 1
+        push!(a,n)
+    end
+    return a
+end
+
+println(factorization(2020))
+# 出力結果は Any[2, 2, 5, 101//1]
+```
+
+>JuliaではPythonに比べてloop処理が数段速く実行できます。Pythonとは逆に、Juliaではベクトル化せずにloopを回す方が一般に速く処理できます。検索すればその辺りのベンチマークテスト結果などが色々出てきます。
+
+>数学関数については[**公式ページ**](https://docs.julialang.org/en/v1/base/math/)に詳しく記載されています。
+
+###・ファイル処理
+```Julia
+# ファイルへの書き出し
+open("output.txt", "w") do f # ファイルを書き込みモードで開く
+    for n = 0:9
+        println(f, n)
+    end
+end # ファイルを閉じる
+
+# 改行の削除
+open("output.txt", "r") do f1 # 読み込みモードで開く
+    lines = readlines(f1)
+    open("output2.txt", "w") do f2 # 書き込みモードで開く
+        for line in lines
+            print(f2,line) # print()を使えば改行コードが入らない
+        end
+    end # f2を閉じる
+end # f1を閉じる
+```
+
+>`do ~ end` で閉じる場合は `close` は不要です。
+
+###・コメントアウト
+```Julia
+# 行頭に#でコメントアウトできる
+# open("output.txt", "w") do f
+#     for n = 0:9
+#         println(f, n)
+#     end
+# end
+
+#= まとめてコメントアウトもできる
+open("output.txt", "r") do f1
+    lines = readlines(f1)
+    open("output2.txt", "w") do f2
+        for line in lines
+            print(f2,line)
+        end
+    end
+end
+=# 
+# ↑ここまでコメントアウト
+```
+
+>Juliaでは `#= ... =#` と囲むことで複数行をまとめてコメントアウト可能です。これはphpやCなどの `/* ... */` と同じです。
+
+
+#・パッケージの確認方法
+
+windowsの場合、[プログラム] から [Julia 1.5.1]（など）を開くと、画像のようなコンソール画面が立ち上がります。
+<img src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/15c1c906-dcca-3fa1-a320-31cc2e91e3ff.png", width="70%">
+JuliaのREPLには以下の5つのモードがあります。他のモードからは Ctrl+C でJuliaモードに戻れます。
+
++ **Juliaモード**
+Juliaのスクリプトを実行できる（デフォルト）
+
++ **パッケージモード**
+パッケージを管理できる（ ] キーで起動）
+
++ **ヘルプモード**
+関数やマクロのドキュメントを確認できる（ ? キーで起動）
+
++ **シェルモード**
+シェルコマンドを実行できる（ ; キーで起動）
+
++ **サーチモード**
+コマンド履歴を検索できる（ Ctrl+r で起動）
+
+
+パッケージモードにして `status` と叩くと、以下のように現在インストール済みのパッケージ一覧が表示されます。
+
+```
+(@v1.5) pkg> status
+Status `C:\Users\name\.julia\environments\v1.5\Project.toml`
+  [438e738f] PyCall v1.91.4
+  [d330b81b] PyPlot v2.9.0
+```
+
+足りないものがあると、スクリプトを実行したときにエラーになってしまいます。（下の例はPyCallパッケージが無くてmatplotlibを呼べなかった時のエラー）
+
+```
+ERROR: LoadError: PyError (PyImport_ImportModule
+
+The Python package matplotlib.pyplot could not be found by pyimport. Usually this means
+that you did not install matplotlib.pyplot in the Python version being used by PyCall.
+
+PyCall is currently configured to use the Julia-specific Python distribution
+installed by the Conda.jl package.  To install the matplotlib.pyplot module, you can
+use `pyimport_conda("matplotlib.pyplot", PKG)`, where PKG is the Anaconda
+package the contains the module matplotlib.pyplot, or alternatively you can use the
+Conda package directly (via `using Conda` followed by `Conda.add` etcetera).
+
+Alternatively, if you want to use a different Python distribution on your
+system, such as a system-wide Python (as opposed to the Julia-specific Python),
+you can re-configure PyCall with that Python.   As explained in the PyCall
+documentation, set ENV["PYTHON"] to the path/name of the python executable
+you want to use, run Pkg.build("PyCall"), and re-launch Julia.
+
+) <class 'ModuleNotFoundError'>
+ModuleNotFoundError("No module named 'matplotlib'")
+```
+
+今後使うものは予めインストールしておきましょう。
+
+
+
+#・PyCallを使ってみる
+
+「[**PyCall**](https://github.com/JuliaPy/PyCall.jl)」というパッケージを使うことで**Juliaのコード内からPythonの関数を呼び出すことが可能**になります。
+
+
+##(例) mathライブラリを呼び出す
+
+Pythonの[**mathライブラリ**](https://docs.python.org/ja/3/library/math.html)を呼び出して使うときは以下のようにpyimportマクロを利用します。
+
+```Julia
+using PyCall
+@pyimport math
+println(math.sin(math.pi / 6))
+
+# 出力結果は 0.49999999999999994 でPythonを用いた場合と全く同じ
+# mathライブラリを使わずに println(sin(pi / 6)) としても同様
+```
+
+>(※注)
+>もしPyCallが無いとか文句を言われる場合は
+>
+>```Julia
+>import Pkg; Pkg.add("PyCall")
+>```
+>
+>と書くか、JuliaのREPLのPkgモードで
+>
+>```Julia
+>(@v1.5) pkg> add PyCall
+>```
+>などとして、PyCallパッケージをインストールして下さい（基本的にインストールは1回だけでOKです）。
+
+
+
+##(例) matplotlibライブラリを呼び出す
+
+Pythonの[**matplotlibライブラリ**](https://matplotlib.org/)を呼び出して使うときは以下のようにします。
+
+```Julia
+using PyCall
+using PyPlot
+
+x = range(0;stop=2*pi,length=1000); y = sin.(3*x + 4*cos.(2*x));
+plt.plot(x, y, color="red", linewidth=2.0, linestyle="--")
+plt.show()
+```
+
+出力結果は以下の通りです。当然ながらmatplotlibと同じ出力になっています。
+![tst_figure.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/e8c7c70e-300d-9fdf-2dc3-76f79250e0fd.png)
+
+>(※注)
+>もしPyPlotが無いとかmatplotlibが無いとか文句を言われる場合は
+>
+>```Julia
+>import Pkg; Pkg.add("PyPlot")
+>```
+>
+>とするか、もしくはJuliaのREPLのPkgモードで
+>
+>```Julia
+>(@v1.5) pkg> add PyPlot
+>```
+>などとすれば、PyPlotなどの一連のパッケージのインストールが始まります。そもそもmatplotlibが無い場合はpipなどでインストールして下さい...。
+
+##(例) 機械学習関連のライブラリを呼び出す
+
+まず、Juliaにも機械学習関連のライブラリが用意されています。「[**PyCall.jlでPyTorch使ってDeep Learningする**](https://qiita.com/yatra9/items/0a1a9a5ba19e9efe08c0)」の記事にJuliaのDeep Learningフレームワークについて主なものが簡単にまとめられていますので、参考にして下さい。
+
+色々な事情により、PyTorchの方が使い勝手が良いという場合は、
+
+```Julia
+using PyCall
+torch = pyimport("torch")
+```
+
+などとして呼び出します。
+
+特に「[**Juliaで機械学習：PyCall.jlを使ってTensorFlowのKerasを使ってみる**](https://qiita.com/cometscome_phys/items/e09e0300e303ba184bcc)」の記事には機械学習フレームワークに関する記事が多数まとめられていますので、こちらも参考にしてみて下さい。
+
+
+#・終わりに
+
+「Julia Advent Calendar」などで検索すると、Juliaに関する素晴らしい記事が多数閲覧できます。無料公開されているJuliaの教科書pdfもネット上で閲覧できますので、是非探してみて下さい。
+
+昨日初めてJuliaを触りましたが、慣れれば結構使いやすそうな言語だと感じました。Pythonを卒業するというにはまだまだ時期尚早ですが、Pythonerの方であればJuliaの習得にはそれほど難儀しないのではないかと思います。

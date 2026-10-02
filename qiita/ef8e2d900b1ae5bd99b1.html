@@ -1,0 +1,119 @@
+---
+layout: "qiita-mirror"
+title: "【Atom】gpp-compilerでC、C++を手軽に実行する"
+qiita_id: "ef8e2d900b1ae5bd99b1"
+qiita_url: "https://qiita.com/h-nabata/items/ef8e2d900b1ae5bd99b1"
+qiita_created: "2022-01-24T18:17:41+09:00"
+qiita_updated: "2022-01-25T22:47:19+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "プログラミング・可視化"
+mirror_tags: ["C", "C++", "ATOM", "compiler", "コンパイル"]
+permalink: "/qiita/ef8e2d900b1ae5bd99b1.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="1:1-1:314">テキストエディタ「<a href="https://atom.io/" rel="nofollow noopener" target="_blank"><strong>Atom</strong></a>」上でCやC++の簡単なプログラムを手軽に（コンパイルの手間を省いて）動かせないか思い、「<a href="https://atom.io/packages/gpp-compiler" rel="nofollow noopener" target="_blank"><strong>gpp-compiler</strong></a>」というプラグインを導入した際の個人的なメモです。</p>
+<div class="code-frame" data-lang="" data-sourcepos="3:1-6:3">
+<div class="code-lang"><span class="bold">想定環境</span></div>
+<div class="highlight"><pre><code>OS：Windows10 64bit版
+エディタ：Atom（当方のバージョンは1.58.0）
+</code></pre></div>
+</div>
+<p data-sourcepos="8:1-8:262">gpp-compilerはCとC++の両方に対応したコンパイラがパッケージになっているものです。いちいちコンパイルする手間が省けるので便利ですが、単品では動かないので導入の際は少し注意が必要です。</p>
+<h2 data-sourcepos="10:1-10:21">
+<span id="導入するもの" class="fragment"></span><a href="#%E5%B0%8E%E5%85%A5%E3%81%99%E3%82%8B%E3%82%82%E3%81%AE"><i class="fa fa-link"></i></a>導入するもの</h2>
+<h3 data-sourcepos="12:1-12:32">
+<span id="atomのパッケージ" class="fragment"></span><a href="#atom%E3%81%AE%E3%83%91%E3%83%83%E3%82%B1%E3%83%BC%E3%82%B8"><i class="fa fa-link"></i></a>【Atomのパッケージ】</h3>
+<ul data-sourcepos="13:1-15:0">
+<li data-sourcepos="13:1-13:18"><strong>gpp-compiler</strong></li>
+<li data-sourcepos="14:1-15:0"><strong>language-c</strong></li>
+</ul>
+<h3 data-sourcepos="16:1-16:53">
+<span id="windows用のプログラミングツール" class="fragment"></span><a href="#windows%E7%94%A8%E3%81%AE%E3%83%97%E3%83%AD%E3%82%B0%E3%83%A9%E3%83%9F%E3%83%B3%E3%82%B0%E3%83%84%E3%83%BC%E3%83%AB"><i class="fa fa-link"></i></a>【Windows用のプログラミングツール】</h3>
+<ul data-sourcepos="17:1-19:0">
+<li data-sourcepos="17:1-19:0"><strong>MinGW</strong></li>
+</ul>
+<h2 data-sourcepos="20:1-20:39">
+<span id="インストール手順概略" class="fragment"></span><a href="#%E3%82%A4%E3%83%B3%E3%82%B9%E3%83%88%E3%83%BC%E3%83%AB%E6%89%8B%E9%A0%86%E6%A6%82%E7%95%A5"><i class="fa fa-link"></i></a>インストール手順（概略）</h2>
+<p data-sourcepos="22:1-22:121">Atom内の「Installe Packages」から「gpp-compiler」と「language-c」をそれぞれインストールします。</p>
+<blockquote data-sourcepos="24:1-24:87">
+<p data-sourcepos="24:2-24:87">language-cはC言語でコーディングしやすくするために導入します。</p>
+</blockquote>
+<p data-sourcepos="26:1-27:128">gpp-compilerを動かすにはMinGW（ミン・ジー・ダブリュー、Minimalist GNU for Windows）が必要（gpp-compilerのREADMEに書いてある）なので、「MinGW-w64」という64bit版MinGWのインストーラをダウンロードしてインストールします。<br>
+<strong>（【参考】<a href="https://www.javadrive.jp/cstart/install/index6.html" rel="nofollow noopener" target="_blank">MinGW-w64のダウンロードとインストール</a>）</strong></p>
+<blockquote data-sourcepos="28:1-29:199">
+<p data-sourcepos="28:2-29:199">「Downloads」タブからダウンロード用のページに飛べます。色々種類がありますが、ここでは「MingW-W64-builds」を選び、「Sourceforge」をクリック。<a href="https://sourceforge.net/projects/mingw-w64/" rel="nofollow noopener" target="_blank">遷移後のページ</a>で数秒待機すればinstall.exeがダウンロードされます。<br>
+<strong>なお、インストール時の「Settings」において、64bit環境の場合は「Architecture」を「i686」ではなく「x86_64」と指定しなければならないことに注意。</strong></p>
+</blockquote>
+<p data-sourcepos="31:1-31:368">インストール後はMinGWのパスを通しておくのを忘れずに。インストール先がデフォルト設定のままであれば<code>C:\Program Files\mingw-w64\x86_64-8.1.0-posix-seh-rt_v6-rev0\mingw64\bin</code>をユーザー環境変数の「Path」に追加すれば良いでしょう（コンパイラはbinに置いてあるのでbinまで通します）。</p>
+<blockquote data-sourcepos="33:1-33:126">
+<p data-sourcepos="33:2-33:126">Destination folderは<code>C:\Program Files\mingw-w64\x86_64-8.1.0-posix-seh-rt_v6-rev0</code>がデフォルトになっています。</p>
+</blockquote>
+<p data-sourcepos="35:1-35:122">パスが通っているかどうかはコマンドプロンプトで<code>gcc -v</code>などを叩いて確かめてください。</p>
+<blockquote data-sourcepos="37:1-37:55">
+<p data-sourcepos="37:2-37:55">※環境変数にパスを追加していないと、</p>
+</blockquote>
+<blockquote data-sourcepos="39:1-39:4">
+<div class="code-frame" data-lang="text" data-sourcepos="39:2-40:125"><div class="highlight"><pre><code></code></pre></div></div>
+</blockquote>
+<p data-sourcepos="40:1-40:125">'gcc' could not be spawned. Is it installed and on your path? If so please open an issue on the package spawning the process.</p>
+<div class="code-frame" data-lang="text" data-sourcepos="41:1-57:3"><div class="highlight"><pre><code>
+&gt;と怒られます。GCCの場所が分からないと言われているので、適宜パスを通してあげてください。
+
+
+## スクリプトの実行
+
+早速、Atomで以下のプログラムを **F5キー** で実行してみましょう。黒画面が立ち上がり`Hello, world!`が出力されます。
+
+```c:hello.c
+# include &lt;stdio.h&gt;
+
+int main(void) {
+    printf("Hello, world!");
+    return 0;
+}
+</code></pre></div></div>
+<p data-sourcepos="59:1-59:126">ライブラリも問題無く読み込めます。新規ファイルは同じディレクトリ配下に作成されます。</p>
+<div class="code-frame" data-lang="c" data-sourcepos="61:1-95:3">
+<div class="code-lang"><span class="bold">sum.c</span></div>
+<div class="highlight"><pre><code><span class="cp"># include &lt;stdio.h&gt;
+# include &lt;math.h&gt;
+</span>
+<span class="kt">int</span> <span class="nf">main</span><span class="p">(</span><span class="kt">void</span><span class="p">)</span> <span class="p">{</span>
+    <span class="kt">FILE</span> <span class="o">*</span><span class="n">fp</span><span class="p">;</span>
+    <span class="kt">int</span> <span class="n">sum_integer</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="kt">float</span> <span class="n">sum_float</span> <span class="o">=</span> <span class="mi">0</span><span class="p">.</span><span class="mi">0</span><span class="p">;</span>
+    <span class="kt">int</span> <span class="n">i</span><span class="p">;</span>
+    <span class="kt">char</span> <span class="n">fname</span><span class="p">[</span><span class="mi">20</span><span class="p">]</span> <span class="o">=</span> <span class="s">"sum.txt"</span><span class="p">;</span>
+
+    <span class="n">fp</span> <span class="o">=</span> <span class="n">fopen</span><span class="p">(</span><span class="n">fname</span><span class="p">,</span><span class="s">"w"</span><span class="p">);</span> <span class="c1">// open the file for writing</span>
+    <span class="k">if</span> <span class="p">(</span><span class="n">fp</span> <span class="o">==</span> <span class="nb">NULL</span><span class="p">)</span> <span class="p">{</span> <span class="c1">// when failed to open</span>
+        <span class="n">printf</span><span class="p">(</span><span class="s">"failed to open %s!</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">fname</span><span class="p">);</span>
+        <span class="k">return</span> <span class="o">-</span><span class="mi">1</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span> <span class="c1">// initialization</span>
+    <span class="k">while</span> <span class="p">(</span><span class="n">i</span> <span class="o">&lt;=</span> <span class="mi">10</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">fprintf</span><span class="p">(</span><span class="n">fp</span><span class="p">,</span> <span class="s">"%d</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">i</span><span class="p">);</span>
+        <span class="n">sum_integer</span> <span class="o">=</span> <span class="n">sum_integer</span> <span class="o">+</span> <span class="n">i</span><span class="p">;</span>
+        <span class="n">i</span><span class="o">++</span><span class="p">;</span>
+    <span class="p">}</span>
+
+    <span class="k">for</span> <span class="p">(</span><span class="n">i</span> <span class="o">=</span> <span class="mi">1</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;=</span> <span class="mi">10</span><span class="p">;</span> <span class="n">i</span><span class="o">++</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">fprintf</span><span class="p">(</span><span class="n">fp</span><span class="p">,</span> <span class="s">"%d: %f</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">i</span><span class="p">));</span>
+        <span class="n">sum_float</span> <span class="o">=</span> <span class="n">sum_float</span> <span class="o">+</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">i</span><span class="p">);</span>
+    <span class="p">}</span>
+
+    <span class="n">printf</span><span class="p">(</span><span class="s">" int sum =</span><span class="se">\t</span><span class="s">%8d</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">sum_integer</span><span class="p">);</span>
+    <span class="n">printf</span><span class="p">(</span><span class="s">"sqrt sum =</span><span class="se">\t</span><span class="s">%7.5f</span><span class="se">\n</span><span class="s">"</span><span class="p">,</span> <span class="n">sum_float</span><span class="p">);</span>
+
+    <span class="k">return</span> <span class="mi">0</span><span class="p">;</span>
+<span class="p">}</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="97:1-97:292">gpp-compilerを通してAtomから実行する場合、コマンド引数を指定することは難しいようですが、対話型のスクリプトであれば値を逐次入力することは可能です。ちょっとしたプログラムの練習環境としては充分でしょう。</p>
+
+</div>
+
+
+{% endraw %}

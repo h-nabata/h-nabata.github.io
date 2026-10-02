@@ -1,0 +1,4001 @@
+# 記事の概要
+
+本稿ではローカルLLMを、単なるチャット相手ではなく、計算化学ワークフローを制御するためのJSON生成器として使えるかを検証した。具体的には、Ollama上で [qwen2.5-coder:14b](https://ollama.com/library/qwen2.5-coder:14b)[^qwen2.5-coder:14b] を動かし、以下の観点について評価した。
+
+[^qwen2.5-coder:14b]: Ollamaにおいて「qwen2.5-coder:14b」は `qwen2.5-coder:14b-instruct` を指す。 `qwen2.5-coder:14b-base` の意味ではないので注意。
+
+- 化学・計算化学に関する基本的な推論ができるか
+- YAML/JSON形式のプロジェクト設定を正しく読めるか
+- 指定したJSON Schemaに従って、機械可読なJSONだけを返せるか
+- 生成したJSONを他のモジュールに渡して実行できるか
+- RDKit、xtb、ASE、DFT、MLIPなどのMI･計算化学ワークフローにおける「出力整形機」として使えるか
+
+この記事では、導入手順、検証用スクリプト、テストプロンプト、評価観点、結果の整理方法をまとめる。
+
+# 背景
+
+計算化学やマテリアルズインフォマティクス（MI）では、実際の計算や構造生成そのものはRDKit、xTB、ASE、Gaussian、ORCA、VASP、fairchem、MACEなどの既存ツールに任せることが多い。
+
+一方で、それらのツールをつなぐワークフローでは、以下のような作業が頻繁に発生する。
+
+- SMILESやXYZファイルのリスト化
+- 計算条件の補完
+- 電荷・スピン多重度・計算手法の指定
+- 正しい順序での計算実行・結果の処理
+- 出力ファイル名の整形
+- 入力YAMLの解釈
+- 結果集計用JSON/CSVの生成
+- エラー時の再試行条件の決定
+ ... etc.
+
+これらは完全に決定論的な処理だけではやや柔軟性に欠ける。一方、LLMにすべてを任せると、説明文やMarkdown記法などが混入し、後続のモジュールが読み取れない出力になってしまうことがある。
+
+そこで本稿では、ローカルLLMを「化学計算エンジン」ではなく、**計算化学ワークフロー用の構造化JSON生成器**として評価する。この方針が有望であれば、計算化学ワークフローを自動化する「計算化学AIエージェント」のインターフェース層として、ローカルLLMを活用できる可能性がある。
+
+
+# Qwen2.5-Coder:14Bの選択理由
+
+今回LLMとして `qwen2.5-coder:14b` を選んだ理由は以下の通りである。
+
+- Coder/Instruct系のモデルであり、JSON、Python、CLI、設定ファイルを扱う際の堅牢性に優れる
+- パラメータサイズが14B規模と控えめであり、16GB VRAM級のGPUでの動作が現実的である
+- reasoning特化モデルと異なり、余計な思考過程を出力しにくい
+- Ollamaから簡単にpullできる
+- 構造化出力の検証対象として扱いやすい
+
+1つ目の理由は重要である。reasoning/thinking系のモデルは推論トレースを標準出力に吐き出す（<think>セクションが出力される）ため、構造化された出力が要求される場合に使いにくい。厳密な入力フォーマットが求められる今回のようなケースではCoder/Instructモデルを利用する方が合理的である。
+
+2つ目の理由はGPUのVRAM（メモリ）容量に関するものである。現実的な制約として、16 GB程度のGPU（5070Tiや5080など）に載せて動かせるモデルのパラメータ数は限定的である。例えば最近では `qwen3-coder` シリーズが公開されているが、2026年5月現在で最小のモデルは30bパラメータ（Q4_K_M）のものであり、これはVRAMが 32 GBのRTX5090クラスでなければそもそもモデルを読み込めない。`qwen2.5-coder:14b-instruct` は速度・安定性・要求VRAMのバランスが良いため選択している。
+
+一方で、Qwen2.5-Coderは化学特化モデルではない。そのため、本記事ではLLMに化学的な最終判断を任せるのではなく、以下のように役割を分ける。
+
+```
+（低レイヤーの）LLMに任せることの例:
+  - YAML/JSON設定の読解
+  - workflow JSONの生成
+  - パラメータ候補の補完
+  - 不足情報の警告化
+  - 実行ステップの自然言語的解釈
+
+（低レイヤーの）LLMに任せないことの例:
+  - SMILESの妥当性検証
+  - 電荷・スピン多重度の最終決定
+  - xtb/DFT/MLIP計算そのもの
+  - 物理化学的な妥当性の最終判定
+  - JSONスキーマの検証
+```
+
+化学のドメイン知識を必要とする推論には、より高いレイヤーに推論専用のモデルを配置して運用するのが良い。ここでは、Qwen2.5-Coderが低レイヤーの「計算化学の雑事担当[^chore]」として機能することを期待している。
+
+[^chore]: 計算化学の研究に従事したことのある方であればよくご存じのところとは思うが、計算のインプットファイルや初期構造を用意したり、計算結果を収集してまとめたりすることは（ある程度自動化できるとはいえ）それなりに面倒なタスクである。それらの作業をまるっと機械化できれば、計算に割く人間側の手間が減り、24時間連続稼働できれば試行錯誤の総量を増やせる。人間の研究者はデータの解析や解釈により多くの時間をかけることができ、ひいては研究の生産性向上につながると考えられる。
+
+> Qwen2.5はやや古い（とはいえ約1年前）小規模なモデルであるが、JSON生成器としての用途でわざわざ最新の巨大なモデルを使う必要性は無い。
+
+# 検証環境
+
+```:実行環境（デスクトップPC）
+OS:
+  Windows 11 + WSL2 Ubuntu 24.04.1
+
+CPU:
+  AMD Ryzen 7 5800X3D 8-Core Processor
+
+GPU:
+  NVIDIA GeForce RTX 5070 Ti 16GB
+
+NVIDIA Driver:
+  596.36
+
+CUDA:
+  13.2
+
+RAM:
+  64 GB
+
+Python:
+  Python 3.11.15
+
+Ollama:
+  0.24.0
+
+検証日:
+  2026-05-16
+```
+
+# インストール＆動作確認
+
+### Ollama
+
+```sh:Ollamaの導入
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+```sh:結果
+>>> Cleaning up old version at /usr/local/lib/ollama
+[sudo] password for hogehoge:
+>>> Installing ollama to /usr/local
+>>> Downloading ollama-linux-amd64.tar.zst
+######################################################################## 100.0%
+>>> Adding ollama user to render group...
+>>> Adding ollama user to video group...
+>>> Adding current user to ollama group...
+>>> Creating ollama systemd service...
+>>> Enabling and starting ollama service...
+>>> Nvidia GPU detected.
+>>> The Ollama API is now available at 127.0.0.1:11434.
+>>> Install complete. Run "ollama" from the command line.
+```
+
+```sh:インストール確認
+$ ollama --version
+ollama version is 0.24.0
+```
+
+### Qwen
+
+ファイルサイズは 9 GB程度。
+
+```sh:qwen2.5-coder:14bのダウンロード
+ollama pull qwen2.5-coder:14b
+```
+
+```sh:結果
+pulling manifest
+pulling ac9bc7a69dab: 100% ▕██████████████████████████████████████████████████████████████████████████████████████████████████████████▏ 9.0 GB
+pulling 66b9ea09bd5b: 100% ▕██████████████████████████████████████████████████████████████████████████████████████████████████████████▏   68 B
+pulling 1e65450c3067: 100% ▕██████████████████████████████████████████████████████████████████████████████████████████████████████████▏ 1.6 KB
+pulling 832dd9e00a68: 100% ▕██████████████████████████████████████████████████████████████████████████████████████████████████████████▏  11 KB
+pulling 0578f229f23a: 100% ▕██████████████████████████████████████████████████████████████████████████████████████████████████████████▏  488 B
+verifying sha256 digest
+writing manifest
+```
+
+モデル一覧を確認する。
+
+```
+$ ollama list
+NAME                 ID              SIZE      MODIFIED
+qwen2.5-coder:14b    9ec8897f747e    9.0 GB    About an hour ago
+```
+
+Ollamaサーバーが起動しておりモデルの読み込みに成功しているか確認する。
+```sh:
+$ curl http://localhost:11434/api/tags
+{"models":[{"name":"qwen2.5-coder:14b","model":"qwen2.5-coder:14b","modified_at":"2026-05-16T20:21:56.526874245+09:00","size":8988124298,"digest":"9ec8897f747e246e970bc5cfdda85d22f1123dc2e3d34978a010a75968716849","details":{"parent_model":"","format":"gguf","family":"qwen2","families":["qwen2"],"parameter_size":"14.8B","quantization_level":"Q4_K_M"}}
+```
+
+````sh:動作確認
+$ ollama run qwen2.5-coder:14b
+>>> Return only JSON. Create a JSON object with keys "status" and "message".
+```json
+{
+  "status": "success",
+  "message": "Request processed successfully."
+}
+```
+
+````
+json形式として正しく、これは期待される挙動となっている。
+
+
+### Pythonクライアントの準備
+
+PythonからOllamaを呼び出すため、必要なライブラリを導入する。 `.venv` がホームに存在すると面倒なので、`ollama`などの適当なディレクトリを作成してその中で検証するのが良い。
+```sh:ライブラリのインストール
+mkdir ~/ollama
+cd ~/ollama
+python -m venv .venv
+source .venv/bin/activate
+
+pip install ollama pydantic pyyaml
+```
+
+```sh:バージョン確認
+$ pip freeze | grep -E "ollama|pydantic|PyYAML"
+ollama==0.6.2
+pydantic==2.13.4
+pydantic_core==2.46.4
+PyYAML==6.0.3
+```
+
+* * *
+
+:::note info
+以下、 `source .venv/bin/activate` を実行した状態で検証を実施する。
+:::
+
+# 検証1：単純なJSON出力
+
+```python:eval1.py
+from ollama import chat
+
+response = chat(
+    model="qwen2.5-coder:14b",
+    messages=[
+        {
+            "role": "system",
+            "content": "Return only valid JSON. Do not use Markdown. Do not explain."
+        },
+        {
+            "role": "user",
+            "content": "Create a JSON object describing methane with formula, charge, spin_multiplicity, and atom_count."
+        }
+    ],
+    options={
+        "temperature": 0
+    }
+)
+
+print(response["message"]["content"])
+```
+
+```sh:出力（検証1）
+$ python eval1.py
+{
+  "formula": "CH4",
+  "charge": 0,
+  "spin_multiplicity": 1,
+  "atom_count": 5
+}
+```
+
+✅期待される挙動になっている。
+
+# 検証2：JSON SchemaによるStructured Outputs
+
+次に、JSON Schemaを指定して、出力形式を制約する。
+
+```python:eval2.py
+import json
+from ollama import chat
+from pydantic import BaseModel, Field, ValidationError
+
+
+class MoleculeInfo(BaseModel):
+    name: str
+    formula: str
+    charge: int
+    spin_multiplicity: int
+    atom_count: int
+    warnings: list[str] = Field(default_factory=list)
+
+
+schema = MoleculeInfo.model_json_schema()
+
+response = chat(
+    model="qwen2.5-coder:14b",
+    messages=[
+        {
+            "role": "system",
+            "content": (
+                "Return only valid JSON matching the given schema. "
+                "Do not use Markdown. Do not explain."
+            )
+        },
+        {
+            "role": "user",
+            "content": "Create molecule metadata for ethanol."
+        }
+    ],
+    format=schema,
+    options={
+        "temperature": 0
+    }
+)
+
+raw = response["message"]["content"]
+print(raw)
+
+try:
+    parsed = MoleculeInfo.model_validate_json(raw)
+    print(parsed.model_dump_json(indent=2))
+except ValidationError as e:
+    print("VALIDATION_FAILED")
+    print(e)
+```
+
+```sh:出力（検証2）
+$ python eval2.py
+{
+  "name": "Ethanol",
+  "formula": "C2H5OH",
+  "charge": 0,
+  "spin_multiplicity": 1,
+  "atom_count": 9,
+  "warnings": []
+}
+{
+  "name": "Ethanol",
+  "formula": "C2H5OH",
+  "charge": 0,
+  "spin_multiplicity": 1,
+  "atom_count": 9,
+  "warnings": []
+}
+```
+
+✅期待される挙動になっている。
+
+> 1つ目がLLMの直接出力、2つ目がPydantic検証後の正規化出力である。この程度の構造であればLLMが直接出力しても崩れることはないようである。
+> また、分子式として厳密な出力が要求されるなら `C2H6O` の方が良い可能性はある。
+
+# 検証3：計算化学ワークフローJSONの生成
+
+次に、計算化学ワークフローを表すJSONを生成させる。想定する処理は以下である。
+
+```
+SMILES CSV
+  ↓
+RDKitで3D構造生成
+  ↓
+xtbで構造最適化
+  ↓
+エネルギー・構造情報をsummary JSONに保存
+```
+
+まず、以下のような CSV ファイルを `~/ollama/examples/` に設置する。（`examples` という名前のディレクトリは事前に作っておく）
+```csv:smiles_list.csv
+id,name,smiles,charge,spin_multiplicity,category,notes
+mol_001,methane,C,0,1,closed_shell,"simple neutral closed-shell molecule"
+mol_002,ethanol,CCO,0,1,closed_shell,"common organic molecule"
+mol_003,benzene,c1ccccc1,0,1,aromatic,"aromatic neutral molecule"
+mol_004,acetone,CC(=O)C,0,1,closed_shell,"neutral carbonyl compound"
+mol_005,acetic_acid,CC(=O)O,0,1,closed_shell,"neutral carboxylic acid"
+mol_006,pyridine,n1ccccc1,0,1,heteroaromatic,"heteroaromatic molecule"
+mol_007,acetate,CC(=O)[O-],-1,1,anion,"charged species; charge must be propagated to xtb"
+mol_008,ammonium,[NH4+],1,1,cation,"charged species; charge must be propagated to xtb"
+mol_009,methyl_radical,[CH3],0,2,radical,"open-shell species; spin/uhf handling required"
+mol_010,nitric_oxide,[N]=O,0,2,radical,"open-shell small molecule; spin handling required"
+mol_011,ferrocenium_like_placeholder,[Fe+3].[C-]1=CC=C1.[C-]1=CC=C1,1,2,organometallic_warning,"intentionally approximate; should trigger warning rather than blind execution"
+```
+
+その後、以下のスクリプトを実行する。
+
+```python:eval3.py
+import csv
+import json
+from pathlib import Path
+
+from ollama import chat
+from pydantic import BaseModel, Field
+
+
+class WorkflowInput(BaseModel):
+    type: str
+    path: str
+    id_column: str
+    smiles_column: str
+    charge_column: str | None = None
+    spin_multiplicity_column: str | None = None
+
+
+class WorkflowStep(BaseModel):
+    step_id: str
+    tool: str
+    description: str
+    input_keys: list[str] = Field(default_factory=list)
+    output_keys: list[str] = Field(default_factory=list)
+    parameters: dict = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class WorkflowSpec(BaseModel):
+    workflow_id: str
+    objective: str
+    input: WorkflowInput
+    steps: list[WorkflowStep]
+    expected_outputs: dict
+    global_warnings: list[str] = Field(default_factory=list)
+
+
+def read_csv_preview(path: str, n: int = 5) -> dict:
+    with open(path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        rows = []
+        for i, row in enumerate(reader):
+            if i >= n:
+                break
+            rows.append(row)
+
+    return {
+        "path": path,
+        "columns": reader.fieldnames,
+        "preview_rows": rows,
+    }
+
+
+csv_info = read_csv_preview("examples/smiles_list.csv")
+
+project_request = {
+    "task": "Create a workflow JSON for computational chemistry automation.",
+    "input_files": {
+        "smiles_csv": csv_info,
+        "planned_workflow": {
+            "workflow_id": "smiles_to_xtb_relax",
+            "input": {
+                "type": "smiles_csv",
+                "path": "examples/smiles_list.csv"
+            },
+            "outputs": {
+                "summary_csv": True,
+                "summary_json": True,
+                "keep_intermediate_runs": True,
+                "fail_fast": False
+            }
+        },
+        "tool_registry": {
+            "tools": [
+                {
+                    "name": "rdkit_generate_3d",
+                    "description": "Generate 3D conformers from SMILES."
+                },
+                {
+                    "name": "xtb_optimize",
+                    "description": "Run geometry optimization using xtb."
+                },
+                {
+                    "name": "collect_results",
+                    "description": "Collect optimized structures, energies, and calculation status."
+                }
+            ]
+        }
+    },
+    "requirements": [
+        "Preserve the CSV column names.",
+        "Set id_column to 'id'.",
+        "Set smiles_column to 'smiles'.",
+        "Set charge_column to 'charge' if present.",
+        "Set spin_multiplicity_column to 'spin_multiplicity' if present.",
+        "Use only tools listed in tool_registry.",
+        "If summary_csv or summary_json is requested, include a collect_results step.",
+        "Do not silently assume all molecules are neutral closed-shell species.",
+        "Add warnings for charged, radical, organometallic, or transition-metal-like entries."
+    ]
+}
+
+response = chat(
+    model="qwen2.5-coder:14b",
+    messages=[
+        {
+            "role": "system",
+            "content": (
+                "You are a JSON generator for computational chemistry workflows. "
+                "Return only valid JSON matching the schema. "
+                "Do not use Markdown. "
+                "Do not explain. "
+                "Use only the registered tools. "
+                "Preserve important CSV columns."
+            )
+        },
+        {
+            "role": "user",
+            "content": json.dumps(project_request, ensure_ascii=False)
+        }
+    ],
+    format=WorkflowSpec.model_json_schema(),
+    options={
+        "temperature": 0,
+        "num_ctx": 8192
+    }
+)
+
+raw = response["message"]["content"]
+parsed = WorkflowSpec.model_validate_json(raw)
+
+print(
+    parsed.model_dump_json(
+        indent=2,
+        ensure_ascii=False
+    )
+)
+```
+
+```sh:出力（検証3）
+$ python eval3.py
+{
+  "workflow_id": "smiles_to_xtb_relax",
+  "objective": "Generate 3D conformers from SMILES and optimize geometries using xtb.",
+  "input": {
+    "type": "smiles_csv",
+    "path": "examples/smiles_list.csv",
+    "id_column": "id",
+    "smiles_column": "smiles",
+    "charge_column": "charge",
+    "spin_multiplicity_column": "spin_multiplicity"
+  },
+  "steps": [
+    {
+      "step_id": "generate_3d_conformers",
+      "tool": "rdkit_generate_3d",
+      "description": "Generate 3D conformers from SMILES.",
+      "input_keys": [],
+      "output_keys": [],
+      "parameters": {},
+      "warnings": []
+    },
+    {
+      "step_id": "optimize_geometry",
+      "tool": "xtb_optimize",
+      "description": "Run geometry optimization using xtb.",
+      "input_keys": [
+        "conformers"
+      ],
+      "output_keys": [
+        "optimized_structures"
+      ],
+      "parameters": {},
+      "warnings": []
+    }
+  ],
+  "expected_outputs": {
+    "summary_csv": true,
+    "summary_json": true
+  },
+  "global_warnings": [
+    "Charged, radical, organometallic, or transition-metal-like entries may require special handling."
+  ]
+}
+```
+
+JSON Schema（スクリプトの`class WorkflowInput`の部分）には `type`、`path`、`id_column`、`smiles_column`、`charge_column`、`spin_multiplicity_column` のみを規定しているので、csvの列情報の一部（`name`、`category`、`notes`）は "input" には保持されていない。これは正常な挙動である。
+
+:::note warn
+JSON Schemaの記載内容はLLMの解釈に影響するため、**並び順を含めて**慎重に選択する必要がある。
+
+例えば、JSON Schemaに以下のように `name`、`path`、`category` を追加すると "input" の属性にも反映される。これらの値はcsvの内容に対応している。
+```python:eval3.py（変更後① 抜粋）
+class WorkflowInput(BaseModel):
+    type: str
+    path: str
+    id_column: str
+    smiles_column: str
+    charge_column: str | None = None
+    spin_multiplicity_column: str | None = None
+    name: str
+    category: str
+    notes: str
+```
+
+```sh:出力（検証3：変更後① 抜粋）
+  "input": {
+    "type": "smiles_csv",
+    "path": "examples/smiles_list.csv",
+    "id_column": "id",
+    "smiles_column": "smiles",
+    "charge_column": "charge",
+    "spin_multiplicity_column": "spin_multiplicity",
+    "name": "name",
+    "category": "category",
+    "notes": "notes"
+  },
+```
+
+では、追加項目の並び順を変えてみるとどうなるだろうか。
+
+```python:eval3.py（変更後② 抜粋）
+class WorkflowInput(BaseModel):
+    type: str
+    path: str
+    name: str
+    category: str
+    notes: str
+    id_column: str
+    smiles_column: str
+    charge_column: str | None = None
+    spin_multiplicity_column: str | None = None
+```
+
+```sh:出力（検証3：変更後② 抜粋）
+  "input": {
+    "type": "smiles_csv",
+    "path": "examples/smiles_list.csv",
+    "name": "smiles_input",
+    "category": "SMILES input file",
+    "notes": "Input CSV containing molecule details.",
+    "id_column": "id",
+    "smiles_column": "smiles",
+    "charge_column": "charge",
+    "spin_multiplicity_column": "spin_multiplicity"
+  },
+```
+
+この場合は、LLMが独自に `smiles_list.csv` の内容から記載すべき事項を判断して追記しており、その値はcsvに対応していない。このように、JSON Schemaの記載内容および並び順はLLMの解釈に影響する恐れがある。
+
+> このようになる理由として、`type`と`path`が「ファイルそのものの属性」であるため、LLMの内部ではこの直後の項目も「ファイルそのものの属性」として認識されてしまっている可能性が考えられる。
+
+csvファイルの列情報を正しく取得するには、以下のように `_column` のラベルを付記して列情報であることを明示すべきである。
+
+```python:eval3.py（変更後③ 抜粋）
+class WorkflowInput(BaseModel):
+    type: str
+    path: str
+    name_column: str
+    category_column: str
+    notes_column: str
+    id_column: str
+    smiles_column: str
+    charge_column: str | None = None
+    spin_multiplicity_column: str | None = None
+```
+
+```sh:出力（検証3：変更後② 抜粋）
+  "input": {
+    "type": "smiles_csv",
+    "path": "examples/smiles_list.csv",
+    "name_column": "name",
+    "category_column": "category",
+    "notes_column": "notes",
+    "id_column": "id",
+    "smiles_column": "smiles",
+    "charge_column": "charge",
+    "spin_multiplicity_column": "spin_multiplicity"
+  },
+```
+
+`notes_column` のようにラベル付けしておけば、例えば `notes` の部分が `tags` や `labels` になっていても `"notes_column": "labels"` のように割り当てられる。
+
+> とはいえ、似たような名前・意味の列が複数ある場合にはLLMが正しく推測できない可能性は十分にあり得る。また、LLMの出力は確率的に決まるため、期待される項目名と実際の項目名が乖離している場合は特に、LLMが予期しない内容のテキストを出力してしまう可能性にも注意したい。
+
+:::
+
+# 検証4：YAML/CSV → workflow JSON生成
+
+次に、ローカルのYAMLファイルをPython側で読み込んでLLMに渡す操作を行う。この検証は「LLMが計算化学ワークフローをゼロから設計できるか」ではなく、「仕様書・ツール定義・入力CSV情報をもとに、下流モジュールが読める構造化JSONへ変換できるか」を評価するものである。
+
+ここでは、LLMに計算化学ワークフローを直接実行させるのではなく、ワークフローを表すJSONを生成させる構成とした。そのため、LLMに渡す入力ファイルとして以下を用意した。
+
+- `planned_workflow.yaml`：人間が意図する計算手順を記述したファイル
+- `canonical_workflow.yaml`：LLMの生成するJSONが満たすべき正規化仕様・検証条件を記述したファイル
+- `tool_registry.yaml`：LLMが使用可能なツール名、入出力、パラメータを定義したファイル
+
+このうち `canonical_workflow.yaml` は、完全な正解JSONそのものではないが、LLMが生成すべきworkflow JSONの「正解に近い仕様」を規定するファイルである。LLMがこれを正しく読めれば、ある程度堅牢なデータ入出力が実現する。
+
+以下に示す `eval4.py` のスクリプトでは、Python側で `planned_workflow.yaml`、`canonical_workflow.yaml`、`tool_registry.yaml`、および `examples/smiles_list.csv` を読み込み、CSVヘッダーと先頭行をLLMに渡している。
+
+<details><summary>yamlファイルの内容</summary>
+
+```yaml:planned_workflow.yaml
+workflow_id: smiles_to_xtb_relax
+description: >
+  Generate 3D structures from a SMILES CSV, optimize each structure using xtb,
+  and collect optimized structures and energies into summary files.
+
+input:
+  type: smiles_csv
+  path: examples/smiles_list.csv
+
+columns:
+  id: id
+  name: name
+  smiles: smiles
+  charge: charge
+  spin_multiplicity: spin_multiplicity
+
+steps:
+  - tool: rdkit_generate_3d
+    description: Generate initial 3D conformers from SMILES.
+    required: true
+  - tool: xtb_optimize
+    description: Optimize each generated structure using xtb.
+    required: true
+  - tool: collect_results
+    description: Collect optimized structures, energies, and status information.
+    required: true
+
+defaults:
+  rdkit_generate_3d:
+    num_conformers: 20
+    max_embed_attempts: 1000
+    optimize_initial_geometry: true
+    random_seed: 20260516
+
+  xtb_optimize:
+    method: gfn2-xtb
+    solvent: null
+    max_steps: 500
+    fmax: 0.05
+    executable: xtb
+
+outputs:
+  output_dir: runs/smiles_to_xtb_relax
+  summary_csv: true
+  summary_json: true
+  keep_intermediate_runs: true
+  fail_fast: false
+
+safety_policy:
+  unknown_tool: reject
+  invalid_smiles: skip_and_report
+  missing_charge_or_spin: warn_and_use_default
+  organometallic_or_transition_metal: warn_and_require_review
+
+metadata:
+  created_for: qwen2.5-coder-14b-instruct-evaluation
+  author: <YOUR_NAME_OR_HANDLE>
+  date: <YYYY-MM-DD>
+```
+
+```yaml:planned_workflow.yaml
+workflow_id: smiles_to_xtb_relax
+objective: >
+  Convert a SMILES CSV into initial 3D structures, optimize them with xtb,
+  and generate machine-readable summary files.
+
+input:
+  type: smiles_csv
+  path: examples/smiles_list.csv
+  id_column: id
+  name_column: name
+  smiles_column: smiles
+  charge_column: charge
+  spin_multiplicity_column: spin_multiplicity
+
+allowed_tools:
+  - rdkit_generate_3d
+  - xtb_optimize
+  - collect_results
+
+required_step_order:
+  - rdkit_generate_3d
+  - xtb_optimize
+  - collect_results
+
+expected_outputs:
+  summary_csv: true
+  summary_json: true
+  optimized_xyz_files: true
+  per_molecule_status_json: true
+
+validation_rules:
+  - rule_id: preserve_input_columns
+    description: >
+      The output workflow JSON must preserve id_column, smiles_column,
+      charge_column, and spin_multiplicity_column when present.
+  - rule_id: no_unregistered_tools
+    description: >
+      The output workflow JSON must use only tools listed in allowed_tools.
+  - rule_id: charged_species_warning
+    description: >
+      Charged molecules must propagate charge to xtb parameters or per-molecule metadata.
+  - rule_id: open_shell_warning
+    description: >
+      Species with spin_multiplicity greater than 1 must trigger an open-shell warning
+      and must not be silently treated as closed-shell.
+  - rule_id: organometallic_review
+    description: >
+      Organometallic or transition-metal-containing entries should be flagged for manual review.
+```
+
+```yaml:tool_registry.yaml
+tools:
+  - name: rdkit_generate_3d
+    version: "0.1.0"
+    category: structure_generation
+    description: Generate one or more initial 3D conformers from SMILES using RDKit.
+    inputs:
+      - name: smiles_csv
+        type: file
+        format: csv
+        required: true
+      - name: smiles_column
+        type: string
+        required: true
+      - name: id_column
+        type: string
+        required: true
+      - name: charge_column
+        type: string
+        required: false
+      - name: spin_multiplicity_column
+        type: string
+        required: false
+    outputs:
+      - name: initial_xyz_files
+        type: file_list
+        format: xyz
+      - name: conformer_metadata_json
+        type: file
+        format: json
+    parameters:
+      num_conformers:
+        type: integer
+        default: 20
+      max_embed_attempts:
+        type: integer
+        default: 1000
+      optimize_initial_geometry:
+        type: boolean
+        default: true
+      random_seed:
+        type: integer
+        default: 20260516
+    failure_modes:
+      - invalid_smiles
+      - embedding_failed
+      - unsupported_element
+
+  - name: xtb_optimize
+    version: "0.1.0"
+    category: quantum_chemistry
+    description: Optimize molecular geometry using xtb.
+    inputs:
+      - name: initial_xyz_files
+        type: file_list
+        format: xyz
+        required: true
+      - name: molecule_metadata_json
+        type: file
+        format: json
+        required: false
+    outputs:
+      - name: optimized_xyz_files
+        type: file_list
+        format: xyz
+      - name: xtb_energy_files
+        type: file_list
+        format: text
+      - name: xtb_status_json
+        type: file
+        format: json
+    parameters:
+      method:
+        type: string
+        enum:
+          - gfn2-xtb
+          - gfn1-xtb
+          - gfnff
+        default: gfn2-xtb
+      charge:
+        type: integer
+        default: 0
+      uhf:
+        type: integer
+        default: 0
+      solvent:
+        type:
+          - string
+          - "null"
+        default: null
+      max_steps:
+        type: integer
+        default: 500
+      fmax:
+        type: number
+        default: 0.05
+      executable:
+        type: string
+        default: xtb
+    failure_modes:
+      - xtb_not_found
+      - optimization_failed
+      - unsupported_charge_spin_combination
+      - scf_not_converged
+
+  - name: collect_results
+    version: "0.1.0"
+    category: postprocessing
+    description: Collect optimized structures, energies, warnings, and status values.
+    inputs:
+      - name: optimized_xyz_files
+        type: file_list
+        format: xyz
+        required: true
+      - name: xtb_energy_files
+        type: file_list
+        format: text
+        required: false
+      - name: xtb_status_json
+        type: file
+        format: json
+        required: false
+    outputs:
+      - name: summary_csv
+        type: file
+        format: csv
+      - name: summary_json
+        type: file
+        format: json
+      - name: per_molecule_status_json
+        type: file
+        format: json
+    parameters:
+      keep_intermediate_runs:
+        type: boolean
+        default: true
+      fail_fast:
+        type: boolean
+        default: false
+```
+
+</details>
+
+```python:eval4.py
+import csv
+import json
+from pathlib import Path
+from typing import Any, Literal
+
+import yaml
+from ollama import chat
+from pydantic import BaseModel, Field, ValidationError, model_validator
+
+
+MODEL = "qwen2.5-coder:14b"
+PROJECT_ROOT = Path(".")
+PLANNED_WORKFLOW_PATH = PROJECT_ROOT / "planned_workflow.yaml"
+CANONICAL_WORKFLOW_PATH = PROJECT_ROOT / "canonical_workflow.yaml"
+TOOL_REGISTRY_PATH = PROJECT_ROOT / "tool_registry.yaml"
+SMILES_CSV_PATH = PROJECT_ROOT / "examples" / "smiles_list.csv"
+NUM_CTX = 8192
+TEMPERATURE = 0
+
+
+class WorkflowInput(BaseModel):
+    type: Literal["smiles_csv", "xyz_dir", "sdf"]
+    path: str
+    id_column: str
+    name_column: str | None = None
+    smiles_column: str
+    charge_column: str | None = None
+    spin_multiplicity_column: str | None = None
+    metadata_columns: list[str] = Field(default_factory=list)
+
+
+class WorkflowStep(BaseModel):
+    step_id: str
+    tool: str
+    description: str
+    input_keys: list[str] = Field(default_factory=list)
+    output_keys: list[str] = Field(default_factory=list)
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class WorkflowSpec(BaseModel):
+    workflow_id: str
+    objective: str
+    input: WorkflowInput
+    steps: list[WorkflowStep]
+    expected_outputs: dict[str, Any] = Field(default_factory=dict)
+    global_warnings: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_basic_workflow_consistency(self) -> "WorkflowSpec":
+        tools = [step.tool for step in self.steps]
+        if self.expected_outputs.get("summary_csv") or self.expected_outputs.get("summary_json"):
+            if "collect_results" not in tools:
+                raise ValueError("summary_csv or summary_json is requested, but collect_results step is missing.")
+        if self.input.type == "smiles_csv":
+            if not self.input.id_column:
+                raise ValueError("input.id_column is required for smiles_csv.")
+            if not self.input.smiles_column:
+                raise ValueError("input.smiles_column is required for smiles_csv.")
+        return self
+
+
+def read_yaml(path: Path) -> Any:
+    if not path.exists():
+        raise FileNotFoundError(f"YAML file not found: {path}")
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def read_csv_preview(path: Path, n: int = 8) -> dict[str, Any]:
+    if not path.exists():
+        raise FileNotFoundError(f"CSV file not found: {path}")
+    with path.open(newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        rows: list[dict[str, str]] = []
+        for i, row in enumerate(reader):
+            if i >= n:
+                break
+            rows.append(row)
+        return {"path": str(path.as_posix()), "columns": reader.fieldnames or [], "preview_rows": rows}
+
+
+def extract_tool_registry_summary(tool_registry: dict[str, Any]) -> dict[str, Any]:
+    tools = []
+    for tool in tool_registry.get("tools", []):
+        tools.append({
+            "name": tool.get("name"),
+            "description": tool.get("description"),
+            "inputs": tool.get("inputs", []),
+            "outputs": tool.get("outputs", []),
+            "parameters": tool.get("parameters", {}),
+        })
+    return {"tools": tools}
+
+
+def build_payload() -> dict[str, Any]:
+    planned_workflow = read_yaml(PLANNED_WORKFLOW_PATH)
+    canonical_workflow = read_yaml(CANONICAL_WORKFLOW_PATH)
+    tool_registry = read_yaml(TOOL_REGISTRY_PATH)
+    csv_preview = read_csv_preview(SMILES_CSV_PATH)
+    return {
+        "task": "Create a workflow JSON for computational chemistry automation.",
+        "important_rules": [
+            "Return only JSON matching the schema.",
+            "Do not use Markdown.",
+            "Use only tools listed in tool_registry.",
+            "Preserve CSV column names exactly.",
+            "Map CSV column 'id' to id_column.",
+            "Map CSV column 'name' to name_column.",
+            "Map CSV column 'smiles' to smiles_column.",
+            "Map CSV column 'charge' to charge_column.",
+            "Map CSV column 'spin_multiplicity' to spin_multiplicity_column.",
+            "Map CSV columns 'category' and 'notes' to metadata_columns.",
+            "Do not use name or category as file-level metadata.",
+            "If summary_csv or summary_json is requested, include a collect_results step.",
+            "For input_keys and output_keys, use names consistent with tool_registry outputs and inputs.",
+            "Do not invent generic keys such as 'conformers' if the registry defines 'initial_xyz_files'.",
+            "Charged, radical, organometallic, and transition-metal-like entries should produce warnings.",
+        ],
+        "planned_workflow": planned_workflow,
+        "canonical_workflow": canonical_workflow,
+        "tool_registry": extract_tool_registry_summary(tool_registry),
+        "smiles_csv": csv_preview,
+        "desired_output_schema": WorkflowSpec.model_json_schema(),
+    }
+
+
+def call_model(payload: dict[str, Any]) -> str:
+    response = chat(
+        model=MODEL,
+        messages=[
+            {"role": "system", "content": (
+                "You are a strict JSON generator for computational chemistry workflows. "
+                "Return only valid JSON matching the provided schema. "
+                "Do not use Markdown. Do not explain. "
+                "Use only registered tools and preserve CSV column mappings exactly."
+            )},
+            {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+        ],
+        format=WorkflowSpec.model_json_schema(),
+        options={"temperature": TEMPERATURE, "num_ctx": NUM_CTX},
+    )
+    return response["message"]["content"]
+
+
+def main() -> None:
+    payload = build_payload()
+    raw = call_model(payload)
+    print("=== raw model output ===")
+    print(raw)
+    print("\n=== validated output ===")
+    try:
+        parsed = WorkflowSpec.model_validate_json(raw)
+    except ValidationError as exc:
+        print("VALIDATION_FAILED")
+        print(exc)
+        raise SystemExit(1)
+    print(parsed.model_dump_json(indent=2, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    main()
+
+```
+
+`build_payload()` は、LLMに完全な正解JSONを渡しているわけではないが、各yamlファイルや出力Schemaをまとめて渡しているため、LLMはかなり強く制約された状態でworkflow JSONを生成している。
+
+以下では、`raw model output`（LLMが実際に返したJSON文字列そのもの）に続けて `validated output`（Pydanticの `WorkflowSpec` に通した後、Python側で正規化して再出力したもの）を出力している。
+
+```sh:出力（検証4）
+$ python eval4.py
+=== raw model output ===
+{
+  "workflow_id": "smiles_to_xtb_relax",
+  "objective": "Convert a SMILES CSV into initial 3D structures, optimize them with xtb, and generate machine-readable summary files.\n",
+  "input": {
+    "type": "smiles_csv",
+    "path": "examples/smiles_list.csv",
+    "id_column": "id",
+    "smiles_column": "smiles",
+    "charge_column": "charge",
+    "spin_multiplicity_column": "spin_multiplicity"
+  },
+  "steps": [
+    {
+      "step_id": "rdkit_generate_3d_step",
+      "tool": "rdkit_generate_3d",
+      "description": "Generate initial 3D conformers from SMILES.",
+      "input_keys": ["smiles_csv", "smiles_column", "id_column", "charge_column", "spin_multiplicity_column"],
+      "output_keys": ["initial_xyz_files", "conformer_metadata_json"],
+      "parameters": {
+        "num_conformers": 20,
+        "max_embed_attempts": 1000,
+        "optimize_initial_geometry": true,
+        "random_seed": 20260516
+      }
+    },
+    {
+      "step_id": "xtb_optimize_step",
+      "tool": "xtb_optimize",
+      "description": "Optimize each generated structure using xtb.",
+      "input_keys": ["initial_xyz_files", "molecule_metadata_json"],
+      "output_keys": ["optimized_xyz_files", "xtb_energy_files", "xtb_status_json"],
+      "parameters": {
+        "method": "gfn2-xtb",
+        "solvent": null,
+        "max_steps": 500,
+        "fmax": 0.05,
+        "executable": "xtb"
+      }
+    },
+    {
+      "step_id": "collect_results_step",
+      "tool": "collect_results",
+      "description": "Collect optimized structures, energies, warnings, and status values.",
+      "input_keys": ["optimized_xyz_files", "xtb_energy_files", "xtb_status_json"],
+      "output_keys": ["summary_csv", "summary_json", "per_molecule_status_json"],
+      "parameters": {
+        "keep_intermediate_runs": true,
+        "fail_fast": false
+      }
+    }
+  ],
+  "expected_outputs": {
+    "summary_csv": true,
+    "summary_json": true,
+    "optimized_xyz_files": true,
+    "per_molecule_status_json": true
+  },
+  "global_warnings": [
+    "Charged molecules must propagate charge to xtb parameters or per-molecule metadata.",
+    "Species with spin_multiplicity greater than 1 must trigger an open-shell warning and must not be silently treated as closed-shell.",
+    "Organometallic or transition-metal-containing entries should be flagged for manual review."
+  ]
+}
+
+=== validated output ===
+{
+  "workflow_id": "smiles_to_xtb_relax",
+  "objective": "Convert a SMILES CSV into initial 3D structures, optimize them with xtb, and generate machine-readable summary files.\n",
+  "input": {
+    "type": "smiles_csv",
+    "path": "examples/smiles_list.csv",
+    "id_column": "id",
+    "name_column": null,
+    "smiles_column": "smiles",
+    "charge_column": "charge",
+    "spin_multiplicity_column": "spin_multiplicity",
+    "metadata_columns": []
+  },
+  "steps": [
+    {
+      "step_id": "rdkit_generate_3d_step",
+      "tool": "rdkit_generate_3d",
+      "description": "Generate initial 3D conformers from SMILES.",
+      "input_keys": [
+        "smiles_csv",
+        "smiles_column",
+        "id_column",
+        "charge_column",
+        "spin_multiplicity_column"
+      ],
+      "output_keys": [
+        "initial_xyz_files",
+        "conformer_metadata_json"
+      ],
+      "parameters": {
+        "num_conformers": 20,
+        "max_embed_attempts": 1000,
+        "optimize_initial_geometry": true,
+        "random_seed": 20260516
+      },
+      "warnings": []
+    },
+    {
+      "step_id": "xtb_optimize_step",
+      "tool": "xtb_optimize",
+      "description": "Optimize each generated structure using xtb.",
+      "input_keys": [
+        "initial_xyz_files",
+        "molecule_metadata_json"
+      ],
+      "output_keys": [
+        "optimized_xyz_files",
+        "xtb_energy_files",
+        "xtb_status_json"
+      ],
+      "parameters": {
+        "method": "gfn2-xtb",
+        "solvent": null,
+        "max_steps": 500,
+        "fmax": 0.05,
+        "executable": "xtb"
+      },
+      "warnings": []
+    },
+    {
+      "step_id": "collect_results_step",
+      "tool": "collect_results",
+      "description": "Collect optimized structures, energies, warnings, and status values.",
+      "input_keys": [
+        "optimized_xyz_files",
+        "xtb_energy_files",
+        "xtb_status_json"
+      ],
+      "output_keys": [
+        "summary_csv",
+        "summary_json",
+        "per_molecule_status_json"
+      ],
+      "parameters": {
+        "keep_intermediate_runs": true,
+        "fail_fast": false
+      },
+      "warnings": []
+    }
+  ],
+  "expected_outputs": {
+    "summary_csv": true,
+    "summary_json": true,
+    "optimized_xyz_files": true,
+    "per_molecule_status_json": true
+  },
+  "global_warnings": [
+    "Charged molecules must propagate charge to xtb parameters or per-molecule metadata.",
+    "Species with spin_multiplicity greater than 1 must trigger an open-shell warning and must not be silently treated as closed-shell.",
+    "Organometallic or transition-metal-containing entries should be flagged for manual review."
+  ]
+}
+```
+
+これを見る限り、概ね良い精度で既定のJSON形式を返せている。一方で、`name_column` が `null` になっているなど、CSV列情報の一部が十分に保持されていない部分も見受けられる。
+
+理由としては、以下の点が考えられる。
+
+- JSON Schemaにおいて、`name_column` や `metadata_columns` が任意項目であり、未指定でもvalidationを通ること
+- `name` という語が、分子名、ファイル名、workflow名など複数の意味を持ちうること
+- タスクの目的が「全CSV列情報の取得・保持」ではなく、「計算ワークフローJSONの生成」として定義されていること
+- `name`、`category`、`notes` のような補助列が、計算実行に直接必要な列として強く指定されていなかったこと
+
+実際、`id`、`smiles`、`charge`、`spin_multiplicity` のような計算の実行に直結する列情報は保持されている。一方で、`name`、`category`、`notes` のような補助的な列情報はSchema上必須ではなく、プロンプト上の優先度も低かったため、省略されたと考えられる。
+
+この結果は単純なモデルの性能不足というより、Schema設計、プロンプト設計、列名の曖昧さ、タスクの目的による影響が大きい。全CSV列を確実に保持したい場合は、プロンプトで明示するだけでなく、`name_column` や `metadata_columns` を必須化する、またはPython側でCSV列マッピングを決定論的に作成してLLMに渡す設計が望ましい。
+
+
+
+# 検証5：生成したJSONを別のモジュールに渡す
+
+検証5では、LLMが生成したworkflow JSONを別モジュールで受け取り、実行可能な形式になっているかを確認する。具体的には、生成したJSONをそのまま実計算に渡すのではなく、まずPydanticモデルと `tool_registry.yaml` によって検証し、dry-runを行う。さらに、実運用に近い条件として、約40個のダミーモジュールを含むlarge版のtool registryを用意し、多数の候補の中からLLMが正しいモジュールの組み合わせと順序を選択できるかを検証する。
+
+ここでは、仕様を明示的に与える場合から自然言語によるプロンプトのみの場合まで、以下の3段階に分けて評価する。
+
+- **Level 1：guided test**
+`expected_tools.json` をLLMにも渡し、必要ツール、推奨順序、期待パラメータ値を明示した状態でworkflow JSONを生成させる検証。LLMの完全自律的なツール選択能力ではなく、仕様書・tool registry・制約条件に従って安定したJSONを生成できるかを見る。
+- **Level 2：semi-blind test**
+`expected_tools.json` はLLMには渡さず、validator側の採点基準としてのみ使う検証。LLMには `planned_workflow_large.yaml`、CSV情報、tool registryだけを渡し、計算目的とregistryの説明から必要なツールを選べるかを見る。
+- **Level 3：natural-language planning test**
+`planned_workflow_large.yaml` も使わず、人間の自然言語依頼、CSV情報、tool registryだけをLLMに渡す検証。実運用に最も近く、自然言語の要求から必要モジュールを自律的に選択し、実行可能なworkflow JSONを構成できるかを見る。
+
+<details><summary>yaml、jsonファイルの内容</summary>
+
+- `tool_registry_large.yaml`：LLMが使用可能なツール一覧を定義するファイル。各ツールの入力、出力、パラメータを記述する。
+- `planned_workflow_large.yaml`：人間が意図する計算目的を記述するファイル。Level 2でLLMに渡す。
+- `expected_tools.json`：採点用の期待仕様を記述するファイル。Level 1ではLLMにも渡し、Level 2/3ではvalidator側だけが使う。
+- `examples/smiles_list.csv`：検証用のSMILES CSV。列情報をLLMに渡し、workflow JSONに反映できるかを見る。
+- `user_request.txt`：Level 3で使う自然言語依頼ファイル。人間の依頼文からツール選択できるかを検証する。
+- `generated_large_registry_workflow.json`：LLM生成結果を保存したJSON。再検証や比較に使う。
+
+```csv:smiles_list.csv
+id,name,smiles,charge,spin_multiplicity,category,notes
+mol_001,methane,C,0,1,closed_shell,simple neutral molecule
+mol_002,ethanol,CCO,0,1,closed_shell,common organic molecule
+mol_003,acetate,CC(=O)[O-],-1,1,anion,charged molecule
+mol_004,methyl_radical,[CH3],0,2,radical,open-shell molecule
+```
+
+```json:expected_tools.json
+{
+  "required_tools": [
+    "read_smiles_csv",
+    "rdkit_validate_smiles",
+    "rdkit_generate_3d",
+    "xtb_optimize",
+    "collect_results"
+  ],
+  "preferred_step_order": [
+    "read_smiles_csv",
+    "rdkit_validate_smiles",
+    "rdkit_generate_3d",
+    "xtb_optimize",
+    "collect_results"
+  ],
+  "discouraged_tools": [
+    "openbabel_convert",
+    "rdkit_compute_descriptors",
+    "mordred_compute_descriptors",
+    "mace_single_point",
+    "fairchem_uma_optimize",
+    "ase_neb_setup",
+    "ase_neb_optimize",
+    "gaussian_input_writer",
+    "orca_input_writer",
+    "vasp_poscar_writer",
+    "generate_dimer_distance_scan_xyz",
+    "random_dimer_pose_sampler",
+    "substituent_replacement_generator",
+    "rank_by_aromatic_ring_count",
+    "vdw_surface_area_estimator",
+    "solvent_accessible_surface_area",
+    "conformer_rmsd_clusterer",
+    "torsion_scan_input_generator",
+    "distance_constraint_scan_generator",
+    "fragment_molecule_by_brics",
+    "enumerate_tautomers",
+    "enumerate_protonation_states",
+    "generate_stereoisomers",
+    "pharmacophore_feature_counter",
+    "molecular_shape_asphericity",
+    "electrostatic_grid_sampler",
+    "molecular_dipole_estimator",
+    "pairwise_molecular_similarity",
+    "substructure_filter",
+    "reactive_site_tagging",
+    "reaction_product_enumerator",
+    "binding_pocket_grid_generator",
+    "conformer_energy_ranker",
+    "boltzmann_average_properties",
+    "xyz_centroid_alignment",
+    "steric_clash_detector",
+    "molecular_volume_estimator"
+  ],
+  "sensitive_parameters": {
+    "rdkit_generate_3d": [
+      "num_conformers",
+      "max_embed_attempts",
+      "optimize_initial_geometry",
+      "random_seed"
+    ],
+    "xtb_optimize": [
+      "method",
+      "charge_column",
+      "spin_multiplicity_column",
+      "max_steps",
+      "fmax",
+      "solvent",
+      "executable"
+    ],
+    "collect_results": [
+      "summary_csv",
+      "summary_json",
+      "keep_intermediate_runs",
+      "fail_fast"
+    ]
+  },
+  "expected_parameter_values": {
+    "read_smiles_csv": {
+      "id_column": "id",
+      "smiles_column": "smiles",
+      "charge_column": "charge",
+      "spin_multiplicity_column": "spin_multiplicity"
+    },
+    "rdkit_validate_smiles": {
+      "strict": false
+    },
+    "rdkit_generate_3d": {
+      "num_conformers": 20,
+      "max_embed_attempts": 1000,
+      "optimize_initial_geometry": true,
+      "random_seed": 20260516
+    },
+    "xtb_optimize": {
+      "method": "gfn2-xtb",
+      "charge_column": "charge",
+      "spin_multiplicity_column": "spin_multiplicity",
+      "max_steps": 500,
+      "fmax": 0.05,
+      "solvent": null,
+      "executable": "xtb"
+    },
+    "collect_results": {
+      "summary_csv": true,
+      "summary_json": true,
+      "keep_intermediate_runs": true,
+      "fail_fast": false
+    }
+  },
+  "initial_input_keys": [
+    "smiles_csv"
+  ],
+  "allowed_missing_optional_outputs": [],
+  "max_allowed_steps": 6
+}
+```
+
+:::note warn
+Level 2 以降の検証では `planned_workflow_large.yaml` から以下を削除する：
+- equired_tools:
+- preferred_step_order:
+- parameter_policy:
+:::
+
+```yaml:planned_workflow_large.yaml
+workflow_id: smiles_to_xtb_relax_large_registry_test
+description: >
+  Generate initial 3D structures from a SMILES CSV, optimize them with xtb,
+  and collect summary CSV/JSON outputs. The tool registry intentionally contains
+  many chemically meaningful but irrelevant modules, so this test checks whether
+  the LLM selects only the minimal tools needed for the requested workflow.
+
+input:
+  type: smiles_csv
+  path: examples/smiles_list.csv
+
+columns:
+  id: id
+  name: name
+  smiles: smiles
+  charge: charge
+  spin_multiplicity: spin_multiplicity
+  category: category
+  notes: notes
+
+expected_behavior:
+  required_tools:
+    - read_smiles_csv
+    - rdkit_validate_smiles
+    - rdkit_generate_3d
+    - xtb_optimize
+    - collect_results
+
+  preferred_step_order:
+    - read_smiles_csv
+    - rdkit_validate_smiles
+    - rdkit_generate_3d
+    - xtb_optimize
+    - collect_results
+
+  forbidden_behavior:
+    - Do not invent tools not listed in tool_registry_large.yaml.
+    - Do not invent parameters not listed for each tool.
+    - Do not use unrelated modules for this simple workflow.
+    - Do not perform descriptor calculation, enumeration, docking, DFT, NEB, MLIP, molecular editing, or reaction enumeration unless explicitly requested.
+    - Do not infer solvent, convergence threshold, number of conformers, or random seed unless specified here or in the registry defaults.
+    - Parameter values must exactly match registry enum values when enum values are defined.
+
+  parameter_policy:
+    read_smiles_csv:
+      id_column: id
+      smiles_column: smiles
+      charge_column: charge
+      spin_multiplicity_column: spin_multiplicity
+    rdkit_validate_smiles:
+      strict: false
+    rdkit_generate_3d:
+      num_conformers: 20
+      max_embed_attempts: 1000
+      optimize_initial_geometry: true
+      random_seed: 20260516
+    xtb_optimize:
+      method: gfn2-xtb
+      charge_column: charge
+      spin_multiplicity_column: spin_multiplicity
+      max_steps: 500
+      fmax: 0.05
+      solvent: null
+      executable: xtb
+    collect_results:
+      summary_csv: true
+      summary_json: true
+      keep_intermediate_runs: true
+      fail_fast: false
+
+outputs:
+  summary_csv: true
+  summary_json: true
+  per_molecule_status_json: true
+
+notes:
+  - This is a large-registry stress test, not a test of whether descriptor, DFT, MLIP, docking, or enumeration modules work.
+  - The correct behavior is to ignore chemically meaningful but irrelevant modules.
+
+```
+
+```yaml:tool_registry_large.yaml
+tools:
+  - name: read_smiles_csv
+    version: "0.1.0"
+    category: io
+    description: Read a CSV file containing molecule identifiers, SMILES, charge, and spin information.
+    inputs:
+      - name: smiles_csv
+        type: file
+        format: csv
+        required: true
+    outputs:
+      - name: molecule_table
+        type: table
+    parameters:
+      id_column:
+        type: string
+      smiles_column:
+        type: string
+      charge_column:
+        type: string
+      spin_multiplicity_column:
+        type: string
+
+  - name: rdkit_validate_smiles
+    version: "0.1.0"
+    category: validation
+    description: Validate SMILES strings using RDKit and annotate invalid rows.
+    inputs:
+      - name: molecule_table
+        type: table
+        required: true
+    outputs:
+      - name: validated_molecule_table
+        type: table
+    parameters:
+      strict:
+        type: boolean
+        default: false
+
+  - name: rdkit_generate_3d
+    version: "0.1.0"
+    category: structure_generation
+    description: Generate initial 3D conformers from validated SMILES using RDKit.
+    inputs:
+      - name: validated_molecule_table
+        type: table
+        required: true
+    outputs:
+      - name: initial_xyz_files
+        type: file_list
+        format: xyz
+      - name: conformer_metadata_json
+        type: file
+        format: json
+    parameters:
+      num_conformers:
+        type: integer
+        default: 20
+      max_embed_attempts:
+        type: integer
+        default: 1000
+      optimize_initial_geometry:
+        type: boolean
+        default: true
+      random_seed:
+        type: integer
+        default: 20260516
+
+  - name: xtb_optimize
+    version: "0.1.0"
+    category: quantum_chemistry
+    description: Optimize molecular geometries using xtb.
+    inputs:
+      - name: initial_xyz_files
+        type: file_list
+        format: xyz
+        required: true
+      - name: conformer_metadata_json
+        type: file
+        format: json
+        required: false
+    outputs:
+      - name: optimized_xyz_files
+        type: file_list
+        format: xyz
+      - name: xtb_energy_files
+        type: file_list
+        format: text
+      - name: xtb_status_json
+        type: file
+        format: json
+    parameters:
+      method:
+        type: string
+        enum: [gfn2-xtb, gfn1-xtb, gfnff]
+        default: gfn2-xtb
+      charge_column:
+        type: string
+      spin_multiplicity_column:
+        type: string
+      max_steps:
+        type: integer
+        default: 500
+      fmax:
+        type: number
+        default: 0.05
+      solvent:
+        type:
+          - string
+          - "null"
+        default: null
+      executable:
+        type: string
+        default: xtb
+
+  - name: collect_results
+    version: "0.1.0"
+    category: postprocessing
+    description: Collect optimized structures, energies, status, and warnings into summary files.
+    inputs:
+      - name: optimized_xyz_files
+        type: file_list
+        format: xyz
+        required: true
+      - name: xtb_energy_files
+        type: file_list
+        format: text
+        required: false
+      - name: xtb_status_json
+        type: file
+        format: json
+        required: false
+    outputs:
+      - name: summary_csv
+        type: file
+        format: csv
+      - name: summary_json
+        type: file
+        format: json
+      - name: per_molecule_status_json
+        type: file
+        format: json
+    parameters:
+      summary_csv:
+        type: boolean
+        default: true
+      summary_json:
+        type: boolean
+        default: true
+      keep_intermediate_runs:
+        type: boolean
+        default: true
+      fail_fast:
+        type: boolean
+        default: false
+
+  - name: openbabel_convert
+    version: "0.1.0"
+    category: format_conversion
+    description: Convert molecule files between formats using Open Babel.
+    inputs:
+      - name: input_molecule_files
+        type: file_list
+    outputs:
+      - name: converted_molecule_files
+        type: file_list
+    parameters:
+      input_format:
+        type: string
+      output_format:
+        type: string
+
+  - name: rdkit_compute_descriptors
+    version: "0.1.0"
+    category: descriptor
+    description: Compute RDKit molecular descriptors from a molecule table.
+    inputs:
+      - name: validated_molecule_table
+        type: table
+    outputs:
+      - name: descriptor_table
+        type: table
+    parameters:
+      descriptor_set:
+        type: string
+        default: basic
+
+  - name: mordred_compute_descriptors
+    version: "0.1.0"
+    category: descriptor
+    description: Compute Mordred descriptors.
+    inputs:
+      - name: validated_molecule_table
+        type: table
+    outputs:
+      - name: mordred_descriptor_table
+        type: table
+    parameters:
+      ignore_3d:
+        type: boolean
+        default: false
+
+  - name: mace_single_point
+    version: "0.1.0"
+    category: mlip
+    description: Run a MACE single-point calculation.
+    inputs:
+      - name: xyz_files
+        type: file_list
+    outputs:
+      - name: mace_energy_json
+        type: file
+    parameters:
+      model_path:
+        type: string
+      device:
+        type: string
+        default: cuda
+
+  - name: fairchem_uma_optimize
+    version: "0.1.0"
+    category: mlip
+    description: Optimize structures using a fairchem UMA calculator.
+    inputs:
+      - name: initial_xyz_files
+        type: file_list
+    outputs:
+      - name: uma_optimized_xyz_files
+        type: file_list
+      - name: uma_status_json
+        type: file
+    parameters:
+      model_path:
+        type: string
+      device:
+        type: string
+        default: cuda
+      fmax:
+        type: number
+
+  - name: ase_neb_setup
+    version: "0.1.0"
+    category: reaction_path
+    description: Set up NEB images from initial and final structures.
+    inputs:
+      - name: initial_xyz
+        type: file
+      - name: final_xyz
+        type: file
+    outputs:
+      - name: neb_images
+        type: file_list
+    parameters:
+      n_images:
+        type: integer
+        default: 7
+      interpolation:
+        type: string
+        default: idpp
+
+  - name: ase_neb_optimize
+    version: "0.1.0"
+    category: reaction_path
+    description: Optimize NEB images.
+    inputs:
+      - name: neb_images
+        type: file_list
+    outputs:
+      - name: neb_result_json
+        type: file
+    parameters:
+      fmax:
+        type: number
+        default: 0.05
+      steps:
+        type: integer
+        default: 500
+
+  - name: gaussian_input_writer
+    version: "0.1.0"
+    category: dft
+    description: Write Gaussian input files.
+    inputs:
+      - name: xyz_files
+        type: file_list
+    outputs:
+      - name: gjf_files
+        type: file_list
+    parameters:
+      method:
+        type: string
+      basis:
+        type: string
+      charge:
+        type: integer
+      multiplicity:
+        type: integer
+
+  - name: orca_input_writer
+    version: "0.1.0"
+    category: dft
+    description: Write ORCA input files.
+    inputs:
+      - name: xyz_files
+        type: file_list
+    outputs:
+      - name: inp_files
+        type: file_list
+    parameters:
+      method:
+        type: string
+      basis:
+        type: string
+
+  - name: vasp_poscar_writer
+    version: "0.1.0"
+    category: periodic_dft
+    description: Write VASP POSCAR files.
+    inputs:
+      - name: ase_atoms_list
+        type: object_list
+    outputs:
+      - name: poscar_files
+        type: file_list
+    parameters:
+      sort_atoms:
+        type: boolean
+        default: true
+
+  - name: generate_dimer_distance_scan_xyz
+    version: "0.1.0"
+    category: structure_generation
+    description: Generate a series of XYZ structures by gradually changing the center-of-mass distance between two molecules.
+    inputs:
+      - name: monomer_a_xyz
+        type: file
+        format: xyz
+        required: true
+      - name: monomer_b_xyz
+        type: file
+        format: xyz
+        required: true
+    outputs:
+      - name: dimer_scan_xyz_files
+        type: file_list
+        format: xyz
+      - name: dimer_scan_metadata_json
+        type: file
+        format: json
+    parameters:
+      start_distance_angstrom:
+        type: number
+        default: 2.5
+      end_distance_angstrom:
+        type: number
+        default: 8.0
+      num_points:
+        type: integer
+        default: 20
+      axis:
+        type: string
+        enum: [x, y, z]
+        default: z
+      keep_monomer_orientation:
+        type: boolean
+        default: true
+
+  - name: random_dimer_pose_sampler
+    version: "0.1.0"
+    category: structure_generation
+    description: Generate random relative translations and rotations of two molecules for noncovalent complex sampling.
+    inputs:
+      - name: monomer_a_xyz
+        type: file
+        format: xyz
+        required: true
+      - name: monomer_b_xyz
+        type: file
+        format: xyz
+        required: true
+    outputs:
+      - name: random_dimer_xyz_files
+        type: file_list
+        format: xyz
+      - name: random_pose_metadata_json
+        type: file
+        format: json
+    parameters:
+      num_samples:
+        type: integer
+        default: 100
+      min_com_distance_angstrom:
+        type: number
+        default: 3.0
+      max_com_distance_angstrom:
+        type: number
+        default: 8.0
+      max_rotation_degrees:
+        type: number
+        default: 180.0
+      random_seed:
+        type: integer
+        default: 20260516
+
+  - name: substituent_replacement_generator
+    version: "0.1.0"
+    category: molecular_editing
+    description: Generate derivative molecules by replacing a specified substituent or attachment point with candidate substituents.
+    inputs:
+      - name: parent_smiles_table
+        type: table
+        required: true
+      - name: substituent_library_csv
+        type: file
+        format: csv
+        required: true
+    outputs:
+      - name: derivative_smiles_table
+        type: table
+      - name: substitution_log_json
+        type: file
+        format: json
+    parameters:
+      attachment_label:
+        type: string
+        default: "[*:1]"
+      max_derivatives:
+        type: integer
+        default: 1000
+      sanitize_products:
+        type: boolean
+        default: true
+      reject_invalid_valence:
+        type: boolean
+        default: true
+
+  - name: rank_by_aromatic_ring_count
+    version: "0.1.0"
+    category: descriptor
+    description: Count aromatic rings in a SMILES list and rank molecules by aromatic ring count.
+    inputs:
+      - name: molecule_table
+        type: table
+        required: true
+    outputs:
+      - name: aromatic_ring_ranking_table
+        type: table
+      - name: aromatic_ring_count_json
+        type: file
+        format: json
+    parameters:
+      smiles_column:
+        type: string
+        default: smiles
+      descending:
+        type: boolean
+        default: true
+      include_ties:
+        type: boolean
+        default: true
+
+  - name: vdw_surface_area_estimator
+    version: "0.1.0"
+    category: geometry_descriptor
+    description: Estimate molecular van der Waals surface area from 3D structures using atomic van der Waals radii.
+    inputs:
+      - name: xyz_files
+        type: file_list
+        format: xyz
+        required: true
+    outputs:
+      - name: vdw_surface_area_table
+        type: table
+      - name: vdw_surface_area_json
+        type: file
+        format: json
+    parameters:
+      probe_radius_angstrom:
+        type: number
+        default: 0.0
+      sampling_density:
+        type: integer
+        default: 960
+      radii_set:
+        type: string
+        enum: [bondi, uff, rdkit]
+        default: bondi
+
+  - name: solvent_accessible_surface_area
+    version: "0.1.0"
+    category: geometry_descriptor
+    description: Estimate solvent-accessible surface area by rolling a spherical probe over a molecular surface.
+    inputs:
+      - name: xyz_files
+        type: file_list
+        format: xyz
+        required: true
+    outputs:
+      - name: sasa_table
+        type: table
+      - name: sasa_json
+        type: file
+        format: json
+    parameters:
+      probe_radius_angstrom:
+        type: number
+        default: 1.4
+      sampling_density:
+        type: integer
+        default: 960
+      radii_set:
+        type: string
+        enum: [bondi, uff, rdkit]
+        default: bondi
+
+  - name: conformer_rmsd_clusterer
+    version: "0.1.0"
+    category: conformer_analysis
+    description: Cluster conformers by heavy-atom RMSD and select representative conformers.
+    inputs:
+      - name: conformer_xyz_files
+        type: file_list
+        format: xyz
+        required: true
+    outputs:
+      - name: clustered_conformer_xyz_files
+        type: file_list
+        format: xyz
+      - name: conformer_cluster_table
+        type: table
+    parameters:
+      rmsd_threshold_angstrom:
+        type: number
+        default: 0.5
+      heavy_atoms_only:
+        type: boolean
+        default: true
+      max_representatives:
+        type: integer
+        default: 20
+
+  - name: torsion_scan_input_generator
+    version: "0.1.0"
+    category: conformational_search
+    description: Generate constrained XYZ structures for a torsional angle scan around a specified four-atom dihedral.
+    inputs:
+      - name: input_xyz
+        type: file
+        format: xyz
+        required: true
+    outputs:
+      - name: torsion_scan_xyz_files
+        type: file_list
+        format: xyz
+      - name: torsion_scan_metadata_json
+        type: file
+        format: json
+    parameters:
+      atom_indices:
+        type: array
+        items: integer
+        minItems: 4
+        maxItems: 4
+      start_angle_degrees:
+        type: number
+        default: 0.0
+      end_angle_degrees:
+        type: number
+        default: 360.0
+      step_degrees:
+        type: number
+        default: 15.0
+
+  - name: distance_constraint_scan_generator
+    version: "0.1.0"
+    category: reaction_coordinate
+    description: Generate structures with a gradually changed interatomic distance constraint.
+    inputs:
+      - name: input_xyz
+        type: file
+        format: xyz
+        required: true
+    outputs:
+      - name: distance_scan_xyz_files
+        type: file_list
+        format: xyz
+      - name: distance_scan_metadata_json
+        type: file
+        format: json
+    parameters:
+      atom_i:
+        type: integer
+      atom_j:
+        type: integer
+      start_distance_angstrom:
+        type: number
+      end_distance_angstrom:
+        type: number
+      num_points:
+        type: integer
+        default: 20
+
+  - name: fragment_molecule_by_brics
+    version: "0.1.0"
+    category: molecular_editing
+    description: Fragment molecules using BRICS rules and output fragment SMILES.
+    inputs:
+      - name: molecule_table
+        type: table
+        required: true
+    outputs:
+      - name: fragment_smiles_table
+        type: table
+      - name: fragmentation_report_json
+        type: file
+        format: json
+    parameters:
+      smiles_column:
+        type: string
+        default: smiles
+      keep_parent_id:
+        type: boolean
+        default: true
+      min_fragment_heavy_atoms:
+        type: integer
+        default: 3
+
+  - name: enumerate_tautomers
+    version: "0.1.0"
+    category: molecular_enumeration
+    description: Enumerate possible tautomeric forms for each input SMILES.
+    inputs:
+      - name: molecule_table
+        type: table
+        required: true
+    outputs:
+      - name: tautomer_smiles_table
+        type: table
+      - name: tautomer_enumeration_json
+        type: file
+        format: json
+    parameters:
+      smiles_column:
+        type: string
+        default: smiles
+      max_tautomers:
+        type: integer
+        default: 50
+      canonicalize:
+        type: boolean
+        default: true
+
+  - name: enumerate_protonation_states
+    version: "0.1.0"
+    category: molecular_enumeration
+    description: Enumerate plausible protonation states for input molecules over a pH range.
+    inputs:
+      - name: molecule_table
+        type: table
+        required: true
+    outputs:
+      - name: protonation_state_smiles_table
+        type: table
+      - name: protonation_state_report_json
+        type: file
+        format: json
+    parameters:
+      smiles_column:
+        type: string
+        default: smiles
+      ph_min:
+        type: number
+        default: 6.0
+      ph_max:
+        type: number
+        default: 8.0
+      max_states:
+        type: integer
+        default: 20
+
+  - name: generate_stereoisomers
+    version: "0.1.0"
+    category: molecular_enumeration
+    description: Enumerate unspecified stereocenters and generate stereoisomer SMILES.
+    inputs:
+      - name: molecule_table
+        type: table
+        required: true
+    outputs:
+      - name: stereoisomer_smiles_table
+        type: table
+      - name: stereoisomer_report_json
+        type: file
+        format: json
+    parameters:
+      smiles_column:
+        type: string
+        default: smiles
+      max_isomers:
+        type: integer
+        default: 64
+      include_unassigned:
+        type: boolean
+        default: false
+
+  - name: pharmacophore_feature_counter
+    version: "0.1.0"
+    category: descriptor
+    description: Count simple pharmacophore features such as hydrogen bond donors, acceptors, aromatic centers, and charged groups.
+    inputs:
+      - name: molecule_table
+        type: table
+        required: true
+    outputs:
+      - name: pharmacophore_feature_table
+        type: table
+      - name: pharmacophore_summary_json
+        type: file
+        format: json
+    parameters:
+      smiles_column:
+        type: string
+        default: smiles
+      include_formal_charges:
+        type: boolean
+        default: true
+
+  - name: molecular_shape_asphericity
+    version: "0.1.0"
+    category: geometry_descriptor
+    description: Compute shape descriptors such as asphericity, eccentricity, and radius of gyration from 3D coordinates.
+    inputs:
+      - name: xyz_files
+        type: file_list
+        format: xyz
+        required: true
+    outputs:
+      - name: shape_descriptor_table
+        type: table
+      - name: shape_descriptor_json
+        type: file
+        format: json
+    parameters:
+      mass_weighted:
+        type: boolean
+        default: false
+      heavy_atoms_only:
+        type: boolean
+        default: true
+
+  - name: electrostatic_grid_sampler
+    version: "0.1.0"
+    category: electrostatics
+    description: Sample approximate electrostatic potential values on a 3D grid around a molecule.
+    inputs:
+      - name: charged_xyz_files
+        type: file_list
+        format: xyz
+        required: true
+    outputs:
+      - name: electrostatic_grid_cube_files
+        type: file_list
+        format: cube
+      - name: electrostatic_grid_metadata_json
+        type: file
+        format: json
+    parameters:
+      grid_spacing_angstrom:
+        type: number
+        default: 0.3
+      padding_angstrom:
+        type: number
+        default: 4.0
+      charge_model:
+        type: string
+        enum: [gasteiger, mmff, user]
+        default: gasteiger
+
+  - name: molecular_dipole_estimator
+    version: "0.1.0"
+    category: electrostatics
+    description: Estimate molecular dipole moments from approximate partial charges and 3D coordinates.
+    inputs:
+      - name: charged_xyz_files
+        type: file_list
+        format: xyz
+        required: true
+    outputs:
+      - name: dipole_moment_table
+        type: table
+      - name: dipole_moment_json
+        type: file
+        format: json
+    parameters:
+      charge_model:
+        type: string
+        enum: [gasteiger, mmff, user]
+        default: gasteiger
+      unit:
+        type: string
+        enum: [debye, atomic_unit]
+        default: debye
+
+  - name: pairwise_molecular_similarity
+    version: "0.1.0"
+    category: similarity
+    description: Compute pairwise molecular similarity from fingerprints for a list of SMILES.
+    inputs:
+      - name: molecule_table
+        type: table
+        required: true
+    outputs:
+      - name: similarity_matrix_csv
+        type: file
+        format: csv
+      - name: nearest_neighbor_table
+        type: table
+    parameters:
+      smiles_column:
+        type: string
+        default: smiles
+      fingerprint:
+        type: string
+        enum: [morgan, rdkit, atom_pair]
+        default: morgan
+      radius:
+        type: integer
+        default: 2
+      n_bits:
+        type: integer
+        default: 2048
+
+  - name: substructure_filter
+    version: "0.1.0"
+    category: filtering
+    description: Filter molecules by SMARTS substructure queries.
+    inputs:
+      - name: molecule_table
+        type: table
+        required: true
+      - name: smarts_query_file
+        type: file
+        format: text
+        required: true
+    outputs:
+      - name: filtered_molecule_table
+        type: table
+      - name: substructure_match_report_json
+        type: file
+        format: json
+    parameters:
+      smiles_column:
+        type: string
+        default: smiles
+      match_mode:
+        type: string
+        enum: [include, exclude]
+        default: include
+      require_all_patterns:
+        type: boolean
+        default: false
+
+  - name: reactive_site_tagging
+    version: "0.1.0"
+    category: reaction_analysis
+    description: Tag likely reactive atoms or functional groups using SMARTS-based rules.
+    inputs:
+      - name: molecule_table
+        type: table
+        required: true
+    outputs:
+      - name: reactive_site_table
+        type: table
+      - name: reactive_site_annotation_json
+        type: file
+        format: json
+    parameters:
+      smiles_column:
+        type: string
+        default: smiles
+      rule_set:
+        type: string
+        enum: [organic_basic, carbonyl, radical, organometallic_warning]
+        default: organic_basic
+
+  - name: reaction_product_enumerator
+    version: "0.1.0"
+    category: reaction_enumeration
+    description: Enumerate products from reactant SMILES using a reaction SMARTS template.
+    inputs:
+      - name: reactant_smiles_table
+        type: table
+        required: true
+      - name: reaction_smarts_file
+        type: file
+        format: text
+        required: true
+    outputs:
+      - name: product_smiles_table
+        type: table
+      - name: reaction_enumeration_report_json
+        type: file
+        format: json
+    parameters:
+      reactant_columns:
+        type: array
+        items: string
+      max_products:
+        type: integer
+        default: 10000
+      sanitize_products:
+        type: boolean
+        default: true
+
+  - name: binding_pocket_grid_generator
+    version: "0.1.0"
+    category: docking_preparation
+    description: Generate a docking grid box around a protein binding pocket or ligand centroid.
+    inputs:
+      - name: protein_structure_file
+        type: file
+        format: pdb
+        required: true
+      - name: reference_ligand_file
+        type: file
+        required: false
+    outputs:
+      - name: docking_grid_json
+        type: file
+        format: json
+      - name: docking_box_pdb
+        type: file
+        format: pdb
+    parameters:
+      box_size_angstrom:
+        type: number
+        default: 20.0
+      center_mode:
+        type: string
+        enum: [ligand_centroid, residue_selection, user_defined]
+        default: ligand_centroid
+
+  - name: conformer_energy_ranker
+    version: "0.1.0"
+    category: conformer_analysis
+    description: Rank conformers by energy and select low-energy representatives.
+    inputs:
+      - name: conformer_xyz_files
+        type: file_list
+        format: xyz
+        required: true
+      - name: energy_table
+        type: table
+        required: true
+    outputs:
+      - name: ranked_conformer_table
+        type: table
+      - name: selected_low_energy_xyz_files
+        type: file_list
+        format: xyz
+    parameters:
+      energy_window_kcal_mol:
+        type: number
+        default: 5.0
+      max_selected:
+        type: integer
+        default: 20
+      sort_ascending:
+        type: boolean
+        default: true
+
+  - name: boltzmann_average_properties
+    version: "0.1.0"
+    category: statistical_thermodynamics
+    description: Compute Boltzmann-weighted averages of conformer properties from energies and property tables.
+    inputs:
+      - name: conformer_energy_table
+        type: table
+        required: true
+      - name: conformer_property_table
+        type: table
+        required: true
+    outputs:
+      - name: boltzmann_average_table
+        type: table
+      - name: boltzmann_weight_json
+        type: file
+        format: json
+    parameters:
+      temperature_kelvin:
+        type: number
+        default: 298.15
+      energy_unit:
+        type: string
+        enum: [kcal_mol, kj_mol, hartree, ev]
+        default: kcal_mol
+
+  - name: xyz_centroid_alignment
+    version: "0.1.0"
+    category: geometry_processing
+    description: Translate and rotate XYZ structures to align molecular centroids and principal axes.
+    inputs:
+      - name: xyz_files
+        type: file_list
+        format: xyz
+        required: true
+    outputs:
+      - name: aligned_xyz_files
+        type: file_list
+        format: xyz
+      - name: alignment_transform_json
+        type: file
+        format: json
+    parameters:
+      align_principal_axes:
+        type: boolean
+        default: true
+      center_at_origin:
+        type: boolean
+        default: true
+      heavy_atoms_only:
+        type: boolean
+        default: true
+
+  - name: steric_clash_detector
+    version: "0.1.0"
+    category: geometry_validation
+    description: Detect steric clashes in XYZ structures using covalent and van der Waals radius thresholds.
+    inputs:
+      - name: xyz_files
+        type: file_list
+        format: xyz
+        required: true
+    outputs:
+      - name: steric_clash_report_json
+        type: file
+        format: json
+      - name: clash_filtered_xyz_files
+        type: file_list
+        format: xyz
+    parameters:
+      vdw_scale:
+        type: number
+        default: 0.75
+      covalent_scale:
+        type: number
+        default: 0.60
+      remove_clashing_structures:
+        type: boolean
+        default: false
+
+  - name: molecular_volume_estimator
+    version: "0.1.0"
+    category: geometry_descriptor
+    description: Estimate molecular volume from van der Waals spheres or grid occupancy.
+    inputs:
+      - name: xyz_files
+        type: file_list
+        format: xyz
+        required: true
+    outputs:
+      - name: molecular_volume_table
+        type: table
+      - name: molecular_volume_json
+        type: file
+        format: json
+    parameters:
+      method:
+        type: string
+        enum: [vdw_sphere_union, grid_occupancy]
+        default: vdw_sphere_union
+      grid_spacing_angstrom:
+        type: number
+        default: 0.2
+      radii_set:
+        type: string
+        enum: [bondi, uff, rdkit]
+        default: bondi
+
+```
+
+</details>
+
+
+```python:eval5.py
+import csv
+import json
+import math
+import sys
+from pathlib import Path
+from typing import Any, Literal
+
+import yaml
+from ollama import chat
+from pydantic import BaseModel, Field, ValidationError, model_validator
+
+
+MODEL = "qwen2.5-coder:14b"
+PROJECT_ROOT = Path(".")
+REGISTRY_PATH = PROJECT_ROOT / "tool_registry_large.yaml"
+PLANNED_PATH = PROJECT_ROOT / "planned_workflow_large.yaml"
+CSV_PATH = PROJECT_ROOT / "examples" / "smiles_list.csv"
+EXPECTED_TOOLS_PATH = PROJECT_ROOT / "expected_tools.json"
+# USER_REQUEST_PATH = PROJECT_ROOT / "user_request.txt"   # enable this line in Level 3
+
+NUM_CTX = 16384
+TEMPERATURE = 0
+
+
+class WorkflowInput(BaseModel):
+    type: Literal["smiles_csv", "xyz_dir", "sdf"]
+    path: str
+    id_column: str
+    name_column: str | None = None
+    smiles_column: str
+    charge_column: str | None = None
+    spin_multiplicity_column: str | None = None
+    metadata_columns: list[str] = Field(default_factory=list)
+
+
+class WorkflowStep(BaseModel):
+    step_id: str
+    tool: str
+    description: str
+    input_keys: list[str] = Field(default_factory=list)
+    output_keys: list[str] = Field(default_factory=list)
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
+
+
+class WorkflowSpec(BaseModel):
+    workflow_id: str
+    objective: str
+    input: WorkflowInput
+    steps: list[WorkflowStep]
+    expected_outputs: dict[str, Any] = Field(default_factory=dict)
+    global_warnings: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def basic_checks(self) -> "WorkflowSpec":
+        tools = [s.tool for s in self.steps]
+        if self.expected_outputs.get("summary_csv") or self.expected_outputs.get("summary_json"):
+            if "collect_results" not in tools:
+                raise ValueError("summary outputs requested but collect_results step is missing.")
+        return self
+
+
+class ToolSpec(BaseModel):
+    name: str
+    version: str | None = None
+    category: str | None = None
+    description: str | None = None
+    inputs: list[dict[str, Any]] = Field(default_factory=list)
+    outputs: list[dict[str, Any]] = Field(default_factory=list)
+    parameters: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolRegistry(BaseModel):
+    tools: list[ToolSpec]
+
+    @property
+    def names(self) -> set[str]:
+        return {t.name for t in self.tools}
+
+    def get(self, name: str) -> ToolSpec | None:
+        for t in self.tools:
+            if t.name == name:
+                return t
+        return None
+
+    def tool_summary(self) -> list[dict[str, Any]]:
+        rows = []
+        for t in self.tools:
+            rows.append(
+                {
+                    "name": t.name,
+                    "category": t.category,
+                    "description": t.description,
+                    "inputs": [x.get("name") for x in t.inputs],
+                    "outputs": [x.get("name") for x in t.outputs],
+                    "parameters": list(t.parameters.keys()),
+                }
+            )
+        return rows
+
+
+def read_yaml(path: Path) -> Any:
+    if not path.exists():
+        raise FileNotFoundError(f"Missing file: {path}")
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def read_json(path: Path) -> Any:
+    if not path.exists():
+        raise FileNotFoundError(f"Missing file: {path}")
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def read_csv_preview(path: Path, n: int = 5) -> dict[str, Any]:
+    if not path.exists():
+        raise FileNotFoundError(f"Missing file: {path}")
+
+    with path.open(newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        rows = []
+        for i, row in enumerate(reader):
+            if i >= n:
+                break
+            rows.append(row)
+
+    return {
+        "path": str(path.as_posix()),
+        "columns": reader.fieldnames or [],
+        "preview_rows": rows,
+    }
+
+
+def load_registry() -> ToolRegistry:
+    return ToolRegistry.model_validate(read_yaml(REGISTRY_PATH))
+
+
+def build_payload(registry: ToolRegistry) -> dict[str, Any]:
+    planned = read_yaml(PLANNED_PATH)
+    expected_tools = read_json(EXPECTED_TOOLS_PATH)      # delete this line in Level 2, and 3
+    # user_request = USER_REQUEST_PATH.read_text(encoding="utf-8")   # enable this line in Level 3
+
+    return {
+        "task": "Create a minimal workflow JSON for a SMILES CSV to xtb optimization workflow.",
+        "mode": "large_tool_registry_stress_test_with_meaningful_irrelevant_modules",
+        "important_rules": [
+            "Return only JSON matching the schema.",
+            "Use only tools listed in tool_registry.",
+            "Do not invent tool names.",
+            "Do not invent parameters. Each step.parameters must use only keys listed for that tool.",
+            "Do not use descriptor, enumeration, docking, DFT, NEB, MLIP, molecular editing, reaction enumeration, or geometry descriptor modules unless explicitly requested.",
+            "For this task, use the tools listed in expected_tools.required_tools.",      # delete this line in Level 2, and 3
+            "Keep the workflow minimal. Avoid unnecessary steps.",
+            "Preserve CSV column mappings exactly.",
+            "Do not change default parameter values unless planned_workflow explicitly specifies them.",
+            "Do not infer solvent, method, convergence threshold, number of conformers, or random seed.",
+            "Parameter values must exactly match registry enum values when enum values are defined.",
+        ],
+        # "user_request": user_request,   # enable this line in Level 3
+        "planned_workflow": planned,   # delete this line in Level 3
+        "expected_tools": expected_tools,   # delete this line in Level 2, and 3
+        "tool_registry": registry.tool_summary(),
+        "smiles_csv": read_csv_preview(CSV_PATH),
+        "desired_output_schema": WorkflowSpec.model_json_schema(),
+    }
+
+
+def call_model(payload: dict[str, Any]) -> str:
+    response = chat(
+        model=MODEL,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a strict workflow JSON generator. "
+                    "Return only valid JSON. "
+                    "Use only registered tools and registered parameters. "
+                    "Prefer minimal workflows. "
+                    "Do not add irrelevant chemistry modules. "
+                    "Do not change parameter values from the provided expected policy."
+                ),
+            },
+            {
+                "role": "user",
+                "content": json.dumps(payload, ensure_ascii=False),
+            },
+        ],
+        format=WorkflowSpec.model_json_schema(),
+        options={"temperature": TEMPERATURE, "num_ctx": NUM_CTX},
+    )
+    return response["message"]["content"]
+
+
+def get_tool_io_names(tool: ToolSpec) -> tuple[set[str], set[str]]:
+    input_names = {x.get("name") for x in tool.inputs if x.get("name")}
+    output_names = {x.get("name") for x in tool.outputs if x.get("name")}
+    return input_names, output_names
+
+
+def normalize_type_name(type_value: Any) -> set[str]:
+    if isinstance(type_value, list):
+        return {str(x) for x in type_value}
+    if type_value is None:
+        return set()
+    return {str(type_value)}
+
+
+def is_number(value: Any) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def value_matches_type(value: Any, spec: dict[str, Any]) -> bool:
+    allowed_types = normalize_type_name(spec.get("type"))
+
+    if not allowed_types:
+        return True
+
+    if value is None:
+        return "null" in allowed_types
+
+    # YAML sometimes represents type arrays differently. This validator is intentionally simple.
+    if "string" in allowed_types and isinstance(value, str):
+        return True
+    if "integer" in allowed_types and isinstance(value, int) and not isinstance(value, bool):
+        return True
+    if "number" in allowed_types and is_number(value):
+        return True
+    if "boolean" in allowed_types and isinstance(value, bool):
+        return True
+    if "array" in allowed_types and isinstance(value, list):
+        return True
+    if "object" in allowed_types and isinstance(value, dict):
+        return True
+
+    return False
+
+
+def values_equal(a: Any, b: Any) -> bool:
+    if is_number(a) and is_number(b):
+        return math.isclose(float(a), float(b), rel_tol=1e-12, abs_tol=1e-12)
+    return a == b
+
+
+def validate_workflow(workflow: WorkflowSpec, registry: ToolRegistry) -> list[str]:
+    issues: list[str] = []
+    policy = read_json(EXPECTED_TOOLS_PATH)
+
+    known_tools = registry.names
+    used_tools = [s.tool for s in workflow.steps]
+
+    # Tool and parameter checks.
+    for step in workflow.steps:
+        if step.tool not in known_tools:
+            issues.append(f"Unknown tool: {step.tool}")
+            continue
+
+        if step.tool in policy.get("discouraged_tools", []):
+            issues.append(f"Discouraged irrelevant tool selected: {step.tool}")
+
+        tool_spec = registry.get(step.tool)
+        if tool_spec is None:
+            continue
+
+        allowed_params = set(tool_spec.parameters.keys())
+
+        for param, value in step.parameters.items():
+            if param not in allowed_params:
+                issues.append(f"Unknown parameter for {step.tool}: {param}")
+                continue
+
+            param_spec = tool_spec.parameters.get(param, {})
+
+            enum_values = param_spec.get("enum")
+            if enum_values is not None and value not in enum_values:
+                issues.append(
+                    f"Invalid enum value for {step.tool}.{param}: {value!r}. "
+                    f"Allowed values: {enum_values}"
+                )
+
+            if not value_matches_type(value, param_spec):
+                issues.append(
+                    f"Invalid type for {step.tool}.{param}: {value!r}. "
+                    f"Expected: {param_spec.get('type')}"
+                )
+
+    # Required tools and order.
+    required_tools = policy.get("required_tools", [])
+    for tool in required_tools:
+        if tool not in used_tools:
+            issues.append(f"Required tool missing: {tool}")
+
+    positions = {tool: used_tools.index(tool) for tool in required_tools if tool in used_tools}
+    for a, b in zip(required_tools, required_tools[1:]):
+        if a in positions and b in positions and positions[a] > positions[b]:
+            issues.append(f"Tool order is wrong: {a} appears after {b}")
+
+    # Dataflow check: input keys should be available from initial inputs or previous outputs.
+    produced = set(policy.get("initial_input_keys", ["smiles_csv"]))
+    for step in workflow.steps:
+        for key in step.input_keys:
+            if key not in produced:
+                issues.append(f"Input key not produced before use in {step.step_id}: {key}")
+        produced.update(step.output_keys)
+
+    # Redundancy check.
+    max_allowed_steps = policy.get("max_allowed_steps", len(required_tools) + 1)
+    if len(workflow.steps) > max_allowed_steps:
+        issues.append(
+            f"Potentially redundant workflow: {len(workflow.steps)} steps, "
+            f"max_allowed_steps={max_allowed_steps}."
+        )
+
+    # Expected parameter value checks.
+    expected_values = policy.get("expected_parameter_values", {})
+    sensitive = policy.get("sensitive_parameters", {})
+
+    for step in workflow.steps:
+        expected_for_tool = expected_values.get(step.tool, {})
+        sensitive_for_tool = set(sensitive.get(step.tool, []))
+
+        for key in sensitive_for_tool:
+            if key in expected_for_tool:
+                expected_value = expected_for_tool[key]
+                actual_value = step.parameters.get(key, "__MISSING__")
+                if actual_value == "__MISSING__":
+                    issues.append(f"Sensitive parameter missing: {step.tool}.{key}")
+                elif not values_equal(actual_value, expected_value):
+                    issues.append(
+                        f"Sensitive parameter value drift: {step.tool}.{key} "
+                        f"expected {expected_value!r}, got {actual_value!r}"
+                    )
+
+    return issues
+
+
+def main() -> None:
+    registry = load_registry()
+
+    if len(sys.argv) >= 2:
+        raw = Path(sys.argv[1]).read_text(encoding="utf-8")
+    else:
+        payload = build_payload(registry)
+        raw = call_model(payload)
+        print("=== raw model output ===")
+        print(raw)
+        print()
+
+    try:
+        workflow = WorkflowSpec.model_validate_json(raw)
+    except ValidationError as exc:
+        print("VALIDATION_FAILED")
+        print(exc)
+        raise SystemExit(1)
+
+    print("=== validated output ===")
+    print(workflow.model_dump_json(indent=2, ensure_ascii=False))
+    print()
+
+    issues = validate_workflow(workflow, registry)
+
+    print("=== large registry validation ===")
+    if issues:
+        print("NG / REVIEW")
+        for issue in issues:
+            print(f"- {issue}")
+        raise SystemExit(2)
+    else:
+        print("OK")
+
+
+if __name__ == "__main__":
+    main()
+
+```
+
+
+## Level 1の検証
+
+Level 1 の出力結果を以下に示す。
+
+<details><summary>検証5; Level 1 の出力結果</summary>
+
+```sh:出力（検証5; Level 1）
+=== raw model output ===
+{
+  "workflow_id": "smiles_to_xtb_relax_large_registry_test",
+  "objective": "Generate initial 3D structures from a SMILES CSV, optimize them with xtb, and collect summary CSV/JSON outputs.",
+  "input": {
+    "type": "smiles_csv",
+    "path": "examples/smiles_list.csv",
+    "id_column": "id",
+    "smiles_column": "smiles",
+    "charge_column": "charge",
+    "spin_multiplicity_column": "spin_multiplicity"
+  },
+  "steps": [
+    {
+      "step_id": "read_smiles_csv",
+      "tool": "read_smiles_csv",
+      "description": "Read a CSV file containing molecule identifiers, SMILES, charge, and spin information.",
+      "input_keys": ["smiles_csv"],
+      "output_keys": ["molecule_table"],
+      "parameters": {
+        "id_column": "id",
+        "smiles_column": "smiles",
+        "charge_column": "charge",
+        "spin_multiplicity_column": "spin_multiplicity"
+      }
+    },
+    {
+      "step_id": "rdkit_validate_smiles",
+      "tool": "rdkit_validate_smiles",
+      "description": "Validate SMILES strings using RDKit and annotate invalid rows.",
+      "input_keys": ["molecule_table"],
+      "output_keys": ["validated_molecule_table"],
+      "parameters": {
+        "strict": false
+      }
+    },
+    {
+      "step_id": "rdkit_generate_3d",
+      "tool": "rdkit_generate_3d",
+      "description": "Generate initial 3D conformers from validated SMILES using RDKit.",
+      "input_keys": ["validated_molecule_table"],
+      "output_keys": ["initial_xyz_files", "conformer_metadata_json"],
+      "parameters": {
+        "num_conformers": 20,
+        "max_embed_attempts": 1000,
+        "optimize_initial_geometry": true,
+        "random_seed": 20260516
+      }
+    },
+    {
+      "step_id": "xtb_optimize",
+      "tool": "xtb_optimize",
+      "description": "Optimize molecular geometries using xtb.",
+      "input_keys": ["initial_xyz_files", "conformer_metadata_json"],
+      "output_keys": ["optimized_xyz_files", "xtb_energy_files", "xtb_status_json"],
+      "parameters": {
+        "method": "gfn2-xtb",
+        "charge_column": "charge",
+        "spin_multiplicity_column": "spin_multiplicity",
+        "max_steps": 500,
+        "fmax": 0.05,
+        "solvent": null,
+        "executable": "xtb"
+      }
+    },
+    {
+      "step_id": "collect_results",
+      "tool": "collect_results",
+      "description": "Collect optimized structures, energies, status, and warnings into summary files.",
+      "input_keys": ["optimized_xyz_files", "xtb_energy_files", "xtb_status_json"],
+      "output_keys": ["summary_csv", "summary_json", "per_molecule_status_json"],
+      "parameters": {
+        "summary_csv": true,
+        "summary_json": true,
+        "keep_intermediate_runs": true,
+        "fail_fast": false
+      }
+    }
+  ],
+  "expected_outputs": {
+    "summary_csv": true,
+    "summary_json": true,
+    "per_molecule_status_json": true
+  },
+  "global_warnings": []
+}
+
+=== validated output ===
+{
+  "workflow_id": "smiles_to_xtb_relax_large_registry_test",
+  "objective": "Generate initial 3D structures from a SMILES CSV, optimize them with xtb, and collect summary CSV/JSON outputs.",
+  "input": {
+    "type": "smiles_csv",
+    "path": "examples/smiles_list.csv",
+    "id_column": "id",
+    "name_column": null,
+    "smiles_column": "smiles",
+    "charge_column": "charge",
+    "spin_multiplicity_column": "spin_multiplicity",
+    "metadata_columns": []
+  },
+  "steps": [
+    {
+      "step_id": "read_smiles_csv",
+      "tool": "read_smiles_csv",
+      "description": "Read a CSV file containing molecule identifiers, SMILES, charge, and spin information.",
+      "input_keys": [
+        "smiles_csv"
+      ],
+      "output_keys": [
+        "molecule_table"
+      ],
+      "parameters": {
+        "id_column": "id",
+        "smiles_column": "smiles",
+        "charge_column": "charge",
+        "spin_multiplicity_column": "spin_multiplicity"
+      },
+      "warnings": []
+    },
+    {
+      "step_id": "rdkit_validate_smiles",
+      "tool": "rdkit_validate_smiles",
+      "description": "Validate SMILES strings using RDKit and annotate invalid rows.",
+      "input_keys": [
+        "molecule_table"
+      ],
+      "output_keys": [
+        "validated_molecule_table"
+      ],
+      "parameters": {
+        "strict": false
+      },
+      "warnings": []
+    },
+    {
+      "step_id": "rdkit_generate_3d",
+      "tool": "rdkit_generate_3d",
+      "description": "Generate initial 3D conformers from validated SMILES using RDKit.",
+      "input_keys": [
+        "validated_molecule_table"
+      ],
+      "output_keys": [
+        "initial_xyz_files",
+        "conformer_metadata_json"
+      ],
+      "parameters": {
+        "num_conformers": 20,
+        "max_embed_attempts": 1000,
+        "optimize_initial_geometry": true,
+        "random_seed": 20260516
+      },
+      "warnings": []
+    },
+    {
+      "step_id": "xtb_optimize",
+      "tool": "xtb_optimize",
+      "description": "Optimize molecular geometries using xtb.",
+      "input_keys": [
+        "initial_xyz_files",
+        "conformer_metadata_json"
+      ],
+      "output_keys": [
+        "optimized_xyz_files",
+        "xtb_energy_files",
+        "xtb_status_json"
+      ],
+      "parameters": {
+        "method": "gfn2-xtb",
+        "charge_column": "charge",
+        "spin_multiplicity_column": "spin_multiplicity",
+        "max_steps": 500,
+        "fmax": 0.05,
+        "solvent": null,
+        "executable": "xtb"
+      },
+      "warnings": []
+    },
+    {
+      "step_id": "collect_results",
+      "tool": "collect_results",
+      "description": "Collect optimized structures, energies, status, and warnings into summary files.",
+      "input_keys": [
+        "optimized_xyz_files",
+        "xtb_energy_files",
+        "xtb_status_json"
+      ],
+      "output_keys": [
+        "summary_csv",
+        "summary_json",
+        "per_molecule_status_json"
+      ],
+      "parameters": {
+        "summary_csv": true,
+        "summary_json": true,
+        "keep_intermediate_runs": true,
+        "fail_fast": false
+      },
+      "warnings": []
+    }
+  ],
+  "expected_outputs": {
+    "summary_csv": true,
+    "summary_json": true,
+    "per_molecule_status_json": true
+  },
+  "global_warnings": []
+}
+
+=== large registry validation ===
+OK
+```
+
+</details>
+
+結果として、level 1のregistry validationはOKとなった。workflowは `read_smiles_csv` → `rdkit_validate_smiles` → `rdkit_generate_3d` → `xtb_optimize` → `collect_results` の順で、各ツールはすべて `tool_registry.yaml` に登録済みであった。入出力キーも `molecule_table`、`validated_molecule_table`、`initial_xyz_files`、`optimized_xyz_files` となっており問題ない。
+
+> 上述の通り、これは guided test になっていることは留意すべきである。
+
+> `tool_registry.yaml` で定義しているツールは42種類しかないことは留意しておくべきである。実用上はLLMの選択できる計算ツール・モジュール群が数百以上になると考えられる。そのような場合に、適切なものを選択できるかは自明ではない。
+
+## Level 2の検証
+
+続いて、Level 2の検証を実施した。
+
+Level 2では、`expected_tools.json` をLLMには渡さず、さらに `planned_workflow_large.yaml` から `required_tools`、`preferred_step_order`、`parameter_policy` を削除した。そのため、LLMは正解となるツールの情報を直接見ることなく、計算目的、CSV情報、large版tool registryのみから必要なモジュールを選択する必要がある。
+
+<details><summary>検証5; Level 2 の出力結果</summary>
+
+```sh:出力（検証5; Level 2）
+=== raw model output ===
+{
+  "workflow_id": "smiles_to_xtb_relax_large_registry_test",
+  "objective": "Generate initial 3D structures from a SMILES CSV, optimize them with xtb, and collect summary CSV/JSON outputs.",
+  "input": {
+    "type": "smiles_csv",
+    "path": "examples/smiles_list.csv",
+    "id_column": "id",
+    "smiles_column": "smiles",
+    "charge_column": "charge",
+    "spin_multiplicity_column": "spin_multiplicity"
+  },
+  "steps": [
+    {
+      "step_id": "read_smiles_csv",
+      "tool": "read_smiles_csv",
+      "description": "Read a CSV file containing molecule identifiers, SMILES, charge, and spin information.",
+      "input_keys": ["smiles_csv"],
+      "output_keys": ["molecule_table"],
+      "parameters": {
+        "id_column": "id",
+        "smiles_column": "smiles",
+        "charge_column": "charge",
+        "spin_multiplicity_column": "spin_multiplicity"
+      }
+    },
+    {
+      "step_id": "rdkit_validate_smiles",
+      "tool": "rdkit_validate_smiles",
+      "description": "Validate SMILES strings using RDKit and annotate invalid rows.",
+      "input_keys": ["molecule_table"],
+      "output_keys": ["validated_molecule_table"],
+      "parameters": {
+        "strict": true
+      }
+    },
+    {
+      "step_id": "rdkit_generate_3d",
+      "tool": "rdkit_generate_3d",
+      "description": "Generate initial 3D conformers from validated SMILES using RDKit.",
+      "input_keys": ["validated_molecule_table"],
+      "output_keys": ["initial_xyz_files", "conformer_metadata_json"],
+      "parameters": {
+        "num_conformers": 1,
+        "max_embed_attempts": 20,
+        "optimize_initial_geometry": true,
+        "random_seed": null
+      }
+    },
+    {
+      "step_id": "xtb_optimize",
+      "tool": "xtb_optimize",
+      "description": "Optimize molecular geometries using xtb.",
+      "input_keys": ["initial_xyz_files", "conformer_metadata_json"],
+      "output_keys": ["optimized_xyz_files", "xtb_energy_files", "xtb_status_json"],
+      "parameters": {
+        "method": "GFN2-xTB",
+        "charge_column": "charge",
+        "spin_multiplicity_column": "spin_multiplicity",
+        "max_steps": 100,
+        "fmax": 0.004,
+        "solvent": null,
+        "executable": "xtb"
+      }
+    },
+    {
+      "step_id": "collect_results",
+      "tool": "collect_results",
+      "description": "Collect optimized structures, energies, status, and warnings into summary files.",
+      "input_keys": ["optimized_xyz_files", "xtb_energy_files", "xtb_status_json"],
+      "output_keys": ["summary_csv", "summary_json", "per_molecule_status_json"],
+      "parameters": {
+        "summary_csv": true,
+        "summary_json": true,
+        "keep_intermediate_runs": false,
+        "fail_fast": false
+      }
+    }
+  ],
+  "expected_outputs": {
+    "summary_csv": true,
+    "summary_json": true,
+    "per_molecule_status_json": true
+  },
+  "global_warnings": []
+}
+
+=== validated output ===
+{
+  "workflow_id": "smiles_to_xtb_relax_large_registry_test",
+  "objective": "Generate initial 3D structures from a SMILES CSV, optimize them with xtb, and collect summary CSV/JSON outputs.",
+  "input": {
+    "type": "smiles_csv",
+    "path": "examples/smiles_list.csv",
+    "id_column": "id",
+    "name_column": null,
+    "smiles_column": "smiles",
+    "charge_column": "charge",
+    "spin_multiplicity_column": "spin_multiplicity",
+    "metadata_columns": []
+  },
+  "steps": [
+    {
+      "step_id": "read_smiles_csv",
+      "tool": "read_smiles_csv",
+      "description": "Read a CSV file containing molecule identifiers, SMILES, charge, and spin information.",
+      "input_keys": [
+        "smiles_csv"
+      ],
+      "output_keys": [
+        "molecule_table"
+      ],
+      "parameters": {
+        "id_column": "id",
+        "smiles_column": "smiles",
+        "charge_column": "charge",
+        "spin_multiplicity_column": "spin_multiplicity"
+      },
+      "warnings": []
+    },
+    {
+      "step_id": "rdkit_validate_smiles",
+      "tool": "rdkit_validate_smiles",
+      "description": "Validate SMILES strings using RDKit and annotate invalid rows.",
+      "input_keys": [
+        "molecule_table"
+      ],
+      "output_keys": [
+        "validated_molecule_table"
+      ],
+      "parameters": {
+        "strict": true
+      },
+      "warnings": []
+    },
+    {
+      "step_id": "rdkit_generate_3d",
+      "tool": "rdkit_generate_3d",
+      "description": "Generate initial 3D conformers from validated SMILES using RDKit.",
+      "input_keys": [
+        "validated_molecule_table"
+      ],
+      "output_keys": [
+        "initial_xyz_files",
+        "conformer_metadata_json"
+      ],
+      "parameters": {
+        "num_conformers": 1,
+        "max_embed_attempts": 20,
+        "optimize_initial_geometry": true,
+        "random_seed": null
+      },
+      "warnings": []
+    },
+    {
+      "step_id": "xtb_optimize",
+      "tool": "xtb_optimize",
+      "description": "Optimize molecular geometries using xtb.",
+      "input_keys": [
+        "initial_xyz_files",
+        "conformer_metadata_json"
+      ],
+      "output_keys": [
+        "optimized_xyz_files",
+        "xtb_energy_files",
+        "xtb_status_json"
+      ],
+      "parameters": {
+        "method": "GFN2-xTB",
+        "charge_column": "charge",
+        "spin_multiplicity_column": "spin_multiplicity",
+        "max_steps": 100,
+        "fmax": 0.004,
+        "solvent": null,
+        "executable": "xtb"
+      },
+      "warnings": []
+    },
+    {
+      "step_id": "collect_results",
+      "tool": "collect_results",
+      "description": "Collect optimized structures, energies, status, and warnings into summary files.",
+      "input_keys": [
+        "optimized_xyz_files",
+        "xtb_energy_files",
+        "xtb_status_json"
+      ],
+      "output_keys": [
+        "summary_csv",
+        "summary_json",
+        "per_molecule_status_json"
+      ],
+      "parameters": {
+        "summary_csv": true,
+        "summary_json": true,
+        "keep_intermediate_runs": false,
+        "fail_fast": false
+      },
+      "warnings": []
+    }
+  ],
+  "expected_outputs": {
+    "summary_csv": true,
+    "summary_json": true,
+    "per_molecule_status_json": true
+  },
+  "global_warnings": []
+}
+
+=== large registry validation ===
+NG / REVIEW
+- Invalid type for rdkit_generate_3d.random_seed: None. Expected: integer
+- Invalid enum value for xtb_optimize.method: 'GFN2-xTB'. Allowed values: ['gfn2-xtb', 'gfn1-xtb', 'gfnff']
+- Sensitive parameter value drift: rdkit_generate_3d.max_embed_attempts expected 1000, got 20
+- Sensitive parameter value drift: rdkit_generate_3d.random_seed expected 20260516, got None
+- Sensitive parameter value drift: rdkit_generate_3d.num_conformers expected 20, got 1
+- Sensitive parameter value drift: xtb_optimize.method expected 'gfn2-xtb', got 'GFN2-xTB'
+- Sensitive parameter value drift: xtb_optimize.max_steps expected 500, got 100
+- Sensitive parameter value drift: xtb_optimize.fmax expected 0.05, got 0.004
+- Sensitive parameter value drift: collect_results.keep_intermediate_runs expected True, got False
+```
+
+</details>
+
+結果として、LLMは `read_smiles_csv`、`rdkit_validate_smiles`、`rdkit_generate_3d`、`xtb_optimize`、`collect_results` の5つを正しい順序で選択することに成功した。不要なdescriptor、DFT、NEB、MLIP、docking、分子編集系モジュールは混入しておらず、step間のinput/outputも自然につながっていた。この点では、large registryからの自律的ツール選択は成功したと評価できる。
+
+
+一方で、validatorは `NG / REVIEW` を返した。原因はツール選択ではなく、パラメータ値の逸脱である。NG例は以下の通り：
+
+- `xtb_optimize.method` がregistry enumの `gfn2-xtb` ではなく `GFN2-xTB` と出力された（表記揺れ）
+- `rdkit_generate_3d.random_seed` はinteger期待に対して `null` となった（型の不一致）
+- `num_conformers`、`max_embed_attempts`、`max_steps`、`fmax`、`keep_intermediate_runs` なども期待される値からずれていた。
+
+| パラメータ | Qwen2.5-Coder:14Bの出力 | 期待される値 | 差分の種類 | 影響・評価 |
+|---|---:|---:|---|---|
+| `rdkit_validate_smiles.strict` | `true` | `false` | validation方針の変更 | 安全寄りの設定だが、軽微なSMILES表現の差異や許容可能な入力まで弾く可能性がある。検証条件を勝手に変えている点はやや問題。 |
+| `rdkit_generate_3d.num_conformers` | `1` | `20` | 配座生成数の過小化 | 動作確認には使えるが、配座探索としては弱い。低エネルギー配座や多様な初期構造を見落とす可能性が高くなる。 |
+| `rdkit_generate_3d.max_embed_attempts` | `20` | `1000` | embedding試行回数の過小 | やや重大。構造生成に失敗しやすくなる。複雑な分子、環状構造、立体的に混み合った分子で特に問題になり得る。 |
+| `rdkit_generate_3d.optimize_initial_geometry` | `true` | `true` | 一致 | 問題なし。 |
+| `rdkit_generate_3d.random_seed` | `null` | `20260516` | 型不一致・再現性欠落 | 重大。integer型に対して `null` なので計算フロー中断の可能性あり。再現性も失われる。 |
+| `xtb_optimize.method` | `"GFN2-xTB"` | `"gfn2-xtb"` | enum表記ゆれ | 厳密には不一致。関数によってはエラーになり獲る。 |
+| `xtb_optimize.charge_column` | `"charge"` | `"charge"` | 一致 | 問題なし。 |
+| `xtb_optimize.spin_multiplicity_column` | `"spin_multiplicity"` | `"spin_multiplicity"` | 一致 | 問題なし。 |
+| `xtb_optimize.max_steps` | `100` | `500` | 最適化step数が過小 | 分子によっては収束前に打ち切られる可能性がある。テスト計算なら許容される場合もあるが、やや危険。 |
+| `xtb_optimize.fmax` | `0.004` | `0.05` | 収束条件の過度な厳格化 | 計算時間増大や収束困難化につながる。LLM側であまり変えるべきではない。 |
+| `xtb_optimize.solvent` | `null` | `null` | 一致 | 問題なし。 |
+| `xtb_optimize.executable` | `"xtb"` | `"xtb"` | 一致 | 問題なし。 |
+| `collect_results.summary_csv` | `true` | `true` | 一致 | 問題なし。 |
+| `collect_results.summary_json` | `true` | `true` | 一致 | 問題なし。 |
+| `collect_results.keep_intermediate_runs` | `false` | `true` | 中間ファイル保持方針の変更 | 計算結果そのものには直接影響しないが、デバッグ、再現性確認、失敗解析には不利。ワークフロー実験では `true` の方が安全。 |
+| `collect_results.fail_fast` | `false` | `false` | 一致 | 問題なし。 |
+
+この結果から、Qwen2.5-Coder:14Bは、多数の候補モジュールから必要なツールを選択する能力を有することが示された。一方で、計算条件に関わるsensitive parameterを勝手に補完・変更する傾向があり、実運用ではパラメータ値の型、enum、既定値、ユーザー指定値との整合性を必ずvalidatorで検査する必要があるようである。
+
+## Level 3の検証
+
+続いて、Level 3の検証を実施した。Level 3では、`planned_workflow_large.yaml` を使わず、自然言語（日本語）によるプロンプト、CSVプレビュー、large版tool registryのみをLLMに渡した。これは、実運用に最も近い検証であり、人間の依頼文からLLMが必要モジュールを自律的に選択できるかを見るものである。
+
+```:user_request.txt
+SMILES、電荷、スピン多重度を含むCSVファイルがあります。
+各分子について初期3D構造を生成し、多数の小分子を対象に比較的軽量な方法で構造最適化を行い、
+最終構造、エネルギー、成功/失敗ステータスをsummary CSVとsummary JSONにまとめるワークフローを作成してください。
+不要な記述子計算、DFT計算、NEB、ドッキング、反応列挙、置換基生成は行わないでください。
+```
+
+<details><summary>検証5; Level 3 の出力結果</summary>
+
+```sh:出力（検証5; Level 3）
+=== raw model output ===
+{
+  "workflow_id": "smiles_to_xtb_optimization",
+  "objective": "Optimize molecular geometries from a SMILES CSV file using xtb and summarize the results.",
+  "input": {
+    "type": "smiles_csv",
+    "path": "examples/smiles_list.csv",
+    "id_column": "id",
+    "smiles_column": "smiles",
+    "charge_column": "charge",
+    "spin_multiplicity_column": "spin_multiplicity"
+  },
+  "steps": [
+    {
+      "step_id": "read_smiles_csv",
+      "tool": "read_smiles_csv",
+      "description": "Read the SMILES CSV file and extract molecule information.",
+      "input_keys": ["smiles_csv"],
+      "output_keys": ["molecule_table"],
+      "parameters": {
+        "id_column": "id",
+        "smiles_column": "smiles",
+        "charge_column": "charge",
+        "spin_multiplicity_column": "spin_multiplicity"
+      }
+    },
+    {
+      "step_id": "rdkit_validate_smiles",
+      "tool": "rdkit_validate_smiles",
+      "description": "Validate SMILES strings using RDKit.",
+      "input_keys": ["molecule_table"],
+      "output_keys": ["validated_molecule_table"],
+      "parameters": {
+        "strict": true
+      }
+    },
+    {
+      "step_id": "rdkit_generate_3d",
+      "tool": "rdkit_generate_3d",
+      "description": "Generate initial 3D conformers from validated SMILES using RDKit.",
+      "input_keys": ["validated_molecule_table"],
+      "output_keys": ["initial_xyz_files", "conformer_metadata_json"],
+      "parameters": {
+        "num_conformers": 10,
+        "max_embed_attempts": 20,
+        "optimize_initial_geometry": true,
+        "random_seed": 42
+      }
+    },
+    {
+      "step_id": "xtb_optimize",
+      "tool": "xtb_optimize",
+      "description": "Optimize molecular geometries using xtb.",
+      "input_keys": ["initial_xyz_files", "conformer_metadata_json"],
+      "output_keys": ["optimized_xyz_files", "xtb_energy_files", "xtb_status_json"],
+      "parameters": {
+        "method": "GFN2-xTB",
+        "charge_column": "charge",
+        "spin_multiplicity_column": "spin_multiplicity",
+        "max_steps": 100,
+        "fmax": 0.004,
+        "solvent": null,
+        "executable": "xtb"
+      }
+    },
+    {
+      "step_id": "collect_results",
+      "tool": "collect_results",
+      "description": "Collect optimized structures, energies, status, and warnings into summary files.",
+      "input_keys": ["optimized_xyz_files", "xtb_energy_files", "xtb_status_json"],
+      "output_keys": ["summary_csv", "summary_json", "per_molecule_status_json"],
+      "parameters": {
+        "summary_csv": "results/summary.csv",
+        "summary_json": "results/summary.json",
+        "keep_intermediate_runs": false,
+        "fail_fast": true
+      }
+    }
+  ],
+  "expected_outputs": {
+    "summary_csv": "results/summary.csv",
+    "summary_json": "results/summary.json"
+  },
+  "global_warnings": []
+}
+
+=== validated output ===
+{
+  "workflow_id": "smiles_to_xtb_optimization",
+  "objective": "Optimize molecular geometries from a SMILES CSV file using xtb and summarize the results.",
+  "input": {
+    "type": "smiles_csv",
+    "path": "examples/smiles_list.csv",
+    "id_column": "id",
+    "name_column": null,
+    "smiles_column": "smiles",
+    "charge_column": "charge",
+    "spin_multiplicity_column": "spin_multiplicity",
+    "metadata_columns": []
+  },
+  "steps": [
+    {
+      "step_id": "read_smiles_csv",
+      "tool": "read_smiles_csv",
+      "description": "Read the SMILES CSV file and extract molecule information.",
+      "input_keys": [
+        "smiles_csv"
+      ],
+      "output_keys": [
+        "molecule_table"
+      ],
+      "parameters": {
+        "id_column": "id",
+        "smiles_column": "smiles",
+        "charge_column": "charge",
+        "spin_multiplicity_column": "spin_multiplicity"
+      },
+      "warnings": []
+    },
+    {
+      "step_id": "rdkit_validate_smiles",
+      "tool": "rdkit_validate_smiles",
+      "description": "Validate SMILES strings using RDKit.",
+      "input_keys": [
+        "molecule_table"
+      ],
+      "output_keys": [
+        "validated_molecule_table"
+      ],
+      "parameters": {
+        "strict": true
+      },
+      "warnings": []
+    },
+    {
+      "step_id": "rdkit_generate_3d",
+      "tool": "rdkit_generate_3d",
+      "description": "Generate initial 3D conformers from validated SMILES using RDKit.",
+      "input_keys": [
+        "validated_molecule_table"
+      ],
+      "output_keys": [
+        "initial_xyz_files",
+        "conformer_metadata_json"
+      ],
+      "parameters": {
+        "num_conformers": 10,
+        "max_embed_attempts": 20,
+        "optimize_initial_geometry": true,
+        "random_seed": 42
+      },
+      "warnings": []
+    },
+    {
+      "step_id": "xtb_optimize",
+      "tool": "xtb_optimize",
+      "description": "Optimize molecular geometries using xtb.",
+      "input_keys": [
+        "initial_xyz_files",
+        "conformer_metadata_json"
+      ],
+      "output_keys": [
+        "optimized_xyz_files",
+        "xtb_energy_files",
+        "xtb_status_json"
+      ],
+      "parameters": {
+        "method": "GFN2-xTB",
+        "charge_column": "charge",
+        "spin_multiplicity_column": "spin_multiplicity",
+        "max_steps": 100,
+        "fmax": 0.004,
+        "solvent": null,
+        "executable": "xtb"
+      },
+      "warnings": []
+    },
+    {
+      "step_id": "collect_results",
+      "tool": "collect_results",
+      "description": "Collect optimized structures, energies, status, and warnings into summary files.",
+      "input_keys": [
+        "optimized_xyz_files",
+        "xtb_energy_files",
+        "xtb_status_json"
+      ],
+      "output_keys": [
+        "summary_csv",
+        "summary_json",
+        "per_molecule_status_json"
+      ],
+      "parameters": {
+        "summary_csv": "results/summary.csv",
+        "summary_json": "results/summary.json",
+        "keep_intermediate_runs": false,
+        "fail_fast": true
+      },
+      "warnings": []
+    }
+  ],
+  "expected_outputs": {
+    "summary_csv": "results/summary.csv",
+    "summary_json": "results/summary.json"
+  },
+  "global_warnings": []
+}
+
+=== large registry validation ===
+NG / REVIEW
+- Invalid enum value for xtb_optimize.method: 'GFN2-xTB'. Allowed values: ['gfn2-xtb', 'gfn1-xtb', 'gfnff']
+- Invalid type for collect_results.summary_csv: 'results/summary.csv'. Expected: boolean
+- Invalid type for collect_results.summary_json: 'results/summary.json'. Expected: boolean
+- Sensitive parameter value drift: rdkit_generate_3d.num_conformers expected 20, got 10
+- Sensitive parameter value drift: rdkit_generate_3d.random_seed expected 20260516, got 42
+- Sensitive parameter value drift: rdkit_generate_3d.max_embed_attempts expected 1000, got 20
+- Sensitive parameter value drift: xtb_optimize.max_steps expected 500, got 100
+- Sensitive parameter value drift: xtb_optimize.fmax expected 0.05, got 0.004
+- Sensitive parameter value drift: xtb_optimize.method expected 'gfn2-xtb', got 'GFN2-xTB'
+- Sensitive parameter value drift: collect_results.keep_intermediate_runs expected True, got False
+- Sensitive parameter value drift: collect_results.summary_csv expected True, got 'results/summary.csv'
+- Sensitive parameter value drift: collect_results.fail_fast expected False, got True
+- Sensitive parameter value drift: collect_results.summary_json expected True, got 'results/summary.json'
+```
+
+
+</details>
+
+
+結果として、Qwen2.5-Coder:14Bは `read_smiles_csv → rdkit_validate_smiles → rdkit_generate_3d → xtb_optimize → collect_results` という妥当なワークフローを生成しており、不要な計算モジュールは混入しなかった。したがって、自然言語による入力から自力で必要な計算モジュールを選択する能力は良好と言える。
+
+一方で、validatorは `NG / REVIEW` を返した。主な原因は、ツール選択ではなく、パラメータ値・型・enumの逸脱である。例えば、`xtb_optimize.method` は `GFN2-xTB` と出力されたが、registry enumでは `gfn2-xtb` が期待されていた（Level 2 と同じ症状）。また、`collect_results.summary_csv` と `summary_json` はbooleanを期待していたにもかかわらず、`results/summary.csv` や `results/summary.json` というパス文字列が出力された。
+
+> パス文字列が出力されたことに関して、これはよくある出力先の `results/` ディレクトリを補完した挙動になっている。今回 `results/` ディレクトリは入力にもSchemaにも明示していないため、広義のハルシネーションと言える。
+
+以上の結果は、Qwen2.5-Coder:14Bが自然言語から計算科学ワークフローの大枠を組み立てる能力を持つ一方で、計算モジュールが要求する厳密な型、enum、既定値、再現性のあるパラメータを安定して守るにはvalidatorが不可欠であることを示している。
+
+> 英語プロンプトにした場合でも、多少改善する可能性はあるが根本解決にはならないと考えられる。Level 3 のNGの原因は入力が日本語であることというより、以下の理由によると考えられるためである。
+> 
+> 1. 自然言語依頼だけでは出力パスや計算パラメータの既定値が未指定だった
+> 2. LLMが未指定部分を自然な推測によって補完した
+> 3. Schema上、summary_csvという名前が「出力するかどうか」と「出力ファイルパス」の両方に読める
+> 4. enum値やdefault値の厳密なコピーをモデル単体に任せていた
+
+# 検証6：化学的推論の性能評価
+
+ここでは、Qwen2.5-Coderが化学的にどの程度妥当な補助判断を返すかを、ごく簡単に確認する。ただし、これはあくまで補助的な評価であり、計算結果の最終的な妥当性の判定や結果の解釈は人間の研究者か、より高レイヤーのLLMにより行うべきである。
+
+ここでは、出力されるJSONのKeyは厳密に定めていない。値が正しければ正しい出力と見なしている。
+
+## プロンプト例1：中性分子（トルエン）
+
+```sh:プロンプト例1：中性分子（トルエン）
+Return only JSON.
+For toluene, provide formula, total_charge, spin_multiplicity, atom_count, and warnings.
+```
+
+````sh:出力
+```json
+{
+  "formula": "C8H10",
+  "total_charge": 0,
+  "spin_multiplicity": 1,
+  "atom_count": 9,
+  "warnings": []
+}
+```
+````
+
+トルエンの組成式は C7H8 で、原子数は 15 である。これは正しくない結果である。
+出力されている組成式の原子数は18であるため、原子数の値が 9 になっている点も不自然である。
+
+## プロンプト例2：ラジカル（メチルラジカル）
+
+```sh:プロンプト例2：ラジカル（メチルラジカル）
+Return only JSON.
+For methyl radical, provide formula, total_charge, spin_multiplicity, atom_count, and warnings.
+If spin cannot be safely inferred, add a warning.
+```
+
+````sh:出力
+```json
+{
+  "formula": "CH3",
+  "total_charge": 0,
+  "spin_multiplicity": 2,
+  "atom_count": 4,
+  "warnings": []
+}
+```
+````
+
+正しい結果である。
+
+## プロンプト例3：遷移金属錯体（FeCl4）
+
+```sh:プロンプト例3：遷移金属錯体（FeCl4）
+Return only JSON.
+For an iron complex represented only by the formula FeCl4, create calculation metadata.
+Do not guess spin state silently. Add warnings when needed.
+```
+
+````sh:出力
+```json
+{
+  "formula": "FeCl4",
+  "total_charge": 0,
+  "spin_multiplicity": null,
+  "atom_count": 5,
+  "warnings": ["Spin multiplicity cannot be safely inferred without additional information."]
+}
+```
+````
+
+スピン状態を断定せず、warningsに記載。期待される挙動になっている。
+
+## プロンプト例4：NEB計算の計算フロー生成
+
+```sh:プロンプト例4：NEB計算の計算フロー生成
+Return only JSON.
+Create a workflow for NEB calculation from initial.xyz and final.xyz.
+Use tools: read_xyz, interpolate_images, run_neb, collect_neb_results.
+Do not invent other tools.
+```
+
+````sh:出力
+```json
+{
+  "workflow": {
+    "steps": [
+      {
+        "tool": "read_xyz",
+        "input_files": ["initial.xyz"],
+        "output_data": "initial_structure"
+      },
+      {
+        "tool": "read_xyz",
+        "input_files": ["final.xyz"],
+        "output_data": "final_structure"
+      },
+      {
+        "tool": "interpolate_images",
+        "input_data": ["initial_structure", "final_structure"],
+        "parameters": {
+          "number_of_images": 10
+        },
+        "output_data": "images"
+      },
+      {
+        "tool": "run_neb",
+        "input_data": "images",
+        "parameters": {
+          "max_iterations": 200,
+          "convergence_criteria": 0.05
+        },
+        "output_data": "neb_results"
+      },
+      {
+        "tool": "collect_neb_results",
+        "input_data": "neb_results",
+        "output_files": ["neb_energy_profile.dat"]
+      }
+    ]
+  }
+}
+```
+````
+
+tool registryを守って正しい順序で出力している。期待される挙動になっている。
+
+## プロンプト例4-1：NEB計算の計算フロー生成
+
+計算対象が約500原子からなることに注意せよ、という文を追加した場合。
+
+```sh:プロンプト例4-1：NEB計算の計算フロー生成
+Return only JSON.
+Create a workflow for NEB calculation from initial.xyz and final.xyz.
+Note that this molecule consists of about 500 atoms.
+Use tools: read_xyz, interpolate_images, run_neb, collect_neb_results.
+Do not invent other tools.
+```
+
+````sh:出力
+```json
+{
+  "workflow": {
+    "steps": [
+      {
+        "tool": "read_xyz",
+        "input_files": ["initial.xyz"],
+        "output_data": "initial_structure"
+      },
+      {
+        "tool": "read_xyz",
+        "input_files": ["final.xyz"],
+        "output_data": "final_structure"
+      },
+      {
+        "tool": "interpolate_images",
+        "input_data": ["initial_structure", "final_structure"],
+        "parameters": {
+          "number_of_images": 10
+        },
+        "output_data": "images"
+      },
+      {
+        "tool": "run_neb",
+        "input_data": "images",
+        "parameters": {
+          "max_iterations": 500,
+          "convergence_criteria": 0.01
+        },
+        "output_data": "neb_results"
+      },
+      {
+        "tool": "collect_neb_results",
+        "input_data": "neb_results",
+        "output_files": ["neb_energy_profile.dat"]
+      }
+    ]
+  }
+}
+```
+````
+
+一般に原子数が多いほど最適化のイタレーション数が増えるため、`max_iterations` が増加したのは正常な挙動と思われる。
+tool registryは破綻していないが、収束の閾値が厳しく設定された。この値はプロンプトで明示する必要がある。
+
+
+## プロンプト例5：複数化合物のJSON化
+
+```sh:プロンプト例5：複数化合物のJSON化
+>>> Return only JSON.
+...
+... Classify the following molecular inputs for computational chemistry workflow planning.
+...
+... Inputs:
+... 1. ethanol: CCO
+... 2. acetate: CC(=O)[O-]
+... 3. methyl radical: [CH3]
+... 4. iron chloride: FeCl4
+... 5. sodium acetate: [Na+].CC(=O)[O-]
+...
+... For each input, return:
+... - total_charge
+... - spin_multiplicity
+... - is_open_shell
+... - is_multicomponent
+... - contains_transition_metal
+... - requires_manual_review
+... - recommended_action
+... - warnings
+```
+
+````sh:出力
+```json
+{
+  "inputs": [
+    {
+      "name": "ethanol",
+      "input_smiles": "CCO",
+      "total_charge": 0,
+      "spin_multiplicity": 1,
+      "is_open_shell": false,
+      "is_multicomponent": false,
+      "contains_transition_metal": false,
+      "requires_manual_review": false,
+      "recommended_action": "Geometry optimization and property calculation",
+      "warnings": []
+    },
+    {
+      "name": "acetate",
+      "input_smiles": "CC(=O)[O-]",
+      "total_charge": -1,
+      "spin_multiplicity": 2,
+      "is_open_shell": true,
+      "is_multicomponent": false,
+      "contains_transition_metal": false,
+      "requires_manual_review": false,
+      "recommended_action": "Geometry optimization with open-shell treatment",
+      "warnings": []
+    },
+    {
+      "name": "methyl radical",
+      "input_smiles": "[CH3]",
+      "total_charge": 0,
+      "spin_multiplicity": 2,
+      "is_open_shell": true,
+      "is_multicomponent": false,
+      "contains_transition_metal": false,
+      "requires_manual_review": false,
+      "recommended_action": "Geometry optimization with open-shell treatment",
+      "warnings": []
+    },
+    {
+      "name": "iron chloride",
+      "input_smiles": "FeCl4",
+      "total_charge": 0,
+      "spin_multiplicity": null,
+      "is_open_shell": false,
+      "is_multicomponent": false,
+      "contains_transition_metal": true,
+      "requires_manual_review": true,
+      "recommended_action": "Determine spin multiplicity and perform geometry optimization",
+      "warnings": ["Spin multiplicity cannot be safely inferred without additional information."]
+    },
+    {
+      "name": "sodium acetate",
+      "input_smiles": "[Na+].CC(=O)[O-]",
+      "total_charge": 0,
+      "spin_multiplicity": 1,
+      "is_open_shell": false,
+      "is_multicomponent": true,
+      "contains_transition_metal": false,
+      "requires_manual_review": false,
+      "recommended_action": "Geometry optimization with proper treatment of the ionic system",
+      "warnings": []
+    }
+  ]
+}
+```
+````
+
+一括での処理は問題なく実行できている。
+酢酸アニオンの電荷を-1としている点は正しいが、開殻二重項として扱っておりスピン多重度の指定は正しくない。
+
+# まとめ
+
+本稿では、ローカルLLMである Qwen2.5-Coder:14B を用いて、計算化学ワークフローをJSONとして生成し、下流モジュールに渡せる形式へ整形できるかを検証した。
+
+結果として、Qwen2.5-Coder:14Bは、計算化学ワークフローの骨格生成には一定の能力を示した。ファイルの読み込みおよび適切なモジュールを選択できた点は良かった。一方で、パラメータ値や出力型の厳密性には不安定さが見られた。表記ゆれや、booleanとすべきところに文字列を入れる型不一致などが確認された。また、厳密に規定されていないパラメータの値を、LLMが独自に補完・変更する挙動も見られた。本文では示していないが、指定していない溶媒 `water` を補完するなど、未指定の計算条件を自然に埋めてしまう傾向もあった。
+
+ただし、これらはQwen2.5-Coder:14Bの能力不足を意味するものではない。必要なツールのリスト、パラメータのポリシー、期待されるenum値や既定値を明示した場合には、出力はかなり安定した。出力の品質はプロンプトの作りこみ、JSON Schemaの設計、tool registryの要約方法、validator設計に強く依存する。
+
+化学的メタデータ生成のテストでも同様に、Qwen2.5-Coder:14Bは未指定の立体化学、柔軟な分子、不正なSMILES、遷移金属錯体のスピン状態などに対して一定の警告を返すことができた。一方で、検証6で見たように、トルエンの組成式を正しく言い当てられなかった点は、このモデルが化学的妥当性の評価に向かないことを示している。酢酸アニオンを開殻二重項として扱うなど、明確な化学的誤りも見られた。14B程度のサイズでは、化合物の種類の判別は可能だが、原子数を含む詳細な物性や特性までは理解できていないことが観察された。（ただし、プロンプトの改良によって結果が改善する余地は残されている）
+
+以上より、Qwen2.5-Coder:14Bは、計算化学ワークフローの「骨格」を提案する補助には有用と言える一方で、計算条件の最終決定に用いるべきではない。特に、電荷・スピン、溶媒、乱数のseed値、収束条件、enum値、出力パスなどは振れ幅が大きく、化学的妥当性をLLM側で把握できていないように見受けられる。実用上は、LLMの出力をそのまま信頼せず、実行前に検証する必要がある。
+
+実運用では、LLMには自然言語依頼の解釈、必要ツール列の提案、入出力キーの接続、workflow JSONの骨格生成を担当させることは可能と思われる。一方で、パラメータ既定値、enum正規化、型検査、tool registry照合、dry-run、RDKitによる化学的検証などはPython側で行う、という分業が現実的である。
+
+ただし、本検証ではプロンプトのチューニングが十分とは言えない部分もある。より厳密なsystem prompt、few-shot例、英語プロンプト、JSON Schemaの詳細化、tool registryの渡し方を工夫すれば、LLMの出力は大きく改善する可能性がある。本稿の結果はQwen2.5-Coder:14Bの初期的な実装検証として捉えていただき、プロンプト最適化やSchema最適化による改善幅の確認は今後の課題としたい。

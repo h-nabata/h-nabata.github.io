@@ -1,0 +1,352 @@
+# 目的
+
+本稿の目的は「**xyz形式で与えられた任意の化合物の3次元座標データをもとに、電荷や双極子モーメントを求めるPythonスクリプトを作成すること**」です。
+
+# 環境
+
+本稿では、既にAnaconda3で構築したPython3系の存在するUbuntu環境に各種パッケージをインストールしていきます。
+
+```sh:筆者のLinux環境
+Linux version 4.4.0-240-generic (buildd@lcy02-amd64-091) (gcc version 5.4.0 20160609 (Ubuntu 5.4.0-6ubuntu1~16.04.12) ) #274-Ubuntu SMP Sat Apr 22 13:35:27 UTC 2023
+```
+
+> Windowsについては「[**RDKitを使うためにWindowsにAnaconda3を導入したときのメモ**](https://qiita.com/h-nabata/items/c1d16471bda6735a5d8a)」の記事を参考にしてください。
+
+
+# Psi4とRDkitの導入
+
+まず、**Psi4**と**RDkit**という2つのパッケージを導入します。
+"[**Psi4**](https://github.com/psi4/psi4)"（サイフォー）は量子化学計算用パッケージ「Psi」の最新版で、種々の量子化学計算機能を提供するLGPLライセンスのオープンソースソフトウェアです。
+"[**RDkit**](https://rdkit.org/docs_jp/Getting_Started_with_RDKit_in_Python_jp.html)"（アールディーキット）は計算機上で化合物情報を扱う様々な機能を備えたオープンソースのライブラリで、ケモインフォマティクス（情報化学）分野でよく用いられています。
+
+ここでは、
+  1. Psi4用の仮想環境を作成する
+  2. 1.で作成した仮想環境にRDkitを導入する
+
+という手順で進めます。
+
+* * *
+
+初めにPsi4用の仮想環境を以下のようにして作成します。
+
+```sh
+conda create -n p4env psi4 -c psi4
+```
+
+これにより `(p4env)` という仮想環境が3.10.11（2023年6月現在）のバージョンで作成されます。途中で `Proceed ([y]/n)?` と確認を求めるメッセージが表示されるので `y` を入力して続行します。
+
+> ここでは p4env という名前にしていますが、他の名前でも構いません。
+
+この仮想環境は以下のコマンドで起動できます。
+
+```sh
+conda activate p4env
+```
+
+仮想環境を起動した状態で `python` と叩くとPythonのREPL（対話モード）が起動し、
+
+```sh
+Python 3.10.11 (main, May 16 2023, 00:28:57) [GCC 11.2.0] on linux
+Type "help", "copyright", "credits" or "license" for more information.
+>>>
+```
+
+とプロンプト待ちの状態になります。ここで以下を打ち込んでみて、Psi4のバージョンが表示されれば、ひとまずインストールは成功です（インストールされるバージョンは特に指定の無い限り、環境や時期によって変わります）。
+
+```py:
+import psi4
+print('psi4 version: ', psi4.__version__)
+# psi4 version:  1.7
+```
+
+* * *
+
+次に、仮想環境p4envを起動したままの状態で以下を実行し、RDkitを仮想環境p4envにインストールします。
+
+```sh
+conda install -c conda-forge rdkit
+```
+
+ここでも途中で `Proceed ([y]/n)?` と確認を求めるメッセージが表示されるので `y` を入力して続行します。
+
+インストールが終わったら先ほど同様に `python` でREPLを起動し、
+
+```py:
+import rdkit
+print('rdkit version: ', rdkit.__version__)
+# rdkit version:  2023.03.1
+```
+
+としてインストールできているか確かめましょう。
+
+以上でインストール作業は終了です。
+
+
+# 分子構造の読み込み
+以下はMethyl Acetate（酢酸メチル）のxyz形式の座標データです。座標の単位はオングストローム（Å）です。
+
+```:C3H6O2.xyz
+11
+Methyl Acetate
+O    -0.215688959924     -0.507766095361     -2.428331137742
+O    -0.215688959921      1.603052223086     -1.642788308431
+C    -0.215688959922      0.411818742635     -1.429297182932
+C    -0.215688959920     -0.247834458954     -0.073962214047
+H     0.665459040080     -0.887746825964      0.029389330718
+H    -0.215688959918      0.516223240518      0.701993181357
+H    -1.096836959920     -0.887746825963      0.029389330721
+C    -0.215688959926      0.244364804095     -3.656296572957
+H     0.805003040074      0.445182709213     -4.001214627043
+H    -0.733748959927     -0.297211082767     -4.455932076327
+H    -0.718320959925      1.210363787554     -3.532539926438
+```
+
+この `C3H6O2.xyz` というファイルは次のようにして読み込むことができます。
+
+```py:rd1.py
+from rdkit import Chem
+
+mol = Chem.MolFromXYZFile("C3H6O2.xyz")
+smiles = Chem.MolToSmiles(mol)
+print(smiles)
+# C.C.C.O.O.[HH].[HH].[HH].[HH].[HH].[HH]
+```
+
+SMILES表記の出力を見て分かるように、xyzファイルを読み込んだ段階では分子の結合情報が存在しません。結合情報は以下のようにDetermineBonds関数を用いて与えることができます。
+
+```py:rd2.py
+from rdkit import Chem
+from rdkit.Chem import rdDetermineBonds
+
+mol = Chem.MolFromXYZFile("C3H6O2.xyz")
+smiles = Chem.MolToSmiles(mol)
+print(smiles)
+# C.C.C.O.O.[HH].[HH].[HH].[HH].[HH].[HH]
+
+rdDetermineBonds.DetermineBonds(mol)  # 推測される結合情報をmolオブジェクトに付与
+smiles2 = Chem.MolToSmiles(mol)
+print(smiles2)
+# [H]C([H])([H])OC(=O)C([H])([H])[H]
+```
+
+> 直感的にも理解できることですが、DetermineBonds関数は分子の局所安定構造（Minimum）に対して有効であり、遷移状態の構造に対しては適切な情報を与えないことがあります。
+
+結合情報を付与したことで、隣接行列や距離行列（ここではグラフ理論的な意味での「距離行列」を指す）を簡単に求めることができます。これによりWiener index（Wiener数）などが簡単に計算できます。
+
+```py:rd3.py
+import numpy as np
+from rdkit import Chem
+from rdkit.Chem import rdDetermineBonds
+
+mol = Chem.MolFromXYZFile("C3H6O2.xyz")
+rdDetermineBonds.DetermineBonds(mol)
+
+# generate the adjacency matrix
+adjacency_matrix = Chem.GetAdjacencyMatrix(mol)
+print(adjacency_matrix)
+
+# generate the distance matrix, calculate the wiener number
+distance_matrix = Chem.GetDistanceMatrix(mol)
+print(distance_matrix)
+wiener_num = np.sum(Chem.GetDistanceMatrix(mol)) / 2
+print(wiener_num)
+```
+
+```:rd3.pyの出力
+[[0 0 1 0 0 0 0 1 0 0 0]
+ [0 0 1 0 0 0 0 0 0 0 0]
+ [1 1 0 1 0 0 0 0 0 0 0]
+ [0 0 1 0 1 1 1 0 0 0 0]
+ [0 0 0 1 0 0 0 0 0 0 0]
+ [0 0 0 1 0 0 0 0 0 0 0]
+ [0 0 0 1 0 0 0 0 0 0 0]
+ [1 0 0 0 0 0 0 0 1 1 1]
+ [0 0 0 0 0 0 0 1 0 0 0]
+ [0 0 0 0 0 0 0 1 0 0 0]
+ [0 0 0 0 0 0 0 1 0 0 0]]
+[[0. 2. 1. 2. 3. 3. 3. 1. 2. 2. 2.]
+ [2. 0. 1. 2. 3. 3. 3. 3. 4. 4. 4.]
+ [1. 1. 0. 1. 2. 2. 2. 2. 3. 3. 3.]
+ [2. 2. 1. 0. 1. 1. 1. 3. 4. 4. 4.]
+ [3. 3. 2. 1. 0. 2. 2. 4. 5. 5. 5.]
+ [3. 3. 2. 1. 2. 0. 2. 4. 5. 5. 5.]
+ [3. 3. 2. 1. 2. 2. 0. 4. 5. 5. 5.]
+ [1. 3. 2. 3. 4. 4. 4. 0. 1. 1. 1.]
+ [2. 4. 3. 4. 5. 5. 5. 1. 0. 2. 2.]
+ [2. 4. 3. 4. 5. 5. 5. 1. 2. 0. 2.]
+ [2. 4. 3. 4. 5. 5. 5. 1. 2. 2. 0.]]
+156.0
+```
+
+
+# Psi4による電子状態計算
+
+本題に移ります。電荷や双極子モーメントの計算をPythonで行うために、Psi4による電子状態計算を利用します。
+
+```:Psi4に与える主なパラメータ
+- CPUのスレッド数
+- メモリ容量
+- 入力する分子の構造
+- 電荷とスピン多重度
+- 計算レベル
+```
+
+xyzファイルの分子を B3LYP/6-31G レベルのDFT計算で構造最適化し、得られた構造の各種計算結果を表示するPythonスクリプトの例を以下に示します。このプログラムでは、 C3H6O2.xyz を読み込み、途中計算のログを C3H6O2.log に書き出し、"C3H6O2.dat" に最終的な計算結果を書き出す、という流れで処理しています。
+
+```py:rd4.py
+import numpy as np
+from rdkit import Chem
+import psi4
+
+
+### input section ###
+# level of theory, charge, spin multiplicity, cpu threads, memory
+level = "b3lyp/6-31G*"
+mol_input = "0 1"
+mol_name = "C3H6O2"   # only xyz files are supported
+psi4.set_num_threads(nthread=1)
+psi4.set_memory("400MB")
+
+inputfile = mol_name + ".xyz"
+outputfile = mol_name + ".log"
+optdatfile = mol_name + ".dat"
+
+# specify the output file
+psi4.set_output_file("outputfile")
+
+# generate conformer from the input xyz file
+mol = Chem.MolFromXYZFile(inputfile)
+conf = mol.GetConformer()
+
+# create the input infomation
+for atom in mol.GetAtoms():
+    mol_input += "\n " + atom.GetSymbol() + " " + str(conf.GetAtomPosition(atom.GetIdx()).x)\
+    + " " + str(conf.GetAtomPosition(atom.GetIdx()).y)\
+    + " " + str(conf.GetAtomPosition(atom.GetIdx()).z)
+molecule = psi4.geometry(mol_input)
+
+
+### execute section ###
+# execute optimization
+energy, wave_function = psi4.optimize(level, molecule=molecule, return_wfn=True)
+
+
+### output section ###
+
+with open(optdatfile, mode='w') as foptdat:
+    
+    # show the coordinates of the optimized structure
+    foptdat.write("\nlevel of theory: "+level+"\n")
+    foptdat.write("\nobtained structure:\n")
+    foptdat.write(molecule.save_string_xyz()+"\n")
+    
+    # total electron energy (unit： au, Hartree)
+    foptdat.write("\nenergy:\n")
+    foptdat.write(str(round(energy,5))+' a.u.\n')
+    
+    # energy levels of HOMO and LUMO (unit： au, Hartree)
+    LUMO_idx = wave_function.nalpha()
+    HOMO_idx = LUMO_idx - 1
+    homo = wave_function.epsilon_a_subset("AO", "ALL").np[HOMO_idx]
+    lumo = wave_function.epsilon_a_subset("AO", "ALL").np[LUMO_idx]
+    foptdat.write('homo: '+str(round(homo,5))+' a.u.\n')
+    foptdat.write('lumo: '+str(round(lumo,5))+' a.u.\n')
+    
+    # mulliken charge
+    psi4.oeprop(wave_function, 'MULLIKEN_CHARGES') 
+    mulliken = np.array(wave_function.atomic_point_charges()) 
+    foptdat.write("\nmulliken charge:\n")
+    for i, atom in enumerate(mol.GetAtoms()):
+        foptdat.write(atom.GetSymbol()+" "+str(round(mulliken[i],4))+"\n")
+    
+    # dipole moment (unit： au = D, debye)
+    dipole_x, dipole_y, dipole_z = psi4.variable('SCF DIPOLE')
+    dipole_moment = np.sqrt(dipole_x ** 2 + dipole_y ** 2 + dipole_z ** 2)
+    foptdat.write("\ndipole moment:\n")
+    foptdat.write(str(round(dipole_x, 8))+" "+str(round(dipole_y, 8))+" "+str(round(dipole_z, 8))+"\n")
+    foptdat.write(str(round(dipole_moment,5))+' D')
+```
+
+> 実行時に
+> ```sh
+> ModuleNotFoundError: No module named 'IPython'
+> ``` 
+> などとエラーが出たら `conda install ipython` でインストールしてください。
+
+生成された "C3H6O2.dat" には、最適化された構造、電子エネルギーとフロンティア軌道のエネルギー準位、マリケン電荷、双極子モーメントがそれぞれ以下のように出力されます。
+
+```py:C3H6O2.dat
+level of theory: b3lyp/6-31G*
+
+obtained structure:
+0 1
+ O   -0.142691767377   -0.715487775027   -0.583744569201
+ O    0.238145932096    1.312467781128    0.338881605767
+ C    0.037032925478    0.124696918090    0.463157590153
+ C   -0.048996325818   -0.624228381503    1.772658569116
+ H    0.711630181961   -1.411067105661    1.807742834855
+ H    0.098788570745    0.071838437024    2.598859014689
+ H   -1.025615663583   -1.110586505160    1.865393896014
+ C   -0.080307666650   -0.100537862010   -1.880394656820
+ H    0.897101218553    0.362632174673   -2.040333617865
+ H   -0.243682798262   -0.907339756802   -2.595685319725
+ H   -0.854492585703    0.664939497912   -1.981766825708
+
+
+energy:
+-268.38849 a.u.
+homo: -0.26949 a.u.
+lumo: 0.01453 a.u.
+
+mulliken charge:
+O -0.4392
+O -0.4662
+C 0.5959
+C -0.5217
+H 0.1817
+H 0.1827
+H 0.1817
+C -0.2168
+H 0.1696
+H 0.1628
+H 0.1695
+
+dipole moment:
+-0.12151125 -0.66753762 -0.17173262
+0.6999 D
+```
+
+以上により、Pythonで電荷と双極子モーメントを求めることができました。xyzファイルを用意すれば任意の化合物について計算することができます。ただし、基底関数6-31G*がサポートしていないような高周期の元素を含む場合は、より大きな基底関数を指定しなければなりません。
+
+> 構造最適化せずに1点計算のみ実行したいという場合は `psi4.optimize` の行について、以下のように `optimize` を `energy` と書き換えるだけでOKです。
+>
+> ```py
+> energy, wave_function = psi4.energy(level, molecule=molecule, return_wfn=True)
+> ```
+> 
+> また、遷移状態の最適化を実行したい場合は `psi4.optimize` の行よりも前に以下のように `opt_type` を `ts` に指定する行を加えればOKです。`'full_hess_every': 0` は初期構造の点でのみヘシアンを計算するオプションで、デフォルトは `-1` です。例えば `5` とすると5点ごとにヘシアンが計算されますが、原子数が多くなるほど計算が重くなります（`1` にすると全点でヘシアンが計算されます）。
+>
+> ```py
+> psi4.set_options({'opt_type': 'ts', 'full_hess_every': 0})
+> ```
+
+
+# 参考文献
+
+- **RDkit関連**
+
+https://aimedchem.hatenablog.com/entry/2023/05/08/233055
+
+https://rdkit-users.jp/docs/release-2022-09-1.html
+
+https://future-chem.com/rdkit-intro/
+
+- **psi4関連**
+
+https://qiita.com/ottantachinque/items/30aa73dd6bb949d4858b
+
+https://future-chem.com/psi4-wfn-analysis/
+
+より詳しいインストール方法に関しては公式のドキュメントを参照してください：
+
+https://psicode.org/psi4manual/master/build_obtaining.html

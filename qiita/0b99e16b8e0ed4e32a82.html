@@ -1,0 +1,94 @@
+---
+layout: "qiita-mirror"
+title: "結晶格子の並進ベクトルの座標計算（Calculate xyz coordinates of translation vectors from cif format）"
+qiita_id: "0b99e16b8e0ed4e32a82"
+qiita_url: "https://qiita.com/h-nabata/items/0b99e16b8e0ed4e32a82"
+qiita_created: "2020-08-24T21:11:59+09:00"
+qiita_updated: "2022-11-10T18:22:00+09:00"
+mirror_saved: "2026-10-02T20:35:35+09:00"
+mirror_category: "計算化学・分子構造"
+mirror_tags: ["Python", "結晶構造", "周期境界条件"]
+permalink: "/qiita/0b99e16b8e0ed4e32a82.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<p data-sourcepos="1:1-2:368">本稿は計算化学等で周期境界条件を用いた計算を行っている方向けのメモです。<br>
+並進ベクトル（Translation Vectors: TV）の長さと角度が既知であるユニットセルについて、格子点の3次元座標（TVの成分）を求める計算について述べます。結晶構造データベースから取得したCIFファイルに記載された結晶構造をxyzに変換するなどの際にご参照頂ければ幸いです。</p>
+<h1 data-sourcepos="4:1-4:20">
+<span id="結晶単位格子" class="fragment"></span><a href="#%E7%B5%90%E6%99%B6%E5%8D%98%E4%BD%8D%E6%A0%BC%E5%AD%90"><i class="fa fa-link"></i></a>結晶単位格子</h1>
+<p data-sourcepos="5:1-10:154">AO系の結晶格子の一例を示します。<br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F07922c04-837a-6bec-acfd-0190d4aedc0b.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=8ec04d7bdb5899a767930bfb4b609c56" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/1a710bf25d95fe8b16da80c0.png" width="70%" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/07922c04-837a-6bec-acfd-0190d4aedc0b.png" loading="lazy" decoding="async"></a><br>
+このような単位結晶格子は通常、$a$軸、$b$軸、$c$軸という3次元のベクトルによって記述されます。<br>
+<a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Fc4fc7e52-8e71-c655-3aa2-d2ead95838c8.png?ixlib=rb-4.0.0&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=cc1eea77ceb21f9ae4f98d9fa0974f1d" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/025bd845e9961edf34b1058a.png" width="70%" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/c4fc7e52-8e71-c655-3aa2-d2ead95838c8.png" loading="lazy" decoding="async"></a><br>
+$b$軸と$c$軸の成す角が$\alpha$、$c$軸と$a$軸の成す角が$\beta$、$a$軸と$b$軸の成す角が$\gamma$です。<br>
+軸の長さとそれらの角度が分かっていれば3次元のカーテシアン座標系（直交座標系）に変換することが可能です。</p>
+<h1 data-sourcepos="12:1-12:32">
+<span id="カーテシアンへの変換" class="fragment"></span><a href="#%E3%82%AB%E3%83%BC%E3%83%86%E3%82%B7%E3%82%A2%E3%83%B3%E3%81%B8%E3%81%AE%E5%A4%89%E6%8F%9B"><i class="fa fa-link"></i></a>カーテシアンへの変換</h1>
+<p data-sourcepos="14:1-15:103">結晶格子を変換後の座標は一意に定まりません。<br>
+ここでは$a$軸を$x$軸に合わせて、$b$軸を$xy$平面に乗せるように変換します。</p>
+<p data-sourcepos="17:1-17:27">結果だけ載せると、</p>
+<div class="code-frame" data-lang="math" data-sourcepos="19:1-25:3"><div class="highlight"><pre><code>\vec{a}=\left[\begin{array}{c}
+|\vec{a}| \\
+0 \\
+0
+\end{array}\right]
+</code></pre></div></div>
+<div class="code-frame" data-lang="math" data-sourcepos="27:1-33:3"><div class="highlight"><pre><code>\vec{b}=\left[\begin{array}{c}
+|\vec{b}| \cos \gamma \\
+|\vec{b}| \sin \gamma \\
+0
+\end{array}\right]
+</code></pre></div></div>
+<div class="code-frame" data-lang="math" data-sourcepos="35:1-41:3"><div class="highlight"><pre><code>\vec{c}=\left[\begin{array}{c} 
+|\vec{c}| \cos \beta \\
+\dfrac{|\vec{c}|(\cos \alpha -\cos \beta \cos \gamma )}{\sin\gamma } \\
+|\vec{c}|\sqrt{1-\cos^2 \beta-\left(\dfrac{\cos \alpha -\cos \beta \cos \gamma}{\sin\gamma }\right)^2}
+\end{array}\right]
+</code></pre></div></div>
+<p data-sourcepos="43:1-43:69">となります。軸はすべて原点を始点としています。</p>
+<p data-sourcepos="45:1-45:271">因みにセルの体積$V$は$$V=|\vec{a}||\vec{b}||\vec{c}|\sqrt{\sin^2 \beta\sin^2 \gamma-\left(\cos \alpha -\cos \beta \cos \gamma\right)^2}$$で求められます。$V=\left|\vec{a} \cdot \vec{b} \times \vec{c}\right|$ としても求められますが、いまTVは</p>
+<div class="code-frame" data-lang="math" data-sourcepos="47:1-53:3"><div class="highlight"><pre><code>\small \left[\begin{array}{ccc} 
+|\vec{a}| &amp; 0 &amp; 0 \\
+|\vec{b}| \cos \gamma &amp; |\vec{b}| \sin \gamma &amp; 0 \\
+|\vec{c}| \cos \beta &amp; \dfrac{|\vec{c}|(\cos \alpha -\cos \beta \cos \gamma )}{\sin\gamma } &amp; |\vec{c}|\sqrt{1-\cos^2 \beta-\left(\dfrac{\cos \alpha -\cos \beta \cos \gamma}{\sin\gamma }\right)^2}
+\end{array}\right]
+</code></pre></div></div>
+<p data-sourcepos="55:1-55:126">という下三角行列になるように整理されているので、セルの体積は対角成分の積で表せます。</p>
+<h1 data-sourcepos="57:1-57:20">
+<span id="変換用コード" class="fragment"></span><a href="#%E5%A4%89%E6%8F%9B%E7%94%A8%E3%82%B3%E3%83%BC%E3%83%89"><i class="fa fa-link"></i></a>変換用コード</h1>
+<p data-sourcepos="59:1-60:154">変換用のpythonのスクリプトを載せておきます。リスト内の数値は適当に書き換えて下さい。<br>
+なお、pythonでは三角関数の中身をラジアン単位にする必要があるので、$\pi/180$ を乗じて換算する必要があります。</p>
+<div class="code-frame" data-lang="python" data-sourcepos="62:1-88:3">
+<div class="code-lang"><span class="bold">cartesian.py</span></div>
+<div class="highlight"><pre><code><span class="kn">import</span> <span class="n">math</span>
+
+<span class="n">length</span> <span class="o">=</span> <span class="p">[</span><span class="mf">6.18704</span><span class="p">,</span>  <span class="mf">2.91581</span><span class="p">,</span>  <span class="mf">7.28313</span><span class="p">]</span> <span class="c1"># a, b, c
+</span><span class="n">degree_angle</span> <span class="o">=</span> <span class="p">[</span><span class="mf">81.6066</span><span class="p">,</span>  <span class="mf">99.4557</span><span class="p">,</span>  <span class="mf">76.4221</span><span class="p">]</span> <span class="c1"># alpha, beta, gamma
+</span><span class="n">angle</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="n">math</span><span class="p">.</span><span class="n">pi</span><span class="o">/</span><span class="mf">180.0</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">degree_angle</span><span class="p">]</span> <span class="c1"># degree --&gt; rad
+</span>
+<span class="n">a_axis</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">3</span>
+<span class="n">b_axis</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">3</span>
+<span class="n">c_axis</span> <span class="o">=</span> <span class="p">[</span><span class="mf">0.0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">3</span>
+
+<span class="n">a_axis</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">length</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+<span class="n">a_axis</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.00000</span>
+<span class="n">a_axis</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.00000</span>
+
+<span class="n">b_axis</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">length</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="n">math</span><span class="p">.</span><span class="nf">cos</span><span class="p">(</span><span class="n">angle</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+<span class="n">b_axis</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">length</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="n">math</span><span class="p">.</span><span class="nf">sin</span><span class="p">(</span><span class="n">angle</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+<span class="n">b_axis</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="mf">0.00000</span>
+
+<span class="n">c_axis</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">length</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="n">math</span><span class="p">.</span><span class="nf">cos</span><span class="p">(</span><span class="n">angle</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+<span class="n">c_axis</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="n">length</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="p">(</span><span class="n">math</span><span class="p">.</span><span class="nf">cos</span><span class="p">(</span><span class="n">angle</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">-</span><span class="n">math</span><span class="p">.</span><span class="nf">cos</span><span class="p">(</span><span class="n">angle</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span> <span class="o">*</span> <span class="n">math</span><span class="p">.</span><span class="nf">cos</span><span class="p">(</span><span class="n">angle</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span><span class="o">/</span><span class="n">math</span><span class="p">.</span><span class="nf">sin</span><span class="p">(</span><span class="n">angle</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+<span class="n">c_axis</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">=</span> <span class="n">length</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="n">math</span><span class="p">.</span><span class="nf">sqrt</span><span class="p">(</span><span class="mi">1</span><span class="o">-</span><span class="n">math</span><span class="p">.</span><span class="nf">cos</span><span class="p">(</span><span class="n">angle</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="o">**</span><span class="mi">2</span><span class="o">-</span><span class="p">((</span><span class="n">math</span><span class="p">.</span><span class="nf">cos</span><span class="p">(</span><span class="n">angle</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="o">-</span><span class="n">math</span><span class="p">.</span><span class="nf">cos</span><span class="p">(</span><span class="n">angle</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span><span class="o">*</span><span class="n">math</span><span class="p">.</span><span class="nf">cos</span><span class="p">(</span><span class="n">angle</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span><span class="o">/</span><span class="n">math</span><span class="p">.</span><span class="nf">sin</span><span class="p">(</span><span class="n">angle</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+
+<span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">TV</span><span class="sh">"</span><span class="p">,</span><span class="sh">'</span><span class="s">{:&gt;14.10f}</span><span class="sh">'</span><span class="p">.</span><span class="nf">format</span><span class="p">(</span><span class="n">a_axis</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span><span class="sh">'</span><span class="s">{:&gt;14.10f}</span><span class="sh">'</span><span class="p">.</span><span class="nf">format</span><span class="p">(</span><span class="n">a_axis</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span><span class="sh">'</span><span class="s">{:&gt;14.10f}</span><span class="sh">'</span><span class="p">.</span><span class="nf">format</span><span class="p">(</span><span class="n">a_axis</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+<span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">TV</span><span class="sh">"</span><span class="p">,</span><span class="sh">'</span><span class="s">{:&gt;14.10f}</span><span class="sh">'</span><span class="p">.</span><span class="nf">format</span><span class="p">(</span><span class="n">b_axis</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span><span class="sh">'</span><span class="s">{:&gt;14.10f}</span><span class="sh">'</span><span class="p">.</span><span class="nf">format</span><span class="p">(</span><span class="n">b_axis</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span><span class="sh">'</span><span class="s">{:&gt;14.10f}</span><span class="sh">'</span><span class="p">.</span><span class="nf">format</span><span class="p">(</span><span class="n">b_axis</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+<span class="nf">print</span><span class="p">(</span><span class="sh">"</span><span class="s">TV</span><span class="sh">"</span><span class="p">,</span><span class="sh">'</span><span class="s">{:&gt;14.10f}</span><span class="sh">'</span><span class="p">.</span><span class="nf">format</span><span class="p">(</span><span class="n">c_axis</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span><span class="sh">'</span><span class="s">{:&gt;14.10f}</span><span class="sh">'</span><span class="p">.</span><span class="nf">format</span><span class="p">(</span><span class="n">c_axis</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span><span class="sh">'</span><span class="s">{:&gt;14.10f}</span><span class="sh">'</span><span class="p">.</span><span class="nf">format</span><span class="p">(</span><span class="n">c_axis</span><span class="p">[</span><span class="mi">2</span><span class="p">]))</span>
+</code></pre></div>
+</div>
+
+</div>
+
+
+{% endraw %}

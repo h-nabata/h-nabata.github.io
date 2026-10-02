@@ -1,0 +1,92 @@
+本稿ではrenameコマンドが使えないLinux環境においてファイル名を一括置換するワンライナーの例を紹介する。
+
+# forループを利用する場合
+
+forループの使用が許容される場合は
+
+```sh:bash系
+for file in *test1*; do mv -n "$file" "${file/test1/test2}"; done
+```
+
+```sh:csh系
+foreach file (*test1*) ; mv -n "$file" `echo "$file" | sed 's/test1/test2/'` ; end
+```
+
+などとすればよい。拡張子が `.txt` のファイルのみリネームしたい場合は `*test1*` の部分を `*test1*.txt` と書けばよい。
+
+> このうち、bash系のワンライナーの方が処理は速い。bashのワンライナーは、ループの中で外部プロセスを生成することなく、組み込み機能だけで処理を行うためである。
+
+# forループを利用しない場合
+
+何らかの理由でforループの使用が躊躇われる場合は以下のようにする。
+
+```sh:ファイル名の "test1" の部分を "test2" に一括置換するコマンド①
+ls * | xargs -n 1 | sed 'p;s/test1/test2/g' | xargs -n 2 mv
+```
+
+この一連のコマンドは以下のように機能している。
+1. `ls *` でカレントディレクトリ内の全ファイルとディレクトリをリストする。
+2. `xargs -n 1` でそれらを1行ずつ `sed` に渡す。
+3. `sed 'p;s/test1/test2/g'` で各ファイルについて変更前後の名前をそれぞれ出力する。1回目（`p`の部分）はそのまま、2回目（`s`で置換している部分）は `test1` を `test2` に置き換えたもの。
+4. `xargs -n 2 mv` で2つの引数をまとめて `mv` コマンドに渡し、ファイル名を変更する。最初の引数は元のファイル名、2番目の引数は新しいファイル名となる。`-n` オプションは同名のファイルが既に存在する場合に上書きを禁止する。
+
+
+例えば、ディレクトリに次のファイルがある場合を考える。
+```
+file_test1.txt
+file_test2.txt
+test1_document.txt
+```
+この場合、コマンドは次のように動作する。
+
+① `ls *` で全ファイルリストを取得：
+```
+file_test1.txt
+file_test2.txt
+test1_document.txt
+```
+② `xargs -n1` で1行ずつ処理：
+```
+file_test1.txt
+file_test2.txt
+test1_document.txt
+```
+③ `sed 'p;s/test1/test2/g'` で各行を2回出力：
+```
+file_test1.txt
+file_test2.txt
+file_test2.txt
+file_test2.txt
+test1_document.txt
+test2_document.txt
+```
+④ `xargs -n 2 mv` で2つの引数を渡し、`mv` でファイル名を変更：
+```sh
+mv file_test1.txt file_test2.txt
+mv test1_document.txt test2_document.txt
+```
+先程のコマンドにより、ワンラインでこれを一括実行できる。
+拡張子が `.txt` のファイルのみリネームしたい場合は `ls *` の部分を `ls *.txt` と書けばよい。
+
+## findを利用するケース
+
+以下のように `find` コマンドを利用することもできる。カレントディレクトリ配下の全ファイルについて `rename` の操作を一括で実行したい場合には便利である。
+
+```sh:ファイル名の "test1" の部分を "test2" に一括置換するコマンド③
+find . -type f -name '*test1*' | sed 'p;s/test1/test2/' | paste - - | xargs -n 2 mv -n
+```
+
+`paste - -` によって標準入力を2行ずつ結合して一行にまとめている。
+なお `-n` が2回登場しているが、 `xargs` コマンドの `-n` オプションと `mv` コマンドの `-n` オプションは別物なので、この形式で正しい。
+
+> `find . -type f -name '*test1*'` は現在のディレクトリ以下で名前に test1 を含むファイルを検索する。そのため、カレントディレクトリ配下の該当するすべてのファイルに `mv` コマンドが適用されることに注意。
+
+`sh` を呼び出しているのでやや回りくどいが、以下の方法でも同様の処理が実行される。
+
+```sh:ファイル名の "test1" の部分を "test2" に一括置換するコマンド②
+find . -type f -name '*test1*' | xargs -I {} sh -c 'mv -n "$1" "${1//test1/test2}"' _ {}
+```
+
+* * *
+
+環境によっては `mv` や `ls` などに特殊なaliasが設定されている場合もあるため、事前に挙動を検証してから実行することが推奨される。

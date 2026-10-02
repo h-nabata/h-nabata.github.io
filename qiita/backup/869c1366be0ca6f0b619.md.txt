@@ -1,0 +1,45 @@
+Overleafで文書を作成するときに調べたので共有します。
+TeXのfancyhdrパッケージを使用した際に表紙のヘッダー/フッターを無効化する書き方の一例を示します。
+
+```:書き方の例
+
+\documentclass{jsarticle}
+　･･･
+　（各種プリアンブル）
+　･･･
+\usepackage{fancyhdr}
+\pagestyle{fancy} %pagestyleはお好みで
+    \lhead{ヘッダ左} %ヘッダ左
+    \chead{ヘッダ中央} %ヘッダ中央
+    \rhead{ヘッダ右} %ヘッダ右．コンパイルした日付を表示
+    \lfoot{フッタ左} %フッタ左
+    \cfoot{—\, \thepage \, —} %フッタ中央．ページ番号を表示
+    \rfoot{© 著作権} %フッタ右
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+　･･･
+　（中略）
+　･･･
+\end{document}
+```
+
+重要な部分は `\thispagestyle{empty}` の行です。これを `\maketitle` の直後に書くことで表紙のヘッダー/フッターのスタイルを無効化することができます。当然ですがOverleaf上でも同様に機能します。なお、プリアンブルに `\renewcommand{\headrulewidth}{0pt}` と書いておけば全ページでヘッダーの羅線を消すことができます。
+
+ページの制御は `\newpage` などのコマンドで可能なので、特定のページ（下の例では `aaa` のページ）だけスタイルを無効化することもできます。
+
+```:書き方の例
+\begin{document}
+
+\newpage
+
+\thispagestyle{empty}
+aaa
+
+\newpage
+
+bbb
+
+\end{document}
+```

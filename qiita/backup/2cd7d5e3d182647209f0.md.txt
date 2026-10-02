@@ -1,0 +1,834 @@
+# はじめに
+
+[GRRMプログラム](https://afir.sci.hokudai.ac.jp/)などの反応経路自動探索ソフトウェアで網羅的な反応経路探索を行う場合、エネルギー・勾配計算の要求回数は非常に膨大です。大規模な反応経路探索の場合は数百万～数千万回以上の一点計算が要求されるため、一点あたりではごく僅かな時間短縮であっても、トータルでは大幅な計算コストの削減に繋がります。
+
+外部計算エンジンをPythonで実装していると、一点計算そのものが軽い場合でも、毎回Pythonプロセスを立ち上げる必要が生じます。ここでNumPyなどのライブラリや機械学習モデルを読み込む処理が挟まると、無視できないオーバーヘッドになります。
+
+特に、機械学習ポテンシャルのように「モデルのロード」「CUDAコンテキストの初期化」「各種ライブラリのimport」などが必要な計算エンジンでは、GRRMから一点計算を要求されるたびに同じ初期化を繰り返すのは極めて非効率です。
+
+そのような場合、GRRMから毎回呼ばれる軽量なインターフェースと、Python環境を保持したまま待機する常駐サーバーを分離する方法が有効です。GRRMとの入出力は従来通りファイルI/Oで行い、インターフェースとサーバーの間だけUnix domain socketで通信するという方式は実装が簡便な割にオーバーヘッドの削減に有効です。これは基本的なPythonスクリプトのみで完結します。
+
+本稿でのテスト系には50原子の[Lennard-Jones（LJ）クラスター](https://doi.org/10.1021/acs.jctc.4c00135)を用い、適当に配置した初期構造からGRRMで構造最適化を実行します。結論としては、この単純な（比較的オーバーヘッドの小さい）系であっても、計算時間は約10%程度も短縮されました。例えば機械学習ポテンシャルのようにモデルの読み込みに時間がかかる計算では、この方式によるオーバーヘッドの削減が計算時間の劇的な短縮に繋がります。
+
+
+# 何がボトルネックになるのか
+
+一点計算のボトルネックを分かりやすく図解します。
+
+GRRMから外部エンジンを呼び出す処理を単純化すると、通常は次のようになります。
+
+```mermaid
+sequenceDiagram
+    participant G as GRRM
+    participant P as Python外部プログラム<br/>（general interface）
+
+    Note over G,P: 一点計算のたびに実行
+    G->>P: argnameを指定して<br/>外部プログラムを呼び出す
+    P->>P: Pythonプロセスを起動
+    P->>P: ライブラリ・モデルの読み込み
+    Note over P: ここが重い！
+    P->>P: argname_INP4GEN.rrmを読み込む
+    P->>P: エネルギー / 勾配を計算
+    P->>P: argname_OUT4GEN.rrmを書き出す
+    P-->>G: 計算終了
+    P->>P: Pythonプロセスを終了
+```
+
+これを一点計算のたびに繰り返すと、エネルギー・勾配計算のプロセスを起動するコストが計算回数に比例して積み上がります。これを、Pythonサーバーを常駐させて初回のみの起動で済ませることにより解決します。
+
+```mermaid
+sequenceDiagram
+    participant G as GRRM
+    participant I as LJ_interface
+    participant S as LJ_server
+
+    Note over S: Pythonプロセスを常駐<br/>（起動は初回のみ）
+    S->>S: Pythonプロセスを起動
+    S->>S: ライブラリ・モデルの読み込み
+    Note over S: 重い処理は初回のみ！
+    Note over G,S: 一点計算のたびに実行
+    G->>I: argnameを指定して<br/>外部プログラムを呼び出す
+    I->>I: argname_FIN4GEN.rrmが<br/>存在していたら削除する
+    I->>I: .socketfileを読み込む
+    I->>S: Unixソケット経由で<br/>argnameを送信
+    S->>S: argname_INP4GEN.rrmを読み込む
+    S->>S: エネルギー / 勾配を計算
+    S->>S: argname_OUT4GEN.rrmを書き出す
+    S->>S: argname_FIN4GEN.rrmを書き出す<br/>（独自実装）
+    S-->>I: 計算結果を返す
+    I->>I: argname_FIN4GEN.rrmの存在を確認<br/>（独自実装）
+    I-->>G: 計算終了
+```
+
+GRRMが直接読み書きするのは `*_INP4GEN.rrm`、`*_OUT4GEN.rrm`のみで、`*_FIN4GEN.rrm` はインターフェースが計算の終了を判定するためだけの独自ファイルです。
+
+> `*_FIN4GEN.rrm` を挟む理由としては、サーバーがOUT4GENへの書き込みを完了していない段階で、インターフェースがGRRMにレスポンスしてしまう事故を防止するためです。数百以上の原子数からなる系では、インターフェースの待ち時間間隔が短いとこうした事故が発生する場合があります。
+
+ここでのsocket通信で送っている情報は計算データそのものではなく、GRRMから渡された `argname` （ジョブ名）だけで、xyz座標などの情報のやり取りはファイルI/O経由で行っています。この設計にしておくと、GRRM側のファイルI/O仕様を維持したまま、計算エンジンだけを常駐化できます。
+
+なお、今回のGRRM用インターフェース `LJ_interface` 自体もPythonスクリプトなので、Pythonインタープリタの起動コストが完全になくなるわけではありません。削減されている主なコストは、NumPyや将来的な機械学習モデルなど、重い計算環境を毎回ロードする処理です。
+
+> インターフェースをより軽量な実装に置き換えれば、さらにオーバーヘッドを削減できる可能性があります。例えば、Pythonランタイムを起動するのではなく bash などのスクリプトで完結させることも可能です。
+>
+> しかし、シェルスクリプトからUnix domain socketを扱うために `socat` などの外部コマンドを毎回起動する場合、そのプロセスを起動するコストが加わるため、必ずしも高速化するとは限りません。起動コストを最小化するという観点では、CやRustなどで小さなインターフェースプログラムとして実装する方が適している可能性があります。
+
+# テストに用いたLennard-Jonesポテンシャル
+
+テストでは、単純なLennard-Jonesポテンシャル
+
+$$
+V(r)=4\epsilon\left[\left(\frac{\sigma}{r}\right)^{12}-\left(\frac{\sigma}{r}\right)^6\right]
+$$
+
+を用いました。
+
+```python:今回のパラメータ
+EPSILON = 0.001
+SIGMA = 1.6
+```
+
+> LJポテンシャルの計算そのものは非常に軽いため、このテストは「一点計算が軽い場合に、Python環境の初期化オーバーヘッドがどの程度削減されるか」を調べるケーススタディになっています。
+
+# 実装の概要
+
+実装はGRRM用インターフェースと常駐サーバー2つのスクリプトに分けています。
+
+## `LJ_interface`：GRRMと常駐サーバーを繋ぐインターフェース
+
+まず、GRRMから直接呼び出されるのが `LJ_interface` です。
+
+今回の構成では、エネルギー・勾配計算そのものを `LJ_interface` の中では行いません。`LJ_interface` の役割は、GRRMから一点計算の要求を受け取ったことを常駐中の `LJ_server` に伝え、計算終了までGRRMとの間を仲介することです。
+
+`LJ_interface` の仕事を簡略化すると、
+
+1. GRRMから `argname` を受け取る
+2. `.socketfile` から接続先を取得する
+3. `LJ_server` に `argname` を送る
+4. 計算終了を待つ
+5. 正常終了したことを確認してGRRMへ制御を返す
+
+という流れになります。
+
+ここで重要なのは、`LJ_interface` 自体にはNumPyやLennard-Jonesポテンシャルの計算処理を持たせていないことです。GRRMから一点計算のたびに起動される部分をできるだけ軽量にし、重い計算環境を常駐server側へ移すことが今回の実装の基本方針です。
+
+<details><summary>インターフェースの詳細</summary>
+GRRMから外部プログラムが呼び出される際には、計算ごとに識別子として `argname` が引数で渡されます。この `argname` は、
+
+`argname_INP4GEN.rrm`
+
+`argname_OUT4GEN.rrm`
+
+`argname_FIN4GEN.rrm`
+
+のように、各計算に対応するファイル名を特定するために用いています。
+
+`LJ_interface` が起動すると、最初にカレントディレクトリの `.socketfile` を読み込みます。このファイルには、対応する `LJ_server` が待ち受けているUnixドメインソケットのパスが記録されています。
+
+次に、
+
+`argname_INP4GEN.rrm`
+
+が存在することを確認します。このファイルはGRRMが生成する入力ファイルであり、原子座標や要求する計算の種類などが含まれています。
+
+入力ファイルの存在を確認した後、`LJ_interface` はUnixドメインソケットを介して `LJ_server` に接続します。ただし、ここでsocket経由で送っているのは原子座標や勾配などの計算データそのものではありません。送信するのはGRRMから受け取った `argname` のみです。
+
+つまり、socket通信は、
+
+「この `argname` に対応する一点計算を実行してください」
+
+と常駐サーバーへ通知するために使っています。
+
+`LJ_server` 側で計算が終了すると、interfaceには完了を示すステータスが返されます。正常終了の場合は `OK`、同じ計算がすでに実行中であれば `AL`、server内部でエラーが生じた場合は `ER` を返す構成です。
+
+正常終了の応答を受け取った `LJ_interface` は、計算終了を示す
+
+`argname_FIN4GEN.rrm`
+
+の存在を確認します。このファイルはGRRMが直接読み込む計算結果ではなく、今回のinterfaceとserverの間で計算終了を判定するためのフラグファイルとして使用しています。
+
+`FIN4GEN.rrm` を確認すると、interfaceはこれを削除して正常終了します。GRRMから見れば、外部プログラムである `LJ_interface` が終了した時点で一点計算が完了したことになり、その後GRRM自身が
+
+`argname_OUT4GEN.rrm`
+
+から計算結果を読み込みます。
+
+</details>
+
+<details><summary>スクリプトの実装例</summary>
+
+```py:LJ_interface
+#!/usr/bin/python3
+
+"""Lightweight GRRM-to-server bridge.
+
+The GRRM-facing file names and the two-byte server protocol are intentionally
+kept identical to the original implementation.
+"""
+
+import os
+import socket
+import struct
+import sys
+import time
+
+SOCKET_POINTER_FILE = ".socketfile"
+RESPONSE_SIZE = 2
+CONNECT_TIMEOUT_SECONDS = 30.0
+CONNECT_RETRY_INTERVAL_SECONDS = 0.1
+FIN_TIMEOUT_SECONDS = 1000.0
+POLL_INTERVAL_SECONDS = 0.1
+
+
+def get_socket_file():
+    """Read the Unix-domain socket path used by the persistent server."""
+    if not os.path.exists(SOCKET_POINTER_FILE):
+        print("ERROR: .socketfile not found", file=sys.stderr)
+        sys.exit(8)
+
+    with open(SOCKET_POINTER_FILE, encoding="utf-8") as f:
+        return f.read().strip()
+
+
+def recv_exact(sock, size):
+    """Receive exactly *size* bytes or raise if the connection closes early."""
+    chunks = []
+    remaining = size
+    while remaining:
+        chunk = sock.recv(remaining)
+        if not chunk:
+            raise ConnectionError(
+                f"Connection closed while receiving {size} bytes"
+            )
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
+
+
+def connect_with_retry(socket_file):
+    """Connect to the Unix-domain server, retrying transient startup errors."""
+    deadline = time.monotonic() + CONNECT_TIMEOUT_SECONDS
+    last_error = None
+
+    while True:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            sock.connect(socket_file)
+            return sock
+        except (FileNotFoundError, ConnectionRefusedError) as exc:
+            sock.close()
+            last_error = exc
+            if time.monotonic() >= deadline:
+                raise TimeoutError(
+                    f"Server did not become ready within "
+                    f"{CONNECT_TIMEOUT_SECONDS:.1f} s: {last_error}"
+                ) from exc
+            time.sleep(CONNECT_RETRY_INTERVAL_SECONDS)
+        except Exception:
+            sock.close()
+            raise
+
+
+def wait_for_and_remove_fin(finfile):
+    """Wait for GRRM's FIN4GEN flag file and remove it once observed."""
+    deadline = time.monotonic() + FIN_TIMEOUT_SECONDS
+    while time.monotonic() < deadline:
+        if os.path.exists(finfile):
+            os.remove(finfile)
+            return True
+        time.sleep(POLL_INTERVAL_SECONDS)
+    return False
+
+
+def main():
+    if len(sys.argv) != 2:
+        print(f"Usage: {sys.argv[0]} ARGNAME", file=sys.stderr)
+        sys.exit(1)
+
+    argname = sys.argv[1]
+    socket_file = get_socket_file()
+
+    inpfile = f"{argname}_INP4GEN.rrm"
+    if not os.path.exists(inpfile):
+        print(f"Input file {inpfile} not found.", file=sys.stderr)
+        sys.exit(2)
+
+    try:
+        with connect_with_retry(socket_file) as sock:
+            msg = argname.encode()
+            sock.sendall(struct.pack(">H", len(msg)) + msg)
+            resp = recv_exact(sock, RESPONSE_SIZE)
+    except Exception as exc:
+        print(f"ERROR: Could not connect to server: {exc}", file=sys.stderr)
+        sys.exit(3)
+
+    if resp == b"OK":
+        finfile = f"{argname}_FIN4GEN.rrm"
+        if wait_for_and_remove_fin(finfile):
+            sys.exit(0)
+        print(
+            "ERROR: Server responded OK but output file not found after waiting.",
+            file=sys.stderr,
+        )
+        sys.exit(4)
+
+    if resp == b"AL":
+        print("ERROR: Job already in progress.", file=sys.stderr)
+        sys.exit(5)
+    if resp == b"ER":
+        print("ERROR: Server error.", file=sys.stderr)
+        sys.exit(6)
+
+    print(f"ERROR: Unexpected server response: {resp}", file=sys.stderr)
+    sys.exit(7)
+
+
+if __name__ == "__main__":
+    main()
+
+```
+
+</details>
+
+
+## `LJ_server`：計算環境を保持したまま待機する常駐プロセス
+
+実際のエネルギー・勾配計算を担当するのが `LJ_server` です。
+
+`LJ_server` はGRRMから一点計算を要求されるたびに起動するのではなく、GRRMによる構造最適化や反応経路探索を開始する前に一度だけ起動し、その後はPythonプロセスを終了せずに待機します。
+
+この部分が今回の高速化の重要なポイントとなります。
+
+<details><summary>サーバーの詳細</summary>
+
+通常の外部計算スクリプトでは、一点計算ごとに
+
+Pythonプロセスの起動
+→ ライブラリのimport
+→ 計算
+→ Pythonプロセスの終了
+
+という処理を繰り返します。
+
+これに対して `LJ_server` では、NumPyなどのライブラリを最初の起動時に一度だけ読み込み、その状態を保ったまま次の計算要求を待ち続けます。今回のLennard-Jones計算ではNumPyの読み込みが主な対象ですが、機械学習ポテンシャルへ応用する場合には、PyTorchなどのライブラリ、学習済みモデル、場合によってはGPU上のモデルやCUDA関連の初期化状態も同じ考え方で保持できます。
+
+serverを起動する際には、
+
+* GRRMの計算ファイルが置かれる作業ディレクトリ `WORKDIR`
+* 通信に使用するUnixドメインソケットのパス `SOCKET_FILE`
+
+を指定します。
+
+起動後、`LJ_server` は指定されたパスにUnixドメインソケットを作成し、clientからの接続を待ち受けます。ここでいうclientが、先ほど説明した `LJ_interface` です。
+
+`LJ_interface` から接続を受けると、serverはsocket経由で送られてきた `argname` を取得します。そして、この名前とあらかじめ指定された `WORKDIR` を組み合わせて、
+
+`argname_INP4GEN.rrm`
+
+`argname_OUT4GEN.rrm`
+
+`argname_FIN4GEN.rrm`
+
+のパスを決定します。
+
+したがって、現在の実装では原子座標そのものをsocketから受け取っているわけではありません。serverが `INP4GEN.rrm` を直接読み込み、そこから座標や計算条件を取得します。
+
+### GRRM入力ファイルの読み込み
+
+一点計算を担当する `run_lj_model()` では、まず `INP4GEN.rrm` を読み込みます。
+
+入力中の `TASK:` を調べ、
+
+* `ENERGY`
+* `GRADIENT`
+* `HESSIAN`
+
+のどの計算が要求されているかを判定します。
+
+さらに `NACTIVEATOM / NATOM:` の情報から原子数を取得し、後続する各行から原子名とCartesian座標を読み込みます。
+
+今回のテストではLennard-Jonesクラスターを対象としているため、この座標から全原子対の距離行列をNumPyで計算します。
+
+### Lennard-Jonesエネルギー・勾配の計算
+
+エネルギー計算が要求されている場合には、各原子対についてLennard-Jonesポテンシャルを評価し、二重カウントを避けるため距離行列の上三角部分について和を取って全エネルギーを求めます。
+
+勾配が要求されている場合には、Lennard-Jonesポテンシャルを原子間距離について微分し、その値を各原子間の方向ベクトルへ分配することでCartesian座標に対する勾配ベクトルを計算します。
+
+ここではLennard-Jonesポテンシャルを使用していますが、常駐serverという仕組みそのものはこの計算式には依存しません。`run_lj_model()` に相当する部分を別の計算エンジンへ置き換えれば、機械学習ポテンシャルなどにも同じ構成を利用できます。
+
+### GRRM形式での結果の書き出し
+
+計算終了後は、GRRMが要求する形式に従って
+
+`argname_OUT4GEN.rrm`
+
+を書き出します。
+
+このファイルには、現在の原子座標、エネルギー、勾配などを所定の形式で記録します。今回のLJテストでは使用していないHessian、dipole、polarizabilityなどの項目についても、GRRM側の入出力形式を維持するため必要なフィールドを出力しています。
+
+そして `OUT4GEN.rrm` の生成が終了した後、空の
+
+`argname_FIN4GEN.rrm`
+
+を作成します。
+
+前述のとおり、`FIN4GEN.rrm` はGRRMへエネルギーや勾配を渡すためのファイルではなく、server側の計算処理が終了したことを `LJ_interface` が判定するためのフラグとして利用しています。
+
+### 複数の要求を処理するための仕組み
+
+`LJ_server` は一度計算したら終了するプログラムではなく、socketへの接続を待ち続けます。
+
+新しいconnectionを受けるたびにclient処理を開始し、実際の一点計算は `ThreadPoolExecutor` に渡す構成としています。このため、serverプロセスそのものを再起動することなく、順次送られてくる計算要求を処理できます。
+
+また、現在計算中の入力ファイルを `jobs_in_progress` に記録しています。同じ入力ファイルに対する要求が重複して到着した場合には、新たな計算を開始せず、すでに計算中であることをinterface側へ通知します。
+
+以上をまとめると、`LJ_server` の役割は、
+
+1. Pythonおよび計算ライブラリを一度だけ初期化する
+2. Unixドメインソケットで計算要求を待つ
+3. interfaceから `argname` を受け取る
+4. 対応する `INP4GEN.rrm` を読み込む
+5. エネルギー・勾配を計算する
+6. `OUT4GEN.rrm` を生成する
+7. 計算終了を示す `FIN4GEN.rrm` を生成する
+8. 次の計算要求を待つ
+
+というものです。
+
+このように、GRRMが要求するファイルI/O形式そのものには手を加えず、計算を実行するPythonプロセスだけをGRRMの外側で常駐化しています。そのため、GRRMとの互換性を保ちながら、反復されるPython環境の初期化処理を削減できることが、この構成の特徴です。
+
+</details>
+
+<details><summary>スクリプトの実装例</summary>
+
+```py:LJ_server
+#!/usr/bin/python3
+
+"""Persistent Lennard-Jones backend for GRRM external calculations.
+
+GRRM-facing input/output file names and output formatting are intentionally
+kept identical to the original implementation.  The server keeps Python and
+NumPy resident and receives lightweight requests over a Unix-domain socket.
+"""
+
+import os
+import socket
+import struct
+import sys
+import threading
+from concurrent.futures import ThreadPoolExecutor
+
+import numpy as np
+
+# Lennard-Jones parameters
+EPSILON = 0.001
+SIGMA = 1.6
+BOHR_PER_ANGSTROM = 1.8897259886
+REQUEST_LENGTH_BYTES = 2
+DEFAULT_MAX_WORKERS = 40
+
+
+# --- Lennard-Jones calculation functions ---
+def lj_potential_energy(r):
+    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+        value = 4.0 * EPSILON * ((SIGMA / r) ** 12 - (SIGMA / r) ** 6)
+    return np.nan_to_num(value, nan=0.0)
+
+
+def lj_potential_gradient(r):
+    with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+        value = -4.0 * EPSILON * (
+            12 * (SIGMA**12 / r**13) - 6 * (SIGMA**6 / r**7)
+        )
+    return np.nan_to_num(value, nan=0.0)
+
+
+def distance_matrix_np(coords):
+    coords = np.asarray(coords, dtype=float)
+    diff = coords[:, None, :] - coords[None, :, :]
+    return np.sqrt(np.sum(diff**2, axis=-1))
+
+
+def calc_gradient_vectors(distance_list, coord_list, grad_matrix):
+    coords = np.asarray(coord_list, dtype=float)
+    vector_list = coords[:, None, :] - coords[None, :, :]
+    distance_array = np.asarray(distance_list)
+    mask = distance_array > 1e-4
+    grad = np.asarray(grad_matrix)
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        gradient_contrib = np.where(
+            mask[:, :, None],
+            vector_list * grad[:, :, None] / distance_array[:, :, None],
+            0.0,
+        )
+
+    return np.sum(gradient_contrib, axis=1)
+
+
+def read_grrm_input(inp_filename):
+    """Parse only the fields required by the LJ test backend."""
+    ene_mode = 0
+    grad_mode = 0
+    hess_mode = 0
+    atomnum = 0
+    coord_list = []
+    atomname_list = []
+
+    with open(inp_filename, encoding="utf-8") as f:
+        lines = f.readlines()
+
+    for idx, line in enumerate(lines):
+        if "TASK:" in line:
+            if "ENERGY" in line:
+                ene_mode = 1
+            if "GRADIENT" in line:
+                grad_mode = 1
+            if "HESSIAN" in line:
+                hess_mode = 1
+
+        if "NACTIVEATOM / NATOM:" in line:
+            elem = line.split()
+            atomnum = int(elem[3])
+            for j in range(atomnum):
+                atomline = lines[idx + 1 + j]
+                elems = atomline.split()
+                atomname_list.append(elems[0])
+                coord_list.append(
+                    [float(elems[1]), float(elems[2]), float(elems[3])]
+                )
+            break
+
+    return ene_mode, grad_mode, hess_mode, atomnum, coord_list, atomname_list
+
+
+def write_grrm_output(
+    out_filename,
+    atomnum,
+    coord_list,
+    atomname_list,
+    optene,
+    gradient_vector_list,
+):
+    """Write the GRRM output in exactly the same format as the original."""
+    with open(out_filename, mode="w", encoding="utf-8") as fout:
+        fout.write("RESULTS\n")
+        fout.write("CURRENT COORDINATE\n")
+        for i in range(atomnum):
+            fout.write(
+                f"{atomname_list[i]:2s} {coord_list[i][0]:22.12f} "
+                f"{coord_list[i][1]:22.12f} {coord_list[i][2]:22.12f}\n"
+            )
+        fout.write(
+            f"ENERGY = {optene:17.12f}    0.000000000000    0.000000000000\n"
+        )
+        fout.write(
+            "       =    0.000000000000    0.000000000000    0.000000000000\n"
+            "S**2   =    0.000000000000\n"
+        )
+        fout.write("GRADIENT\n")
+        if gradient_vector_list is not None:
+            for vec in gradient_vector_list:
+                for val in vec:
+                    fout.write(f"  {val / BOHR_PER_ANGSTROM:17.12f}\n")
+        else:
+            for _ in range(atomnum * 3):
+                fout.write("  0.000000000000\n")
+        fout.write(
+            "DIPOLE =    0.000000000000         0.000000000000          "
+            "0.000000000000\n"
+        )
+        fout.write("HESSIAN\n")
+        for i in range((3 * atomnum) // 5 + 1):
+            tmp_linenum = (3 * atomnum) - i * 5
+            if tmp_linenum <= 0:
+                tmp_linenum = (3 * atomnum) % 5
+            for j in range(tmp_linenum):
+                if j == 0:
+                    fout.write("  0.000000000\n")
+                if j == 1:
+                    fout.write("  0.000000000   0.000000000\n")
+                if j == 2:
+                    fout.write(
+                        "  0.000000000   0.000000000   0.000000000\n"
+                    )
+                if j == 3:
+                    fout.write(
+                        "  0.000000000   0.000000000   0.000000000   "
+                        "0.000000000\n"
+                    )
+                if j >= 4:
+                    fout.write(
+                        "  0.000000000   0.000000000   0.000000000   "
+                        "0.000000000   0.000000000\n"
+                    )
+        fout.write("DIPOLE DERIVATIVES\n")
+        for _ in range(3 * atomnum):
+            fout.write(
+                "   0.000000000000          0.000000000000          "
+                "0.000000000000\n"
+            )
+        fout.write("POLARIZABILITY\n")
+        fout.write("   0.000000000000\n")
+        fout.write("   0.000000000000          0.000000000000\n")
+        fout.write(
+            "   0.000000000000          0.000000000000          "
+            "0.000000000000\n"
+        )
+
+
+def run_lj_model(inp_filename, out_filename, fin_filename):
+    (
+        ene_mode,
+        grad_mode,
+        _hess_mode,
+        atomnum,
+        coord_list,
+        atomname_list,
+    ) = read_grrm_input(inp_filename)
+
+    coord_np = np.asarray(coord_list, dtype=float)
+    distance_list = distance_matrix_np(coord_np)
+
+    optene = 0.0
+    if ene_mode:
+        ene_matrix = lj_potential_energy(distance_list)
+        optene = np.triu(ene_matrix, k=1).sum()
+
+    gradient_vector_list = None
+    if grad_mode:
+        grad_matrix = lj_potential_gradient(distance_list)
+        gradient_vector_list = calc_gradient_vectors(
+            distance_list, coord_np, grad_matrix
+        )
+
+    write_grrm_output(
+        out_filename,
+        atomnum,
+        coord_list,
+        atomname_list,
+        optene,
+        gradient_vector_list,
+    )
+
+    with open(fin_filename, mode="w", encoding="utf-8") as ffin:
+        ffin.write("")
+
+
+def recv_exact(sock, size):
+    """Receive exactly *size* bytes or raise if the peer closes early."""
+    chunks = []
+    remaining = size
+    while remaining:
+        chunk = sock.recv(remaining)
+        if not chunk:
+            raise ConnectionError(
+                f"Connection closed while receiving {size} bytes"
+            )
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
+
+
+# --- Server class ---
+class RRMServer:
+    def __init__(self, workdir, socket_file, max_workers=DEFAULT_MAX_WORKERS):
+        self.workdir = os.path.abspath(workdir)
+        self.socket_file = os.path.abspath(socket_file)
+        self.executor = ThreadPoolExecutor(max_workers=max_workers)
+        self.jobs_in_progress = set()
+        self.lock = threading.Lock()
+
+    def serve(self):
+        if os.path.exists(self.socket_file):
+            os.unlink(self.socket_file)
+
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as serversock:
+            serversock.bind(self.socket_file)
+            serversock.listen(8)
+            print(f"Listening on {self.socket_file}", flush=True)
+
+            try:
+                while True:
+                    conn, _ = serversock.accept()
+                    threading.Thread(
+                        target=self.handle_client,
+                        args=(conn,),
+                        daemon=True,
+                    ).start()
+            finally:
+                self.executor.shutdown(wait=True)
+                if os.path.exists(self.socket_file):
+                    os.unlink(self.socket_file)
+
+    def handle_client(self, conn):
+        try:
+            length = struct.unpack(">H", recv_exact(conn, REQUEST_LENGTH_BYTES))[0]
+            argname = recv_exact(conn, length).decode()
+
+            inp = os.path.join(self.workdir, f"{argname}_INP4GEN.rrm")
+            out = os.path.join(self.workdir, f"{argname}_OUT4GEN.rrm")
+            fin = os.path.join(self.workdir, f"{argname}_FIN4GEN.rrm")
+
+            print("filepath:", inp, out, flush=True)
+
+            with self.lock:
+                if inp in self.jobs_in_progress:
+                    conn.sendall(b"AL")
+                    return
+                self.jobs_in_progress.add(inp)
+
+            # Wait on the Future rather than polling FIN.  This preserves the
+            # external protocol while correctly propagating backend failures.
+            future = self.executor.submit(self.do_job, inp, out, fin)
+            future.result()
+            conn.sendall(b"OK")
+
+        except Exception as exc:
+            print("ERROR:", exc, flush=True)
+            try:
+                conn.sendall(b"ER")
+            except Exception:
+                pass
+        finally:
+            conn.close()
+
+    def do_job(self, inp, out, fin):
+        try:
+            run_lj_model(inp, out, fin)
+        finally:
+            with self.lock:
+                self.jobs_in_progress.discard(inp)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        print(f"Usage: {sys.argv[0]} WORKDIR SOCKET_FILE", file=sys.stderr)
+        sys.exit(1)
+
+    workdir = sys.argv[1]
+    socket_file = sys.argv[2]
+    RRMServer(workdir, socket_file, max_workers=DEFAULT_MAX_WORKERS).serve()
+
+```
+
+</details>
+
+
+## 起動方法
+
+サーバーは例えば次のように起動します。これはユーザーが手動で立ち上げても良いですし、ジョブ投入用シェルスクリプトの中でGRRMを実行する前に立ち上げさせても良いでしょう。GPUの確保が他プロセスと競合するなどの場合を除き、基本的には後者の方法がラクだと思います。
+
+```bash
+./LJ_server /path/to/WORKDIR /path/to/grrm_lj.sock
+```
+
+その後、GRRMから呼ばれるディレクトリに `.socketfile` を用意し、socketのパスを書いておきます。（これもシェルスクリプト内で実行して良い）
+
+```bash
+printf '%s\n' '/path/to/grrm_lj.sock' > .socketfile
+```
+
+GRRM側からは従来の外部計算と同様に `LJ_interface` が呼ばれるように設定します。インターフェースのパスはGRRMのインプットファイル（ .com ファイル）内の `sublink` オプションで指定します。
+
+ここで、サーバーが正常にlisten状態になっているかを確認する処理をインターフェース側に実装しています。これが無いと、（特に初回の一点計算において）サーバーがまだ立ち上がっていない段階にもかかわらず、ソケットファイルが存在した時点で直ちにサーバーに接続しようとしてコネクションエラーになる恐れがあるためです。上記の実装例では、0.1秒間隔で最大30秒まで再接続を試みます（最大約300回の再試行）。
+
+# LJ50クラスターでのベンチマーク
+
+50原子のLJクラスターを適当に配置した構造から構造最適化し、従来方式と常駐サーバー方式を比較ました。2 runだけですが、結果を整理すると次のようになります。
+
+| run | 勾配計算回数 | 従来方式 [s] | 常駐方式 [s] | 短縮 [s] | 時間短縮率 | 加速率 |
+| ---- | -----------------: | -------: | -----------: | -----: | ----: | ------: |
+| 1    |               1820 |      363 |          332 |     31 | 8.54% |  1.093× |
+| 2    |               2023 |      407 |          370 |     37 | 9.09% |  1.100× |
+| 合計   |               3843 |      770 |          702 |     68 | 8.83% |  1.097× |
+
+2試行を合計すると、3843回の勾配計算で68秒短縮されました。
+
+単純に差分を勾配計算回数で割ると、1回あたり約17.7 msのオーバーヘッドが削減された計算になります。
+
+```text
+従来方式:     770 / 3843 ≈ 200.4 ms / force call
+常駐server:   702 / 3843 ≈ 182.7 ms / force call
+差分:                         ≈ 17.7 ms / force call
+```
+
+GRRMの `TOTAL ELAPSED TIME` には外部エンジン以外の処理も含まれるため、この17.7 msのすべてが「Python起動時間」というわけではありません。ですが、勾配計算回数が同一の対応する2組の最適化において、計算時間が約10%短縮されていることから、プロセス常駐化の効果が明瞭に現れていると言えます。
+
+
+# この方式は他のPython外部計算にも応用可能
+
+今回LJポテンシャルを用いたのは、動作を簡単に観察するためです。常駐サーバーが行う計算部分を置き換えれば、原理上はGRRMから利用できる任意のエネルギー・勾配計算エンジンに同じ構成を適用できます。
+
+特に効果が期待できるのは、次のような初期化コストの大きいPythonベースの計算エンジンです。
+
+* PyTorch等を用いる機械学習ポテンシャル
+* GPUモデルでCUDA contextやモデルweightのロードが必要なもの
+* 大きなdescriptorやlookup tableを初期化するモデル
+* Pythonラッパー経由で呼び出す外部ライブラリ
+
+特に機械学習ポテンシャルの場合、モデルをGPUメモリ上に保持したまま次のGRRM要求を待てるため、単なるNumPyのimport削減より大きな効果が期待できます。
+
+例えば、エネルギー・勾配の推論が0.1秒で済む機械学習ポテンシャルの場合、逐一モデルをロードするのに約3秒かかっていると仮定すると、
+
+```
+3.1 秒 -> 0.1 秒
+```
+
+に削減されるので計算時間はおよそ 1/30 になります。これは1週間要していた反応経路探索が5時間半程度で済む計算になります。
+
+> 一方で、1回の電子状態計算が数十秒〜数時間かかるような量子化学計算では、数十ms程度の起動オーバーヘッドは全体に対して小さくなります。その場合でも、Pythonラッパーやモデル初期化が重い構成では常駐化に意味がありますが、期待される相対的な高速化率は計算エンジンごとに異なります。
+
+:::note info
+
+### 並列実行時の注意
+
+今回のserverでは `ThreadPoolExecutor(max_workers=40)` を使用しています。
+
+LJ計算では大きな問題になりませんが、実際の外部エンジンへ置き換える場合には、計算エンジン自体がthread-safeかどうかを確認する必要があります。
+
+特にGPUを使う機械学習ポテンシャルでは、「40 requestを同時にGPUへ流せば速い」とは限りません。GPUメモリ使用量、CUDA stream、モデル側のbatching、GRRM側の並列度などを考慮し、`max_workers` は実際の計算環境に合わせて調整する必要があります。
+
+> GPUが複数デバイス存在する場合や、容量の大きいVRAMのために複数のプロセスを常駐できる場合はリクエストを捌くためのサーバー（APIエンドポイント）の運用も視野に入ります。こうなると、今回のようなプロセスごとにサーバーを起動する方式では計算資源を効率的に利用できない可能性も出てきます。
+
+:::
+
+
+# まとめ
+
+GRRMからPythonベースの外部エネルギー・勾配計算を多数回呼び出す場合、計算そのものだけでなく、Python環境やライブラリ、モデルの初期化コストが積み上がることがあります。
+
+今回は、GRRMから毎回呼ぶ軽量なインターフェースと、Python環境を保持する常駐サーバーをUnix domain socketで接続する構成を試しました。LJ50クラスターの構造最適化のような単純な系でも、合計で9%程度の実行時間短縮を確認しました。
+
+
+
+GRRM側の `INP4GEN/OUT4GEN` 形式を維持したままバックエンドを常駐化できるため、既存の外部計算インターフェースを大きく変えずに適用できる点も利点です。
+
+LJ計算は極端に軽い系でのテストでしたが、この方式の本命の対象としては、モデルロードやGPU初期化のコストが大きい機械学習ポテンシャルを利用するケースです。
+
+:::note warn
+
+### 未対応事項について
+
+本稿のサンプルスクリプトはあくまでサンプルであり、実用上はもう少しエラーハンドリングや実装を精緻化すべき部分が残っています。例えばGRRMが `TASK: HESSIAN` を要求してきた場合にゼロ埋めのヘシアン行列を返すので、`derivative=force` のオプションを付けないと構造最適化において異常な挙動を示します。
+
+以下の点は今回の実装では不十分な場合に改修を検討すべき事項です。本稿のスクリプトを流用する際は参考にしてください。
+
+|箇所|現状|起こり得る問題|推奨|
+|:----|:----|:----|:----|
+|socket応答待ち|接続後の `recv()` にtimeoutなし|backendがhangするとinterfaceも永久待機|request timeoutを追加|
+|`HESSIAN`|認識するが計算せず0を書き出す|**誤ったHessianを正常結果として返す**|未対応なら明示的に`ER`|
+|server終了処理|serverは自動終了しない|GRRM終了後も孤児serverが残り続ける|launcherでkill、またはidle timeout|
+|socket起動|既存socket pathを無条件`unlink`|別の生きたserverのsocketを破壊し得る|生存確認後にstale socketだけ削除|
+|server取り違え|`.socketfile` はsocket pathだけ|別ジョブのserverに誤接続すると別WORKDIRを参照|job/server ID handshake|
+|出力ファイル|`OUT4GEN.rrm`へ直接書込|強制終了時に途中までのファイルが残る|temporary file → `os.replace()`|
+|並列数|`max_workers=40`固定|NNP/GPUではOOMや性能低下、thread safety問題|backend別に設定可能にする|
+|client thread|接続ごとにthread生成|大量接続時にthreadが増え続ける|worker数を制限|
+|`.socketfile`|設定ファイル自体は待たない|launcherとGRRMの起動race|`.socketfile`にも短いretry|
+|logging|一点計算ごとに`print(filepath)`|数万〜数十万点ではI/Oが無視できない|verbose mode時のみ出力|
+|FINファイル|`OK`後さらに最大1000秒poll|現実にはほぼ冗長|短縮または設計整理|
+|Unix socket path|path長チェックなし|深いWORKDIRで`bind()`失敗|`$TMPDIR`等の短いpath|
+|socket権限|明示設定なし|共有計算機上で他ユーザーから接続可能な場合|`chmod 600`等|
+|LJ特有|原子重複時の`nan`を0化|異常構造が低エネルギーのように扱われ得る|diagonalだけ除外し重複原子はerror|
+
+:::
