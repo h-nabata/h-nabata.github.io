@@ -1,0 +1,21 @@
+{% assign og = site.data.page_ogp[page.url] %}
+{% assign og_title = page.ogp_title | default: page.title | default: og.title | default: site.title %}
+{% assign og_description = page.description | default: og.description | default: site.description %}
+{% assign og_image = page.ogp_image | default: og.image | default: site.ogp_image | absolute_url %}
+{% assign og_url = page.url | absolute_url %}
+<meta name="description" content="{{ og_description | escape }}">
+<meta property="og:site_name" content="{{ site.title | escape }}">
+<meta property="og:locale" content="ja_JP">
+<meta property="og:type" content="{% if page.qiita_id %}article{% else %}website{% endif %}">
+<meta property="og:title" content="{{ og_title | escape }}">
+<meta property="og:description" content="{{ og_description | escape }}">
+<meta property="og:url" content="{{ og_url | escape }}">
+<meta property="og:image" content="{{ og_image | escape }}">
+<meta property="og:image:alt" content="{{ og_title | escape }}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ og_title | escape }}">
+<meta name="twitter:description" content="{{ og_description | escape }}">
+<meta name="twitter:image" content="{{ og_image | escape }}">
+{% if page.qiita_created %}<meta property="article:published_time" content="{{ page.qiita_created | escape }}">{% endif %}
+{% assign modified = page.qiita_updated | default: page.last_updated %}
+{% if modified %}<meta property="article:modified_time" content="{{ modified | escape }}">{% endif %}

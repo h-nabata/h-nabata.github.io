@@ -1,0 +1,551 @@
+{
+  "/grrm-tips.html": {
+    "title": "GRRM Tips（利用上の注意点など）",
+    "description": "反応経路自動探索プログラムGRRMの利用上の注意点、入力設定、計算環境に関する技術メモです。",
+    "image": "/top.png"
+  },
+  "/grrm-input-check.html": {
+    "title": "GRRM入力チェック機能",
+    "description": "Gaussian形式を含む GRRM の .com / .inp テキストを対象に、よくある記述ミスを静的に確認します。計算プログラムの文法全体や、電子状態計算の収束・化学的妥当性を保証するものではありません。",
+    "image": "/top.png"
+  },
+  "/mynote.html": {
+    "title": "Nabata's personal page - My Note",
+    "description": "計算化学・プログラミング・論文執筆などの参考資料と備忘録をまとめています。",
+    "image": "/top.png"
+  },
+  "/reaction-network.html": {
+    "title": "反応経路ネットワーク表示機能",
+    "description": "GRRM が RCMC 計算で出力する 列の対応を確認してください。ヘッダーを自動判定できない場合は、列番号を選びます。 ノードにカーソルを合わせるとEQ名、エッジに合わせると対応するEaを表示します。レイアウトは連結関係を見渡すための簡易配置です。",
+    "image": "/top.png"
+  },
+  "/toc.html": {
+    "title": "Nabata's personal page - Table of Contents",
+    "description": "研究・技術ノート、GRRM関連ツール、分子構造エディタ、Qiita記事ミラーへのリンクをまとめた目次です。",
+    "image": "/top.png"
+  },
+  "/": {
+    "title": "Nabata's personal page",
+    "description": "Hitoshi Nabataの個人ホームページ。計算化学・反応経路探索、プログラミング、ローカルLLMの研究・技術ノートを掲載しています。",
+    "image": "/top.png"
+  },
+  "/search.html": {
+    "title": "サイト内検索",
+    "description": "ホームページ内の技術ノート、ツール、Qiita記事ミラーを検索できます。",
+    "image": "/top.png"
+  },
+  "/qiita/9457b0d51653c7eeab06.html": {
+    "title": "オフライン環境のユーザーローカルにgcc-14.3.0を導入する",
+    "description": "gccはC言語、C++言語、Fortran言語などの複数言語のコンパイラ群の総称である。 もともとは「GNU C Compiler」の略だったが、今は「GNU Compiler Collection」の意味で使われている。 Red Hat Enterprise Linux などの長期サポートを意図した保守的なシステムでは、組み込みで利用できる gcc のバー",
+    "image": "/top.png"
+  },
+  "/qiita/d234345c54e5eccc0cd7.html": {
+    "title": "【Linux】最新版のOpenBabelをローカルにインストールする",
+    "description": "OpenBabel は情報化学（ケモインフォマティクス）の領域で利用されるツール群のパッケージで、主にファイル・データのフォーマットを変換するために用いられます。公式のGithubリポジトリで公開されているバージョンのリストは以下。（最新版は3.1.1） 公式サイトからは古いバージョンしかインストールできないため、最新版を導入するにはソースコードからコンパイ",
+    "image": "/assets/qiita/images/34cb19f6cd44693a6700d4b9.png"
+  },
+  "/qiita/290a575e07a2e56c7c94.html": {
+    "title": "簡単なスラブモデルの作り方",
+    "description": "※本稿は2023年11月24日に開催された「 GRRMチュートリアル2023 」の表面モデル作成パートの内容について、講演者自身が要点を再録したものである。 スラブモデルは計算化学において表面系を記述する際に広く利用されるモデルである。特に表面科学や触媒反応の分野において、固体材料の表面をシミュレーションし、研究するために用いられる計算手法として用いられてい",
+    "image": "/assets/qiita/images/63090da9db91f47eab9afbb4.png"
+  },
+  "/qiita/ada3098b933e17613dca.html": {
+    "title": "アイリングの式から反応速度定数を見積もる",
+    "description": "遷移状態理論の範囲において、反応速度定数はアイリングの式（H. EYRING, J. Chem. Phys. 1935 , 3, 107–115.）に基づいて温度$T$と活性化エネルギー$\\Delta G^{\\ddagger}$の関数として与えられます。 【補足】 透過係数 $\\varGamma$ は簡単のために$1$とすることが多いですが、トンネル効果を簡",
+    "image": "/top.png"
+  },
+  "/qiita/a17b41fd4e72b2855e8a.html": {
+    "title": "【Python】igraphでグラフ・ネットワークを生成・描画する",
+    "description": "グラフの作成・操作を行うライブラリ（内部はC/C++系）。2023年2月現在の最新バージョンは 0.10.4 。 【参考】 公式サイト RやPythonで利用可能なigraphパッケージが公開されている。今回はPython版を利用する。 公式ドキュメント ）。 かつてはPyPIにおいて \"igraph\" と \"python-igraph\" という2つのパッケ",
+    "image": "/assets/qiita/images/bf45c6f4ebed2a5db4d7fe3c.png"
+  },
+  "/qiita/869c1366be0ca6f0b619.html": {
+    "title": "【LaTeX: fancyhdr】表紙のヘッダー/フッターを無効化する",
+    "description": "Overleafで文書を作成するときに調べたので共有します。 TeXのfancyhdrパッケージを使用した際に表紙のヘッダー/フッターを無効化する書き方の一例を示します。 重要な部分は ページの制御は",
+    "image": "/top.png"
+  },
+  "/qiita/33bff630ef0750d07076.html": {
+    "title": "汎用NNP「OrbMol-v2」の潜在電荷（latent charge）の挙動を観察する",
+    "description": "気象庁に先んじて 全国的な梅雨明けが宣言された ので、少し気が早いが夏休みの自由研究に取り組んでみた。本稿では機械学習ポテンシャル「OrbMol-v2」の特性について扱う。 近年、分子や材料のポテンシャルエネルギー面（PES; potential energy surface）を高速に予測する汎用機械学習原子間ポテンシャル（uMLIP; universal ",
+    "image": "/assets/qiita/images/d311ce4b6c0b674b5ba42f9a.png"
+  },
+  "/qiita/3ffdabb45cb08eaab2f0.html": {
+    "title": "【Python】resting stateの存在する化学反応の速度論シミュレーション",
+    "description": "化学反応の速度論シミュレーションでは、反応速度式（レート方程式）を連立して数値的に解く、という操作が一般に行われます。この際、4次のルンゲ＝クッタ法（RK4法）が用いられることが多く、先日これに関する記事を投稿しました。 本稿では、より複雑な反応素過程からなる系の速度論シミュレーションを実施します。 \"resting state\"（休息状態）とは、副反応によ",
+    "image": "/assets/qiita/images/f41fc73278984ec3f7e23e04.png"
+  },
+  "/qiita/96d6a9068cb7c6ad26ae.html": {
+    "title": "SeleniumでSlackに自動でログインする",
+    "description": "ブラウザの操作を自動化するライブラリ「 Selenium 」を使って Slack のログインを自動化するプログラムの一例です。 セキュリティの問題が生じない範囲で適宜改変してご利用下さい。",
+    "image": "/top.png"
+  },
+  "/qiita/854076d3437b70990cb3.html": {
+    "title": "Goで実装する並列処理（Hello, world!を10000回出力してみる）",
+    "description": "Goのバージョン: go1.15.2 windows/amd64 PCの環境: Windows 10 Pro / Intel(R) Core(TM) i5-6300U CPU @2.40GHz (コア数:2, プロセッサ数:4) プログラムはテキストエディタAtom上で動かしており、下記のコードからは時間計測用の部分を除いています。下記の実行時間はコンパイル",
+    "image": "/top.png"
+  },
+  "/qiita/ef8e2d900b1ae5bd99b1.html": {
+    "title": "【Atom】gpp-compilerでC、C++を手軽に実行する",
+    "description": "テキストエディタ「 Atom 」上でCやC++の簡単なプログラムを手軽に（コンパイルの手間を省いて）動かせないか思い、「 gpp-compiler 」というプラグインを導入した際の個人的なメモです。 gpp-compilerはCとC++の両方に対応したコンパイラがパッケージになっているものです。いちいちコンパイルする手間が省けるので便利ですが、単品では動かな",
+    "image": "/top.png"
+  },
+  "/qiita/2a8283c99fe7493aaf35.html": {
+    "title": "【Python】距離行列の計算と実行時間",
+    "description": "距離行列（distance matrix）とは、データセットに含まれる各要素間の距離を表した行列のことです。データ解析、クラスタリング、機械学習の前処理など、さまざまな場面で広く用いられています。 本記事ではランダムに生成した3次元データを用いてPython環境で距離行列を作成し、実行時間を比較します。 numpyには距離行列を与える関数が組み込み関数として",
+    "image": "/top.png"
+  },
+  "/qiita/15f7856b036f055a431b.html": {
+    "title": "【ローカルLLM】Qwen2.5-Coder:14Bによる計算化学ワークフローのJSON化を検証する",
+    "description": "本稿ではローカルLLMを、単なるチャット相手ではなく、計算化学ワークフローを制御するためのJSON生成器として使えるかを検証した。具体的には、Ollama上で qwen2.5-coder:14b 1 を動かし、以下の観点について評価した。 この記事では、導入手順、検証用スクリプト、テストプロンプト、評価観点、結果の整理方法をまとめる。 計算化学やマテリアルズ",
+    "image": "/top.png"
+  },
+  "/qiita/7688354b917e18c0b000.html": {
+    "title": "Go言語初心者がGo言語をさわってみた",
+    "description": "Windowsユーザー＆Goに初めて触れるor久々に触れる人が流し読む用のメモです。 使用しているGoのバージョンは go1.15.2 windows/amd64 で、エディタは Atom を使っています。 「 Go 」は2009年に発表されたGoogle発のプログラミング言語で、バージョン1.0が2012年に公開された、比較的最近登場した言語です。「 Go",
+    "image": "/assets/qiita/images/ea89b1844b2682f65f0f5981.png"
+  },
+  "/qiita/c1d16471bda6735a5d8a.html": {
+    "title": "RDKitを使うためにWindowsにAnaconda3を導入したときのメモ",
+    "description": "① Anaconda3をwindowsにインストール ② Anaconda3上でPython3.7系の仮想環境を構築 ③ 仮想環境でRDKitをインストール 環境： windows 10（ノートPC） RDKitを動かすのに必要な諸々のパッケージがまとまっていて、個々のパッケージを導入するよりも労力が小さくて済む。 …というわけで 公式サイト からwindo",
+    "image": "/top.png"
+  },
+  "/qiita/0d477fccb9f1e054c4a3.html": {
+    "title": "【Python】SMILESから立体異性体を全列挙する【RDkit】",
+    "description": "Pythonの RDkitライブラリ を用いてSMILESから立体異性体をxyz形式で全列挙する方法を紹介します。 RDKitが古すぎなければ正常に動作すると期待されます。Pythonのバージョンによって実行時間が変化する可能性はありますが今回は特に検証しておりません。 メントールは3個の不斉炭素を有するため、8個の立体異性体が存在します。下記プログラムによ",
+    "image": "/assets/qiita/images/d2a780a7e2777d52dea9a0e7.png"
+  },
+  "/qiita/f2a9d301a6c93efdf0b2.html": {
+    "title": "【機械学習ポテンシャル】UMA-S-1.2をGPUで動かす",
+    "description": "計算化学における「機械学習ポテンシャル」の概念については以下の記事等を参照のこと。 MetaのFairChemから機械学習ポテンシャル「UMA」のsmallモデルについて、新しいモデル（uma-s-1.2）がリリースされた。 公式リポジトリ のREADMEには以下のように記載がある。 モデルとしては拡張されているが、活性化するパラメータ数は従来と同規模に抑え",
+    "image": "/assets/qiita/images/1e809dd0ba5cfe7738b2e139.png"
+  },
+  "/qiita/a7a3cbcd1d8e6ecd04e2.html": {
+    "title": "【Python】sdf形式を経由してChemDrawの構造式からxyz座標を取得する",
+    "description": "本稿では化学構造式エディタ「ChemDraw」上で描画された複数の構造式を一括でxyzデータに変換する方法の例を紹介します。 ここでは、複数の分子の構造式を含むChemDrawファイルが存在する前提で、 という順序で、各分子のxyz形式の三次元座標データを取得します。 sdfファイルに出力された時点で分子の3次元骨格は得られるのですが、結合長や結合角が正確で",
+    "image": "/assets/qiita/images/a9ef48467d93c678daa15f41.png"
+  },
+  "/qiita/193b030a48b122907a08.html": {
+    "title": "Qiitaでアスタリスクやアンダーバーを含む数式を書くときの注意",
+    "description": "既出かもしれませんが、まとめておきます。 $\\psi_{ij}^{*}$ $\\psi_{ij}^{ } \\psi_{kl}^{ }$ $\\psi_{ij}^{ } \\psi_{kl}^{ } \\psi_{mn}^{*}$ これは、Qiita内ではアスタリスクが Italic や Bold への書式変更に利用されており、2個以上のアスタリスクを含む数式が正しく",
+    "image": "/top.png"
+  },
+  "/qiita/f18eb202bf035fb4d705.html": {
+    "title": "renameコマンドが使えないときにファイル名を一括置換するワンライナー",
+    "description": "本稿ではrenameコマンドが使えないLinux環境においてファイル名を一括置換するワンライナーの例を紹介する。 forループの使用が許容される場合は などとすればよい。拡張子が このうち、bash系のワンライナーの方が処理は速い。bashのワンライナーは、ループの中で外部プロセスを生成することなく、組み込み機能だけで処理を行うためである。 何らかの理由でf",
+    "image": "/top.png"
+  },
+  "/qiita/788f97e09c8593ac3951.html": {
+    "title": "WSL環境にfairchem-coreを導入して汎用NNP「UMA」をテストする",
+    "description": "fairchem は、材料科学と量子化学の分野で使用される、FacebookのAI研究チーム（Facebook AI Research, FAIR; 現在のMeta AI）が開発したソフトウェアプラットフォームである。 FAIR Chemistry（フェア・ケミストリー）はMeta（旧Facebook）の人工知能研究所「FAIR」の化学研究部門である。 以下",
+    "image": "/assets/qiita/images/5b7fd382602847cc1fba0289.png"
+  },
+  "/qiita/e191f5106ce1c2cd18f3.html": {
+    "title": "ローカル環境に導入したdeepseek-r1をCLIで動かしてみる",
+    "description": "最近、 DeepSeek をローカルで動かすのが世間で流行っているので試してみました。ここではLinux環境にOllama（ローカルLLM実行環境）を導入してCLIで動かします。 Ollama は ローカル環境で LLM を動作させるオープンソースのツール です。 公式サイト: https://ollama.com GitHub レポジトリ: https:/",
+    "image": "/top.png"
+  },
+  "/qiita/3e9c79fa462fb7716d71.html": {
+    "title": "【Python】4次ルンゲ＝クッタ法で化学反応速度論シミュレーション",
+    "description": "ルンゲ＝クッタ法 （runge kutta method）は微分方程式を数値的に解く手法の一つで、そのプログラムの実装の容易さから時間発展追跡の簡便法として知られています。特に4次のルンゲ＝クッタ法（RK4法）は計算コストと計算精度の兼ね合いから広く用いられています。RK4法は時刻 $t$ の関数 $x = x(t)$ の常微分方程式 について、以下の式を用",
+    "image": "/assets/qiita/images/13c1727ebc66079895cf8101.png"
+  },
+  "/qiita/c3da4b35553618037dca.html": {
+    "title": "xyz座標の結晶構造をcif形式に変換する",
+    "description": "本稿は計算化学等で周期境界条件を用いた計算を行っている方向けのメモです。 並進ベクトル（Translation Vectors: TV）を含む3次元座標からcif形式のファイルを生成する方法を述べます。 以下のような直交座標系（Cartesian coordinate system）で記述された構造をcif形式に変換するには分率座標系（fractional ",
+    "image": "/top.png"
+  },
+  "/qiita/836492786d57c2ae78ea.html": {
+    "title": "【2026年最新版】主要出版社の投稿規定における生成AIの取り扱い",
+    "description": "論文執筆の際、英文の推敲にAIを使う場合と、論文に掲載する図をAIで作る場合では、同じ「AI利用」でも投稿規定上の扱いが異なることがあります。図版についても、本文中の模式図、TOC画像／Graphical Abstract（以下、必要に応じてGAと表記）、雑誌の表紙（カバーアート）では、それぞれ異なる条件が設けられている場合があります。 例えばACSでは、A",
+    "image": "/top.png"
+  },
+  "/qiita/70d7d6ed64e91fce8675.html": {
+    "title": "【ローカルLLM】続・精選問題による国産LLM「LLM-jp-4-33B」と「Qwen3.8-27B」の推論性能比較（RTX 5070 Ti + RTX 3070 Ti）",
+    "description": "「Qwen3.8-27B」のリリースに続いて国産LLM「LLM-jp-4-33B-thinking」がリリースされたので、両者の推論能力を比較したいと考え、いくつかの問題セットを用意して簡単な評価を実施したのが前回の記事の内容であった。 前回の検証で問題になったのが、用意した問題が 両モデルを比較するベンチマークテストとしては簡単すぎた ことである。実際、前",
+    "image": "/assets/qiita/images/61d5053a2ad07698e3cff8ba.png"
+  },
+  "/qiita/efb8c8ea0ccf5fccc1ab.html": {
+    "title": "WSL-Ubuntu + RTX 5070 Ti で fairchem-core (UMA) をGPUで動かす",
+    "description": "デスクトップPCのGPUを RTX 3070 Ti → RTX 5070 Ti に換装したので、性能のチェックを兼ねてMetaの UMAポテンシャル を動かしてみる。以前の記事に倣い、最新の fairchem-coreライブラリ を導入する。 本稿ではWSL-Ubuntuのセットアップ等には触れていないので、必要に応じて他の記事を参考にされたい。 fairc",
+    "image": "/assets/qiita/images/a2698471d96d8462fbf7c556.png"
+  },
+  "/qiita/b80484406e839ee6507b.html": {
+    "title": "【ローカルLLM】国産LLM「LLM-jp-4-33B」と「Qwen3.8-27B」の推論性能比較（RTX 5070 Ti + RTX 3070 Ti）",
+    "description": "より高度な推論能力を試すベンチマークでの検証結果を以下の記事で公開した。 先週、LLMCが大規模言語モデル 「LLM-jp-4 33B」 を公開した。これは約332億パラメーターのDense型のモデルで、今年4月に公開された MoE型のモデル のDense版に対応する。 以前、性能比較検証に関してLLMCが以下のような声明を発表している。確かに、推論性能比較",
+    "image": "/assets/qiita/images/cf8b5459bd4e0340ece2cee7.png"
+  },
+  "/qiita/3719ecab1dc804e30606.html": {
+    "title": "seabornを使うのを諦めた人のメモ",
+    "description": "Windows10；Python 3.7.9；パッケージはPyPIを経由して導入（condaではない） seabornをインストールし、いざ使おうと思ったら以下のエラーメッセージに遭遇。seabornのインポートに失敗しているようです。 後から入れたseabornと他のモジュールとのバージョン不整合が原因か？と考えて、numpy、scipy、pandas、m",
+    "image": "/top.png"
+  },
+  "/qiita/8ba25944017b64207792.html": {
+    "title": "【LLM】ベンチマーク用オリジナル上級問題（v1）",
+    "description": "本稿の問題セットを用いたベンチマーク結果を以下の記事にまとめている。 LLMの高度な推論性能テストのために8分野・各8問の計64問からなるオリジナルの上級問題リストを作成した。 ベンチマーク用の問題はすべて英語を入力言語とした。ただし、固有名詞や文学に関する問題では文中に漢字や日本語を含む場合がある。出力言語に関する指示はプロンプトに含めていない。 ベンチマ",
+    "image": "/top.png"
+  },
+  "/qiita/0c07792d4ef6f69b4e18.html": {
+    "title": "scikit-learn導入時にOSErrorが出たときのメモ",
+    "description": "ちょっとした回帰の実装をしてみようと思い、scikit-learnをpipでローカル環境(Windows10)に導入することにしました。 しかしエラー。 エラーの原因はインストール先のパスが長すぎることらしいです。 Windows10ではデフォルトでパス名の文字数が260文字までに制限されているので、以下の投稿を参考に文字数制限を解除しました。 やったことは",
+    "image": "/top.png"
+  },
+  "/qiita/2499d24fc29fa7f45844.html": {
+    "title": "【ローカルLLM】LLM-jp-4.1-33Bの推論性能検証（RTX 5070 Ti + RTX 3070 Ti）",
+    "description": "9月28日にLLM-jpの新バージョン「 LLM-jp-4.1 」がリリースされた。 公開されたモデルは以下の通り。 公式のGGUFファイル も提供されている。 今回リリースされたLLM-jp-4.1では、STEM分野の性能向上、ツール呼び出しへの新規対応、回答の簡潔化が図られている。本稿ではLLM-jp-4.1-33B-thinkingについて、STEM分",
+    "image": "/assets/qiita/images/558af4753b4362ce16f29352.png"
+  },
+  "/qiita/80e75333ecb952ae2979.html": {
+    "title": "【ローカルLLM】Qwen3.8-27BをデュアルGPUで高速化する",
+    "description": "以前の記事では、Qwen3.8-27BをRTX 5070 Ti（VRAM 16 GB）上でOllamaを用いてローカル実行し、推論性能を検証した。 Qwen3.8-27BのOllama公式Q4量子化モデルは、RTX 5070 Tiの16 GB VRAMだけではモデル全体をGPU上に保持できず、一部がCPU/RAM側へオフロードされる。 前回の環境では、 とい",
+    "image": "/top.png"
+  },
+  "/qiita/11eb4c14f97d4f761445.html": {
+    "title": "【Linux/Python】Psi4とRDkitの導入～電荷と双極子モーメントの算出",
+    "description": "本稿の目的は「 xyz形式で与えられた任意の化合物の3次元座標データをもとに、電荷や双極子モーメントを求めるPythonスクリプトを作成すること 」です。 本稿では、既にAnaconda3で構築したPython3系の存在するUbuntu環境に各種パッケージをインストールしていきます。 Windowsについては「 RDKitを使うためにWindowsにAnac",
+    "image": "/top.png"
+  },
+  "/qiita/129f1dc2ca00332fc971.html": {
+    "title": "結晶構造から特定の指数面を切り出す",
+    "description": "本稿は 計算化学 に関する内容で、VESTAプログラムを利用し、結晶構造（この場合、特にcif形式のファイル）から特定の指数の面を切り出してスラブモデルを作成する手順の例を示すものです。細かい用語の解説は特にしていません。 例えば「立方体の」ユニットセルをもつ結晶の$(111)$面は下図のようになっています。ここでは各頂点が$xyz$座標系において$\\mat",
+    "image": "/assets/qiita/images/866c3a2aae31a837f536c8ba.png"
+  },
+  "/qiita/7cec84f02db8bd1ca754.html": {
+    "title": "Selenium経由でSlackのDMを取得･送信･スクショする",
+    "description": "ブラウザの操作を自動化するライブラリ「 Selenium 」を使って Slack へ自動でログインし、特定のメンバーのDM欄からテキストを自動で取得・送信したり、スクリーンショットを保存したりするプログラムの一例です。 先日の投稿の上位互換プログラムです。 セキュリティの問題が生じない範囲で適宜改変してご利用下さい。 Slack内のクラス名などは予告なく変更",
+    "image": "/top.png"
+  },
+  "/qiita/6bdf5972720154a2f271.html": {
+    "title": "Juliaで3Dのgifアニメを作りたい！",
+    "description": "Juliaで3Dのgifアニメを作るために格闘したのでメモ。 使用しているJuliaは v1.5.1 で、エディタは Atom を使っています（筆者はWindowsユーザーです）。 Julia で出力された3D画像について色々と調べていると次のページに巡り合いました。 \"Depth\" - cormullion’s blog https://cormullio",
+    "image": "/top.png"
+  },
+  "/qiita/77e54041bf7cc0086248.html": {
+    "title": "【LLM】MCPを「役所での住所変更」で簡単に理解する",
+    "description": "LLMを使ったAIエージェントの文脈で、近年 MCP という用語を見かけることが多くなりました。 MCPとは、 Model Context Protocol の略です。簡単に言えば、 LLMが外部のツールやデータベース、アプリケーションと安全かつ標準化された形でやり取りするための仕組み です。これはAnthropicが2024年11月25日に正式発表した規格",
+    "image": "/assets/qiita/images/f2d3fb633cf5a745ee906bdd.png"
+  },
+  "/qiita/a5f0d3b6b13910c734fd.html": {
+    "title": "Windows 11 + WSL2 のPC 2台とRaspberry PiをLAN内で相互SSH接続する",
+    "description": "手元に、 があり、これら3台を同一LAN内で相互にSSH接続できるよう設定した際のメモです。 WSL2の PCは3台とも同じルーターに接続しています。 まず、 Pi側では既にSSHを有効化していた。未設定の場合は sudo systemctl enable --now ssh などで有効化する。 最初はアクセス可能なのが という状態でした。この原因はWind",
+    "image": "/top.png"
+  },
+  "/qiita/0b99e16b8e0ed4e32a82.html": {
+    "title": "結晶格子の並進ベクトルの座標計算（Calculate xyz coordinates of translation vectors from cif format）",
+    "description": "本稿は計算化学等で周期境界条件を用いた計算を行っている方向けのメモです。 並進ベクトル（Translation Vectors: TV）の長さと角度が既知であるユニットセルについて、格子点の3次元座標（TVの成分）を求める計算について述べます。結晶構造データベースから取得したCIFファイルに記載された結晶構造をxyzに変換するなどの際にご参照頂ければ幸いです",
+    "image": "/assets/qiita/images/1a710bf25d95fe8b16da80c0.png"
+  },
+  "/qiita/2cd7d5e3d182647209f0.html": {
+    "title": "GRRMのPython外部計算を常駐サーバー化して高速化する",
+    "description": "GRRMプログラム などの反応経路自動探索ソフトウェアで網羅的な反応経路探索を行う場合、エネルギー・勾配計算の要求回数は非常に膨大です。大規模な反応経路探索の場合は数百万～数千万回以上の一点計算が要求されるため、一点あたりではごく僅かな時間短縮であっても、トータルでは大幅な計算コストの削減に繋がります。 外部計算エンジンをPythonで実装していると、一点計",
+    "image": "/top.png"
+  },
+  "/qiita/f2849d2d1b69f2415de3.html": {
+    "title": "Julia初心者がJuliaをさわってみた",
+    "description": "Windowsユーザー＆Julia触りたての方（Pythonはある程度使える想定）向けのメモです。 使用しているJuliaは v1.5.1 で、エディタは Atom を使っています。 【2021/12/15加筆；v1.7.0でも同様に動作することを確認しました】 「 Julia 」は2012年に公開された比較的若いプログラミング言語で、Pythonのような書",
+    "image": "/assets/qiita/images/10912d56f3a70ec6602b6014.png"
+  },
+  "/qiita/": {
+    "title": "Qiita記事ミラー・バックアップ",
+    "description": "筆者のQiita公開記事を分野別に整理したミラーです。本文・画像・原文Markdownをバックアップしています。",
+    "image": "/top.png"
+  },
+  "/qiita/3e83d9b0a908fb6bcf50.html": {
+    "title": "Linux mint入りのSSDを追加してWindowsとデュアルブートする",
+    "description": "Windows環境がインストールされたデスクトップPCに、Linux mint環境をインストールしたSSDを新たに付け足してデュアルブートできるようにした際のメモです。 マザーボードはASRock製で、biosのバージョンは以下の通り。 SSDとマザーボードを接続するSATAケーブルはマザーボードの付属品を使い、SSDに電力を供給する電源ケーブルは電源ユニッ",
+    "image": "/top.png"
+  },
+  "/qiita/100057e9823f9878eeb9.html": {
+    "title": "【Python】png,jpeg,gif画像をeps形式に変換する",
+    "description": "PillowライブラリのImageモジュールにより，png，jpeg，gifなどの画像をeps形式に変換することができます． Pillowをインストールしているのであれば，怪しいフリーソフトをダウンロードする必要はありません． ダウンロードフォルダ内にある 'ABC.png', 'DEF.jpg', 'GHI.gif' という3つの画像をすべてeps形式に変",
+    "image": "/top.png"
+  },
+  "/qiita/844912c4cc1ab246d6a1.html": {
+    "title": "mplfinanceでドル円（USDJPY）の年足チャートを描く",
+    "description": "Pythonを使って以下のようなローソク足チャートを描画することができる。最近は円安が話題なので、このエントリではやや見慣れないドル円（USDJPY）の「年足」を描画してみよう。 今回用いる「 mplfinance 」は金融系の画像操作に特化したライブラリで、 ドル円の価格データ デフォルトではバー表示だが、 mplfinanceはラベル名を大文字小文字で区",
+    "image": "/assets/qiita/images/a8515e8ab134d2fd866e6137.png"
+  },
+  "/qiita/390b3558be49c30f85a7.html": {
+    "title": "【ローカルLLM】Qwen3.8-27Bの推論性能をテストする（WSL2 + Ollama + RTX 5070 Ti）",
+    "description": "Qwen3.8-27B が公開されたのでローカルLinux環境で動かしてみる。 Hugging Faceからも Qwen3.8-27B-GGUF:Q4_K_M が出ているが、Ollama上で動作した際のThinkモードでの出力の切り分けに問題があったため、ここでは利用しなかった。 Ollama導入済みの場合、以下でモデルをダウンロード可能。 Ollamaが未",
+    "image": "/top.png"
+  },
+  "/qiita/e6892c62175bfd4dfd9f.html": {
+    "title": "MobaXtermを複数インスタンス起動する",
+    "description": "SSHクライアントソフト「MobaXTerm」において、デフォルト設定の場合、複数のターミナルをタブとして開けますが、ターミナルタブを切り離してもSFTPブラウザ（SSH browser）は付いてきません。ターミナルの切り替え時にSFTPブラウザが切り替わるのを待つ必要があり、カレントディレクトリを頻繁に変更するような作業の際に面倒な場合があります。 そこで",
+    "image": "/assets/qiita/images/84ee501e50af9c8a7bc74fe0.png"
+  },
+  "/qiita/a5d8cb9589d8a7347321.html": {
+    "title": "【Anaconda3】仮想環境で起動したAtomからコードを直接実行する（RDKit）",
+    "description": "以前、RDkitという化学系ライブラリを使用するためにPython3.7系の仮想環境を作成しました（RDkitがPython3.8以上に対応していないため）。このような仮想環境下でAtomエディタから直接スクリプトを実行する方法を調べたのでメモしておきます。 ※ここでは既にRDkit用の仮想環境が準備できているものとします。仮想環境を構築する方法については過",
+    "image": "/top.png"
+  },
+  "/TheoChem25/X1-Me_X2-CF3_f0SC_plot.html": {
+    "title": "反応経路のエネルギープロファイル",
+    "description": "Hitoshi Nabataの研究・技術ノート。反応経路のエネルギープロファイル",
+    "image": "/top.png"
+  },
+  "/TheoChem25/X1-Me_X2-CF3_f100SC_plot.html": {
+    "title": "反応経路のエネルギープロファイル",
+    "description": "Hitoshi Nabataの研究・技術ノート。反応経路のエネルギープロファイル",
+    "image": "/top.png"
+  },
+  "/TheoChem25/X1-Me_X2-CF3_f200SC_plot.html": {
+    "title": "反応経路のエネルギープロファイル",
+    "description": "Hitoshi Nabataの研究・技術ノート。反応経路のエネルギープロファイル",
+    "image": "/top.png"
+  },
+  "/TheoChem25/X1-Me_X2-CF3_f300SC_plot.html": {
+    "title": "反応経路のエネルギープロファイル",
+    "description": "Hitoshi Nabataの研究・技術ノート。反応経路のエネルギープロファイル",
+    "image": "/top.png"
+  },
+  "/TheoChem25/list.html": {
+    "title": "反応経路のエネルギープロファイル一覧",
+    "description": "X1=Me X2=CF3 Field=x+0 X1=Me X2=CF3 Field=x+100 X1=Me X2=CF3 Field=x+200 X1=Me X2=CF3 Field=x+300 X1=Me X2=CF3 Field=x+400",
+    "image": "/top.png"
+  },
+  "/TheoChem25/X1-Me_X2-CF3_f400SC_plot.html": {
+    "title": "反応経路のエネルギープロファイル",
+    "description": "Hitoshi Nabataの研究・技術ノート。反応経路のエネルギープロファイル",
+    "image": "/top.png"
+  },
+  "/molecule-visualizer/": {
+    "title": "分子構造エディタ | Molecule Studio",
+    "description": "Shift＋左ドラッグ：視点を保ってロール（左右にドラッグ）。視野角が大きいほど遠近感が強くなります。構造緩和は現在の結合次数に基づく概略調整です。 座標は Å。XYZの結合は原子間距離からの推定です。結合次数・配位の妥当性は確認してください。 XYZ / 拡張XYZ / MOL V2000・V3000 / SDF / CIF / PDB / MOL2 / ",
+    "image": "/top.png"
+  },
+  "/polymer/chainmodel_derivation.html": {
+    "title": "高分子鎖の形と大きさ",
+    "description": "※本稿は「基礎高分子科学 第2版」の内容をフォローするノートである。 主鎖原子を端から\\(0,\\ 1,\\ \\cdots ,\\ N\\)と番号付けし、\\(i-1\\)番目と\\(i\\)番目の主鎖原子を繋ぐ結合ベクトルを\\(\\boldsymbol{l}_i\\)とすると、両端間距離ベクトル\\(\\boldsymbol{R}\\)は と表せる。平均二乗両端距離は次の式で表せる",
+    "image": "/top.png"
+  },
+  "https://ai.meta.com/blog/meta-fair-science-new-open-source-releases/": {
+    "title": "Sharing new breakthroughs and artifacts supporting molecular property prediction, language processing, and neuroscience",
+    "description": "Meta FAIR is sharing new research artifacts that highlight our commitment to advanced machine intelligence (AMI) through focused scientific and academic progress."
+  },
+  "https://aimedchem.hatenablog.com/entry/2023/05/08/233055": {
+    "title": "RDKit ã®åºæ¬çãªä½¿ãæ¹ - ãæ³¨æã¯ãªã¼ãååç©ã§ããï¼ãå»è¬åå­¦é²ã«ãã",
+    "description": "RDKit ã¯ã±ã¢ã¤ã³ãã©ããã£ã¯ã¹ãè¡ãä¸ã§ãå¿ è¦ä¸å¯æ¬ ãªãã¼ã«ã§ãã å¤§ä½ã®ãã¨ã¯ RDKit ã§åºæ¥ã¦ãã¾ãã®ã§ãããå ¬å¼ãã­ã¥ã¡ã³ãããã¡ããã¡ããããã«ããã¨ããè´å½çã",
+    "image": "/assets/ogp/images/767918a3e4c320766944531b.png"
+  },
+  "https://arxiv.org/abs/2506.23971v2": {
+    "title": "UMA: A Family of Universal Models for Atoms",
+    "description": "The ability to quickly and accurately compute properties from atomic simulations is critical for advancing a large number of applications in chemistry and materials science including drug discovery, energy storage, and semiconductor manufac",
+    "image": "/assets/ogp/images/12d01bd52f6047c46a48a9cb.png"
+  },
+  "https://blog.mobatek.net/post/mobaxterm-configuration-settings/": {
+    "title": "MobaXterm configuration settings · Mobatek blog",
+    "description": "Set some advanced parameters directly into MobaXterm configuration file",
+    "image": "/assets/ogp/images/2346e793384255eac17c0cc1.jpg"
+  },
+  "https://docs.ollama.com/faq": {
+    "title": "FAQ - Ollama",
+    "description": "",
+    "image": "/assets/ogp/images/a7f7df3363c8b2d3197621a7.png"
+  },
+  "https://future-chem.com/psi4-wfn-analysis/": {
+    "title": "計算化学における電荷：Psi4を用いた電子密度解析",
+    "description": "「計算手法とエネルギー・最適化構造の関係：コンフォメーション探索における注意点」という記事では，Psi4を用いて様々な計算手法を用いてエネルギー計算を行うことで，計算手法によって考慮できる相互作用が異なることを説明しました。その結果構造最適...",
+    "image": "/assets/ogp/images/9debfcdad74034b3222bb4da.png"
+  },
+  "https://future-chem.com/rdkit-intro/": {
+    "title": "RDKitでケモインフォマティクスに入門",
+    "description": "ケモインフォマティクスとは化学情報学とも呼ばれる分野で，コンピュータ・情報科学を用いて化学上の問題を取り扱う学問領域になります．そのためにはコンピュータで化合物の構造・性質などを取り扱う必要がありますが，人間とコンピュータでは化合物の認識方...",
+    "image": "/assets/ogp/images/ec7d615345fae84a6a29e67f.png"
+  },
+  "https://gcc.gnu.org/pub/gcc/infrastructure/": {
+    "title": "Index of /pub/gcc/infrastructure",
+    "description": ""
+  },
+  "https://gcc.gnu.org/pub/gcc/releases/": {
+    "title": "Index of /pub/gcc/releases",
+    "description": ""
+  },
+  "https://github.com/facebookresearch/fairchem": {
+    "title": "GitHub - facebookresearch/fairchem: FAIR Chemistry's library of machine learning methods for chemistry",
+    "description": "FAIR Chemistry's library of machine learning methods for chemistry - facebookresearch/fairchem",
+    "image": "/assets/ogp/images/1ef9e9e8f62693b6d12e2854.png"
+  },
+  "https://github.com/h-nabata/LLM/tree/main/Qiita/LLM-jp": {
+    "title": "LLM/Qiita/LLM-jp at main · h-nabata/LLM",
+    "description": "Contribute to h-nabata/LLM development by creating an account on GitHub.",
+    "image": "/assets/ogp/images/3418aff5152745478a8ef9f8.png"
+  },
+  "https://github.com/h-nabata/LLM/tree/main/Qiita/LLM-jp/local_llm_hard_benchmark_v1_0": {
+    "title": "LLM/Qiita/LLM-jp/local_llm_hard_benchmark_v1_0 at main · h-nabata/LLM",
+    "description": "Contribute to h-nabata/LLM development by creating an account on GitHub.",
+    "image": "/assets/ogp/images/3418aff5152745478a8ef9f8.png"
+  },
+  "https://github.com/h-nabata/LLM/tree/main/Qiita/LLM-jp/local_llm_hard_benchmark_v1_0/LLM-jp-4.1": {
+    "title": "LLM/Qiita/LLM-jp/local_llm_hard_benchmark_v1_0/LLM-jp-4.1 at main · h-nabata/LLM",
+    "description": "Contribute to h-nabata/LLM development by creating an account on GitHub.",
+    "image": "/assets/ogp/images/3418aff5152745478a8ef9f8.png"
+  },
+  "https://github.com/h-nabata/MLIP/tree/main/test/orbmol/latent_charge_test": {
+    "title": "MLIP/test/orbmol/latent_charge_test at main · h-nabata/MLIP",
+    "description": "Machine Learning Interatomic Potentials. Contribute to h-nabata/MLIP development by creating an account on GitHub."
+  },
+  "https://github.com/openbabel/openbabel/releases": {
+    "title": "Releases · openbabel/openbabel",
+    "description": "Open Babel is a chemical toolbox designed to speak the many languages of chemical data. - openbabel/openbabel",
+    "image": "/assets/ogp/images/67a22df3a0a784b7b904dfc5.png"
+  },
+  "https://huggingface.co/Orbital-Materials/orbmol-v2/blob/main/README.md": {
+    "title": "README.md · Orbital-Materials/orbmol-v2 at main",
+    "description": "We’re on a journey to advance and democratize artificial intelligence through open source and open science.",
+    "image": "/assets/ogp/images/595297ce098b0366bfaccb0b.png"
+  },
+  "https://huggingface.co/facebook/UMA": {
+    "title": "facebook/UMA · Hugging Face",
+    "description": "We’re on a journey to advance and democratize artificial intelligence through open source and open science.",
+    "image": "/assets/ogp/images/f6270b3b6375de7e44532b2e.png"
+  },
+  "https://huggingface.co/ggml-org/Qwen3.8-27B-GGUF/tree/main": {
+    "title": "ggml-org/Qwen3.8-27B-GGUF at main",
+    "description": "We’re on a journey to advance and democratize artificial intelligence through open source and open science.",
+    "image": "/assets/ogp/images/de65c13e75aa120b14ca6cd1.png"
+  },
+  "https://igraph.readthedocs.io/en/stable/tutorials/index.html": {
+    "title": "Gallery of Examples — igraph stable documentation",
+    "description": ""
+  },
+  "https://igraph.readthedocs.io/en/stable/tutorials/shortest_path_visualisation.html": {
+    "title": "Shortest Paths — igraph stable documentation",
+    "description": ""
+  },
+  "https://igraph.readthedocs.io/en/stable/tutorials/topological_sort.html": {
+    "title": "Topological sorting — igraph stable documentation",
+    "description": ""
+  },
+  "https://itsfoss.com/install-deepseek-r1-locally-linux/": {
+    "title": "How to Install DeepSeek R1 Locally on Linux",
+    "description": "Run the trending DeepSeek R1 model on your Linux system locally.",
+    "image": "/assets/ogp/images/87ef49b0be73d74647c790e0.png"
+  },
+  "https://llmc.nii.ac.jp/topics/llm-jp-4-1/": {
+    "title": "大規模言語モデル「LLM-jp-4.1」シリーズを公開 ｜ 国立情報学研究所 大規模言語モデル研究開発センター",
+    "description": "国立情報学研究所 大規模言語モデル研究開発センターのWebサイトです。"
+  },
+  "https://llmc.nii.ac.jp/topics/post-2756/": {
+    "title": "報道における弊所モデル「LLM-jp-4 32B-A3B」と他モデルの性能比較について ｜ 国立情報学研究所 大規模言語モデル研究開発センター",
+    "description": "国立情報学研究所 大規模言語モデル研究開発センターのWebサイトです。"
+  },
+  "https://modelcontextprotocol.io/docs/learn/server-concepts": {
+    "title": "Understanding MCP servers - Model Context Protocol",
+    "description": "",
+    "image": "/assets/ogp/images/19006fb46e5fb8094ec8c288.png"
+  },
+  "https://ollama.com/": {
+    "title": "Ollama",
+    "description": "Ollama is an API for open models. Get inference locally or in the cloud, anywhere you already work.",
+    "image": "/assets/ogp/images/1d5acb26a4e17b8a2460be53.png"
+  },
+  "https://ollama.com/library/deepseek-r1:8b": {
+    "title": "deepseek-r1:8b",
+    "description": "DeepSeek-R1 is a family of open reasoning models with performance approaching that of leading models, such as O3 and Gemini 2.5 Pro.",
+    "image": "/assets/ogp/images/1d5acb26a4e17b8a2460be53.png"
+  },
+  "https://ollama.com/library/qwen3.8": {
+    "title": "qwen3.8",
+    "description": "Qwen3.8 delivers substantial gains across coding, professional work, research, and long-horizon agentic tasks.",
+    "image": "/assets/ogp/images/1d5acb26a4e17b8a2460be53.png"
+  },
+  "https://psicode.org/psi4manual/master/build_obtaining.html": {
+    "title": "Obtaining PSI4",
+    "description": ""
+  },
+  "https://qiita.com/MasafumiTsuyuki/items/73af68e94b14447a3d74": {
+    "title": "OpenBabelの最新版をソースコードからコンパイルしてインストールする方法 - Qiita",
+    "description": "はじめに こんにちは，(株)日立製作所 研究開発グループ サービスコンピューティング研究部の露木です。 今回はOpenBabelプログラムのインストール方法を簡単に紹介します。OpenBabelは情報化学 (ケモインフォマティクス) 分野の各種計算に役立つツールボックスで...",
+    "image": "/assets/ogp/images/4af28846f46ecce26b73b389.jpg"
+  },
+  "https://qiita.com/PlanetMeron/items/63ac58898541cbe81ada": {
+    "title": "Qiitaの数式チートシート - Qiita",
+    "description": "きれいな数式がかけると見るのも書くのも気持ちがいいですよね！ QiitaではMathJaxというライブラリを使っていて、ブラウザ上で美しい数式を見ることができます。 MathJaxにおける数式の記述方法はTeX記法に則っています。 以下Qiitaにおける数式を書くためのチー...",
+    "image": "/assets/ogp/images/6e9b844ee0d1ff334e658cf2.jpg"
+  },
+  "https://qiita.com/kuchida1981/items/d028940ade41096490de": {
+    "title": "自分でソフトウェアをビルド・インストールするときに/usrや/usr/localへインストールしない - Qiita",
+    "description": "Linux系OSやcygwinに、自分でソフトウェアのソースコードを入手してきてをビルド・イ ンストールするときに、/usrや/usr/localへインストールしないようにしている。 apt-get/apt-cache 等のパッケージ管理用のが使っている領域に自分で手を...",
+    "image": "/assets/ogp/images/423dacd04aa6fac9d48985b1.jpg"
+  },
+  "https://qiita.com/kunishou/items/b1789c446770c8c97613": {
+    "title": "import torchで「OSError:[WinError 126] 指定されたモジュールが見つかりません。」が出た時の対処 - Qiita",
+    "description": "はじめに これまでテーブルデータの機械学習を中心に勉強してきましたが、画像処理についても勉強するために書籍「Pytorchによる発展ディープラーニング」を購入しました。さっそく、サンプルコードを実行するべくPytorchをインストールしましたが、コード実行時にモジュールの...",
+    "image": "/assets/ogp/images/b6dede67d6f113e1979e0829.jpg"
+  },
+  "https://qiita.com/ottantachinque/items/30aa73dd6bb949d4858b": {
+    "title": "Pythonで量子化学計算（Psi4） - Qiita",
+    "description": "はじめに Psi4とは オープンソースの量子化学計算ソフトウェアで、pythonを使って動かせる。 この記事について 使い方（主にコード）は、化学の新しいカタチ、ご注文はリード化合部ですか？を参考にさせていただきました。ありがとうございました。 （詳しい使い方などの情...",
+    "image": "/assets/ogp/images/318886fe06fa694ba3e2ea07.jpg"
+  },
+  "https://qiita.com/scapegoat_11_/items/d99cbcfea053d9fcd8d2": {
+    "title": "igraphの使い方（公式準拠） - Qiita",
+    "description": "igraphとよばれるPythonのライブラリはグラフ構造（ソーシャルなあれとか）を書く為に翼利用されるらしいということを見かけたがいかんせん日本語の情報は少ない。 そこで公式ドキュメントのチュートリアル部分の解読をしてみようといった感じ 英語からの直訳チックの表現はご愛嬌...",
+    "image": "/assets/ogp/images/674c90a2a8b2b65d0a5efb1b.jpg"
+  },
+  "https://qiita.com/taro_yamada_dewanokami/items/fea7f35b536add46ea0a": {
+    "title": "ローカルLLMのHW環境構築：RTX 4060ti(16GB)x2 + ollamaによるマルチGPU環境 - Qiita",
+    "description": "要旨 いつの間にかollamaはマルチGPU対応していたらしい ２本目のPCIeスロットが3.0かつ4レーンという低性能、更に560W電源でもTDP165WのRTX4060tix2を支えて安定稼働できた1 HW構成 RTX4060tiを２枚買ってきて、既存の古い自...",
+    "image": "/assets/ogp/images/16e4c9ebaf6b943ce24d31f8.jpg"
+  },
+  "https://qiita.com/y-shoji/items/19def45edf582646f584": {
+    "title": "[win10]Could not install packages due to an EnvironmentError: [Errno 2] No such file or directory - Qiita",
+    "description": "原因について 同じエラーが発生した人の助けになればと思いこの記事を書きました。 &gt;pip install tf-nightly-gpu-2.0-preview pip installしているときに、以下のようなエラーが出ました。 Could not install pa...",
+    "image": "/assets/ogp/images/b580c32242271275575eb0ea.jpg"
+  },
+  "https://qiita.com/yyu/items/633ae6af08aff4e5805c": {
+    "title": "Qiitaで数式やソースコードを使うときの注意 - Qiita",
+    "description": "はじめに QiitaはMathJaxをサポートするMarkdownの処理系ですが、何点か知っていないと苦労する部分があるので、僕が知っているテクニックを公開しようと思います。 エスケープシンボルを使うとき TeXでやを使う際は\\{や\\#なとすればよいので...",
+    "image": "/assets/ogp/images/c5cf08d98932d4da7d032dad.jpg"
+  },
+  "https://rdkit-users.jp/docs/release-2022-09-1.html": {
+    "title": "RDKit 2022.09.1 がリリースされました",
+    "description": "rdkit-users-jp WEB pages"
+  },
+  "https://stackoverflow.com/questions/31596125/python-dll-load-failed": {
+    "title": "PYTHON DLL load failed",
+    "description": "I usually code in Matlab but I found a nice piece of PYTHON code that I would like to use. However having downloaded the package it is proving difficult to run. I'm getting the following error:",
+    "image": "/assets/ogp/images/b2faf3e21377e839d06e6ced.png"
+  },
+  "https://stackoverflow.com/questions/37267399/importerror-cannot-import-name-numpy-mkl": {
+    "title": "ImportError: cannot import name NUMPY_MKL",
+    "description": "I am trying to run the following simple code import scipy scipy.test() But I am getting the following error Traceback (most recent call last): File \"&lt;stdin&gt;\", line 1, in &lt;module&gt; ...",
+    "image": "/assets/ogp/images/b2faf3e21377e839d06e6ced.png"
+  },
+  "https://stackoverflow.com/questions/46306266/error-import-seaborn-while-running-the-program-from-ufuncs-import-import": {
+    "title": "ERROR :import seaborn- while running the program : from ._ufuncs import * ImportError: DLL load failed: The specified module could not be found",
+    "description": "I am using Window 10 64-bit Python version : Python 3.6.2 (v3.6.2:5fd33b5, Jul 8 2017, 04:57:36) [MSC v.1900 64 bit (AMD64)] on win32 I have installed scipy : C:\\Users\\Aswathi&gt;pip install sc...",
+    "image": "/assets/ogp/images/b2faf3e21377e839d06e6ced.png"
+  },
+  "https://stackoverflow.com/questions/51037949/seaborn-import-error": {
+    "title": "Seaborn import error",
+    "description": "I have been trying to import Seaborn in Python 3.6 but I always get an error: ImportError: DLL load failed: The specified module could not be found. I tried to install 2 DLLs (msvcp71 and msvcr71...",
+    "image": "/assets/ogp/images/b2faf3e21377e839d06e6ced.png"
+  },
+  "https://tech.preferred.jp/ja/blog/%E6%A9%9F%E6%A2%B0%E5%AD%A6%E7%BF%92%E3%83%9D%E3%83%86%E3%83%B3%E3%82%B7%E3%83%A3%E3%83%AB%E3%81%AE%E8%BF%91%E4%BC%BC%E3%81%AE%E9%99%90%E7%95%8C%E3%82%92%E8%B6%85%E3%81%88%E3%81%A6%E3%80%90%E3%82%A4/": {
+    "title": "機械学習ポテンシャルの近似の限界を超えて【インターン募集】｜株式会社Preferred Networks",
+    "description": "2026年もインターンの季節がやってきました。本稿は、機械学習ポテンシャルの研究分野の紹介を兼ねたインターン募集案内です",
+    "image": "/assets/ogp/images/52178d6887f8143b87adab0f.png"
+  },
+  "https://teratail.com/questions/93662": {
+    "title": "sklearnのimportができません | teratail",
+    "description": "###前提・実現したいこと https://github.com/tensorflow/tensorflow/blob/r0.11/tensorflow/examples/tutorials/wor",
+    "image": "/assets/ogp/images/3e3e5aa79c7fc1f73d0444db.png"
+  },
+  "https://www.anthropic.com/news/model-context-protocol": {
+    "title": "Introducing the Model Context Protocol",
+    "description": "The Model Context Protocol (MCP) is an open standard for connecting AI assistants to the systems where data lives, including content repositories, business tools, and development environments. Its aim is to help frontier models produce bett",
+    "image": "/assets/ogp/images/ce7645e0b78b9d6c6a3b2da3.png"
+  },
+  "https://www.jstage.jst.go.jp/article/mssj/21/2/21_151/_article/-char/ja/": {
+    "title": "化学反応素過程の複雑ネットワークに対する速度解析",
+    "description": "本稿では，博士論文「化学反応素過程の複雑ネットワークに対する速度解析」について紹介する．近年開発が進められている反応経路自動探索法では，膨大な数の安定構造及び素過程から成る反応経路ネットワークを得ることができる．反応経路ネットワークに基づいて化学反応の反応性を議論するためには，反応速度論に基づく理論 …",
+    "image": "/assets/ogp/images/a3a493d1fb0dc1282fe722db.png"
+  },
+  "https://www.orbitalindustries.com/news/blog/introducing-orbmol-v2": {
+    "title": "Introducing OrbMol-v2: A Neural Network That Outperforms the Most-Cited Method in Chemistry",
+    "description": "A new universal molecular machine learning interatomic potential that beats hybrid GGA functionals like PBE0 and B3LYP at computing molecular energies and forces, at 6 orders of magnitude lower cost.",
+    "image": "/assets/ogp/images/5044c4673c65a45f70662975.jpg"
+  }
+}

@@ -2,3 +2,10 @@ title: "Nabata's personal page"
 url: "https://h-nabata.github.io"
 baseurl: ""
 markdown: kramdown
+description: "計算化学・反応経路探索、プログラミング、ローカルLLMの研究・技術ノートをまとめたHitoshi Nabataの個人ホームページ。"
+ogp_image: "/top.png"
+defaults:
+  - scope:
+      path: "TheoChem25"
+    values:
+      exclude_from_search: true

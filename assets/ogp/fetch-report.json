@@ -1,0 +1,14 @@
+[
+  {
+    "url": "https://onlinelibrary.wiley.com/doi/abs/10.1002/anie.202408016",
+    "reason": "HTTP Error 403: Forbidden"
+  },
+  {
+    "url": "https://qiita.com/embed-contents/github-blob",
+    "reason": "No title"
+  },
+  {
+    "url": "https://www.youtube.com/watch?v=1YZnic1Ug9g",
+    "reason": "HTTP Error 429: Too Many Requests"
+  }
+]

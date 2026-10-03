@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Snapshot h-nabata's public Qiita articles; run from repository root.
-Uses only Python stdlib plus lxml for preserving rendered HTML.
+Uses Python stdlib, lxml and PyYAML (for the shared OGP cache).
 Never deletes older snapshots/pages. No API token is needed for public items.
 """
 import concurrent.futures, datetime, gzip, hashlib, html, json, re, urllib.request
@@ -108,4 +108,7 @@ def main():
     manifest={'user':USER,'retrieved_at':NOW,'article_count':len(items),'image_count':len(urls),'image_failures':failures,'images':image_map,'css_source':css_url}
     put('qiita/backup/manifest.json',json.dumps(manifest,ensure_ascii=False,indent=2))
     print(json.dumps({k:v for k,v in manifest.items() if k not in ['images']},ensure_ascii=False))
-if __name__=='__main__':main()
+if __name__=='__main__':
+    main()
+    from build_ogp import main as build_ogp
+    build_ogp()
