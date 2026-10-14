@@ -519,17 +519,14 @@
     groupDragIds=[];setStatus("構造の移動・回転を確定しました。");
   }
 
-  function handleBoxSelect(atomIds, event) {
-    if (additive(event)) {
-      const next = new Set(state.selectedAtomIds);
-      atomIds.forEach(id => next.add(id));
-      Model.setSelectedAtoms(state, Array.from(next));
-    } else {
-      Model.setSelectedAtoms(state, atomIds);
-    }
+  function handleBoxSelect(atomIds) {
+    const next = new Set(state.selectedAtomIds);
+    atomIds.forEach(id => next.add(id));
+    const added = next.size - state.selectedAtomIds.size;
+    Model.setSelectedAtoms(state, Array.from(next));
     Model.setSelectedBonds(state, []);
     rerenderSelectionOnly();
-    setStatus(`Box selected: ${atomIds.length} atom(s)`);
+    setStatus(`矩形選択で${added}原子を追加しました。合計${next.size}原子を選択中です。`);
   }
 
   function setSelectedBondOrder(order) {

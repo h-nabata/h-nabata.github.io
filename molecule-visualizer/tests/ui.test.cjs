@@ -46,7 +46,11 @@ test('right rectangle and Alt gestures transform only target groups with undo',(
  const gesture=(button,alt,x,y,dx,dy)=>{canvas.fire('pointerdown',{pointerId:9,button,altKey:alt,clientX:x,clientY:y});canvas.fire('pointermove',{pointerId:9,button,altKey:alt,clientX:x+dx,clientY:y+dy});canvas.fire('pointerup',{pointerId:9,button,altKey:alt,clientX:x+dx,clientY:y+dy});};
  let p=r.projectedAtoms[0];const before=s.atoms.map(a=>({...a}));gesture(0,true,p.x,p.y,25,10);let moved=app.getState();assert.notEqual(moved.atoms[0].x,before[0].x);assert.equal(moved.atoms[3].x,before[3].x);assert.ok(Math.abs((moved.atoms[1].x-before[1].x)-(moved.atoms[0].x-before[0].x))<1e-9);nodes.get('btnUndo').click();assert.equal(app.getState().atoms[0].x,0);
  const current=app.getState();current.selectedAtomIds=new Set(current.atoms.slice(0,3).map(a=>a.id));app.setState(current,true);const oldRot=JSON.stringify(r.orientation),oldDistance=MV.Geometry.distance(current.atoms[0],current.atoms[1]);gesture(2,true,20,20,40,25);assert.equal(JSON.stringify(r.orientation),oldRot);assert.ok(Math.abs(MV.Geometry.distance(current.atoms[0],current.atoms[1])-oldDistance)<1e-9);assert.equal(current.atoms[3].x,6);assert.notEqual(current.atoms[1].y,0);nodes.get('btnUndo').click();
- const old=JSON.stringify(app.getState().atoms);gesture(2,false,0,0,800,500);assert.equal(app.getState().selectedAtomIds.size,4);assert.equal(JSON.stringify(app.getState().atoms),old);
+ const old=JSON.stringify(app.getState().atoms);nodes.get('btnClearSel').click();
+ for(const index of [0,3,0]){const point=r.projectedAtoms.find(p=>p.atom.id===app.getState().atoms[index].id);gesture(2,false,point.x-4,point.y-4,8,8);}
+ assert.deepEqual([...app.getState().selectedAtomIds],[app.getState().atoms[0].id,app.getState().atoms[3].id]);
+ gesture(2,false,0,0,8,8);assert.equal(app.getState().selectedAtomIds.size,2);
+ gesture(2,false,0,0,800,500);assert.equal(app.getState().selectedAtomIds.size,4);assert.equal(JSON.stringify(app.getState().atoms),old);
 });
 test('right click toggles only the clicked atom; cancel preserves selection',()=>{
  const {MV,canvas}=boot(),r=MV.App.renderer(),s=MV.App.getState();

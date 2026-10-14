@@ -29,6 +29,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  const picks=await page.evaluate(()=>MoleculeVisualizer.App.renderer().projectedAtoms.slice(0,2).map(p=>({id:p.atom.id,x:p.x,y:p.y})));
  for(const i of [0,1,1])await page.mouse.click(bounds.x+picks[i].x,bounds.y+picks[i].y,{button:'right'});
  assert.deepEqual(await page.evaluate(()=>[...MoleculeVisualizer.App.getState().selectedAtomIds]),[picks[0].id]);await page.click('#btnClearSel');
+ // Separate rectangles always accumulate, even without multi-select or modifiers.
+ for(const i of [0,1,0]){
+  await page.mouse.move(bounds.x+picks[i].x-6,bounds.y+picks[i].y-6);await page.mouse.down({button:'right'});await page.mouse.move(bounds.x+picks[i].x+6,bounds.y+picks[i].y+6,{steps:3});await page.mouse.up({button:'right'});
+ }
+ assert.deepEqual(await page.evaluate(()=>[...MoleculeVisualizer.App.getState().selectedAtomIds]),picks.map(p=>p.id));
 
  await page.mouse.move(bounds.x+5,bounds.y+5);await page.mouse.down({button:'right'});await page.mouse.move(bounds.x+bounds.width-5,bounds.y+bounds.height-5,{steps:6});await page.mouse.up({button:'right'});
  assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().selectedAtomIds.size),3);
