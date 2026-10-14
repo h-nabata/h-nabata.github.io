@@ -26,7 +26,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  await page.mouse.move(cx,cy);await page.mouse.down();let turn=0,previous={x:0,y:0,z:1};
  for(let i=1;i<=260;i++){await page.mouse.move(cx+i*10,cy);const v=await page.evaluate(()=>MoleculeVisualizer.App.renderer().rotate({x:0,y:0,z:1}));turn+=Math.acos(Math.max(-1,Math.min(1,previous.x*v.x+previous.y*v.y+previous.z*v.z)));previous=v;}
  await page.mouse.up();assert.ok(turn>6*Math.PI,'a held drag must exceed three full turns');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),unchanged);await page.click('#btnViewXY');
- const picks=await page.evaluate(()=>MoleculeVisualizer.App.renderer().projectedAtoms.slice(0,2).map(p=>({id:p.id,x:p.x,y:p.y})));
+ const picks=await page.evaluate(()=>MoleculeVisualizer.App.renderer().projectedAtoms.slice(0,2).map(p=>({id:p.atom.id,x:p.x,y:p.y})));
  for(const i of [0,1,1])await page.mouse.click(bounds.x+picks[i].x,bounds.y+picks[i].y,{button:'right'});
  assert.deepEqual(await page.evaluate(()=>[...MoleculeVisualizer.App.getState().selectedAtomIds]),[picks[0].id]);await page.click('#btnClearSel');
 
