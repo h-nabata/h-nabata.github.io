@@ -907,9 +907,9 @@
     renderer = new Renderer3DMol("viewer");
     renderer.ensureViewer();
     renderer.onAtomContextSelect = atomId => {
-      const ids=new Set(state.selectedAtomIds);ids.add(atomId);
-      Model.setSelectedAtoms(state,[...ids]);Model.setSelectedBonds(state,[]);
-      rerenderSelectionOnly();setStatus('原子を追加選択しました。Altドラッグで選択原子群を操作できます。');
+      const wasSelected=state.selectedAtomIds.has(atomId);
+      Model.toggleAtomSelection(state,atomId,true);Model.setSelectedBonds(state,[]);
+      rerenderSelectionOnly();setStatus(wasSelected?'原子の選択を解除しました。':'原子を追加選択しました。Altドラッグで選択原子群を操作できます。');
     };
     renderer.onAtomClick = function (atomId, event, viewer) {
       handleAtomClick(atomId, event);
