@@ -17,10 +17,10 @@ function boot(afir=false){
  const tables={'#atomTable tbody':new El(),'#bondTable tbody':new El()};
  doc.querySelector=q=>tables[q]||((q==='.mv-app'||q==='.mv-inspector')?app:q==='dialog[open]'?[...nodes.values()].find(x=>x.open):null);
  doc.querySelectorAll=q=>q==='[data-tab]'?[...nodes.values()].filter(x=>x.dataset.tab):[];
- const timers=new Map();let seq=0;const win={document:doc,devicePixelRatio:1,addEventListener(){}};
+ const timers=new Map();let seq=0;const win={document:doc,devicePixelRatio:1,events:{},addEventListener(t,f){(this.events[t]??=[]).push(f);}};
  const ctx={window:win,document:doc,navigator:{clipboard:{writeText:async()=>{}}},localStorage:{getItem(){return null;},setItem(){}},setTimeout(f){timers.set(++seq,f);return seq;},clearTimeout(i){timers.delete(i);},Blob,URL,console};
  vm.createContext(ctx);for(const f of ['model','bonding','geometry','io','molfile','periodic','formats','history','renderer3dmol','ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
- if(afir)for(const f of ['afir','afir-ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);win.MoleculeVisualizer.App.init();if(afir)win.MoleculeVisualizer.AFIRUI.init();return {MV:win.MoleculeVisualizer,nodes,doc,canvas:nodes.get('viewer').children[0]};
+ if(afir)for(const f of ['afir','afir-ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);win.MoleculeVisualizer.App.init();if(afir)win.MoleculeVisualizer.AFIRUI.init();return {MV:win.MoleculeVisualizer,nodes,doc,win,timers,canvas:nodes.get('viewer').children[0]};
 }
 test('app loads, atom edit/undo, invalid import is non-destructive, export uses latest state',()=>{const {MV,nodes}=boot(),app=MV.App;assert.equal(app.getState().atoms.length,3);assert.equal(nodes.get('statusBadge').classList!==null,true);
  const s=app.getState();s.selectedAtomIds.add(s.atoms[0].id);app.setState(s,true);nodes.get('dataText').value='O 2.5 0 0\nH .9572 0 0\nH -.239987 .926627 0';nodes.get('dataText').fire('input');nodes.get('dataApply').click();assert.equal(app.getState().atoms[0].x,2.5);nodes.get('btnUndo').click();assert.equal(app.getState().atoms[0].x,0);
@@ -140,13 +140,38 @@ test('bond shortcuts rotate and translate the ordered B fragment rigidly, preser
  const theta=5*Math.PI/180;
  press(']');near(atom('C').y,Math.cos(theta));near(atom('C').z,Math.sin(theta));near(atom('D').y,-Math.sin(theta));near(atom('B').x,1.5);near(atom('A').x,0);near(atom('X').x,8);
  near(MV.Geometry.distance(atom('C'),atom('D')),Math.SQRT2);assert.equal(JSON.stringify(app.getState().bonds),bonds);
- canvas.fire('keydown',{key:']',repeat:true});near(atom('C').z,Math.sin(theta));press('[');near(atom('C').z,0);
+ press('[');near(atom('C').z,0);
  press('.');for(const id of ['B','C','D'])near(atom(id).x,1.6);near(atom('F').x,-1);press(',');near(atom('B').x,1.5);
  press('<');near(atom('B').x,1.4);nodes.get('btnUndo').click();near(atom('B').x,1.5);nodes.get('btnRedo').click();near(atom('B').x,1.4);press('>');near(atom('B').x,1.5);
  assert.deepEqual([...app.getState().selectedAtomIds],['A','B']);assert.equal(JSON.stringify(app.getState().bonds),bonds);
  app.setState(shortcutMolecule(MV.Model),true);app.getState().selectedAtomIds=new Set(['B','A']);press('.');near(atom('A').x,-.1);near(atom('F').x,-1.1);near(atom('B').x,1.5);near(atom('C').x,1.5);
  nodes.get('btnUndo').click();assert.equal(JSON.stringify(app.getState().atoms),original);
 });
+test('held bond keys repeat with one undo snapshot, full redo and separate releases',()=>{
+ const {MV,canvas,nodes,doc,timers}=boot(),app=MV.App;app.setState(shortcutMolecule(MV.Model),true);canvas.focus();
+ const atoms=()=>JSON.stringify(app.getState().atoms),before=atoms(),press=(key,repeat=false,code)=>canvas.fire('keydown',{key,repeat,code}),release=(key,code)=>doc.events.keyup.forEach(f=>f({key,code}));
+ press(']');for(let i=1;i<125;i++)press(']',true); // More repetitions than the entire history capacity.
+ assert.ok(Math.abs(app.getState().atoms[2].z-Math.sin(625*Math.PI/180))<1e-10);
+ assert.equal(timers.size,0,'no autosaved intermediate structure during a hold');
+ const rotated=atoms();release(']');assert.equal(timers.size,1);nodes.get('btnUndo').click();assert.equal(atoms(),before);assert.equal(nodes.get('btnUndo').disabled,true);
+ nodes.get('btnRedo').click();assert.equal(atoms(),rotated);
+ press('.');press('.',true);press('.',true);release('.');const firstMove=atoms();assert.ok(Math.abs(app.getState().atoms[1].x-1.8)<1e-10);
+ press('.');press('.',true);release('.');const secondMove=atoms();nodes.get('btnUndo').click();assert.equal(atoms(),firstMove);nodes.get('btnUndo').click();assert.equal(atoms(),rotated);
+ nodes.get('btnRedo').click();nodes.get('btnRedo').click();assert.equal(atoms(),secondMove);
+ // Release uses the physical key code even if Shift changed the printed key.
+ press('>',false,'Period');press('>',true,'Period');release('.','Period');const released=atoms();press('>',true,'Period');assert.equal(atoms(),released);
+});
+
+test('held bond edits stop on lost focus, other actions and rejection without merging histories',()=>{
+ const {MV,canvas,nodes,doc,win}=boot(),app=MV.App,press=(key,extra={})=>canvas.fire('keydown',{key,...extra}),fire=(target,type,e={})=>target.events[type].forEach(f=>f(e)),atoms=()=>JSON.stringify(app.getState().atoms);
+ for(const stop of [()=>fire(doc,'focusout'),()=>fire(win,'blur'),()=>{doc.hidden=true;fire(doc,'visibilitychange');doc.hidden=false;},()=>fire(doc,'pointerdown'),()=>{nodes.get('helpDialog').open=true;press('.', {repeat:true});nodes.get('helpDialog').open=false;},()=>press('r')]){
+   app.setState(shortcutMolecule(MV.Model),true);canvas.focus();const before=atoms();press('.');press('.',{repeat:true});const after=atoms();stop();press('.',{repeat:true});assert.equal(atoms(),after);nodes.get('btnUndo').click();assert.equal(atoms(),before);
+ }
+ app.setState(shortcutMolecule(MV.Model),true);canvas.focus();const before=atoms();press('.');press('.',{repeat:true});press('z',{ctrlKey:true});assert.equal(atoms(),before);press('.',{repeat:true});assert.equal(atoms(),before);
+ press(']');press(']',{repeat:true});const rotated=atoms();press('.');press('.',{repeat:true});nodes.get('btnUndo').click();assert.equal(atoms(),rotated);nodes.get('btnUndo').click();assert.equal(atoms(),before);
+ const short=shortcutMolecule(MV.Model);short.atoms[1].x=.25;app.setState(short,true);press(',');const lastValid=atoms();press(',',{repeat:true});assert.equal(atoms(),lastValid);assert.match(nodes.get('statusBadge').textContent,/0.1 Å以下/);press(',',{repeat:true});assert.equal(atoms(),lastValid);nodes.get('btnUndo').click();assert.equal(app.getState().atoms[1].x,.25);
+});
+
 test('bond shortcuts reject rings, missing bonds, zero axes, collapsed distances, periodic cuts and stale drafts atomically',()=>{
  const {MV,canvas,nodes}=boot(),app=MV.App;
  const reject=(change,key,pattern)=>{const s=shortcutMolecule(MV.Model);change(s);app.setState(s,true);canvas.focus();const before=JSON.stringify(s),undo=nodes.get('btnUndo').disabled;canvas.fire('keydown',{key});assert.equal(JSON.stringify(app.getState()),before);assert.equal(nodes.get('btnUndo').disabled,undo);assert.match(nodes.get('statusBadge').textContent,pattern);};

@@ -23,6 +23,14 @@
     mode: "xy"
   };
   let dragMoved = false;
+  // A held bond-edit key owns one undo snapshot, regardless of OS repeat count.
+  let bondKeyEdit = null;
+  function bondKeyId(e) { return e.code || ({'<':',','>':'.'}[e.key] || e.key); }
+  function finishBondKeyEdit() {
+    if(!bondKeyEdit)return;
+    bondKeyEdit=null;
+    saveLocal();
+  }
 
   function byId(id) { return document.getElementById(id); }
   function setStatus(msg, error) { const el = byId("statusBadge"); if (el) { el.textContent = msg; el.classList.toggle("error",Boolean(error)); } if(byId("exportDialog")?.open) byId("exportMessage").textContent=msg; }
@@ -30,7 +38,7 @@
   function numberInput(id, min=-1e6, max=1e6) {const el=byId(id), value=Number(el.value);if(el.value.trim()==="" || !Number.isFinite(value) || value<min || value>max)throw Error("数値が空欄または範囲外です。");return value;}
   function additive(event){return Boolean(event&&(event.ctrlKey||event.metaKey||event.shiftKey))||byId("multiSelect").checked;}
   let saveTimer;
-  function saveLocal(){clearTimeout(saveTimer);saveTimer=setTimeout(()=>{try{localStorage.setItem("molecule-studio-v1",IO.stateToProjectText(state));byId("saveState").textContent="この端末に保存済み";}catch(e){byId("saveState").textContent="自動保存できません。ファイルで保存してください。";}},350);}
+  function saveLocal(){clearTimeout(saveTimer);if(bondKeyEdit)return;saveTimer=setTimeout(()=>{try{localStorage.setItem("molecule-studio-v1",IO.stateToProjectText(state));byId("saveState").textContent="この端末に保存済み";}catch(e){byId("saveState").textContent="自動保存できません。ファイルで保存してください。";}},350);}
   function syncUI(){
     const selected=selectedAtoms();byId("structureStats").textContent=`${state.atoms.length} 原子 · ${state.bonds.length} 結合`;
     if(document.activeElement!==byId("structureTitle"))byId("structureTitle").value=state.metadata.title||"無題の構造";
@@ -74,7 +82,7 @@
     pushHistory('structure text');xyzDirty=false;byId('inputFormat').value='auto';setState(next,true);setStatus('座標・構造データを適用しました。「戻す」で復元できます。');
   }
   function setMeasure(msg) { const el = byId("measureBadge"); if (el) el.textContent = msg; }
-  function pushHistory(label) { history.push(label, state); }
+  function pushHistory(label) { finishBondKeyEdit(); history.push(label, state); }
 
   function setMode(mode) {
     editMode = mode;
@@ -115,12 +123,14 @@
   }
 
   function setState(nextState, preserveCamera) {
+    finishBondKeyEdit();
     state = nextState;
     Model.sanitizeSelection(state);
     render(preserveCamera);
   }
 
   function rerenderSelectionOnly() {
+    finishBondKeyEdit();
     renderer.updateSelection(state);
     updateAtomTable();
     updateBondTable();
@@ -304,10 +314,17 @@
     setStatus(`Selected connected molecule: ${state.selectedAtomIds.size} atom(s)`);
   }
 
-  function editBondSide(kind, amount) {
+  function editBondSide(kind, amount, event) {
+    const keyId=bondKeyId(event);
+    // A repeat after blur, selection changes, undo or rejection must not restart editing.
+    if(event.repeat&&(!bondKeyEdit||bondKeyEdit.keyId!==keyId))return;
     if(xyzDirty)throw Error('座標欄の編集中の内容を適用するか、「現在の構造を再表示」で戻してから操作してください。');
     const ids=[...state.selectedAtomIds], positions=Geometry.bondSideTransform(state,ids,kind,amount);
-    pushHistory(kind==='rotate'?'rotate bond side':'translate bond side');
+    if(event.repeat&&ids.join('\0')!==bondKeyEdit.ids){finishBondKeyEdit();return;}
+    if(!event.repeat){
+      pushHistory(kind==='rotate'?'rotate bond side':'translate bond side');
+      bondKeyEdit={keyId,ids:ids.join('\0')};
+    }
     const byId=new Map(state.atoms.map(a=>[a.id,a]));
     positions.forEach(({id,...p})=>Object.assign(byId.get(id),p));
     // Preserve the explicit cut and the complete bond table while editing its geometry.
@@ -656,6 +673,7 @@
   }
 
   function undo() {
+    finishBondKeyEdit();
     const previous = history.undo(state);
     if (!previous) return;
     setState(previous, true);
@@ -663,6 +681,7 @@
   }
 
   function redo() {
+    finishBondKeyEdit();
     const next = history.redo(state);
     if (!next) return;
     setState(next, true);
@@ -751,7 +770,8 @@
     const inCanvas = canvasHasFocus();
     const key = e.key.toLowerCase();
 
-    if(editingText || !inCanvas || e.isComposing || e.altKey || document.querySelector("dialog[open]"))return;
+    if(editingText || !inCanvas || e.isComposing || e.altKey || document.querySelector("dialog[open]")){finishBondKeyEdit();return;}
+    if(bondKeyEdit&&(!e.repeat||bondKeyId(e)!==bondKeyEdit.keyId||e.ctrlKey||e.metaKey))finishBondKeyEdit();
     if(e.ctrlKey||e.metaKey){
       if(key==="a"){consumeShortcut(e);selectAll();return;}
       if(key==="e"){consumeShortcut(e);if(!e.repeat)expandSelectionOneBond();return;}
@@ -762,9 +782,11 @@
       return;
     }
     if(['[',']',',','.','<','>'].includes(key)){
-      consumeShortcut(e);if(e.repeat)return;
-      if(key==='['||key===']')editBondSide('rotate',key==='['?-5:5);
-      else editBondSide('translate',key===','||key==='<'?-.1:.1);
+      consumeShortcut(e);
+      try{
+        if(key==='['||key===']')editBondSide('rotate',key==='['?-5:5,e);
+        else editBondSide('translate',key===','||key==='<'?-.1:.1,e);
+      }catch(error){finishBondKeyEdit();throw error;}
       return;
     }
     if ((e.key === "Delete" || e.key === "Backspace") && !editingText) {
@@ -853,6 +875,11 @@
       if(applyFragment()!==false) byId("fragDialog").close();
     });
     document.addEventListener("keydown", e=>{try{onKeyDown(e);}catch(error){report(error);}}, true);
+    document.addEventListener('keyup',e=>{if(bondKeyEdit&&bondKeyId(e)===bondKeyEdit.keyId)finishBondKeyEdit();},true);
+    document.addEventListener('pointerdown',finishBondKeyEdit,true);
+    document.addEventListener('focusout',finishBondKeyEdit,true);
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)finishBondKeyEdit();});
+    global.addEventListener('blur',finishBondKeyEdit);
   }
 
   function safeFilename(){return String(state.metadata.title||'structure').replace(/[\\/:*?"<>|\r\n]/g,'_').slice(0,80)||'structure';}

@@ -109,7 +109,20 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  await keys.press(']');assert.ok(Math.abs(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[2].z)-Math.sin(5*Math.PI/180))<1e-10);
  await keys.press('Control+z');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),shortcutBefore);
  await keys.press('.');assert.ok(Math.abs(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[1].x)-1.6)<1e-10);await keys.press(',');
+ // Repeated keydown events while the physical key remains down must share one undo entry.
+ const heldBefore=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms));
+ for(let i=0;i<6;i++)await page.keyboard.down(']');await page.keyboard.up(']');
+ const heldAfter=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms));
+ assert.ok(Math.abs(JSON.parse(heldAfter)[2].z-Math.sin(30*Math.PI/180))<1e-10);
+ await keys.press('Control+z');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),heldBefore);
+ await keys.press('Control+Shift+z');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),heldAfter);
+ for(let i=0;i<4;i++)await page.keyboard.down('.');await page.keyboard.up('.');
+ assert.ok(Math.abs(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[1].x)-1.9)<1e-10);
+ await keys.press('Control+z');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),heldAfter);
+ await page.keyboard.down('.');await page.keyboard.down('.');await page.locator('#dataText').focus();await page.keyboard.up('.');
+ await keys.press('Control+z');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),heldAfter);
  await page.click('#btnHelp');assert.match(await page.locator('#helpDialog').textContent(),/Ctrl\+E/);assert.match(await page.locator('#helpDialog').textContent(),/0.1 Å/);
+ assert.match(await page.locator('#helpDialog').textContent(),/長押し前の構造/);
  await page.screenshot({path:'test-artifacts/keyboard-help.png',fullPage:true});await page.locator('#helpDialog [data-close]').click();
  await page.screenshot({path:'test-artifacts/studio.png',fullPage:true});
  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'test-artifacts/mobile.png',fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1));
