@@ -33,7 +33,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   const afirDownload=page.waitForEvent('download');await page.click('#afirDownload');const afirFile=await afirDownload;
   const afir=JSON.parse(fs.readFileSync(await afirFile.path(),'utf8'));assert.equal(afir.input.config.maxSteps,3);assert.equal(afir.result.images.length,4);assert.equal(afir.result.validation,'biased-trajectory-not-ts');assert.ok(!JSON.stringify(afir).includes(token));
   await page.click('#afirApply');await page.click('#frameNext');assert.match(await page.locator('#frameLabel').textContent(),/2 \/ 4/);
-  await page.screenshot({path:'test-artifacts/afir.png',fullPage:true});await page.click('#btnUndo');await page.click('#dataReset');await page.click('#afirClose');
+  await page.screenshot({path:'test-artifacts/afir.png',fullPage:true});await page.click('#btnUndo');await page.click('#afirClose');await page.click('#dataReset');
   // Actual fixed-cell path relaxation, final review, apply, navigation, export and Undo.
   const xyz=offset=>`3\npath Lattice="9 0 0 1 9 0 0 0 9" pbc="T T T"\nO 0 0 0\nH ${.96+offset} 0 0\nH -.24 .93 0\n`;
   await page.fill('#dataText',[0,.2,.4].map(xyz).join(''));await page.click('#dataApply');
