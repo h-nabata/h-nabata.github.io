@@ -120,6 +120,45 @@ test('B toggles exactly the selected pair, survives inference, ignores repeat, a
  MV.Bonding.refreshInferredBonds(app.getState());assert.equal(app.getState().bonds.length,count-1);canvas.fire('keydown',{key:'b',repeat:true});assert.equal(app.getState().bonds.length,count-1);
  canvas.fire('keydown',{key:'b'});assert.equal(app.getState().bonds.length,count);nodes.get('btnUndo').click();assert.equal(app.getState().bonds.length,count-1);nodes.get('btnUndo').click();assert.equal(app.getState().bonds.length,count);
 });
+function shortcutMolecule(M){
+ return M.createState({atoms:[{id:'A',element:'C',x:0,y:0,z:0},{id:'B',element:'C',x:1.5,y:0,z:0},{id:'C',element:'H',x:1.5,y:1,z:0},{id:'D',element:'H',x:1.5,y:0,z:1},{id:'F',element:'H',x:-1,y:0,z:0},{id:'X',element:'He',x:8,y:0,z:0}],bonds:[['A','B'],['B','C'],['B','D'],['A','F']].map(([atom1,atom2])=>({atom1,atom2,order:1})),selectedAtomIds:['A','B']});
+}
+test('Ctrl selection shortcuts expand one edge, select connected components, invert, and respect canvas focus',()=>{
+ const {MV,canvas,nodes,doc}=boot(),app=MV.App,s=shortcutMolecule(MV.Model);s.selectedAtomIds=new Set(['A']);app.setState(s,true);canvas.focus();
+ const press=(key,extra={})=>canvas.fire('keydown',{key,ctrlKey:true,...extra}),selected=()=>[...app.getState().selectedAtomIds].sort();
+ assert.ok(press('e').defaultPrevented);assert.deepEqual(selected(),['A','B','F']);press('e',{repeat:true});assert.deepEqual(selected(),['A','B','F']);
+ assert.ok(press('w').defaultPrevented);assert.deepEqual(selected(),['A','B','C','D','F']);
+ assert.ok(press('r').defaultPrevented);assert.deepEqual(selected(),['X']);press('r',{repeat:true});assert.deepEqual(selected(),['X']);
+ press('a');assert.equal(selected().length,6);app.getState().selectedAtomIds.clear();press('w');assert.equal(selected().length,0);
+ app.getState().selectedAtomIds=new Set(['A']);nodes.get('dataText').focus();assert.ok(!press('r',{target:nodes.get('dataText')}).defaultPrevented);assert.deepEqual(selected(),['A']);
+ doc.activeElement=null;assert.ok(!press('e').defaultPrevented);assert.deepEqual(selected(),['A']);canvas.focus();nodes.get('helpDialog').open=true;assert.ok(!press('w').defaultPrevented);nodes.get('helpDialog').open=false;
+ assert.ok(!press('e',{isComposing:true}).defaultPrevented);assert.ok(!press('e',{altKey:true}).defaultPrevented);
+});
+test('bond shortcuts rotate and translate the ordered B fragment rigidly, preserve bonds and undo',()=>{
+ const {MV,canvas,nodes}=boot(),app=MV.App,s=shortcutMolecule(MV.Model);app.setState(s,true);canvas.focus();
+ const original=JSON.stringify(s.atoms),bonds=JSON.stringify(s.bonds),near=(a,b)=>assert.ok(Math.abs(a-b)<1e-10),atom=id=>app.getState().atoms.find(a=>a.id===id),press=key=>canvas.fire('keydown',{key});
+ const theta=5*Math.PI/180;
+ press(']');near(atom('C').y,Math.cos(theta));near(atom('C').z,Math.sin(theta));near(atom('D').y,-Math.sin(theta));near(atom('B').x,1.5);near(atom('A').x,0);near(atom('X').x,8);
+ near(MV.Geometry.distance(atom('C'),atom('D')),Math.SQRT2);assert.equal(JSON.stringify(app.getState().bonds),bonds);
+ canvas.fire('keydown',{key:']',repeat:true});near(atom('C').z,Math.sin(theta));press('[');near(atom('C').z,0);
+ press('.');for(const id of ['B','C','D'])near(atom(id).x,1.6);near(atom('F').x,-1);press(',');near(atom('B').x,1.5);
+ press('<');near(atom('B').x,1.4);nodes.get('btnUndo').click();near(atom('B').x,1.5);nodes.get('btnRedo').click();near(atom('B').x,1.4);press('>');near(atom('B').x,1.5);
+ assert.deepEqual([...app.getState().selectedAtomIds],['A','B']);assert.equal(JSON.stringify(app.getState().bonds),bonds);
+ app.setState(shortcutMolecule(MV.Model),true);app.getState().selectedAtomIds=new Set(['B','A']);press('.');near(atom('A').x,-.1);near(atom('F').x,-1.1);near(atom('B').x,1.5);near(atom('C').x,1.5);
+ nodes.get('btnUndo').click();assert.equal(JSON.stringify(app.getState().atoms),original);
+});
+test('bond shortcuts reject rings, missing bonds, zero axes, collapsed distances, periodic cuts and stale drafts atomically',()=>{
+ const {MV,canvas,nodes}=boot(),app=MV.App;
+ const reject=(change,key,pattern)=>{const s=shortcutMolecule(MV.Model);change(s);app.setState(s,true);canvas.focus();const before=JSON.stringify(s),undo=nodes.get('btnUndo').disabled;canvas.fire('keydown',{key});assert.equal(JSON.stringify(app.getState()),before);assert.equal(nodes.get('btnUndo').disabled,undo);assert.match(nodes.get('statusBadge').textContent,pattern);};
+ reject(s=>s.bonds.push(MV.Model.createBond({atom1:'C',atom2:'A'})),']',/環内/);
+ reject(s=>s.selectedAtomIds=new Set(['A','X']),'.',/結合がありません/);
+ reject(s=>s.selectedAtomIds=new Set(['A']),'.',/2原子/);
+ reject(s=>s.atoms[1].x=0,']',/方向/);
+ reject(s=>s.atoms[1].x=.15,',',/0.1 Å以下/);
+ reject(s=>{s.metadata.cell=MV.Periodic.cell([[5,0,0],[0,5,0],[0,0,5]]);s.atoms[1].x=4.5;},'.',/周期境界/);
+ const s=shortcutMolecule(MV.Model);app.setState(s,true);nodes.get('dataText').value='C 3 0 0';nodes.get('dataText').fire('input');canvas.focus();const before=JSON.stringify(s);canvas.fire('keydown',{key:']'});assert.equal(JSON.stringify(s),before);assert.match(nodes.get('statusBadge').textContent,/編集中/);
+});
+
 test('text editor imports multi-record SDF and CIF as complete documents and preserves failed drafts',()=>{
  const {MV,nodes}=boot(),app=MV.App,box=nodes.get('dataText');const molecule=MV.IO.parseXYZToState('C 0 0 0\nO 1.2 0 0');molecule.bonds[0].order=2;molecule.bonds[0].source='manual';
  const sdf=MV.IO.stateToSDFText(molecule);box.value=sdf+sdf;box.fire('input');nodes.get('dataApply').click();assert.equal(app.getState().metadata.trajectory.length,2);assert.equal(app.getState().bonds[0].order,2);nodes.get('btnUndo').click();assert.equal(app.getState().atoms.length,3);nodes.get('dataReset').click();

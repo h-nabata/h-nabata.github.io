@@ -85,3 +85,5 @@
 .mv-app .mv-afir-note{font-size:10pt;color:#397254;line-height:1.6;white-space:pre-line;margin:8px 0}
 .mv-afir-status{padding:10px;background:#eef6f4;border-radius:6px;font-size:13px;line-height:1.7;overflow-wrap:anywhere}
 #afirAlpha{font-size:12px;color:var(--muted)}#afirResult{margin-top:16px}#afirResultSummary{font-size:13px;line-height:1.7}#afirPlot{width:100%;margin:8px 0;background:#f7fafb;border:1px solid var(--border);border-radius:6px}
+
+.mv-app .mv-shortcut-table th,.mv-app .mv-shortcut-table td{white-space:normal;overflow-wrap:anywhere}.mv-app .mv-shortcut-table td:first-child{white-space:nowrap}

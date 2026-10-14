@@ -97,6 +97,20 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  await page.click('#btnExport');const downloadPath=page.waitForEvent('download');await page.click('#allFrames');const generatedFile=await downloadPath;const output=fs.readFileSync(await generatedFile.path(),'utf8');assert.equal((output.match(/^2$/gm)||[]).length,5);await page.locator('#exportDialog [data-close]').click();
  await page.click('#btnRandomStructures');await page.selectOption('#randomMode','orientation');await page.fill('#generationCount','21');await page.click('#generationRun');assert.match(await page.locator('#generationMessage').textContent(),/20/);await page.fill('#generationCount','5');await page.evaluate(()=>{MoleculeVisualizer.GeneratorUI.run();MoleculeVisualizer.GeneratorUI.cancel();});assert.match(await page.locator('#generationMessage').textContent(),/中止/);await page.locator('#generationDialog [data-close]').click();assert.equal(await page.locator('#frameLabel').textContent(),'3 / 5');
 
+ // Canvas shortcuts: one-edge expansion, connected-only selection and rigid B-side edits.
+ await page.click('#dataReset');
+ await page.evaluate(()=>{const m=MoleculeVisualizer,s=m.Model.createState({atoms:[{id:'A',element:'C',x:0,y:0,z:0},{id:'B',element:'C',x:1.5,y:0,z:0},{id:'C',element:'H',x:1.5,y:1,z:0},{id:'D',element:'H',x:1.5,y:0,z:1},{id:'F',element:'H',x:-1,y:0,z:0},{id:'X',element:'He',x:8,y:0,z:0}],bonds:[['A','B'],['B','C'],['B','D'],['A','F']].map(([atom1,atom2])=>({atom1,atom2})),selectedAtomIds:['A']});m.App.setState(s,false);});
+ const keys=page.locator('canvas'),selected=()=>page.evaluate(()=>[...MoleculeVisualizer.App.getState().selectedAtomIds].sort());
+ await keys.press('Control+e');assert.deepEqual(await selected(),['A','B','F']);
+ await keys.press('Control+w');assert.deepEqual(await selected(),['A','B','C','D','F']);
+ await keys.press('Control+r');assert.deepEqual(await selected(),['X']);await keys.press('Control+a');assert.equal((await selected()).length,6);
+ await page.evaluate(()=>{const a=MoleculeVisualizer.App,s=a.getState();s.selectedAtomIds=new Set(['A','B']);a.setState(s,true);});
+ const shortcutBefore=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms));
+ await keys.press(']');assert.ok(Math.abs(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[2].z)-Math.sin(5*Math.PI/180))<1e-10);
+ await keys.press('Control+z');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),shortcutBefore);
+ await keys.press('.');assert.ok(Math.abs(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[1].x)-1.6)<1e-10);await keys.press(',');
+ await page.click('#btnHelp');assert.match(await page.locator('#helpDialog').textContent(),/Ctrl\+E/);assert.match(await page.locator('#helpDialog').textContent(),/0.1 Å/);
+ await page.screenshot({path:'test-artifacts/keyboard-help.png',fullPage:true});await page.locator('#helpDialog [data-close]').click();
  await page.screenshot({path:'test-artifacts/studio.png',fullPage:true});
  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'test-artifacts/mobile.png',fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1));
  assert.deepEqual(errors,[]);console.log('PASS: periodic cell, supercell undo, trajectory editing, shortcuts, Ketcher SMILES, UFF 3D generation, mobile layout');await browser.close();

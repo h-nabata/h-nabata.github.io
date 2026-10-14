@@ -235,6 +235,7 @@
 
   function selectInvert() {
     Model.invertAtomSelection(state);
+    Model.setSelectedBonds(state, []);
     rerenderSelectionOnly();
     setStatus("選択を反転しました。");
   }
@@ -301,6 +302,19 @@
     Model.setSelectedBonds(state, []);
     rerenderSelectionOnly();
     setStatus(`Selected connected molecule: ${state.selectedAtomIds.size} atom(s)`);
+  }
+
+  function editBondSide(kind, amount) {
+    if(xyzDirty)throw Error('座標欄の編集中の内容を適用するか、「現在の構造を再表示」で戻してから操作してください。');
+    const ids=[...state.selectedAtomIds], positions=Geometry.bondSideTransform(state,ids,kind,amount);
+    pushHistory(kind==='rotate'?'rotate bond side':'translate bond side');
+    const byId=new Map(state.atoms.map(a=>[a.id,a]));
+    positions.forEach(({id,...p})=>Object.assign(byId.get(id),p));
+    // Preserve the explicit cut and the complete bond table while editing its geometry.
+    render(true);
+    setStatus(kind==='rotate'
+      ?`B側の原子団を、AからBを見る向きで${amount<0?'左':'右'}へ5°回転しました。`
+      :`B側の原子団を結合方向に0.1 Å移動し、A–B間を${amount<0?'短く':'長く'}しました。`);
   }
 
   function addAtom() {
@@ -733,15 +747,24 @@
   function onKeyDown(e) {
     if (e.defaultPrevented) return;
     const tag = e.target && e.target.tagName ? e.target.tagName.toLowerCase() : "";
-    const editingText = tag === "textarea" || tag === "input" || tag === "select";
+    const editingText = tag === "textarea" || tag === "input" || tag === "select" || e.target?.isContentEditable;
     const inCanvas = canvasHasFocus();
     const key = e.key.toLowerCase();
 
-    if(editingText || !inCanvas || document.querySelector("dialog[open]"))return;
+    if(editingText || !inCanvas || e.isComposing || e.altKey || document.querySelector("dialog[open]"))return;
     if(e.ctrlKey||e.metaKey){
       if(key==="a"){consumeShortcut(e);selectAll();return;}
+      if(key==="e"){consumeShortcut(e);if(!e.repeat)expandSelectionOneBond();return;}
+      if(key==="w"){consumeShortcut(e);selectConnectedMoleculesFromSelection();return;}
+      if(key==="r"){consumeShortcut(e);if(!e.repeat)selectInvert();return;}
       if(key==="z"){consumeShortcut(e);e.shiftKey?redo():undo();return;}
       if(key==="y"){consumeShortcut(e);redo();return;}
+      return;
+    }
+    if(['[',']',',','.','<','>'].includes(key)){
+      consumeShortcut(e);if(e.repeat)return;
+      if(key==='['||key===']')editBondSide('rotate',key==='['?-5:5);
+      else editBondSide('translate',key===','||key==='<'?-.1:.1);
       return;
     }
     if ((e.key === "Delete" || e.key === "Backspace") && !editingText) {

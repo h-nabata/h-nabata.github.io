@@ -83,6 +83,43 @@
     return rotateAroundAxis(d, c, vsub(c, b), current - targetDegrees);
   }
 
+  // Return coordinates before mutating state, so invalid cuts cannot partially edit a molecule.
+  function bondSideTransform(state, atomIds, kind, amount) {
+    if (atomIds.length !== 2 || atomIds[0] === atomIds[1]) throw Error('結合している2原子を、固定側A、動かす側Bの順に選択してください。');
+    if (!['rotate','translate'].includes(kind) || !Number.isFinite(amount)) throw Error('結合操作の指定が不正です。');
+    const byId = new Map(state.atoms.map(a => [a.id,a])), [a,b] = atomIds.map(id => byId.get(id));
+    if (!a || !b || !state.bonds.some(edge => edge.atom1===a.id&&edge.atom2===b.id || edge.atom1===b.id&&edge.atom2===a.id)) throw Error('選択した2原子の間に結合がありません。');
+    const adj = new Map(state.atoms.map(atom => [atom.id,[]]));
+    for (const edge of state.bonds) {
+      if (!adj.has(edge.atom1) || !adj.has(edge.atom2)) throw Error('結合先の原子が存在しません。');
+      if (edge.atom1===a.id&&edge.atom2===b.id || edge.atom1===b.id&&edge.atom2===a.id) continue;
+      adj.get(edge.atom1).push(edge.atom2);adj.get(edge.atom2).push(edge.atom1);
+    }
+    const moving = new Set(), stack = [b.id];
+    while (stack.length) {
+      const id=stack.pop();if(moving.has(id))continue;
+      moving.add(id);for(const next of adj.get(id))if(!moving.has(next))stack.push(next);
+    }
+    if (moving.has(a.id)) throw Error('この結合は環内にあり、B側の原子団を分離できません。座標は変更していません。');
+    const axis=vsub(b,a), length=norm(axis);
+    if (!Number.isFinite(length) || length<1e-8) throw Error('結合方向を定義できません。2原子の座標を確認してください。');
+    if (kind==='translate' && length+amount<=0.1) throw Error('原子間距離が0.1 Å以下になる移動はできません。');
+    const cell=state.metadata?.cell;
+    if(cell?.pbc?.some(Boolean))for(const edge of state.bonds){
+      if(!moving.has(edge.atom1)&&!moving.has(edge.atom2))continue;
+      const delta=vsub(byId.get(edge.atom2),byId.get(edge.atom1)), raw=[delta.x,delta.y,delta.z];
+      const nearest=MV.Periodic.minimumImage(raw,cell).vector;
+      if(Math.hypot(...nearest.map((x,i)=>x-raw[i]))>1e-7)throw Error('動かす原子団の結合が周期境界をまたいでいます。分子を連続した座標にしてから操作してください。');
+    }
+    const shift=vscale(axis,amount/length), positions=[];
+    for(const id of moving){
+      const atom=byId.get(id), p=kind==='translate'?vadd(atom,shift):id===b.id?{x:atom.x,y:atom.y,z:atom.z}:rotateAroundAxis(atom,a,axis,amount);
+      if(![p.x,p.y,p.z].every(Number.isFinite))throw Error('移動後の座標が有限値ではありません。');
+      positions.push({id,...p});
+    }
+    return positions;
+  }
+
   MV.Geometry = {
     centerOfMass,
     vsub,
@@ -98,7 +135,8 @@
     rotateAroundAxis,
     setDistance,
     setAngle,
-    setDihedral
+    setDihedral,
+    bondSideTransform
   };
 })(window);
 
