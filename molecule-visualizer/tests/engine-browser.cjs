@@ -19,6 +19,21 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   // Stale result never overwrites an edit made after the input snapshot.
   await page.click('#btnExternalEngine');await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
   await page.evaluate(()=>MoleculeVisualizer.App.change('stale edit',s=>{s.atoms[0].x+=.01;return s;}));await page.click('#engineApply');assert.match(await page.locator('#engineMessage').textContent(),/変更されています/);await page.click('#engineClose');await page.click('#btnUndo');await page.click('#dataReset');
+  // AFIR: pick on canvas, add three groups / two pairs, run a real local potential.
+  await page.click('#btnAFIR');
+  for(let i=0;i<3;i++){
+    const p=await page.evaluate(i=>{const a=MoleculeVisualizer.App.renderer().projectedAtoms.find(a=>a.index===i+1);return {x:a.x,y:a.y};},i);
+    await page.locator('canvas').click({position:p});await page.fill('#afirName','Group '+(i+1));await page.click('#afirAddFragment');
+  }
+  await page.selectOption('#afirA','f1');await page.selectOption('#afirB','f2');await page.fill('#afirGamma','40');await page.click('#afirAddPair');
+  await page.selectOption('#afirA','f2');await page.selectOption('#afirB','f3');await page.selectOption('#afirMode','repel');await page.fill('#afirGamma','20');await page.click('#afirAddPair');
+  await page.fill('#afirSteps','3');await page.fill('#afirFmax','0.00001');await page.fill('#afirMove','0.02');await page.click('#afirRun');
+  await page.waitForSelector('#afirResult:not([hidden])');assert.match(await page.locator('#afirResultSummary').textContent(),/3ステップ/);
+  assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
+  const afirDownload=page.waitForEvent('download');await page.click('#afirDownload');const afirFile=await afirDownload;
+  const afir=JSON.parse(fs.readFileSync(await afirFile.path(),'utf8'));assert.equal(afir.input.config.maxSteps,3);assert.equal(afir.result.images.length,4);assert.equal(afir.result.validation,'biased-trajectory-not-ts');assert.ok(!JSON.stringify(afir).includes(token));
+  await page.click('#afirApply');await page.click('#frameNext');assert.match(await page.locator('#frameLabel').textContent(),/2 \/ 4/);
+  await page.screenshot({path:'test-artifacts/afir.png',fullPage:true});await page.click('#btnUndo');await page.click('#dataReset');await page.click('#afirClose');
   // Actual fixed-cell path relaxation, final review, apply, navigation, export and Undo.
   const xyz=offset=>`3\npath Lattice="9 0 0 1 9 0 0 0 9" pbc="T T T"\nO 0 0 0\nH ${.96+offset} 0 0\nH -.24 .93 0\n`;
   await page.fill('#dataText',[0,.2,.4].map(xyz).join(''));await page.click('#dataApply');

@@ -182,7 +182,8 @@ def math_is_finite(value):return bool(np.isfinite(value))
 
 class HTTPBoundary(unittest.TestCase):
     def setUp(self):
-        self.server=b.make_server(CONFIG,'test-token',0,['https://h-nabata.github.io'])
+        config=CONFIG if importlib.util.find_spec('tblite') else {**CONFIG,'engine':'gxtb'}
+        self.server=b.make_server(config,'test-token',0,['https://h-nabata.github.io'])
         self.thread=threading.Thread(target=self.server.serve_forever,daemon=True);self.thread.start()
     def tearDown(self):
         self.server.jobs.close();self.server.shutdown();self.server.server_close();self.thread.join()

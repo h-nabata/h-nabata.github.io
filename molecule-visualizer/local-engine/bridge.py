@@ -11,6 +11,7 @@ import copy
 import importlib.metadata
 import json
 import math
+import hashlib
 import multiprocessing as mp
 import os
 from pathlib import Path
@@ -27,13 +28,14 @@ from urllib.parse import urlsplit, unquote
 
 import numpy as np
 import psutil
-from ase.data import atomic_numbers
+from ase.data import atomic_numbers, covalent_radii
 from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 
-VERSION = '1.0.0'
+VERSION = '1.1.0'
 MAX_BODY = 2 * 1024 * 1024
-MODES = ('evaluate', 'optimize', 'perpendicular', 'neb', 'cineb')
+MODES = ('evaluate', 'optimize', 'perpendicular', 'neb', 'cineb', 'afir')
+PATH_MODES = ('perpendicular', 'neb', 'cineb')
 
 
 def number(value, name, lo, hi, integer=False):
@@ -46,7 +48,7 @@ def number(value, name, lo, hi, integer=False):
 
 def validate(data, engine):
     allowed = {'symbols', 'images', 'cell', 'charge', 'multiplicity', 'mode',
-               'maxSteps', 'fmax', 'spring', 'maxMove', 'climbAfter'}
+               'maxSteps', 'fmax', 'spring', 'maxMove', 'climbAfter', 'atomIds', 'afir'}
     if not isinstance(data, dict) or set(data) - allowed:
         raise ValueError('未定義の入力項目があります。コマンド・パス指定は受け付けません。')
     symbols = data.get('symbols')
@@ -61,7 +63,7 @@ def validate(data, engine):
     if not np.isfinite(images).all() or np.max(np.abs(images)) > 1e4:
         raise ValueError('座標は有限値、絶対値10000 Å以下にしてください。')
     mode = data.get('mode', 'evaluate')
-    if mode not in MODES or (mode in MODES[2:] and len(images) < 3) or (mode == 'optimize' and len(images) != 1):
+    if mode not in MODES or (mode in PATH_MODES and len(images) < 3) or (mode in ('optimize', 'afir') and len(images) != 1):
         raise ValueError('経路緩和には端点を含む3〜20構造、単一最適化には1構造が必要です。')
     charge = number(data.get('charge', 0), '電荷', -100, 100, True)
     multiplicity = number(data.get('multiplicity', 1), '多重度', 1, 101, True)
@@ -93,8 +95,127 @@ def validate(data, engine):
         result[key] = number(data.get(key, default), key, low, high, integer)
     if mode == 'cineb' and result['climbAfter'] >= result['maxSteps']:
         raise ValueError('CI開始ステップは最大ステップ数より小さくしてください。')
-    if mode in MODES[2:] and any(np.linalg.norm(images[i+1]-images[i]) < 1e-10 for i in range(len(images)-1)):
+    if mode in PATH_MODES and any(np.linalg.norm(images[i+1]-images[i]) < 1e-10 for i in range(len(images)-1)):
         raise ValueError('隣接構造が同一です。重複フレームを除いてください。')
+    if mode == 'afir':
+        result['afir'], result['atomIds'] = validate_afir(data, result)
+    elif 'afir' in data or 'atomIds' in data:
+        raise ValueError('afirとatomIdsはAFIR専用の入力項目です。')
+    return result
+
+
+def alpha_from_gamma(gamma):
+    """Ar calibration; gamma in kJ/mol, returned alpha in eV/Å. Zero disables bias."""
+    number(gamma, 'gamma', 0, 1000)
+    if gamma == 0:
+        return 0.
+    t = gamma / 1.0061
+    log_ratio = math.log1p(t / (math.sqrt(1+t)+1) / 2)
+    return gamma / 96.48533288249877 / (3.8164 * 2**(-1/6) * -math.expm1(-log_ratio/6))
+
+
+def validate_afir(data, normalized):
+    c, ids = data.get('afir'), data.get('atomIds')
+    if not isinstance(ids, list) or len(ids) != len(normalized['symbols']) or any(not isinstance(i, str) or not i or len(i)>200 for i in ids) or len(set(ids)) != len(ids):
+        raise ValueError('AFIRには全原子の一意なIDが必要です。')
+    allowed = {'schema', 'fragments', 'pairs', 'charge', 'multiplicity', 'maxSteps', 'fmax', 'maxMove'}
+    if not isinstance(c, dict) or set(c) != allowed or c['schema'] != 'molecule-afir/1':
+        raise ValueError('AFIR設定の形式が一致しません。')
+    for key in ('charge', 'multiplicity', 'maxSteps', 'fmax', 'maxMove'):
+        if type(c[key]) is bool or c[key] != normalized[key]:
+            raise ValueError('AFIRと計算条件が一致しません: '+key)
+    if normalized['maxSteps']>500 or len(ids)<2 or any(atomic_numbers[s]>96 for s in normalized['symbols']):
+        raise ValueError('AFIRは2〜500原子、H〜Cm、最大500ステップです。')
+    if normalized['cell'] and any(normalized['cell']['pbc']):
+        raise ValueError('AFIRは非周期分子用です。')
+    if not isinstance(c['fragments'], list) or not 2 <= len(c['fragments']) <= 64 or not isinstance(c['pairs'], list) or not 1 <= len(c['pairs']) <= 128:
+        raise ValueError('AFIRには2〜64原子団と1〜128ペアが必要です。')
+    groups = {}
+    for f in c['fragments']:
+        if not isinstance(f, dict) or set(f) != {'id', 'label', 'atomIds'} or not isinstance(f['id'], str) or not f['id'] or f['id'] in groups or not isinstance(f['label'], str) or not f['label'].strip() or len(f['label'])>40:
+            raise ValueError('フラグメントのID・名前が不正です。')
+        a = f['atomIds']
+        if not isinstance(a, list) or not a or any(not isinstance(i, str) or i not in ids for i in a) or len(set(a))!=len(a):
+            raise ValueError('原子団の原子IDが不正です。')
+        groups[f['id']] = tuple(sorted(ids.index(i) for i in a))
+    seen = set()
+    for p in c['pairs']:
+        if not isinstance(p, dict) or set(p) != {'a','b','mode','gamma'} or not isinstance(p['a'], str) or not isinstance(p['b'], str) or p['a'] not in groups or p['b'] not in groups or p['mode'] not in ('attract','repel'):
+            raise ValueError('AFIRペアが不正です。')
+        a, b = groups[p['a']], groups[p['b']]
+        key = tuple(sorted((a, b)))
+        if set(a)&set(b) or key in seen:
+            raise ValueError('ペア内の原子重複または同じペアの重複があります。')
+        seen.add(key)
+        alpha_from_gamma(p['gamma'])
+    return copy.deepcopy(c), ids[:]
+
+
+def afir_bias(positions, symbols, ids, config):
+    groups = {f['id']:[ids.index(i) for i in f['atomIds']] for f in config['fragments']}
+    radii = np.array([covalent_radii[atomic_numbers[s]] for s in symbols])
+    total, forces = 0., np.zeros_like(positions)
+    for pair in config['pairs']:
+        a, b = np.meshgrid(groups[pair['a']], groups[pair['b']], indexing='ij')
+        a, b = a.ravel(), b.ravel()
+        vectors = positions[a]-positions[b]
+        distances = np.linalg.norm(vectors, axis=1)
+        if np.min(distances)<.1:
+            raise ValueError('AFIRの原子団に0.1 Å未満の衝突があります。')
+        logw = 6*np.log((radii[a]+radii[b])/distances)
+        weights = np.exp(logw-logw.max()); weights /= weights.sum()
+        distance = float(weights@distances)
+        coefficient = alpha_from_gamma(pair['gamma'])*(1 if pair['mode']=='attract' else -1)
+        total += coefficient*distance
+        force = -(coefficient*weights*(-5+6*distance/distances)/distances)[:,None]*vectors
+        np.add.at(forces, a, force); np.add.at(forces, b, -force)
+    return total, forces
+
+
+def afir_relax(data, calculate, progress=lambda p:None):
+    """FIRE minimizes physical energy plus independent pair biases; no TS claim."""
+    positions = np.array(data['images'][0], dtype=float)
+    velocity = np.zeros_like(positions)
+    dt, mix, positive = .05, .1, 0
+    result = dict(schema='molecule-afir-trajectory/1', mode='afir', atomIds=data['atomIds'],
+        images=[], energies=[], biasEnergies=[], biasedEnergies=[], forces=[], imageFmax=[], physicalFmax=[],
+        validation='biased-trajectory-not-ts', converged=False, reason='step_limit',
+        units={'length':'angstrom','energy':'eV','force':'eV/angstrom'})
+    for step in range(data['maxSteps']+1):
+        distances = np.linalg.norm(positions[:,None,:]-positions[None,:,:], axis=-1)
+        if np.any(distances[np.triu_indices(len(positions),1)]<.1):
+            raise ValueError('AFIR探索中に0.1 Å未満の原子衝突を検出しました。')
+        energy, force = calculate(0, positions)
+        force = np.asarray(force, dtype=float)
+        if not math.isfinite(energy) or force.shape!=positions.shape or not np.isfinite(force).all():
+            raise ValueError('物理計算から有限のエネルギー・力を取得できません。')
+        bias, artificial = afir_bias(positions, data['symbols'], data['atomIds'], data['afir'])
+        effective = force+artificial
+        fmax = float(np.linalg.norm(effective, axis=1).max())
+        result['images'].append(positions.tolist()); result['energies'].append(float(energy))
+        result['biasEnergies'].append(bias); result['biasedEnergies'].append(float(energy+bias))
+        result['forces'].append(force.tolist()); result['imageFmax'].append(fmax)
+        result['physicalFmax'].append(float(np.linalg.norm(force, axis=1).max()))
+        result.update(steps=step, evaluations=step+1, effectiveFmax=fmax)
+        # One evaluated frame per checkpoint; no optimizer internals are claimed.
+        progress({'step':step, 'fmax':fmax, 'energyEV':float(energy), 'biasEnergyEV':bias,
+                  'checkpoint':{'positions':positions.tolist(), 'force':force.tolist(),
+                    'energy':float(energy), 'bias':bias, 'fmax':fmax, 'physicalFmax':result['physicalFmax'][-1]}})
+        if fmax<=data['fmax']:
+            result.update(converged=True, reason='converged'); break
+        if step==data['maxSteps']:
+            break
+        velocity += dt*effective
+        if float(np.vdot(velocity, effective))>0:
+            positive += 1
+            if positive>5:
+                dt=min(dt*1.1,.5); mix*=.99
+            velocity=(1-mix)*velocity+mix*effective*np.linalg.norm(velocity)/max(np.linalg.norm(effective),1e-300)
+        else:
+            positive=0; dt*=.5; mix=.1; velocity.fill(0)
+        displacement=dt*velocity
+        displacement *= min(1., data['maxMove']/max(float(np.linalg.norm(displacement,axis=1).max()),1e-300))
+        positions += displacement
     return result
 
 
@@ -313,14 +434,22 @@ def worker(data, config, directory, messages):
         for key in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS'):
             os.environ[key] = str(config['threads'])
         calculator = (TBLiteEngine if config['engine'] == 'tblite' else GXTBEngine)(data, config, directory)
-        result = relax(data, calculator, lambda p: messages.put(('progress', p)))
+        result = (afir_relax if data['mode']=='afir' else relax)(data, calculator, lambda p: messages.put(('progress', p)))
         result['engine'] = config['engine']
         result['method'] = config['method'] if config['engine'] == 'tblite' else 'g-xTB'
         result['symbols'], result['cell'] = data['symbols'], data['cell']
         result['charge'], result['multiplicity'] = data['charge'], data['multiplicity']
+        result['conditionId'] = hashlib.sha256(json.dumps({'data':data, 'config':config}, sort_keys=True).encode()).hexdigest()
+        result['provenance'] = provenance(config)
         messages.put(('result', result))
     except Exception as error:
         messages.put(('error', str(error)[:2500]))
+
+
+def provenance(config):
+    return {'bridgeVersion':VERSION, 'engine':config['engine'], 'binarySHA256':config.get('binarySHA256'),
+        'threads':config['threads'], 'solvent':'gas', 'aseVersion':importlib.metadata.version('ase'),
+        'numpyVersion':np.__version__, 'afirReference':{'R0_A':3.8164,'epsilon_kJ_mol':1.0061,'power':6,'radii':'ASE covalent radii H-Cm'}}
 
 
 def stop_process(process):
@@ -348,7 +477,7 @@ class Jobs:
 
     def start(self, data):
         with self.lock:
-            if self.job and self.job['status'] == 'running':
+            if self.job and self.job['status'] in ('running', 'stopping'):
                 raise RuntimeError('別の計算が実行中です。中止または完了後に実行してください。')
             if self.job:
                 self.job['thread'].join(timeout=5)
@@ -361,7 +490,7 @@ class Jobs:
             messages = context.Queue()
             process = context.Process(target=worker, args=(data, self.config, directory, messages), daemon=True)
             job = {'id': secrets.token_hex(16), 'status': 'running', 'progress': {}, 'process': process,
-                   'directory': directory, 'queue': messages, 'started': time.monotonic()}
+                   'directory': directory, 'queue': messages, 'started': time.monotonic(), 'data':data, 'checkpoints':[]}
             self.job = job
             process.start()
             thread = job['thread'] = threading.Thread(target=self.monitor, args=(job,), daemon=True)
@@ -377,31 +506,55 @@ class Jobs:
             while job['status'] == 'running':
                 if time.monotonic()-job['started'] > self.config['jobTimeout']:
                     with self.lock:
-                        job['status'], job['error'] = 'error', '計算時間の上限に達しました。'
+                        job['status'], job['error'], job['terminalStatus'] = 'stopping', '計算時間の上限に達しました。', 'error'
                     break
                 try:
                     kind, value = job['queue'].get(timeout=.2)
                 except queue.Empty:
                     if not job['process'].is_alive():
                         with self.lock:
-                            job['status'], job['error'] = 'error', '計算プロセスが終了しました。エンジンの導入状態を確認してください。'
+                            job['status'], job['error'], job['terminalStatus'] = 'stopping', '計算プロセスが終了しました。エンジンの導入状態を確認してください。', 'error'
                         break
                     continue
                 with self.lock:
                     if job['status'] != 'running':
                         break
                     if kind == 'progress':
+                        checkpoint = value.pop('checkpoint', None)
+                        if checkpoint is not None:
+                            job['checkpoints'].append(checkpoint)
                         job['progress'].update(value)
                     elif kind == 'result':
                         job['status'], job['result'] = 'completed', value
                     else:
-                        job['status'], job['error'] = 'error', value
+                        job['status'], job['error'], job['terminalStatus'] = 'stopping', value, 'error'
         finally:
             # Always reap native processes, including timeout/cancel/SCF failures.
             stop_process(job['process'])
             job['process'].join(timeout=2)
             job['queue'].close()
             shutil.rmtree(job['directory'], ignore_errors=True)
+            if job['status']=='stopping':
+                with self.lock:
+                    job['status'] = job.get('terminalStatus', 'cancelled')
+                    if job['data']['mode']=='afir' and job['checkpoints']:
+                        job['result'] = self.partial_afir(job)
+
+    def partial_afir(self, job):
+        data, frames = job['data'], job['checkpoints']
+        energies, biases = [p['energy'] for p in frames], [p['bias'] for p in frames]
+        return dict(schema='molecule-afir-trajectory/1', mode='afir', engine=self.config['engine'],
+            method=self.config['method'] if self.config['engine']=='tblite' else 'g-xTB', atomIds=data['atomIds'],
+            symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
+            images=[p['positions'] for p in frames], energies=energies, biasEnergies=biases,
+            biasedEnergies=[e+b for e,b in zip(energies,biases)], forces=[p['force'] for p in frames],
+            imageFmax=[p['fmax'] for p in frames], physicalFmax=[p['physicalFmax'] for p in frames],
+            effectiveFmax=frames[-1]['fmax'], steps=len(frames)-1, evaluations=len(frames),
+            converged=False, reason='cancelled' if job['status']=='cancelled' else 'failed',
+            error=job.get('error'), validation='biased-trajectory-not-ts',
+            provenance=provenance(self.config),
+            conditionId=hashlib.sha256(json.dumps({'data':data, 'config':self.config}, sort_keys=True).encode()).hexdigest(),
+            units={'length':'angstrom','energy':'eV','force':'eV/angstrom'})
 
     def get(self, identifier):
         with self.lock:
@@ -414,7 +567,8 @@ class Jobs:
             if not self.job or self.job['id'] != identifier:
                 raise KeyError('計算が見つかりません。')
             if self.job['status'] == 'running':
-                self.job['status'] = 'cancelled'
+                self.job['status'] = 'stopping'
+                self.job['terminalStatus'] = 'cancelled'
             return self.public(self.job)
 
     def close(self):
@@ -598,6 +752,12 @@ def main():
         parser.error('--site-dir must contain the Molecule Studio index.html')
     config = {'engine': args.engine, 'method': args.method, 'binary': args.binary, 'threads': args.threads,
               'jobTimeout': args.job_timeout, 'evaluationTimeout': args.evaluation_timeout}
+    if args.engine=='gxtb':
+        digest=hashlib.sha256()
+        with open(args.binary,'rb') as source:
+            for chunk in iter(lambda:source.read(1024*1024),b''):
+                digest.update(chunk)
+        config['binarySHA256']=digest.hexdigest()
     token = secrets.token_urlsafe(32)
     server = make_server(config, token, args.port, args.allow_origin, args.site_dir)
     print(f'Molecule Studio bridge {VERSION}\nURL: http://127.0.0.1:{args.port}\nToken: {token}\nEngine: {args.engine}', flush=True)

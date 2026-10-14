@@ -51,9 +51,9 @@
     if(job)return;connection=null;$('engineRun').disabled=true;$('engineConnect').disabled=true;
     try{
       const c={url:endpoint($('engineURL').value),token:$('engineToken').value.trim()};if(!c.token)throw Error('サービス起動時に表示されるTokenを入力してください。');
-      c.info=await request(c,'/api/info');if(c.info.version!=='1.0.0'||!Array.isArray(c.info.modes))throw Error('サービスのバージョンが一致しません。最新のbridge.pyを使用してください。');connection=c;
+      c.info=await request(c,'/api/info');if(!['1.0.0','1.1.0'].includes(c.info.version)||!Array.isArray(c.info.modes))throw Error('サービスのバージョンが一致しません。最新のbridge.pyを使用してください。');connection=c;
       $('engineConnected').textContent=`接続済み: ${c.info.engine} / ${c.info.method} · ${c.info.engineVersion} · ${c.info.periodic?'固定セル周期系対応':'非周期系'}`;message('接続しました。電荷と多重度を確認して計算を実行してください。');
-    }catch(error){$('engineConnected').textContent='未接続';message(error.message);}finally{$('engineConnect').disabled=false;busy(false);}
+    }catch(error){$('engineConnected').textContent='未接続';message(error.message);}finally{$('engineConnect').disabled=false;busy(false);MV.AFIRUI?.sync();}
   }
   function clearResult(){result=null;$('engineResult').hidden=true;$('engineApply').disabled=true;$('engineDownload').disabled=true;}
   function validateResult(r,j){
@@ -120,8 +120,8 @@
   function init(){
     if(location.hostname==='127.0.0.1'||location.hostname==='localhost')$('engineURL').value=location.origin;
     $('btnExternalEngine').addEventListener('click',open);$('engineConnect').addEventListener('click',connect);$('engineMode').addEventListener('change',settings);$('engineRun').addEventListener('click',run);$('engineCancel').addEventListener('click',cancel);$('engineApply').addEventListener('click',apply);$('engineDownload').addEventListener('click',download);
-    for(const id of ['engineURL','engineToken'])$(id).addEventListener('input',()=>{connection=null;$('engineRun').disabled=true;$('engineConnected').textContent='未接続';});
+    for(const id of ['engineURL','engineToken'])$(id).addEventListener('input',()=>{connection=null;$('engineRun').disabled=true;$('engineConnected').textContent='未接続';MV.AFIRUI?.sync();});
     $('engineDialog').addEventListener('cancel',e=>{if(job){e.preventDefault();cancel();}});settings();
   }
-  MV.EngineUI={init,endpoint,frames,validateResult};
+  MV.EngineUI={init,endpoint,frames,validateResult,request,getConnection:()=>connection?{...connection}:null};
 })(window);

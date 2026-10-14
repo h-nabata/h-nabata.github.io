@@ -111,6 +111,7 @@
     syncUI();
     MV.Studio?.sync();
     MV.MeasurementUI?.sync();
+    MV.AFIRUI?.sync();
   }
 
   function setState(nextState, preserveCamera) {
@@ -126,6 +127,7 @@
     syncUI();
     MV.Studio?.sync();
     MV.MeasurementUI?.sync();
+    MV.AFIRUI?.sync();
   }
 
   function refreshBondsAndRender(preserveCamera) {

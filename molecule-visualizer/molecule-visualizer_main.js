@@ -8,6 +8,7 @@
     global.MoleculeVisualizer.GeneratorUI?.init();
     global.MoleculeVisualizer.EngineUI?.init();
     global.MoleculeVisualizer.MeasurementUI?.init();
+    global.MoleculeVisualizer.AFIRUI?.init();
   });
 })(window);
 

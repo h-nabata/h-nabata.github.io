@@ -133,3 +133,7 @@ Atom letters refer to selection order, not sorted atom numbers. Distances are Å
 The cone solver checks intersections of spherical-cap boundaries and bisects the enclosing half-angle, including one- and two-sphere support and degenerate direction sets. General ligand cone angles differ from classical Tolman values; see [Morfeus's definitions and Bondi radii discussion](https://digital-chemistry-laboratory.github.io/morfeus/cone_angle.html), [its Bondi data table](https://github.com/digital-chemistry-laboratory/morfeus/blob/main/morfeus/data.py), and [Bilbrey et al., JCC 2013](https://doi.org/10.1002/jcc.23217).
 
 Regression tests include analytic geometry for all six types, rigid-motion invariance, periodic measurements, frame-ID changes, project persistence, CSV contents, atom deletion, ring bond-length/closure and stereochemical checks, and real browser Worker/navigation/rendering/export interactions.
+
+## 複数フラグメントAFIR
+
+「AFIR / 原子団に人工力」から、描画上で複数の原子団とペアを指定して探索できます。設定と表示はブラウザ内で行い、探索時のエネルギー・力だけを、このPCのg-xTBまたはtbliteへ依頼します。外部サーバーには分子データを送りません。[操作・数式・データ形式](./AFIR.md)と[検証記録](./AFIR-VALIDATION.md)を参照してください。ローカルサービスは1.1.0へ更新してください。

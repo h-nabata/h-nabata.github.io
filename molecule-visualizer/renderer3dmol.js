@@ -348,7 +348,12 @@
     this.ctx.strokeStyle = pa.atom.element === "H" ? "#9ca3af" : "#111827";
     this.ctx.stroke();
 
-    if (this.state.viewSettings && this.state.viewSettings.showIndexLabels) {
+    if(this.state.viewSettings.afirOverlay && MV.AFIR){
+      const definitions=this.state.metadata.afir?.fragments;
+      const memberships=(Array.isArray(definitions)?definitions:[]).map((f,i)=>Array.isArray(f?.atomIds)&&f.atomIds.includes(pa.atom.id)?i:-1).filter(i=>i>=0);
+      memberships.forEach((i,k)=>{this.ctx.beginPath();this.ctx.arc(pa.x,pa.y,pa.radius+4+3*k,0,2*Math.PI);this.ctx.lineWidth=2;this.ctx.strokeStyle=MV.AFIR.palette[i%MV.AFIR.palette.length];this.ctx.stroke();});
+    }
+    if (this.state.viewSettings && (this.state.viewSettings.showIndexLabels || this.state.viewSettings.afirOverlay)) {
       const idx = pa.index;
       this.ctx.fillStyle = "#111827";
       this.ctx.font = "12px Arial, sans-serif";

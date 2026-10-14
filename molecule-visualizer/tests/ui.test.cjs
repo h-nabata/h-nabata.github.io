@@ -1,10 +1,10 @@
 // Browser-independent integration checks; a visual browser pass is still required.
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
-function boot(){
+function boot(afir=false){
  const nodes=new Map(),doc={activeElement:null,events:{},addEventListener(t,f){(this.events[t]??=[]).push(f);}};
  class El{
   constructor(id=''){this.id=id;this.value='';this.children=[];this.events={};this.dataset={};this.attrs={};this.style={};this.checked=false;this.open=false;this.classList={toggle(){},add(){},remove(){}};this.clientWidth=800;this.clientHeight=500;this.tagName='DIV';}
-  appendChild(x){this.children.push(x);return x;}append(x){this.appendChild(x);}removeChild(x){this.children=this.children.filter(c=>c!==x);}replaceChildren(...xs){this.children=xs;if(xs[0]?.value)this.value=xs[0].value;}
+  appendChild(x){this.children.push(x);return x;}append(...xs){xs.forEach(x=>this.appendChild(x));}removeChild(x){this.children=this.children.filter(c=>c!==x);}replaceChildren(...xs){this.children=xs;if(xs[0]?.value)this.value=xs[0].value;}
   set innerHTML(v){this.children=[];}get innerHTML(){return '';}
   setAttribute(k,v){this.attrs[k]=v;}addEventListener(t,f){(this.events[t]??=[]).push(f);}getBoundingClientRect(){return {width:800,height:500,left:0,top:0};}setPointerCapture(){}focus(){doc.activeElement=this;}showModal(){this.open=true;}close(){this.open=false;}contains(){return false;}
   getContext(){return new Proxy({createRadialGradient(){return {addColorStop(){}};}},{get:(o,k)=>o[k]||(()=>{})});}
@@ -15,12 +15,12 @@ function boot(){
  for(const [k,v] of Object.entries({bondOrder:'1',bondType:'covalent',styleSelect:'stickball',addMode:'custom',fragPlace:'offset',fragScale:'1',fragAnchorIndex:'1',fragBondDistance:'1.45',fragBondOrder:'1'}))nodes.get(k).value=v;
  const app=new El();doc.getElementById=id=>nodes.get(id)||null;doc.createElement=()=>new El();doc.body=new El();
  const tables={'#atomTable tbody':new El(),'#bondTable tbody':new El()};
- doc.querySelector=q=>tables[q]||(q==='.mv-app'?app:q==='dialog[open]'?[...nodes.values()].find(x=>x.open):null);
+ doc.querySelector=q=>tables[q]||((q==='.mv-app'||q==='.mv-inspector')?app:q==='dialog[open]'?[...nodes.values()].find(x=>x.open):null);
  doc.querySelectorAll=q=>q==='[data-tab]'?[...nodes.values()].filter(x=>x.dataset.tab):[];
  const timers=new Map();let seq=0;const win={document:doc,devicePixelRatio:1,addEventListener(){}};
  const ctx={window:win,document:doc,navigator:{clipboard:{writeText:async()=>{}}},localStorage:{getItem(){return null;},setItem(){}},setTimeout(f){timers.set(++seq,f);return seq;},clearTimeout(i){timers.delete(i);},Blob,URL,console};
  vm.createContext(ctx);for(const f of ['model','bonding','geometry','io','molfile','periodic','formats','history','renderer3dmol','ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
- win.MoleculeVisualizer.App.init();return {MV:win.MoleculeVisualizer,nodes,doc,canvas:nodes.get('viewer').children[0]};
+ if(afir)for(const f of ['afir','afir-ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);win.MoleculeVisualizer.App.init();if(afir)win.MoleculeVisualizer.AFIRUI.init();return {MV:win.MoleculeVisualizer,nodes,doc,canvas:nodes.get('viewer').children[0]};
 }
 test('app loads, atom edit/undo, invalid import is non-destructive, export uses latest state',()=>{const {MV,nodes}=boot(),app=MV.App;assert.equal(app.getState().atoms.length,3);assert.equal(nodes.get('statusBadge').classList!==null,true);
  const s=app.getState();s.selectedAtomIds.add(s.atoms[0].id);app.setState(s,true);nodes.get('dataText').value='O 2.5 0 0\nH .9572 0 0\nH -.239987 .926627 0';nodes.get('dataText').fire('input');nodes.get('dataApply').click();assert.equal(app.getState().atoms[0].x,2.5);nodes.get('btnUndo').click();assert.equal(app.getState().atoms[0].x,0);
@@ -121,4 +121,42 @@ test('text editor imports multi-record SDF and CIF as complete documents and pre
  const sdf=MV.IO.stateToSDFText(molecule);box.value=sdf+sdf;box.fire('input');nodes.get('dataApply').click();assert.equal(app.getState().metadata.trajectory.length,2);assert.equal(app.getState().bonds[0].order,2);nodes.get('btnUndo').click();assert.equal(app.getState().atoms.length,3);nodes.get('dataReset').click();
  box.value='data_cell\n_cell_length_a 5\n_cell_length_b 5\n_cell_length_c 5\n_cell_angle_alpha 90\n_cell_angle_beta 90\n_cell_angle_gamma 90\nloop_\n_atom_site_type_symbol\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\nC .2 .4 .6\n';box.fire('input');nodes.get('dataApply').click();assert.equal(app.getState().atoms.length,1);assert.ok(app.getState().metadata.cell);assert.match(box.value,/TV /);
  const before=JSON.stringify(app.getState());box.value='data_bad\nloop_\n_atom_site_fract_x\n.2';box.fire('input');nodes.get('dataApply').click();assert.equal(JSON.stringify(app.getState()),before);assert.match(box.value,/data_bad/);
+});
+
+
+test('AFIR fragments follow canvas selection, pairs reject duplicates, edit/undo/project retain IDs',()=>{
+ const {MV,nodes,canvas}=boot(true),app=MV.App;
+ nodes.get('btnAFIR').click();assert.equal(nodes.get('afirPanel').hidden,false);assert.equal(nodes.get('multiSelect').checked,true);
+ const positions=app.renderer().projectedAtoms;
+ // Exercise actual atom picking through the canvas pointer handlers.
+ const pick=p=>{canvas.fire('pointerdown',{pointerId:23,clientX:p.x,clientY:p.y,button:0});canvas.fire('pointerup',{pointerId:23,clientX:p.x,clientY:p.y,button:0});};
+ pick(positions[0]);assert.equal(app.getState().selectedAtomIds.size,1);
+ nodes.get('afirName').value='O group';nodes.get('afirAddFragment').click();
+ assert.equal(app.getState().metadata.afir.fragments[0].atomIds[0],app.getState().atoms[0].id);
+ assert.equal(app.getState().selectedAtomIds.size,0);
+ pick(app.renderer().projectedAtoms[1]);nodes.get('afirName').value='H group';nodes.get('afirAddFragment').click();
+ nodes.get('afirA').value='f1';nodes.get('afirB').value='f2';nodes.get('afirMode').value='attract';nodes.get('afirGamma').value='100';nodes.get('afirAddPair').click();
+ assert.equal(app.getState().metadata.afir.pairs.length,1);assert.equal(nodes.get('afirCheck').disabled,false);
+ nodes.get('afirCheck').click();assert.match(nodes.get('afirStatus').textContent,/人工項のみ評価/);
+ nodes.get('afirAddPair').click();assert.equal(app.getState().metadata.afir.pairs.length,1);assert.match(nodes.get('afirStatus').textContent,/重複/);
+ nodes.get('afirSteps').value='4';nodes.get('afirFmax').value='0.00001';nodes.get('afirMove').value='0.02';
+ nodes.get('afirCheck').click();assert.equal(app.getState().metadata.afir.maxSteps,4);assert.equal(app.getState().metadata.afir.fmax,.00001);
+ nodes.get('btnUndo').click(); // restore settings so the next undo removes the pair
+ assert.equal(nodes.get('afirRun').disabled,true); // no physical engine is silently substituted
+ const serialized=MV.IO.stateToProjectText(app.getState()),restored=MV.IO.parseProject(serialized);
+ assert.equal(JSON.stringify(restored.metadata.afir),JSON.stringify(app.getState().metadata.afir));
+ nodes.get('btnUndo').click();assert.equal(app.getState().metadata.afir.pairs.length,0);
+ nodes.get('btnRedo').click();assert.equal(app.getState().metadata.afir.pairs.length,1);
+ app.change('delete selected atom',s=>{s.atoms=s.atoms.slice(1);});assert.equal(nodes.get('afirCheck').disabled,true);assert.match(nodes.get('afirPreview').textContent,/原子ID/);
+ nodes.get('btnUndo').click();assert.equal(nodes.get('afirCheck').disabled,false);
+ nodes.get('afirClose').click();assert.equal(nodes.get('afirPanel').hidden,true);assert.equal(app.getState().viewSettings.afirOverlay,false);
+});
+
+
+test('malformed imported AFIR settings cannot break the editor and can be reset with undo',()=>{
+ const {MV,nodes}=boot(true);MV.App.change('import invalid AFIR',s=>{s.metadata.afir={schema:'bad',fragments:{bad:true},pairs:[]};});
+ assert.match(nodes.get('afirStatus').textContent,/形式が不正/);assert.equal(nodes.get('afirRun').disabled,true);
+ nodes.get('btnAFIR').click();assert.equal(nodes.get('afirPanel').hidden,false);
+ nodes.get('afirReset').click();assert.equal(MV.App.getState().metadata.afir.schema,'molecule-afir/1');
+ nodes.get('btnUndo').click();assert.equal(MV.App.getState().metadata.afir.schema,'bad');assert.equal(nodes.get('afirRun').disabled,true);
 });
