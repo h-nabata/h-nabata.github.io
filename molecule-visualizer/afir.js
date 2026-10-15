@@ -16,7 +16,7 @@
     const t=gamma/EPSILON,logRatio=Math.log1p(t/(Math.sqrt(1+t)+1)/2);
     return gamma*KJMOL_TO_EV/(R0*Math.pow(2,-1/6)*(-Math.expm1(-logRatio/6)));
   }
-  const defaults=()=>({schema:'molecule-afir/1',fragments:[],pairs:[],charge:0,multiplicity:1,maxSteps:150,fmax:.05,maxMove:.04});
+  const defaults=()=>({schema:'molecule-afir/1',fragments:[],pairs:[],charge:0,multiplicity:1,maxSteps:10000,fmax:.05,maxMove:.04});
   function validate(atoms,config,cell=null){
     if(!Array.isArray(atoms)||atoms.length<2||atoms.length>500)throw Error('AFIRの原子数は2〜500にしてください。');
     const index=new Map();atoms.forEach((a,i)=>{
@@ -41,7 +41,7 @@
       return {a,b,mode:p.mode,gamma:p.gamma,alpha:alphaFromGamma(p.gamma)};
     });
     number(config.charge,'電荷',-100,100,true);number(config.multiplicity,'多重度',1,101,true);
-    number(config.maxSteps,'最大ステップ数',1,500,true);number(config.fmax,'収束しきい値 (eV/Å)',.00001,10);number(config.maxMove,'最大変位 (Å)',.001,.2);
+    number(config.maxSteps,'最大ステップ数',1,10000,true);number(config.fmax,'収束しきい値 (eV/Å)',.00001,10);number(config.maxMove,'最大変位 (Å)',.001,.2);
     return {terms,atomIds:atoms.map(a=>a.id)};
   }
   function evaluate(atoms,config,cell=null){

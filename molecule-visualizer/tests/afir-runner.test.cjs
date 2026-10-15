@@ -17,3 +17,11 @@ test('result acceptance independently checks all IDs, biases, budgets and conver
  const MV=boot(),{j,r}=sample();MV.AFIRRunner.validateResult(r,j);
  for(const modify of [v=>v.atomIds.reverse(),v=>v.biasEnergies[0]++,v=>v.converged=true,v=>v.charge=1,v=>v.steps=2,v=>v.images[0][1][0]=3,v=>v.forces[0][0][0]=NaN,v=>v.units.force='hartree/bohr']){const bad=structuredClone(r);modify(bad);assert.throws(()=>MV.AFIRRunner.validateResult(bad,j));}
 });
+test('10000-step jobs retain the budget in transport and old bridges get an update instruction',async()=>{
+ const MV=boot(),{j}=sample(),calls=[],link={url:'http://127.0.0.1:8766',info:{modes:['afir']}};
+ MV.EngineUI.getConnection=()=>link;
+ MV.EngineUI.request=async(c,path,body)=>{calls.push({path,body});return body?{id:'a'.repeat(32)}:{status:'cancelled'};};
+ await assert.rejects(()=>MV.AFIRRunner.run(j,()=>{}),/bridge.py 1\.1\.1/);assert.equal(calls.length,0);
+ link.info.maxAFIRSteps=10000;await MV.AFIRRunner.run(j,()=>{});
+ assert.equal(calls[0].body.maxSteps,10000);assert.equal(calls[0].body.afir.maxSteps,10000);
+});

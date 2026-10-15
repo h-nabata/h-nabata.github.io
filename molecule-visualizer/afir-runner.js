@@ -23,6 +23,7 @@
   async function run(j,progress){
     if(!available())throw Error('AFIRに対応したローカルサービス1.1.0以降へ接続してください。');
     j.connection=connection();j.connection.url=MV.EngineUI.endpoint(j.connection.url);
+    if(j.config.maxSteps>(j.connection.info.maxAFIRSteps??500))throw Error('指定したAFIRステップ数にはbridge.py 1.1.1以降が必要です。最新版をダウンロードしてサービスを再起動し、再接続してください。');
     progress('このPCの計算エンジンで探索を開始しています…');
     try{
       const created=await MV.EngineUI.request(j.connection,'/api/jobs',input(j));if(!/^[a-f0-9]{32}$/.test(created.id))throw Error('計算IDが不正です。');j.id=created.id;

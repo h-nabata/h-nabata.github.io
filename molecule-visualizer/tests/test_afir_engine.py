@@ -21,6 +21,19 @@ def request():
 
 
 class AFIR(unittest.TestCase):
+    def test_step_budget_boundary(self):
+        r=request()
+        for steps in (1,500,1000,10000):
+            r['maxSteps']=r['afir']['maxSteps']=steps
+            normalized=b.validate(r,'gxtb')
+            self.assertEqual(normalized['maxSteps'],steps)
+            self.assertEqual(normalized['afir']['maxSteps'],steps)
+        del r['maxSteps']
+        self.assertEqual(b.validate(r,'gxtb')['maxSteps'],10000)
+        for steps in (0,10001,1.5):
+            r['maxSteps']=r['afir']['maxSteps']=steps
+            with self.assertRaisesRegex(ValueError,'maxSteps'):b.validate(r,'gxtb')
+
     def test_bias_finite_difference_and_independent_singleton_oracle(self):
         data=b.validate(request(),'gxtb');p=np.array(data['images'][0])
         e,f=b.afir_bias(p,data['symbols'],data['atomIds'],data['afir'])

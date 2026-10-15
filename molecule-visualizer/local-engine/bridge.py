@@ -32,7 +32,7 @@ from ase.data import atomic_numbers, covalent_radii
 from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 
-VERSION = '1.1.0'
+VERSION = '1.1.1'
 MAX_BODY = 2 * 1024 * 1024
 MODES = ('evaluate', 'optimize', 'perpendicular', 'neb', 'cineb', 'afir')
 PATH_MODES = ('perpendicular', 'neb', 'cineb')
@@ -90,7 +90,8 @@ def validate(data, engine):
                 raise ValueError('0.1 Å未満で重なった原子があります。初期経路の衝突を解消してください。')
     result = dict(symbols=symbols, images=images.tolist(), cell=cell, charge=charge,
                   multiplicity=multiplicity, mode=mode)
-    for key, default, low, high, integer in [('maxSteps', 150, 1, 1000, True), ('fmax', .05, .00001, 10, False),
+    step_default, step_limit = (10000, 10000) if mode == 'afir' else (150, 1000)
+    for key, default, low, high, integer in [('maxSteps', step_default, 1, step_limit, True), ('fmax', .05, .00001, 10, False),
             ('spring', .1, .001, 10, False), ('maxMove', .04, .001, .2, False), ('climbAfter', 10, 0, 500, True)]:
         result[key] = number(data.get(key, default), key, low, high, integer)
     if mode == 'cineb' and result['climbAfter'] >= result['maxSteps']:
@@ -124,8 +125,8 @@ def validate_afir(data, normalized):
     for key in ('charge', 'multiplicity', 'maxSteps', 'fmax', 'maxMove'):
         if type(c[key]) is bool or c[key] != normalized[key]:
             raise ValueError('AFIRと計算条件が一致しません: '+key)
-    if normalized['maxSteps']>500 or len(ids)<2 or any(atomic_numbers[s]>96 for s in normalized['symbols']):
-        raise ValueError('AFIRは2〜500原子、H〜Cm、最大500ステップです。')
+    if len(ids)<2 or any(atomic_numbers[s]>96 for s in normalized['symbols']):
+        raise ValueError('AFIRは2〜500原子、H〜Cmです。')
     if normalized['cell'] and any(normalized['cell']['pbc']):
         raise ValueError('AFIRは非周期分子用です。')
     if not isinstance(c['fragments'], list) or not 2 <= len(c['fragments']) <= 64 or not isinstance(c['pairs'], list) or not 1 <= len(c['pairs']) <= 128:
@@ -649,7 +650,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.response(200, {'version': VERSION, 'engine': config['engine'],
                     'method': config['method'] if config['engine'] == 'tblite' else 'g-xTB (--gxtb --grad)',
                     'periodic': config['engine'] == 'tblite', 'maxAtoms': 500, 'maxImages': 20,
-                    'modes': MODES, 'jobTimeout': config['jobTimeout'],
+                    'modes': MODES, 'maxAFIRSteps': 10000, 'jobTimeout': config['jobTimeout'],
                     'engineVersion': importlib.metadata.version('tblite') if config['engine'] == 'tblite' else 'locally configured binary'})
             elif re.fullmatch(r'/api/jobs/[a-f0-9]{32}', self.path):
                 try:

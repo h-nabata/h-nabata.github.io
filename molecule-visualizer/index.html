@@ -17,10 +17,10 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./studio.js?v=16"></script>
 <script defer src="./advanced.js?v=16"></script>
 <script defer src="./generator-ui.js?v=16"></script>
-<script defer src="./engine-ui.js?v=16"></script>
-<script defer src="./afir.js?v=16"></script>
+<script defer src="./engine-ui.js?v=17"></script>
+<script defer src="./afir.js?v=17"></script>
 <script defer src="./afir-search.js?v=16"></script>
-<script defer src="./afir-runner.js?v=16"></script>
+<script defer src="./afir-runner.js?v=17"></script>
 <script defer src="./afir-ui.js?v=17"></script>
 <script defer src="./measurement-ui.js?v=16"></script>
 <script defer src="./molecule-visualizer_main.js?v=16"></script>
@@ -82,7 +82,7 @@ title: 分子構造エディタ | Molecule Studio
         </fieldset>
         <fieldset id="afirSettings"><legend>3. 探索条件</legend>
           <div class="mv-afir-pair"><label>全電荷<input id="afirCharge" type="number" min="-100" max="100" step="1" value="0"></label><label>スピン多重度<input id="afirMultiplicity" type="number" min="1" max="101" step="1" value="1"></label></div>
-          <div class="mv-afir-pair"><label>最大ステップ<input id="afirSteps" type="number" min="1" max="500" step="1" value="150"></label><label>収束 (eV/Å)<input id="afirFmax" type="number" min="0.00001" max="10" step="0.01" value="0.05"></label></div>
+          <div class="mv-afir-pair"><label>最大ステップ<input id="afirSteps" type="number" min="1" max="10000" step="1" value="10000"></label><label>収束 (eV/Å)<input id="afirFmax" type="number" min="0.00001" max="10" step="0.01" value="0.05"></label></div>
           <label>1ステップの最大変位 (Å)<input id="afirMove" type="number" min="0.001" max="0.2" step="0.01" value="0.04"></label>
         </fieldset>
         <p id="afirPreview" class="mv-afir-note"></p>
@@ -344,7 +344,7 @@ H 1.0 0 0
   <h2>外部エンジン / 経路緩和</h2>
   <p class="mv-small">計算はこのPCで起動したサービス上で実行します。座標はローカルサービスへ送信されます。接続トークンはこの画面のメモリだけに保持します。</p>
   <details class="mv-engine-setup"><summary>初回のセットアップ：tblite / g-xTBを選ぶ</summary>
-    <p><a href="./local-engine/bridge.py" download>bridge.pyをダウンロード</a>し、使いたい計算手法に応じて、以下のどちらか一方の手順で起動してください。Python 3.10以上が必要です。</p>
+    <p><a href="./local-engine/bridge.py?v=1.1.1" download>bridge.pyをダウンロード</a>し、使いたい計算手法に応じて、以下のどちらか一方の手順で起動してください。Python 3.10以上が必要です。AFIRの最大10,000ステップに対応するには、bridge.py 1.1.1以降へ差し替え、サービスを再起動して再接続してください。</p>
     <ul>
       <li><strong>tblite</strong>：GFN2-xTB（既定）、GFN1-xTB、IPEA1-xTBを利用します。このアプリでは非周期系と固定セルの周期系に対応します。</li>
       <li><strong>g-xTB</strong>：公式のg-xTB対応実行ファイルを別途用意します。このアプリでは非周期系に対応します。tbliteのPythonパッケージは不要です。</li>

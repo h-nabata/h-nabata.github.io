@@ -198,7 +198,8 @@ class HTTPBoundary(unittest.TestCase):
         c.close();return result
 
     def test_auth_origin_host_and_preflight(self):
-        self.assertEqual(self.call('GET','/api/info')[0],200)
+        status,_,info=self.call('GET','/api/info')
+        self.assertEqual(status,200);self.assertEqual(info['maxAFIRSteps'],10000)
         for h,status in [({'Authorization':''},401),({'Origin':'https://evil.example'},403),({'Origin':'null'},403),({'Host':'evil.example'},403)]:
             self.assertEqual(self.call('GET','/api/info',headers=h)[0],status)
         status,headers,_=self.call('OPTIONS','/api/jobs',headers={'Authorization':'','Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'authorization,content-type','Access-Control-Request-Private-Network':'true'})

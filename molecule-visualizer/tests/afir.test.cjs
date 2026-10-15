@@ -3,6 +3,11 @@ const A=require('../afir.js');
 const atoms=[{id:'h1',element:'H',x:0,y:0,z:0},{id:'h2',element:'H',x:2,y:0,z:0},{id:'o1',element:'O',x:.5,y:2,z:.3},{id:'c1',element:'C',x:2.8,y:1,z:-.2}];
 function config(){return {...A.defaults(),fragments:[{id:'a',label:'A',atomIds:['h1']},{id:'b',label:'B',atomIds:['h2']}],pairs:[{a:'a',b:'b',mode:'attract',gamma:100}]};}
 const close=(a,b,tol=1e-8)=>assert.ok(Math.abs(a-b)<tol,`${a} != ${b}`);
+test('AFIR accepts the 10000-step default and rejects budgets outside 1..10000',()=>{
+  const c=config();assert.equal(c.maxSteps,10000);A.validate(atoms,c);
+  for(const maxSteps of [1,500,1000,10000])A.validate(atoms,{...c,maxSteps});
+  for(const maxSteps of [0,10001,1.5])assert.throws(()=>A.validate(atoms,{...c,maxSteps}),/最大ステップ数/);
+});
 test('Ar conversion: independent published equation, known values, zero is explicitly off',()=>{
   const direct=g=>g*A.KJMOL_TO_EV/((2**(-1/6)-(1+Math.sqrt(1+g/1.0061))**(-1/6))*3.8164);
   for(const g of [1,40,100,500,1000])close(A.alphaFromGamma(g),direct(g),1e-12);

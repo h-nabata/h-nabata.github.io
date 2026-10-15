@@ -176,9 +176,9 @@ g-xTBは公式配布 `xtb-6.7.1-gxtb-140526-linux-x86_64` で検証していま�
 - Henkelman & Jónsson, *Improved tangent estimate in the nudged elastic band method*, J. Chem. Phys. 113, 9978 (2000), [DOI](https://doi.org/10.1063/1.1323224)
 - Henkelman, Uberuaga & Jónsson, *A climbing image nudged elastic band method*, J. Chem. Phys. 113, 9901 (2000), [DOI](https://doi.org/10.1063/1.1329672)
 
-## 7. 複数フラグメントAFIR（1.1.0）
+## 7. 複数フラグメントAFIR（1.1.1）
 
-AFIRを利用する場合は、このフォルダーの`bridge.py`を1.1.0へ更新して再起動します。追加のPython依存関係はありません。NEBと同じ接続URL・Tokenを使います。[AFIR操作説明](../AFIR.md)を参照してください。
+AFIRを利用する場合は、このフォルダーの`bridge.py`を1.1.1へ更新して再起動します。最大ステップ数の既定値・上限は10,000です。1.1.0の上限は500ステップのため、ファイルを差し替えて再起動し、新しいTokenで再接続してください。追加のPython依存関係はありません。NEBと同じ接続画面を使います。[AFIR操作説明](../AFIR.md)を参照してください。
 
 AFIRは非周期分子専用です。人工項を加えたエネルギーのFIRE最適化を実行し、物理エネルギーと人工項、原子ID付きの全評価フレームを区別して返します。中止時は受領済みの途中フレームを保持し、子プロセスの終了後に停止を報告します。結果はサービスのメモリ上にあるため、終了前にブラウザからJSONを保存してください。
 

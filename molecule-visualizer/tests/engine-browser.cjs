@@ -27,6 +27,12 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   }
   await page.selectOption('#afirA','f1');await page.selectOption('#afirB','f2');await page.fill('#afirGamma','40');await page.click('#afirAddPair');
   await page.selectOption('#afirA','f2');await page.selectOption('#afirB','f3');await page.selectOption('#afirMode','repel');await page.fill('#afirGamma','20');await page.click('#afirAddPair');
+  // Accept the new budget in a real job; a loose threshold ends this smoke test immediately.
+  await page.fill('#afirSteps','10000');await page.fill('#afirFmax','10');await page.click('#afirRun');
+  await page.waitForSelector('#afirResult:not([hidden])');
+  const largeBudgetDownload=page.waitForEvent('download');await page.click('#afirDownload');
+  const largeBudgetFile=await largeBudgetDownload,largeBudget=JSON.parse(fs.readFileSync(await largeBudgetFile.path(),'utf8'));
+  assert.equal(largeBudget.input.config.maxSteps,10000);assert.equal(largeBudget.result.converged,true);
   await page.fill('#afirSteps','3');await page.fill('#afirFmax','0.00001');await page.fill('#afirMove','0.02');await page.click('#afirRun');
   await page.waitForSelector('#afirResult:not([hidden])');assert.match(await page.locator('#afirResultSummary').textContent(),/3ステップ/);
   assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);

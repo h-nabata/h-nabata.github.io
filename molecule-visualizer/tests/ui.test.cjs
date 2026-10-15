@@ -212,8 +212,8 @@ test('AFIR fragments follow canvas selection, pairs reject duplicates, edit/undo
  nodes.get('afirCheck').click();assert.match(nodes.get('afirStatus').textContent,/人工項のみ評価/);
  nodes.get('afirAddPair').click();assert.equal(app.getState().metadata.afir.pairs.length,1);assert.match(nodes.get('afirStatus').textContent,/重複/);
  assert.match(nodes.get('afirPairStatus').textContent,/追加できません:.*重複/);
- nodes.get('afirSteps').value='4';nodes.get('afirFmax').value='0.00001';nodes.get('afirMove').value='0.02';
- nodes.get('afirCheck').click();assert.equal(app.getState().metadata.afir.maxSteps,4);assert.equal(app.getState().metadata.afir.fmax,.00001);
+ nodes.get('afirSteps').value='10000';nodes.get('afirFmax').value='0.00001';nodes.get('afirMove').value='0.02';
+ nodes.get('afirCheck').click();assert.equal(app.getState().metadata.afir.maxSteps,10000);assert.equal(app.getState().metadata.afir.fmax,.00001);
  nodes.get('btnUndo').click(); // restore settings so the next undo removes the pair
  assert.equal(nodes.get('afirRun').disabled,true); // no physical engine is silently substituted
  const serialized=MV.IO.stateToProjectText(app.getState()),restored=MV.IO.parseProject(serialized);
