@@ -1,7 +1,7 @@
 name: Molecule editor tests
 on:
   push:
-    branches: [main, molecule-studio-v3]
+    branches: [main, molecule-studio-v3, molecule-profile-preview]
     paths: ['molecule-visualizer/**', '.github/workflows/molecule-test.yml']
   workflow_dispatch:
 permissions:

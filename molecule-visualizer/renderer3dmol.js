@@ -386,6 +386,7 @@
       if(touches.size>2)return;
       const atom=self.pickAtom(p.x,p.y),bond=atom?null:self.pickBond(p.x,p.y);
       let action=e.button===1?"pan":e.altKey?(e.button===2?"groupRotate":"groupMove"):e.button===0&&e.shiftKey?"roll":e.button===2||self.mode==="box"?"box":self.mode==="move"&&atom?"move":"rotate";
+      if(self.previewOnly)action=e.button===1?'pan':e.shiftKey?'roll':'rotate';
       self.pointer={button:e.button,id:e.pointerId,x:e.clientX,y:e.clientY,lastX:e.clientX,lastY:e.clientY,moved:false,atomId:atom?.id,bondId:bond?.id,groupSeed:atom?.id||bond?.atom1,action,historyStarted:false};
       if(action==="box")self.selectionBox={x1:p.x,y1:p.y,x2:p.x,y2:p.y};
       e.preventDefault();
@@ -420,7 +421,7 @@
           else if(ptr.button===2&&ptr.atomId)self.onAtomContextSelect?.(ptr.atomId,e);
         }
       }
-      else if(!ptr.moved&&["rotate","move","roll"].includes(ptr.action)&&e.type!=="pointercancel") {if(ptr.atomId)self.onAtomClick?.(ptr.atomId,e,self);else if(ptr.bondId)self.onBondClick?.(ptr.bondId,e,self);else self.onBlankClick?.(e);}
+      else if(!self.previewOnly&&!ptr.moved&&["rotate","move","roll"].includes(ptr.action)&&e.type!=="pointercancel") {if(ptr.atomId)self.onAtomClick?.(ptr.atomId,e,self);else if(ptr.bondId)self.onBondClick?.(ptr.bondId,e,self);else self.onBlankClick?.(e);}
       self.draw();
     };
     this.canvas.addEventListener("pointerup",finish);this.canvas.addEventListener("pointercancel",finish);this.canvas.addEventListener("lostpointercapture",finish);

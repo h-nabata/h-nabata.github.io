@@ -29,12 +29,13 @@
       const created=await MV.EngineUI.request(j.connection,'/api/jobs',input(j));if(!/^[a-f0-9]{32}$/.test(created.id))throw Error('計算IDが不正です。');j.id=created.id;
       if(j.cancelled)await cancel(j);
       while(true){
-        const state=await MV.EngineUI.request(j.connection,`/api/jobs/${j.id}`);
+        const live=j.livePreview&&MV.EnergyProfile?.following();
+        const state=await MV.EngineUI.request(j.connection,`/api/jobs/${j.id}`+(live?`?preview=1&after=${j.previewCursor||0}`:''));
         if(state.status==='completed'||state.status==='cancelled'||state.status==='error'){
           if(state.result){validateResult(state.result,j);return state.result;}
           if(state.status==='error')throw Error(state.error||'計算エンジンが失敗しました。');return null;
         }
-        const p=state.progress||{};progress(`AFIR探索中: ${p.step??0} / ${j.config.maxSteps} ステップ`+(p.fmax!=null?` · 最大有効力 ${p.fmax.toPrecision(4)} eV/Å`:'')+(j.cancelled||state.status==='stopping'?' · 停止処理中':''));
+        const p=state.progress||{};progress(`AFIR探索中: ${p.step??0} / ${j.config.maxSteps} ステップ`+(p.fmax!=null?` · 最大有効力 ${p.fmax.toPrecision(4)} eV/Å`:'')+(j.cancelled||state.status==='stopping'?' · 停止処理中':''),state.preview);
         await new Promise(resolve=>setTimeout(resolve,600));
       }
     }catch(e){throw Error(e.message+(j.id?' 接続が途切れた場合はローカル端末でCtrl+Cを押して停止できます。':''));}

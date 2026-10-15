@@ -19,7 +19,7 @@
       const data=await response.json();if(!response.ok)throw Error(data.error||`HTTP ${response.status}`);return data;
     }catch(error){if(error.name==='TypeError'||error.name==='AbortError')throw Error('ローカルサービスに接続できません。起動状態・URL・許可Origin・ブラウザのローカルネットワーク許可を確認してください。接続が遮断される場合は --site-dir で画面もローカル配信できます。');throw error;}finally{clearTimeout(timer);}
   }
-  function busy(value){$('engineSettings').disabled=value;$('engineConnection').disabled=value;$('engineRun').disabled=value||!connection;$('engineCancel').disabled=!value;$('engineClose').disabled=value;}
+  function busy(value){$('engineSettings').disabled=value;$('engineConnection').disabled=value;$('engineRun').disabled=value||!connection;$('engineCancel').disabled=!value;$('engineClose').disabled=false;$('engineLive').disabled=value;}
   function settings(){
     const mode=$('engineMode').value,path=['perpendicular','neb','cineb'].includes(mode);
     if(path)$('engineScope').value='all';if(mode==='optimize')$('engineScope').value='current';$('engineScope').disabled=path||mode==='optimize';
@@ -52,7 +52,7 @@
     if(job)return;connection=null;$('engineRun').disabled=true;$('engineConnect').disabled=true;
     try{
       const c={url:endpoint($('engineURL').value),token:$('engineToken').value.trim()};if(!c.token)throw Error('サービス起動時に表示されるTokenを入力してください。');
-      c.info=await request(c,'/api/info');if(!['1.0.0','1.1.0','1.1.1','1.1.2'].includes(c.info.version)||!Array.isArray(c.info.modes))throw Error('サービスのバージョンが一致しません。最新のbridge.pyを使用してください。');connection=c;
+      c.info=await request(c,'/api/info');if(!['1.0.0','1.1.0','1.1.1','1.1.2','1.2.0'].includes(c.info.version)||!Array.isArray(c.info.modes))throw Error('サービスのバージョンが一致しません。最新のbridge.pyを使用してください。');connection=c;
       $('engineConnected').textContent=`接続済み: ${c.info.engine} / ${c.info.method} · ${c.info.engineVersion} · ${c.info.periodic?'固定セル周期系対応':'非周期系'}`;message('接続しました。電荷と多重度を確認して計算を実行してください。');
     }catch(error){$('engineConnected').textContent='未接続';message(error.message);}finally{$('engineConnect').disabled=false;busy(false);MV.AFIRUI?.sync();}
   }
@@ -67,29 +67,40 @@
     const reason={converged:'収束',step_limit:'ステップ上限（未収束）',evaluated:'評価完了'}[r.reason]||r.reason;
     $('engineResultSummary').textContent=`${modeText[r.mode]} · ${reason} · ${r.steps}ステップ · ${r.evaluations}回の評価 · 最大有効力 ${r.effectiveFmax.toPrecision(4)} eV/Å`+(r.maxTangentialStep!=null?` · 接線方向の最大更新 ${r.maxTangentialStep.toExponential(2)} Å`:'');
     const body=$('engineEnergyRows');body.replaceChildren();r.energies.forEach((energy,i)=>{const tr=document.createElement('tr');const fixed=['perpendicular','neb','cineb'].includes(r.mode)&&(i===0||i===r.energies.length-1);for(const value of [i+1,energy.toFixed(8),(energy-r.energies[0]).toFixed(6),fixed?'端点固定':r.imageFmax[i].toPrecision(4),i===r.climbingImage?'CI':'']){const td=document.createElement('td');td.textContent=value;tr.append(td);}body.append(tr);});
-    const svg=$('enginePlot');svg.replaceChildren();const ns='http://www.w3.org/2000/svg',relative=r.energies.map(e=>e-r.energies[0]),lo=Math.min(0,...relative),hi=Math.max(...relative),span=Math.max(hi-lo,1e-8),points=relative.map((e,i)=>[30+i*500/Math.max(1,relative.length-1),145-(e-lo)*115/span]);
-    const line=document.createElementNS(ns,'polyline');line.setAttribute('points',points.map(p=>p.join(',')).join(' '));line.setAttribute('fill','none');line.setAttribute('stroke','#087c83');line.setAttribute('stroke-width','2');svg.append(line);
-    points.forEach(([x,y],i)=>{const circle=document.createElementNS(ns,'circle');circle.setAttribute('cx',x);circle.setAttribute('cy',y);circle.setAttribute('r',i===r.climbingImage?5:3);circle.setAttribute('fill',i===r.climbingImage?'#bf582c':'#087c83');const title=document.createElementNS(ns,'title');title.textContent=`構造 ${i+1}: ${relative[i].toFixed(6)} eV`;circle.append(title);svg.append(circle);});
-    for(const [text,x,y] of [[`ΔE (始点基準): ${lo.toFixed(4)} 〜 ${hi.toFixed(4)} eV`,15,18],['構造番号 →',450,170]]){const node=document.createElementNS(ns,'text');node.setAttribute('x',x);node.setAttribute('y',y);node.setAttribute('font-size',12);node.textContent=text;svg.append(node);}
+    showProfile(r,j,!!j.livePreview&&MV.EnergyProfile.following());
     message('計算が完了しました。結果を確認し、「結果を構造へ適用」で反映してください。');
+  }
+  function showProfile(r,j,follow=false){
+    MV.EnergyProfile.set({title:modeText[j.data.mode]+' · エネルギープロファイル'+(r.step!=null?' · ステップ '+r.step:''),kind:'path',focusIndex:Math.floor((r.images.length-1)/2),energies:r.energies,positions:i=>r.images[i],base:i=>j.frames[i],details:open},follow);
   }
   async function run(){
     if(job||!connection)return;
     let j;
     try{
-      j={...input(),connection:{...connection},cancelRequested:false};clearResult();job=j;busy(true);message('ローカル計算を開始しています…');
-      const created=await request(j.connection,'/api/jobs',j.data);if(!/^[a-f0-9]{32}$/.test(created.id))throw Error('不正な計算IDです。');j.id=created.id;
+      j={...input(),connection:{...connection},cancelRequested:false,livePreview:$('engineLive').checked};
+      if(j.livePreview&&!connection.info.livePreview)throw Error('ライブ表示にはbridge.py 1.2.0以降が必要です。更新・再接続するか、ライブ表示をオフにしてください。');
+      if(j.livePreview)j.data.livePreview=true;
+      MV.EnergyProfile.restore();MV.EnergyProfile.finish();clearResult();job=j;busy(true);message('ローカル計算を開始しています…');
+      if(j.livePreview)MV.EnergyProfile.begin(cancel,open);
+      const created=await request(j.connection,'/api/jobs',j.data);if(!/^[a-f0-9]{32}$/.test(created.id))throw Error('不正な計算IDです。');j.id=created.id;if(j.livePreview){$('engineDialog').close();MV.EnergyProfile.reveal();}
       if(j.cancelRequested)await request(j.connection,`/api/jobs/${j.id}/cancel`,{});
       while(job===j){
-        const state=await request(j.connection,`/api/jobs/${j.id}`);
+        const live=j.livePreview&&MV.EnergyProfile.following();
+        const state=await request(j.connection,`/api/jobs/${j.id}`+(live?'?preview=1&after=0':''));
         if(state.status==='completed'){showResult(state.result,j);break;}
         if(state.status==='error')throw Error(state.error||'計算に失敗しました。');
-        if(state.status==='cancelled'){message('計算を中止しました。構造は変更していません。');break;}
+        if(state.status==='cancelled'){MV.EnergyProfile.restore();message('計算を中止しました。構造は変更していません。');break;}
+        if(live&&state.preview&&state.preview.step!==j.previewStep){
+          const p=state.preview;
+          if(Number.isInteger(p.step)&&p.step>=0&&p.step<=j.data.maxSteps&&Array.isArray(p.images)&&p.images.length===j.frames.length&&p.images.every(a=>Array.isArray(a)&&a.length===j.data.symbols.length&&a.every(v=>Array.isArray(v)&&v.length===3&&v.every(x=>Number.isFinite(x)&&Math.abs(x)<=10000)))&&Array.isArray(p.energies)&&p.energies.length===j.frames.length&&p.energies.every(Number.isFinite)){
+            j.previewStep=p.step;showProfile(p,j,true);
+          }
+        }
         const p=state.progress||{};message(`計算中: ステップ ${p.step??0} / ${j.data.maxSteps} · 構造 ${p.image??0}/${j.frames.length}`+(p.fmax!=null?` · 最大有効力 ${p.fmax.toPrecision(4)} eV/Å`:'')+(j.cancelRequested?' · 中止処理中':''));
         await new Promise(resolve=>setTimeout(resolve,600));
       }
-    }catch(error){message(error.message+(j?.id?' 接続が途切れた場合、計算はローカル側で継続している可能性があります。サービスをCtrl+Cで停止できます。':''));}
-    finally{if(job===j){job=null;busy(false);}}
+    }catch(error){MV.EnergyProfile.restore();message(error.message+(j?.id?' 接続が途切れた場合、計算はローカル側で継続している可能性があります。サービスをCtrl+Cで停止できます。':''));}
+    finally{if(job===j){job=null;MV.EnergyProfile.finish();busy(false);}}
   }
   async function cancel(){
     const j=job;if(!j)return;j.cancelRequested=true;$('engineCancel').disabled=true;message('計算を中止しています…');
@@ -109,7 +120,7 @@
         next=MV.Model.createState(updated[0]);next.metadata.trajectory=JSON.parse(JSON.stringify(j.original.metadata.trajectory));next.metadata.frameIndex=j.original.metadata.frameIndex||0;next.metadata.trajectory[next.metadata.frameIndex]=updated[0];
       }else{const index=j.scope==='all'?j.original.metadata.frameIndex||0:0;next=MV.Model.createState(updated[index]||updated[0]);if(updated.length>1){next.metadata.trajectory=updated;next.metadata.frameIndex=index;}}
       if(j.original.metadata.measurements)next.metadata.measurements=JSON.parse(JSON.stringify(j.original.metadata.measurements));
-      next.viewSettings={...j.original.viewSettings};app().change('external engine result',()=>next,true);$('dataReset').click();$('engineApply').disabled=true;$('engineDialog').close();app().setStatus(`${modeText[r.mode]}の結果を反映しました（${r.reason==='converged'?'収束':r.reason==='evaluated'?'評価済み':'未収束・ステップ上限'}）。「戻す」で計算前へ戻れます。`);
+      next.viewSettings={...j.original.viewSettings};app().change('external engine result',()=>next,true);$('dataReset').click();$('engineApply').disabled=true;if(next.metadata.trajectory&&j.scope==='all')MV.EnergyProfile.bindTrajectory(next.metadata.trajectory);$('engineDialog').close();app().setStatus(`${modeText[r.mode]}の結果を反映しました（${r.reason==='converged'?'収束':r.reason==='evaluated'?'評価済み':'未収束・ステップ上限'}）。「戻す」で計算前へ戻れます。`);
     }catch(error){message(error.message);}
   }
   function download(){if(!result)return;const payload={input:result.data,result:result.result},url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='molecule-engine-result.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
@@ -122,6 +133,7 @@
     if(location.hostname==='127.0.0.1'||location.hostname==='localhost')$('engineURL').value=location.origin;
     $('btnExternalEngine').addEventListener('click',open);$('engineConnect').addEventListener('click',connect);$('engineMode').addEventListener('change',settings);$('engineRun').addEventListener('click',run);$('engineCancel').addEventListener('click',cancel);$('engineApply').addEventListener('click',apply);$('engineDownload').addEventListener('click',download);
     for(const id of ['engineURL','engineToken'])$(id).addEventListener('input',()=>{connection=null;$('engineRun').disabled=true;$('engineConnected').textContent='未接続';MV.AFIRUI?.sync();});
+    $('engineProfile').addEventListener('click',()=>{if(result){showProfile(result.result,result);$('engineDialog').close();MV.EnergyProfile.reveal();}});
     $('engineDialog').addEventListener('cancel',e=>{if(job){e.preventDefault();cancel();}});settings();
   }
   MV.EngineUI={init,endpoint,frames,validateResult,request,getConnection:()=>connection?{...connection}:null};
