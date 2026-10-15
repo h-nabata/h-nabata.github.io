@@ -58,4 +58,6 @@ Pythonのskipはtblite未導入に伴う3件とPOSIX実行ファイルを使う�
 
 - `node --test molecule-visualizer/tests/*.test.cjs`: 60件合格。初期選択、既存選択の保持、同一原子団・重なり・重複・空のγの拒否、拒否時の入力保持、AFIR対応エンジンの有無による開始ボタンの状態を確認しました。
 - `python -m unittest discover -s molecule-visualizer/tests -p 'test_*.py' -v`: 20件中17件合格、2件skip、1件error。停止テストが子プロセスを列挙する時点で対象PIDが存在せず、`psutil.NoSuchProcess`になりました。この環境では今回のUI修正前にも同じ失敗があり、合格には数えていません。
-- 実g-xTBバイナリはこの環境にないため、実g-xTBの2試験はskipです。今回、ブラウザからの実計算・結果適用・結果JSON保存の一連の再試験は未実施です。上記2026-10-14のWindowsでの実測と区別します。
+- 実g-xTBバイナリはこの環境にないため、実g-xTBの2試験はskipです。この作業環境では、ブラウザからの実計算・結果適用・結果JSON保存の一連の再試験は未実施です。上記2026-10-14のWindowsでの実測と区別します。
+- 公開版（`afir-ui.js?v=17`）でも2つの原子団を登録し、A=f1/B=f2の初期選択、そのままのペア追加、人工項評価を確認しました。同一原子団を手動で選び直した場合にはボタン直下に理由が表示され、登録済みペアは保持されます。
+- 修正コミット`25f8e56`の[GitHub Actions](https://github.com/h-nabata/h-nabata.github.io/actions/runs/38753466855)は成功しました。Python、JavaScript、`engine-browser.cjs`を含むブラウザ統合試験が合格しました。CIの実エンジンはtbliteで、AFIRの計算・結果JSON保存・構造列適用も対象です。実g-xTBの再検証としては数えていません。GitHub Pagesの公開処理も成功しました。
