@@ -21,7 +21,7 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./afir.js?v=16"></script>
 <script defer src="./afir-search.js?v=16"></script>
 <script defer src="./afir-runner.js?v=16"></script>
-<script defer src="./afir-ui.js?v=16"></script>
+<script defer src="./afir-ui.js?v=17"></script>
 <script defer src="./measurement-ui.js?v=16"></script>
 <script defer src="./molecule-visualizer_main.js?v=16"></script>
 
@@ -75,7 +75,8 @@ title: 分子構造エディタ | Molecule Studio
           <h3>2. ペアと力を指定する</h3>
           <div class="mv-afir-pair"><label>原子団A<select id="afirA"></select></label><label>原子団B<select id="afirB"></select></label></div>
           <div class="mv-afir-pair"><label>作用<select id="afirMode"><option value="attract">近づける →←</option><option value="repel">離す ←→</option></select></label><label>γ (kJ/mol)<input id="afirGamma" type="number" min="0" max="1000" step="1" value="100"></label></div>
-          <div class="mv-row"><output id="afirAlpha">α = 1.2314 eV/Å</output><button class="mv-btn" id="afirAddPair" disabled>ペアを追加</button></div>
+          <div class="mv-row"><output id="afirAlpha">α = 1.2314 eV/Å</output><button class="mv-btn" id="afirAddPair" aria-describedby="afirPairStatus" disabled>ペアを追加</button></div>
+          <p id="afirPairStatus" class="mv-afir-status" role="status" aria-live="polite">原子団を2つ以上登録してください。</p>
           <p class="mv-afir-note">γは衝突エネルギーの尺度です。Arの基準値からαに換算します。γ = 0でそのペアの人工力を解除します。</p>
           <div id="afirPairs" class="mv-afir-list"></div>
         </fieldset>

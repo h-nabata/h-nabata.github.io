@@ -202,11 +202,16 @@ test('AFIR fragments follow canvas selection, pairs reject duplicates, edit/undo
  nodes.get('afirName').value='O group';nodes.get('afirAddFragment').click();
  assert.equal(app.getState().metadata.afir.fragments[0].atomIds[0],app.getState().atoms[0].id);
  assert.equal(app.getState().selectedAtomIds.size,0);
+ assert.equal(nodes.get('afirA').value,'f1');assert.equal(nodes.get('afirB').value,'f1');
  pick(app.renderer().projectedAtoms[1]);nodes.get('afirName').value='H group';nodes.get('afirAddFragment').click();
- nodes.get('afirA').value='f1';nodes.get('afirB').value='f2';nodes.get('afirMode').value='attract';nodes.get('afirGamma').value='100';nodes.get('afirAddPair').click();
+ // Registering the second fragment must replace the browser's old f1/f1 default.
+ assert.equal(nodes.get('afirA').value,'f1');assert.equal(nodes.get('afirB').value,'f2');
+ nodes.get('afirMode').value='attract';nodes.get('afirGamma').value='100';nodes.get('afirAddPair').click();
  assert.equal(app.getState().metadata.afir.pairs.length,1);assert.equal(nodes.get('afirCheck').disabled,false);
+ assert.match(nodes.get('afirPairStatus').textContent,/ペアを追加しました/);
  nodes.get('afirCheck').click();assert.match(nodes.get('afirStatus').textContent,/人工項のみ評価/);
  nodes.get('afirAddPair').click();assert.equal(app.getState().metadata.afir.pairs.length,1);assert.match(nodes.get('afirStatus').textContent,/重複/);
+ assert.match(nodes.get('afirPairStatus').textContent,/追加できません:.*重複/);
  nodes.get('afirSteps').value='4';nodes.get('afirFmax').value='0.00001';nodes.get('afirMove').value='0.02';
  nodes.get('afirCheck').click();assert.equal(app.getState().metadata.afir.maxSteps,4);assert.equal(app.getState().metadata.afir.fmax,.00001);
  nodes.get('btnUndo').click(); // restore settings so the next undo removes the pair
@@ -218,6 +223,27 @@ test('AFIR fragments follow canvas selection, pairs reject duplicates, edit/undo
  app.change('delete selected atom',s=>{s.atoms=s.atoms.slice(1);});assert.equal(nodes.get('afirCheck').disabled,true);assert.match(nodes.get('afirPreview').textContent,/原子ID/);
  nodes.get('btnUndo').click();assert.equal(nodes.get('afirCheck').disabled,false);
  nodes.get('afirClose').click();assert.equal(nodes.get('afirPanel').hidden,true);assert.equal(app.getState().viewSettings.afirOverlay,false);
+});
+
+test('AFIR pair failures are visible beside the button and preserve the input; distinct choices survive redraw',()=>{
+ const {MV,nodes}=boot(true),app=MV.App;
+ for(const [i,label] of [[0,'O'],[1,'H'],[0,'same O']]){
+  const s=app.getState();s.selectedAtomIds=new Set([s.atoms[i].id]);app.setState(s,true);
+  nodes.get('afirName').value=label;nodes.get('afirAddFragment').click();
+ }
+ nodes.get('afirMode').value='attract';nodes.get('afirGamma').value='100';
+ nodes.get('afirA').value='f1';nodes.get('afirB').value='f1';
+ const original=JSON.stringify(app.getState());nodes.get('afirAddPair').click();
+ assert.match(nodes.get('afirPairStatus').textContent,/原子団AとBが同じ/);assert.equal(JSON.stringify(app.getState()),original);
+ nodes.get('afirB').value='f3';nodes.get('afirB').fire('change');nodes.get('afirAddPair').click();
+ assert.match(nodes.get('afirPairStatus').textContent,/原子が重ならない/);assert.equal(JSON.stringify(app.getState()),original);
+ nodes.get('afirB').value='f2';nodes.get('afirGamma').value='';nodes.get('afirAddPair').click();
+ assert.match(nodes.get('afirPairStatus').textContent,/数値を入力/);assert.equal(JSON.stringify(app.getState()),original);
+ nodes.get('afirGamma').value='40';nodes.get('afirA').value='f2';nodes.get('afirB').value='f3';nodes.get('afirAddPair').click();
+ assert.equal(app.getState().metadata.afir.pairs.length,1);assert.equal(app.getState().metadata.afir.pairs[0].gamma,40);
+ assert.equal(nodes.get('afirA').value,'f2');assert.equal(nodes.get('afirB').value,'f3');
+ assert.equal(nodes.get('afirRun').disabled,true);
+ MV.AFIRRunner={available:()=>true};MV.AFIRUI.sync();assert.equal(nodes.get('afirRun').disabled,false);
 });
 
 

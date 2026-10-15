@@ -18,7 +18,15 @@
   function selected(){const s=app().getState(),ids=s.atoms.filter(a=>s.selectedAtomIds.has(a.id)).map(a=>a.id);if(!ids.length)throw Error('描画エリアで原子を選択してください。');return ids;}
   function selectGroup(f){const s=app().getState();s.selectedAtomIds=new Set(f.atomIds.filter(id=>s.atoms.some(a=>a.id===id)));s.selectedBondIds.clear();app().setState(s,true);}
   function addFragment(){const ids=selected(),label=$('afirName').value.trim();if(!label||label.length>40)throw Error('原子団の名前を1〜40文字で入力してください。');edit(c=>{if(c.fragments.length>=64)throw Error('フラグメント数の上限は64です。');let n=1;while(c.fragments.some(f=>f.id===`f${n}`))n++;c.fragments.push({id:`f${n}`,label,atomIds:ids});});$('afirName').value=`原子団${config().fragments.length+1}`;message(`${label}を登録しました。次の原子団を選択してください。`);$('btnClearSel').click();}
-  function addPair(){const p={a:$('afirA').value,b:$('afirB').value,mode:$('afirMode').value,gamma:readNumber('afirGamma')};edit((c,s)=>{c.pairs.push(p);MV.AFIR.validate(s.atoms,c,s.metadata.cell);});message('人工力を適用するペアを追加しました。');}
+  function addPair(){
+    try{
+      const p={a:$('afirA').value,b:$('afirB').value,mode:$('afirMode').value,gamma:readNumber('afirGamma')};
+      if(p.a&&p.a===p.b)throw Error('原子団AとBが同じです。原子団Bで別の原子団を選んでください。');
+      edit((c,s)=>{c.pairs.push(p);MV.AFIR.validate(s.atoms,c,s.metadata.cell);});
+      $('afirPairStatus').textContent='ペアを追加しました。下の一覧に表示されています。';
+      message('人工力を適用するペアを追加しました。');
+    }catch(e){$('afirPairStatus').textContent=`追加できません: ${e.message}`;message(e.message);}
+  }
   function readNumber(id){const raw=String($(id).value).trim();if(raw==='')throw Error('数値を入力してください。');return Number(raw);}
   function saveSettings(){
     // Read the visible values at the action boundary, including unblurred inputs.
@@ -27,7 +35,7 @@
     MV.AFIR.validate(app().getState().atoms,next,app().getState().metadata.cell);
     if(JSON.stringify(next)!==JSON.stringify(c))edit(v=>Object.assign(v,next));
   }
-  function fillSelect(id,groups,previous){const el=$(id);el.replaceChildren();for(const f of groups){const o=document.createElement('option');o.value=f.id;o.textContent=f.label;el.append(o);}if(groups.some(f=>f.id===previous))el.value=previous;}
+  function fillSelect(id,groups,previous){const el=$(id);el.replaceChildren();for(const f of groups){const o=document.createElement('option');o.value=f.id;o.textContent=f.label;el.append(o);}el.value=groups.some(f=>f.id===previous)?previous:groups[0]?.id||'';}
   function redrawLists(c,s){
     const list=$('afirFragments');list.replaceChildren();
     c.fragments.forEach((f,i)=>{const row=document.createElement('div');row.className='mv-afir-item';row.style.borderLeftColor=MV.AFIR.palette[i%MV.AFIR.palette.length];
@@ -37,13 +45,19 @@
       const remove=button('削除',()=>edit(v=>{v.fragments=v.fragments.filter(g=>g.id!==f.id);v.pairs=v.pairs.filter(p=>p.a!==f.id&&p.b!==f.id);}));
       row.append(name,nums,replace,remove);list.append(row);
     });
-    const a=$('afirA').value,b=$('afirB').value;fillSelect('afirA',c.fragments,a);fillSelect('afirB',c.fragments,b||c.fragments[1]?.id);
+    const a=$('afirA').value,b=$('afirB').value;fillSelect('afirA',c.fragments,a);
+    // A native select already has f1 selected after the first fragment is added.
+    // Preserve a distinct choice, but choose another group when B still equals A.
+    const other=c.fragments.find(f=>f.id!==$('afirA').value);
+    fillSelect('afirB',c.fragments,b!==$('afirA').value&&c.fragments.some(f=>f.id===b)?b:other?.id);
+    pairHint();
     const pairs=$('afirPairs');pairs.replaceChildren();pairInputs=[];c.pairs.forEach((p,i)=>{
       const row=document.createElement('div');row.className='mv-afir-item';const label=document.createElement('span');label.className='mv-afir-pair-label';label.textContent=`${c.fragments.find(f=>f.id===p.a)?.label||'?'} ${p.mode==='attract'?'→←':'←→'} ${c.fragments.find(f=>f.id===p.b)?.label||'?'}`;
       const strength=document.createElement('label');strength.textContent='γ (kJ/mol) ';const input=document.createElement('input');input.type='number';input.min='0';input.max='1000';input.step='1';input.value=p.gamma;input.setAttribute('aria-label',`ペア${i+1}のγ (kJ/mol)`);input.addEventListener('change',()=>safe(()=>edit(v=>{if(!String(input.value).trim())throw Error('γを入力してください。');MV.AFIR.alphaFromGamma(Number(input.value));v.pairs[i].gamma=Number(input.value);})));strength.append(input);
       pairInputs.push(input);row.append(label,strength,button('削除',()=>edit(v=>{v.pairs.splice(i,1);})));pairs.append(row);
     });
   }
+  function pairHint(){$('afirPairStatus').textContent=config().fragments.length<2?'原子団を2つ以上登録してください。':'A・Bに異なる原子団を選び、「ペアを追加」を押してください。同じ原子を両方に含めることはできません。';}
   function sync(){
     try{syncInternal();}catch(e){message(e.message);for(const id of ['afirRun','afirCheck','afirExport','afirAddPair','afirAddFragment'])$(id).disabled=true;}
   }
@@ -93,6 +107,7 @@
     $('afirConnect').addEventListener('click',()=>$('btnExternalEngine').click());
     $('afirReset').addEventListener('click',()=>safe(()=>{if(job)throw Error('計算を中止してから初期化してください。');app().change('reset AFIR settings',s=>{s.metadata.afir=MV.AFIR.defaults();});message('AFIR設定を初期化しました。「戻す」で復元できます。');}));
     for(const [id,f] of [['afirAddFragment',addFragment],['afirAddPair',addPair],['afirExport',exportFiles],['afirCheck',check],['afirApply',apply]])$(id).addEventListener('click',()=>safe(f));
+    for(const id of ['afirA','afirB','afirMode','afirGamma'])$(id).addEventListener('change',()=>safe(pairHint));
     $('afirGamma').addEventListener('input',()=>safe(()=>{$('afirAlpha').textContent=`α = ${MV.AFIR.alphaFromGamma(readNumber('afirGamma')).toFixed(4)} eV/Å`;}));
     for(const [id,key] of [['afirCharge','charge'],['afirMultiplicity','multiplicity'],['afirSteps','maxSteps'],['afirFmax','fmax'],['afirMove','maxMove']])$(id).addEventListener('change',()=>safe(()=>edit(c=>{c[key]=readNumber(id);})));
     $('afirRun').addEventListener('click',run);$('afirCancel').addEventListener('click',()=>{if(job){job.cancelled=true;MV.AFIRRunner?.cancel(job).catch(e=>message(e.message));}});
