@@ -32,7 +32,7 @@ from ase.data import atomic_numbers, covalent_radii
 from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 
-VERSION = '1.1.1'
+VERSION = '1.1.2'
 MAX_BODY = 2 * 1024 * 1024
 MODES = ('evaluate', 'optimize', 'perpendicular', 'neb', 'cineb', 'afir')
 PATH_MODES = ('perpendicular', 'neb', 'cineb')
@@ -90,7 +90,7 @@ def validate(data, engine):
                 raise ValueError('0.1 Å未満で重なった原子があります。初期経路の衝突を解消してください。')
     result = dict(symbols=symbols, images=images.tolist(), cell=cell, charge=charge,
                   multiplicity=multiplicity, mode=mode)
-    step_default, step_limit = (10000, 10000) if mode == 'afir' else (150, 1000)
+    step_default, step_limit = (10000 if mode == 'afir' else 150), 10000
     for key, default, low, high, integer in [('maxSteps', step_default, 1, step_limit, True), ('fmax', .05, .00001, 10, False),
             ('spring', .1, .001, 10, False), ('maxMove', .04, .001, .2, False), ('climbAfter', 10, 0, 500, True)]:
         result[key] = number(data.get(key, default), key, low, high, integer)
@@ -650,7 +650,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.response(200, {'version': VERSION, 'engine': config['engine'],
                     'method': config['method'] if config['engine'] == 'tblite' else 'g-xTB (--gxtb --grad)',
                     'periodic': config['engine'] == 'tblite', 'maxAtoms': 500, 'maxImages': 20,
-                    'modes': MODES, 'maxAFIRSteps': 10000, 'jobTimeout': config['jobTimeout'],
+                    'modes': MODES, 'maxSteps': 10000, 'maxAFIRSteps': 10000, 'jobTimeout': config['jobTimeout'],
                     'engineVersion': importlib.metadata.version('tblite') if config['engine'] == 'tblite' else 'locally configured binary'})
             elif re.fullmatch(r'/api/jobs/[a-f0-9]{32}', self.path):
                 try:

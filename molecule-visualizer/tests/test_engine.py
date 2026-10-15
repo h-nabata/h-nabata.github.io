@@ -112,10 +112,20 @@ class Validation(unittest.TestCase):
     def test_charge_spin_bounds_and_no_commands(self):
         self.assertEqual(b.validate(WATER,'tblite')['multiplicity'],1)
         for patch in ({'charge':0.5},{'multiplicity':2},{'images':[[[float('nan'),0,0]]]},
-                      {'command':'rm -rf /'},{'binary':'/tmp/something'},{'maxSteps':1001},{'mode':'cineb','maxSteps':2,'climbAfter':3}):
+                      {'command':'rm -rf /'},{'binary':'/tmp/something'},{'maxSteps':10001},{'mode':'cineb','maxSteps':2,'climbAfter':3}):
             with self.assertRaises((ValueError,TypeError)):b.validate({**WATER,**patch},'tblite')
         with self.assertRaises(ValueError):b.validate({**WATER,'mode':'perpendicular'},'tblite')
         with self.assertRaises(ValueError):b.validate({**WATER,'images':WATER['images']*21},'tblite')
+
+    def test_all_external_modes_accept_10000_steps_and_reject_invalid_budgets(self):
+        for mode in ('evaluate','optimize','perpendicular','neb','cineb'):
+            source=WATER if mode in ('evaluate','optimize') else {**WATER,'images':[
+                (np.array(WATER['images'][0])+offset).tolist() for offset in (0,.1,.2)]}
+            for steps in (1500,10000):
+                self.assertEqual(b.validate({**source,'mode':mode,'maxSteps':steps},'tblite')['maxSteps'],steps)
+            for steps in (0,10001,1.5):
+                with self.assertRaisesRegex(ValueError,'maxSteps'):
+                    b.validate({**source,'mode':mode,'maxSteps':steps},'tblite')
 
     def test_periodic_validation_and_minimum_image_collisions(self):
         cell={'vectors':[[8,0,0],[2,8,0],[0,0,8]],'pbc':[True]*3}
@@ -199,7 +209,7 @@ class HTTPBoundary(unittest.TestCase):
 
     def test_auth_origin_host_and_preflight(self):
         status,_,info=self.call('GET','/api/info')
-        self.assertEqual(status,200);self.assertEqual(info['maxAFIRSteps'],10000)
+        self.assertEqual(status,200);self.assertEqual(info['maxAFIRSteps'],10000);self.assertEqual(info['maxSteps'],10000)
         for h,status in [({'Authorization':''},401),({'Origin':'https://evil.example'},403),({'Origin':'null'},403),({'Host':'evil.example'},403)]:
             self.assertEqual(self.call('GET','/api/info',headers=h)[0],status)
         status,headers,_=self.call('OPTIONS','/api/jobs',headers={'Authorization':'','Access-Control-Request-Method':'POST','Access-Control-Request-Headers':'authorization,content-type','Access-Control-Request-Private-Network':'true'})

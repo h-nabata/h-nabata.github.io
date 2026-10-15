@@ -2,7 +2,7 @@
 (function(global){
   'use strict';
   const MV=global.MoleculeVisualizer,$=id=>document.getElementById(id),app=()=>MV.App;
-  let ready=false,visible=false,lastConfig='',lastAtoms='',result=null,job=null,pairInputs=[];
+  let ready=false,visible=false,lastConfig='',lastAtoms='',lastLists='',result=null,job=null,pairInputs=[];
   const settingsFields=[['afirCharge','charge'],['afirMultiplicity','multiplicity'],['afirSteps','maxSteps'],['afirFmax','fmax'],['afirMove','maxMove']];
   const config=()=>{
     const c=app().getState().metadata.afir||MV.AFIR.defaults();
@@ -65,7 +65,13 @@
     if(!ready)return;const s=app().getState(),c=config();$('afirSelection').textContent=`選択中: ${s.selectedAtomIds.size}原子`;
     $('afirAddFragment').disabled=!!job||!s.selectedAtomIds.size;
     const serialized=JSON.stringify(c),atoms=JSON.stringify(s.atoms.map(a=>[a.id,a.element]));
-    if(serialized!==lastConfig||atoms!==lastAtoms){redrawLists(c,s);for(const [id,key] of [['afirCharge','charge'],['afirMultiplicity','multiplicity'],['afirSteps','maxSteps'],['afirFmax','fmax'],['afirMove','maxMove']])$(id).value=c[key];lastConfig=serialized;lastAtoms=atoms;}
+    if(serialized!==lastConfig||atoms!==lastAtoms){
+      // Updating gamma must not replace the focused input or interrupt held spinner arrows.
+      const lists=JSON.stringify([c.fragments,c.pairs.map(({gamma,...pair})=>pair),atoms]);
+      if(lists!==lastLists){redrawLists(c,s);lastLists=lists;}
+      else pairInputs.forEach((input,i)=>{input.value=c.pairs[i].gamma;});
+      for(const [id,key] of settingsFields)$(id).value=c[key];lastConfig=serialized;lastAtoms=atoms;
+    }
     let valid=false;try{const preview=MV.AFIR.evaluate(s.atoms,c,s.metadata.cell);valid=true;$('afirPreview').textContent=preview.pairs.map((p,i)=>`ペア${i+1}: 加重距離 ${p.distanceA.toFixed(3)} Å · α ${p.alphaEV_A.toFixed(4)} eV/Å`).join('\n');}catch(e){$('afirPreview').textContent=e.message;}
     $('afirExport').disabled=!valid||!!job;$('afirCheck').disabled=!valid||!!job;$('afirAddPair').disabled=c.fragments.length<2||!!job;
     $('afirRun').disabled=!valid||!!job||!MV.AFIRRunner?.available();$('afirCancel').disabled=!job;

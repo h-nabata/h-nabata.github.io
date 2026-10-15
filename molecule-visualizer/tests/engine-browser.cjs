@@ -7,9 +7,13 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  try{
   browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:1280,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:8765/molecule-visualizer/');await page.waitForSelector('canvas');
+  const spin=async(id,start,next)=>{const input=page.locator('#'+id);await input.fill(start);await input.press('ArrowUp');assert.equal(await input.inputValue(),next);await input.press('ArrowDown');assert.equal(await input.inputValue(),start);};
   const before=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms));
   await page.click('#btnExternalEngine');await page.fill('#engineURL','http://127.0.0.1:8766');await page.fill('#engineToken','incorrect');await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineMessage').textContent.includes('トークンが一致'));
   await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
+  await page.selectOption('#engineMode','neb');
+  await spin('engineFmax','0.3','0.31');await spin('engineMove','0.04','0.05');await spin('engineSpring','0.1','0.2');
+  await page.fill('#engineFmax','0.00001');await page.locator('#engineFmax').press('Tab');assert.equal(await page.locator('#engineFmax').inputValue(),'0.00001');
   await page.selectOption('#engineMode','evaluate');await page.selectOption('#engineScope','current');await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
   assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before,'review must not modify coordinates');
   assert.equal(await page.locator('#engineEnergyRows tr').count(),1);assert.match(await page.locator('#engineResultSummary').textContent(),/評価完了/);
@@ -20,13 +24,29 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.click('#btnExternalEngine');await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
   await page.evaluate(()=>MoleculeVisualizer.App.change('stale edit',s=>{s.atoms[0].x+=.01;return s;}));await page.click('#engineApply');assert.match(await page.locator('#engineMessage').textContent(),/変更されています/);await page.click('#engineClose');await page.click('#btnUndo');await page.click('#dataReset');
   // AFIR: pick on canvas, add three groups / two pairs, run a real local potential.
+  await page.click('#btnExternalEngine');await page.selectOption('#engineMode','optimize');
+  await page.fill('#engineFmax','0');await page.click('#engineRun');assert.match(await page.locator('#engineMessage').textContent(),/fmaxは/);
+  await page.fill('#engineFmax','10');
+  await page.fill('#engineSteps','10001');await page.click('#engineRun');assert.match(await page.locator('#engineMessage').textContent(),/maxStepsは1〜10000/);
+  for(const steps of ['1500','10000']){
+    await page.fill('#engineSteps',steps);await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
+    const saved=page.waitForEvent('download');await page.click('#engineDownload');const file=await saved;
+    const report=JSON.parse(fs.readFileSync(await file.path(),'utf8'));assert.equal(report.input.maxSteps,Number(steps));assert.equal(report.result.converged,true);
+  }
+  await page.click('#engineClose');
   await page.click('#btnAFIR');
+  await spin('afirFmax','0.3','0.31');await spin('afirMove','0.04','0.05');await spin('afirGamma','100','101');
   for(let i=0;i<3;i++){
     const p=await page.evaluate(i=>{const a=MoleculeVisualizer.App.renderer().projectedAtoms.find(a=>a.index===i+1);return {x:a.x,y:a.y};},i);
     await page.locator('canvas').click({position:p});await page.fill('#afirName','Group '+(i+1));await page.click('#afirAddFragment');
   }
   await page.selectOption('#afirA','f1');await page.selectOption('#afirB','f2');await page.fill('#afirGamma','40');await page.click('#afirAddPair');
   await page.selectOption('#afirA','f2');await page.selectOption('#afirB','f3');await page.selectOption('#afirMode','repel');await page.fill('#afirGamma','20');await page.click('#afirAddPair');
+  const gamma=page.getByRole('spinbutton',{name:'ペア1のγ (kJ/mol)',exact:true});
+  await gamma.press('ArrowUp');assert.equal(await gamma.inputValue(),'41');
+  assert.equal(await gamma.evaluate(el=>document.activeElement===el),true);
+  await page.keyboard.press('ArrowUp');assert.equal(await gamma.inputValue(),'42');
+  await gamma.press('ArrowDown');await page.keyboard.press('ArrowDown');assert.equal(await gamma.inputValue(),'40');
   // Accept the new budget in a real job; a loose threshold ends this smoke test immediately.
   await page.fill('#afirSteps','10000');await page.fill('#afirFmax','10');await page.click('#afirRun');
   await page.waitForSelector('#afirResult:not([hidden])');

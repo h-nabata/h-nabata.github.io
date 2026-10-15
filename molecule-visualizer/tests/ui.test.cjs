@@ -247,6 +247,19 @@ test('AFIR pair failures are visible beside the button and preserve the input; d
 });
 
 
+test('editing a registered AFIR gamma retains its input node and focus across updates and undo',()=>{
+ const {MV,nodes,doc}=boot(true),app=MV.App;
+ app.change('prepare AFIR pair',s=>{s.metadata.afir={...MV.AFIR.defaults(),fragments:[
+  {id:'a',label:'A',atomIds:[s.atoms[0].id]},{id:'b',label:'B',atomIds:[s.atoms[1].id]}],pairs:[{a:'a',b:'b',mode:'attract',gamma:100}]};});
+ const input=nodes.get('afirPairs').children[0].children[1].children[0];input.focus();
+ for(const value of ['101','102','100.5']){
+  input.value=value;input.fire('change');
+  assert.equal(nodes.get('afirPairs').children[0].children[1].children[0],input);
+  assert.equal(doc.activeElement,input);assert.equal(app.getState().metadata.afir.pairs[0].gamma,Number(value));
+ }
+ nodes.get('btnUndo').click();assert.equal(Number(input.value),102);
+});
+
 test('malformed imported AFIR settings cannot break the editor and can be reset with undo',()=>{
  const {MV,nodes}=boot(true);MV.App.change('import invalid AFIR',s=>{s.metadata.afir={schema:'bad',fragments:{bad:true},pairs:[]};});
  assert.match(nodes.get('afirStatus').textContent,/形式が不正/);assert.equal(nodes.get('afirRun').disabled,true);

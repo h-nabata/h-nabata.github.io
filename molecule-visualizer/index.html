@@ -17,11 +17,11 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./studio.js?v=16"></script>
 <script defer src="./advanced.js?v=16"></script>
 <script defer src="./generator-ui.js?v=16"></script>
-<script defer src="./engine-ui.js?v=17"></script>
+<script defer src="./engine-ui.js?v=18"></script>
 <script defer src="./afir.js?v=17"></script>
 <script defer src="./afir-search.js?v=16"></script>
 <script defer src="./afir-runner.js?v=17"></script>
-<script defer src="./afir-ui.js?v=17"></script>
+<script defer src="./afir-ui.js?v=18"></script>
 <script defer src="./measurement-ui.js?v=16"></script>
 <script defer src="./molecule-visualizer_main.js?v=16"></script>
 
@@ -82,8 +82,9 @@ title: 分子構造エディタ | Molecule Studio
         </fieldset>
         <fieldset id="afirSettings"><legend>3. 探索条件</legend>
           <div class="mv-afir-pair"><label>全電荷<input id="afirCharge" type="number" min="-100" max="100" step="1" value="0"></label><label>スピン多重度<input id="afirMultiplicity" type="number" min="1" max="101" step="1" value="1"></label></div>
-          <div class="mv-afir-pair"><label>最大ステップ<input id="afirSteps" type="number" min="1" max="10000" step="1" value="10000"></label><label>収束 (eV/Å)<input id="afirFmax" type="number" min="0.00001" max="10" step="0.01" value="0.05"></label></div>
-          <label>1ステップの最大変位 (Å)<input id="afirMove" type="number" min="0.001" max="0.2" step="0.01" value="0.04"></label>
+          <!-- A zero step base keeps native spinner increments on the decimal grid. JS/Python enforce the positive lower limits. -->
+          <div class="mv-afir-pair"><label>最大ステップ<input id="afirSteps" type="number" min="1" max="10000" step="1" value="10000"></label><label>収束 (eV/Å)<input id="afirFmax" type="number" min="0" max="10" step="0.01" value="0.05" title="0.00001〜10。上下ボタンは0.01刻み。より小さな値は直接入力できます。"></label></div>
+          <label>1ステップの最大変位 (Å)<input id="afirMove" type="number" min="0" max="0.2" step="0.01" value="0.04" title="0.001〜0.2。上下ボタンは0.01刻み。"></label>
         </fieldset>
         <p id="afirPreview" class="mv-afir-note"></p>
         <div class="mv-row"><button class="mv-btn" id="afirCheck" disabled>人工項を確認</button><button class="mv-btn" id="afirExport" disabled>入力JSONを保存</button><button class="mv-btn" id="afirReset">AFIR設定を初期化</button></div>
@@ -344,7 +345,7 @@ H 1.0 0 0
   <h2>外部エンジン / 経路緩和</h2>
   <p class="mv-small">計算はこのPCで起動したサービス上で実行します。座標はローカルサービスへ送信されます。接続トークンはこの画面のメモリだけに保持します。</p>
   <details class="mv-engine-setup"><summary>初回のセットアップ：tblite / g-xTBを選ぶ</summary>
-    <p><a href="./local-engine/bridge.py?v=1.1.1" download>bridge.pyをダウンロード</a>し、使いたい計算手法に応じて、以下のどちらか一方の手順で起動してください。Python 3.10以上が必要です。AFIRの最大10,000ステップに対応するには、bridge.py 1.1.1以降へ差し替え、サービスを再起動して再接続してください。</p>
+    <p><a href="./local-engine/bridge.py?v=1.1.2" download>bridge.pyをダウンロード</a>し、使いたい計算手法に応じて、以下のどちらか一方の手順で起動してください。Python 3.10以上が必要です。AFIR・外部エンジンともに最大10,000ステップを使用するには、bridge.py 1.1.2以降へ差し替え、サービスを再起動して再接続してください。</p>
     <ul>
       <li><strong>tblite</strong>：GFN2-xTB（既定）、GFN1-xTB、IPEA1-xTBを利用します。このアプリでは非周期系と固定セルの周期系に対応します。</li>
       <li><strong>g-xTB</strong>：公式のg-xTB対応実行ファイルを別途用意します。このアプリでは非周期系に対応します。tbliteのPythonパッケージは不要です。</li>
@@ -399,10 +400,10 @@ python bridge.py --engine gxtb --binary /absolute/path/to/xtb --allow-origin htt
     <label>スピン多重度 (2S+1)<input id="engineMultiplicity" type="number" min="1" max="101" step="1" value="1"></label>
   </div><p id="engineModeHelp" class="mv-small"></p>
   <div id="engineRelaxSettings" class="mv-grid">
-    <label>最大ステップ数<input id="engineSteps" type="number" min="1" max="1000" step="1" value="150"></label>
-    <label>最大有効力の収束閾値 (eV/Å)<input id="engineFmax" type="number" min="0.00001" max="10" step="0.01" value="0.05"></label>
-    <label>1ステップの最大原子変位 (Å)<input id="engineMove" type="number" min="0.001" max="0.2" step="0.01" value="0.04"></label>
-    <label id="engineSpringLabel">ばね定数 (eV/Å²)<input id="engineSpring" type="number" min="0.001" max="10" step="0.1" value="0.1"></label>
+    <label>最大ステップ数<input id="engineSteps" type="number" min="1" max="10000" step="1" value="150"></label>
+    <label>最大有効力の収束閾値 (eV/Å)<input id="engineFmax" type="number" min="0" max="10" step="0.01" value="0.05" title="0.00001〜10。上下ボタンは0.01刻み。より小さな値は直接入力できます。"></label>
+    <label>1ステップの最大原子変位 (Å)<input id="engineMove" type="number" min="0" max="0.2" step="0.01" value="0.04" title="0.001〜0.2。上下ボタンは0.01刻み。"></label>
+    <label id="engineSpringLabel">ばね定数 (eV/Å²)<input id="engineSpring" type="number" min="0" max="10" step="0.1" value="0.1" title="0.001〜10。上下ボタンは0.1刻み。"></label>
     <label id="engineClimbLabel">CIを開始するステップ<input id="engineClimb" type="number" min="0" max="500" step="1" value="10"></label>
   </div><p class="mv-small">最大500原子・20構造。経路は同じ元素順序・固定セルが必要です。周期境界をまたぐ経路は連続したCartesian座標で入力してください。原子ごとの移動固定や可変セルには対応していません。</p></fieldset>
   <p id="engineMessage" role="status" aria-live="polite"></p>
