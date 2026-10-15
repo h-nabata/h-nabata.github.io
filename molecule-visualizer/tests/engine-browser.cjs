@@ -62,6 +62,8 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   const afir=JSON.parse(fs.readFileSync(await afirFile.path(),'utf8'));assert.equal(afir.input.config.maxSteps,3);assert.equal(afir.result.images.length,4);assert.equal(afir.result.validation,'biased-trajectory-not-ts');assert.ok(!JSON.stringify(afir).includes(token));
   assert.equal(previewRequests.length,0,'live display must make no preview requests by default');
   await page.click('#afirProfile');
+  const viewBox=await page.locator('#viewer').boundingBox(),plotBox=await page.locator('#profilePanel').boundingBox();
+  assert.ok(plotBox.y+plotBox.height-viewBox.y<page.viewportSize().height-100,'structure and graph fit together in the viewport');
   await page.locator('#energyProfile circle[tabindex="0"]').nth(2).focus();
   assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.renderer().state.atoms.map(a=>[a.x,a.y,a.z])),afir.result.images[2]);
   assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);

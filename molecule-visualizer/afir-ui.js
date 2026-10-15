@@ -92,7 +92,7 @@
     try{if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();const s=app().getState();MV.AFIR.validate(s.atoms,config(),s.metadata.cell);
       j={original:MV.Model.cloneState(s),fingerprint:fingerprint(s),config:JSON.parse(JSON.stringify(config())),cancelled:false,livePreview:$('afirLive').checked,previewCursor:0,liveEnergies:[],liveBiases:[]};
       if(j.livePreview&&!MV.EngineUI.getConnection()?.info.livePreview)throw Error('ライブ表示にはbridge.py 1.2.0以降が必要です。更新・再接続するか、ライブ表示をオフにしてください。');
-      MV.EnergyProfile.restore();MV.EnergyProfile.finish();job=j;result=null;$('afirResult').hidden=true;sync();
+      MV.EnergyProfile.reset();job=j;result=null;$('afirResult').hidden=true;sync();
       if(j.livePreview)MV.EnergyProfile.begin(()=>$('afirCancel').click(),()=>toggle(true));
       const r=await MV.AFIRRunner.run(j,(text,p)=>{
         message(text);if(!p||!j.livePreview)return;

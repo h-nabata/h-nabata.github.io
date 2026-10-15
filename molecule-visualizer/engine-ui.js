@@ -80,7 +80,7 @@
       j={...input(),connection:{...connection},cancelRequested:false,livePreview:$('engineLive').checked};
       if(j.livePreview&&!connection.info.livePreview)throw Error('ライブ表示にはbridge.py 1.2.0以降が必要です。更新・再接続するか、ライブ表示をオフにしてください。');
       if(j.livePreview)j.data.livePreview=true;
-      MV.EnergyProfile.restore();MV.EnergyProfile.finish();clearResult();job=j;busy(true);message('ローカル計算を開始しています…');
+      MV.EnergyProfile.reset();clearResult();job=j;busy(true);message('ローカル計算を開始しています…');
       if(j.livePreview)MV.EnergyProfile.begin(cancel,open);
       const created=await request(j.connection,'/api/jobs',j.data);if(!/^[a-f0-9]{32}$/.test(created.id))throw Error('不正な計算IDです。');j.id=created.id;if(j.livePreview){$('engineDialog').close();MV.EnergyProfile.reveal();}
       if(j.cancelRequested)await request(j.connection,`/api/jobs/${j.id}/cancel`,{});
