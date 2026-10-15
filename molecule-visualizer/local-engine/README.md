@@ -6,6 +6,17 @@ Molecule Studioの「外部エンジン / 経路緩和」から、このPCで動
 
 Python 3.10以上を使用します。[bridge.py](./bridge.py) を保存してください。以下の手順はbridge.pyだけをダウンロードした場合にも使えます。[requirements.txt](./requirements.txt) は基本パッケージ（numpy・ase・psutil）の一覧で、tbliteは含みません。
 
+### 計算エンジンを選ぶ
+
+使いたい計算手法に応じて、**tbliteまたはg-xTBのどちらか一方**を導入します。
+
+| 起動時の指定 | 計算手法 | 必要なもの | このアプリで扱える系 |
+|---|---|---|---|
+| `--engine tblite` | GFN2-xTB（既定）、GFN1-xTB、IPEA1-xTB | tbliteのPython API（condaでは`tblite-python`） | 非周期系・固定セルの周期系 |
+| `--engine gxtb --binary …` | g-xTB | 公式のg-xTB対応xtb実行ファイルと付属ライブラリ | 非周期系 |
+
+**通常配布版tblite 0.7.0はg-xTBに対応していません（2026年10月15日確認）。** [tbliteの組み込み手法](https://tblite.readthedocs.io/en/latest/spec/methods.html)は上表の3種類です。[公式g-xTB](https://github.com/grimme-lab/g-xtb)は改変版tbliteを内部で使用していますが、通常配布版tbliteのPython APIとは異なります。g-xTBが目的なら、下の「g-xTBの実行ファイルを使う」へ進んでください。
+
 ### Windowsでtbliteを使う（推奨：Miniforge）
 
 1. [Miniforge公式配布ページ](https://conda-forge.org/download/)からWindows x86_64版をインストールします。
@@ -45,18 +56,46 @@ python bridge.py --engine tblite --allow-origin https://h-nabata.github.io
 
 `--only-binary=:all:` は対応wheelがない場合にソースビルドへ進むことを防ぎます。「No matching distribution found」なら、そのOS・CPU・Pythonに対応するwheelを取得できていません。その場合はMiniforgeを導入して、Windowsの例と同じ `conda create` と `conda activate` を使えます（フォルダー移動には通常の `cd` を使用）。Windows＋WSLで既存の計算エンジンを利用する場合は、サービスもそのWSL内で起動します。
 
-起動するとURLと、起動のたびに変わる `Token` が表示されます。アプリの接続先URLと接続トークン欄へ入力し、「接続を確認」を押してください。ブラウザからローカルネットワークへの接続許可が求められた場合は許可します。接続トークンはブラウザの永続ストレージ・プロジェクト・結果JSONに保存しません。
-
 ### g-xTBの実行ファイルを使う
 
 このアダプタは、[公式g-xTBリポジトリ](https://github.com/grimme-lab/g-xtb) が配布する **`xtb --gxtb --grad` 対応版**を対象にしています。旧版の独立した `gxtb` 実行ファイルとはコマンド形式が異なります。実行ファイルと付属ライブラリはユーザーがローカルに導入します。g-xTB使用時はtbliteのPythonパッケージは不要です。
 
-```bash
+[公式のbinariesフォルダー](https://github.com/grimme-lab/g-xtb/tree/main/binaries)からOSに対応する配布物を取得し、展開してください。通常版のxtbではなく、g-xTB対応版を指定します。
+
+#### Windows（コマンドプロンプト）
+
+Python 3.10以上を用意し、bridge.pyの保存先で専用環境を作ります。以下の2種類のパスを実際の保存先に置き換えてください。付属DLLも配布時の配置を保ち、xtb.exeがあるbinフォルダーをPATHへ追加します。
+
+```bat
+cd /d "C:\Users\ユーザー名\Downloads"
+python -m venv .venv-gxtb
+.venv-gxtb\Scripts\python.exe -m pip install "numpy>=1.24,<3" "ase>=3.23,<4" "psutil>=5.9,<8"
+set "PATH=C:\path\to\g-xtb\bin;%PATH%"
+"C:\path\to\g-xtb\bin\xtb.exe" --help
+.venv-gxtb\Scripts\python.exe bridge.py --engine gxtb --binary "C:\path\to\g-xtb\bin\xtb.exe" --allow-origin https://h-nabata.github.io
+```
+
+`--help`で起動でき、`--gxtb`と`--grad`が使える版であることを確認します。`set`は現在のコマンドプロンプトだけに適用されます。次回も保存先へ移動し、PATHを設定してから最後の起動コマンドを実行してください。仮想環境の作成とpipによる導入は初回だけです。
+
+#### WSL / Linux / macOS
+
+```sh
+python3 -m venv .venv-gxtb
+source .venv-gxtb/bin/activate
 python -m pip install "numpy>=1.24,<3" "ase>=3.23,<4" "psutil>=5.9,<8"
+/absolute/path/to/xtb --help
 python bridge.py --engine gxtb --binary /absolute/path/to/xtb --allow-origin https://h-nabata.github.io
 ```
 
-Windowsでは `--binary "C:\path\to\xtb.exe"` と指定し、付属DLLが見つかるようにbinフォルダーをPATHへ登録してください。空白のあるパスは引用符で囲みます。サービスは引数配列と `shell=False` で実行し、ブラウザからコマンド・任意の引数・ファイルパスは受け取りません。
+`/absolute/path/to/xtb`は対応実行ファイルの絶対パスに置き換えます。macOSでは付属ライブラリも配置し、公式READMEの案内に従ってください。WSLではLinux用バイナリとWSL内のPythonを使います。
+
+既にtblite用のPython環境を作った場合は、その環境を再利用し、g-xTB対応実行ファイルを指定して起動することもできます。g-xTB使用時はtbliteのPythonパッケージを呼び出しません。空白のあるパスは引用符で囲みます。サービスは引数配列と `shell=False` で実行し、ブラウザからコマンド・任意の引数・ファイルパスは受け取りません。
+
+### 起動後の接続（両エンジン共通）
+
+起動するとURLと、起動のたびに変わる `Token` が表示されます。アプリの接続先URLと接続トークン欄へ入力し、「接続を確認」を押してください。ブラウザからローカルネットワークへの接続許可が求められた場合は許可します。接続トークンはブラウザの永続ストレージ・プロジェクト・結果JSONに保存しません。
+
+端末はアプリの利用中開いたままにします。エンジンを切り替える場合はCtrl+Cでサービスを停止し、もう一方の `--engine` で起動して、新しく表示されたTokenで接続し直してください。
 
 ### 公開サイトから接続できない場合
 
