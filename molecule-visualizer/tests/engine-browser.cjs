@@ -70,7 +70,8 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.renderer().state.atoms.map(a=>[a.x,a.y,a.z])),afir.result.images[2]);
   assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
   assert.equal(await page.locator('#profilePreview').isVisible(),true);
-  await page.locator('#energyProfile circle[tabindex="0"]').first().hover();
+  // Both series start at zero; hover the upper, visible circle at that position.
+  await page.locator('#energyProfile circle[tabindex="-1"]').first().hover();
   await page.locator('#energyProfile').hover({position:{x:20,y:70}});await page.locator('#profileRange').hover({position:{x:8,y:8}});
   assert.equal(await page.locator('#profileRange').inputValue(),'2','hover must not change the selected frame');
   assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.renderer().state.atoms.map(a=>[a.x,a.y,a.z])),afir.result.images[2]);
