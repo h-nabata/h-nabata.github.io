@@ -32,6 +32,7 @@
     // A frame change is navigation. Its current edits are saved in the document.
     frames[s.metadata.frameIndex||0]=P.snapshot(s);
     const next=M.createState(frames[index]);next.metadata.trajectory=frames;next.metadata.frameIndex=index;next.viewSettings={...s.viewSettings};
+    MV.Bonding.refreshInferredBonds(next);
     if(s.metadata.measurements)next.metadata.measurements=JSON.parse(JSON.stringify(s.metadata.measurements));
     const missing=MV.Measurements?MV.Measurements.transferSelection(s,next):0;
     app().setState(next,true,playing);if(missing)app().setStatus(`このフレームに存在しない選択原子${missing}個を除外しました。`,true);

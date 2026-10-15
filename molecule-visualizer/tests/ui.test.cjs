@@ -298,6 +298,37 @@ test('long profiles retain peaks, bound DOM size, and allow selection of all 100
  nodes.get('profileRange').value='10000';nodes.get('profileRange').fire('input');
  assert.equal(MV.App.renderer().state.atoms[0].x,1);assert.equal(MV.App.getState().atoms[0].x,0);
 });
+test('profile visibility preserves results and hovering never selects a frame or reopens a hidden plot',()=>{
+ const {MV,nodes}=boot(false,true),p=MV.EnergyProfile,s=MV.App.getState(),base=MV.Periodic.snapshot(s),toggle=nodes.get('profileToggle');
+ assert.equal(toggle.disabled,true);
+ const result={title:'result',kind:'afir',energies:[0,1,2],base:()=>base,positions:i=>s.atoms.map(a=>[a.x+i,a.y,a.z])};
+ p.begin(()=>{});p.set(result,true);assert.equal(toggle.disabled,false);assert.equal(toggle.attrs['aria-expanded'],'true');
+ nodes.get('energyProfile').fire('pointermove',{clientX:0});nodes.get('energyProfile').children.find(e=>e.attrs.role==='button').fire('pointerenter');
+ nodes.get('profileRange').fire('pointermove',{clientX:0});assert.equal(nodes.get('profileRange').value,2);assert.equal(p.following(),true);
+ toggle.click();assert.equal(nodes.get('profilePanel').hidden,true);assert.equal(MV.App.renderer().state,s);assert.equal(p.following(),false);
+ // A preview response already in flight, then completion, must respect the hide action.
+ p.set(result,true);p.finish();assert.equal(nodes.get('profilePanel').hidden,true);assert.equal(MV.App.renderer().state,s);
+ toggle.click();assert.equal(nodes.get('profilePanel').hidden,false);assert.equal(nodes.get('profileRange').value,2);assert.equal(MV.App.renderer().state.atoms[0].x,2);
+ nodes.get('profileHide').click();assert.equal(toggle.attrs['aria-expanded'],'false');assert.equal(toggle.disabled,false);
+ p.reset();assert.equal(toggle.disabled,true);
+});
+test('preview, live updates and playback rebuild inferred bonds while preserving manual bonds and the input',()=>{
+ const {MV,nodes}=boot(false,true),app=MV.App,p=MV.EnergyProfile;
+ const original=MV.IO.parseXYZToState('C 0 0 0\nC 3 0 0\nC 0 4 0\nC 1.4 4 0');
+ original.bonds[0].source='manual';original.bonds[0].order=2;
+ app.setState(original,true);const base=MV.Periodic.snapshot(original),saved=MV.IO.stateToProjectText(original);
+ const images=[3,1.4,3].map(x=>original.atoms.map((a,i)=>[i===1?x:a.x,a.y,a.z]));
+ const result={title:'bond change',kind:'afir',energies:[0,1,0],base:()=>base,positions:i=>images[i]};
+ const check=count=>{const s=app.renderer().state;assert.equal(s.bonds.length,count);assert.equal(s.bonds.find(b=>b.source==='manual').order,2);assert.deepEqual(Array.from(s.atoms,a=>a.id),Array.from(original.atoms,a=>a.id));};
+ p.set(result);p.select(1);check(2);p.select(2);check(1);
+ p.set({...result,focusIndex:1},true);check(2);
+ assert.equal(MV.IO.stateToProjectText(app.getState()),saved);nodes.get('profileRestore').click();check(1);
+ // Deliberately retain stale input bonds in every stored frame.
+ const frames=images.map(pos=>{const s=MV.Model.createState(base);s.atoms.forEach((a,i)=>[a.x,a.y,a.z]=pos[i]);return MV.Periodic.snapshot(s);});
+ app.change('trajectory',()=>{const s=MV.Model.createState(base);s.metadata.trajectory=frames;return s;});p.bindTrajectory(frames);
+ MV.Studio.play();check(2);MV.Studio.stop();nodes.get('profileRange').value='2';nodes.get('profileRange').fire('input');check(1);
+ MV.Studio.frame(1);check(2);nodes.get('btnUndo').click();assert.equal(MV.IO.stateToProjectText(app.getState()),saved);
+});
 test('live profile can stop following, restores input on edit, and never mismatches missing historical coordinates',()=>{
  const {MV,nodes}=boot(false,true),s=MV.App.getState(),base=MV.Periodic.snapshot(s),p=MV.EnergyProfile;let cancelled=0;
  p.begin(()=>cancelled++);assert.equal(p.following(),true);
