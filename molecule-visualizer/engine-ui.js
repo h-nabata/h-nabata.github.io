@@ -24,7 +24,13 @@
     const mode=$('engineMode').value,path=['perpendicular','neb','cineb'].includes(mode);
     if(path)$('engineScope').value='all';if(mode==='optimize')$('engineScope').value='current';$('engineScope').disabled=path||mode==='optimize';
     $('engineRelaxSettings').hidden=mode==='evaluate';$('engineSpringLabel').hidden=!['neb','cineb'].includes(mode);$('engineClimbLabel').hidden=mode!=='cineb';
-    $('engineModeHelp').textContent={evaluate:'座標は変更せず、指定した構造のエネルギーと力を計算します。',optimize:'現在の1構造を、外部エンジンの力で最適化します。セルは固定します。',perpendicular:'全原子の3N次元接線に直交する力・座標更新だけを使います。端点固定、接線方向のばね・再配置なし。',neb:'物理的な力の接線成分を除き、構造間隔を保つための接線方向のばね力を加えます。端点固定。',cineb:'初めはNEBで緩和し、指定ステップ以降、最高エネルギーの内部構造を接線方向へ登らせます。CI構造は直交緩和の例外です。端点固定。'}[mode];
+    $('engineModeHelp').textContent={evaluate:'座標は変更せず、指定した構造のエネルギーと力を計算します。',optimize:'現在の1構造を物理的な力のみで最適化します。セルは固定します。人工力を加える場合は「AFIR法の設定を開く」を選び、専用パネルでペア・探索条件を確認して開始してください。',perpendicular:'全原子の3N次元接線に直交する力・座標更新だけを使います。端点固定、接線方向のばね・再配置なし。',neb:'物理的な力の接線成分を除き、構造間隔を保つための接線方向のばね力を加えます。端点固定。',cineb:'初めはNEBで緩和し、指定ステップ以降、最高エネルギーの内部構造を接線方向へ登らせます。CI構造は直交緩和の例外です。端点固定。'}[mode];
+  }
+  function chooseMode(){
+    if($('engineMode').value!=='afir'){settings();return;}
+    // AFIR has its own fragment pairs and conditions; selecting it only opens setup.
+    $('engineMode').value='optimize';settings();$('engineDialog').close();MV.AFIRUI.toggle(true);
+    $('afirPanel').scrollIntoView({block:'nearest',behavior:'smooth'});$('afirName').focus({preventScroll:true});
   }
   function frames(state,scope){
     if(scope==='current'||!state.metadata.trajectory)return [MV.Periodic.snapshot(state)];
@@ -131,7 +137,7 @@
   }
   function init(){
     if(location.hostname==='127.0.0.1'||location.hostname==='localhost')$('engineURL').value=location.origin;
-    $('btnExternalEngine').addEventListener('click',open);$('engineConnect').addEventListener('click',connect);$('engineMode').addEventListener('change',settings);$('engineRun').addEventListener('click',run);$('engineCancel').addEventListener('click',cancel);$('engineApply').addEventListener('click',apply);$('engineDownload').addEventListener('click',download);
+    $('btnExternalEngine').addEventListener('click',open);$('engineConnect').addEventListener('click',connect);$('engineMode').addEventListener('change',chooseMode);$('engineRun').addEventListener('click',run);$('engineCancel').addEventListener('click',cancel);$('engineApply').addEventListener('click',apply);$('engineDownload').addEventListener('click',download);
     for(const id of ['engineURL','engineToken'])$(id).addEventListener('input',()=>{connection=null;$('engineRun').disabled=true;$('engineConnected').textContent='未接続';MV.AFIRUI?.sync();});
     $('engineProfile').addEventListener('click',()=>{if(result){showProfile(result.result,result);$('engineDialog').close();MV.EnergyProfile.reveal();}});
     $('engineDialog').addEventListener('cancel',e=>{if(job){e.preventDefault();cancel();}});settings();

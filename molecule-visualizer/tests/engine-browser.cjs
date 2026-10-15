@@ -9,7 +9,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.goto('http://127.0.0.1:8765/molecule-visualizer/');await page.waitForSelector('canvas');
   const spin=async(id,start,next)=>{const input=page.locator('#'+id);await input.fill(start);await input.press('ArrowUp');assert.equal(await input.inputValue(),next);await input.press('ArrowDown');assert.equal(await input.inputValue(),start);};
   const before=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms));
-  const previewRequests=[];page.on('request',r=>{if(r.url().includes('?preview=1'))previewRequests.push(r.url());});
+  const previewRequests=[],jobRequests=[];page.on('request',r=>{if(r.url().includes('?preview=1'))previewRequests.push(r.url());if(r.method()==='POST'&&r.url().endsWith('/api/jobs'))jobRequests.push(r.url());});
   assert.equal(await page.locator('#engineLive').isChecked(),false);assert.equal(await page.locator('#afirLive').isChecked(),false);
   await page.click('#btnExternalEngine');await page.fill('#engineURL','http://127.0.0.1:8766');await page.fill('#engineToken','incorrect');await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineMessage').textContent.includes('トークンが一致'));
   await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
@@ -33,10 +33,12 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   for(const steps of ['1500','10000']){
     await page.fill('#engineSteps',steps);await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
     const saved=page.waitForEvent('download');await page.click('#engineDownload');const file=await saved;
-    const report=JSON.parse(fs.readFileSync(await file.path(),'utf8'));assert.equal(report.input.maxSteps,Number(steps));assert.equal(report.result.converged,true);
+    const report=JSON.parse(fs.readFileSync(await file.path(),'utf8'));assert.equal(report.input.maxSteps,Number(steps));assert.equal(report.input.mode,'optimize');assert.equal(report.result.converged,true);
   }
-  await page.click('#engineClose');
-  await page.click('#btnAFIR');
+  assert.equal(await page.locator('#engineMode optgroup').getAttribute('label'),'単一構造の最適化（AFIR法を含む）');
+  const jobsBefore=jobRequests.length;await page.selectOption('#engineMode','afir');
+  assert.equal(await page.locator('#engineDialog').isVisible(),false);assert.equal(await page.locator('#afirPanel').isVisible(),true);
+  assert.equal(await page.locator('#engineMode').inputValue(),'optimize');assert.equal(jobRequests.length,jobsBefore,'opening AFIR setup must not start a calculation');
   await spin('afirFmax','0.3','0.31');await spin('afirMove','0.04','0.05');await spin('afirGamma','100','101');
   for(let i=0;i<3;i++){
     const p=await page.evaluate(i=>{const a=MoleculeVisualizer.App.renderer().projectedAtoms.find(a=>a.index===i+1);return {x:a.x,y:a.y};},i);
@@ -68,6 +70,19 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.renderer().state.atoms.map(a=>[a.x,a.y,a.z])),afir.result.images[2]);
   assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
   assert.equal(await page.locator('#profilePreview').isVisible(),true);
+  await page.locator('#energyProfile circle[tabindex="0"]').first().hover();
+  await page.locator('#energyProfile').hover({position:{x:20,y:70}});await page.locator('#profileRange').hover({position:{x:8,y:8}});
+  assert.equal(await page.locator('#profileRange').inputValue(),'2','hover must not change the selected frame');
+  assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.renderer().state.atoms.map(a=>[a.x,a.y,a.z])),afir.result.images[2]);
+  const slider=await page.locator('#profileRange').boundingBox(),thumb=slider.x+8+(slider.width-16)*2/3;
+  await page.mouse.move(thumb,slider.y+slider.height/2);await page.mouse.down({button:'left'});
+  await page.mouse.move(slider.x+slider.width-8,slider.y+slider.height/2,{steps:5});await page.mouse.up({button:'left'});
+  assert.equal(await page.locator('#profileRange').inputValue(),'3');
+  assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.renderer().state.atoms.map(a=>[a.x,a.y,a.z])),afir.result.images[3]);
+  await page.mouse.move(slider.x+8,slider.y+slider.height/2);assert.equal(await page.locator('#profileRange').inputValue(),'3','released drag must stop following the cursor');
+  await page.click('#profileToggle');assert.equal(await page.locator('#profilePanel').isVisible(),false);assert.equal(await page.locator('#profileToggle').getAttribute('aria-expanded'),'false');
+  assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.renderer().previewOnly),false);
+  await page.click('#profileToggle');assert.equal(await page.locator('#profilePanel').isVisible(),true);assert.equal(await page.locator('#profileRange').inputValue(),'3');
   await page.locator('canvas').focus();await page.locator('canvas').press('ArrowRight');
   assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before,'preview keyboard must not edit input');
   await page.click('#profileRestore');
@@ -112,6 +127,19 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.deepEqual(positions(after[0]),positions(initial[0]));assert.deepEqual(positions(after[2]),positions(initial[2]));assert.notDeepEqual(positions(after[1]),positions(initial[1]));assert.deepEqual(after[1].metadata.cell,initial[1].metadata.cell);
   await page.evaluate(()=>MoleculeVisualizer.Studio.frame(1));assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.externalCalculation.mode),'perpendicular');assert.equal((await page.evaluate(()=>MoleculeVisualizer.Studio.allXYZ())).match(/\nO /g).length,3);
   await page.click('#btnUndo');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().metadata.trajectory)),source);
+  // Generic two-carbon geometry exercises visible bond formation and cleavage.
+  await page.evaluate(()=>{
+    const MV=MoleculeVisualizer,s=MV.IO.parseXYZToState('C 0 0 0\nC 3 0 0'),base=MV.Periodic.snapshot(s),images=[3,1.4,3].map(x=>[[0,0,0],[x,0,0]]);
+    MV.App.change('bond display fixture',()=>s,true);
+    MV.EnergyProfile.set({title:'Bond display check',kind:'afir',energies:[0,-1,0],base:()=>base,positions:i=>images[i]});
+    const frames=images.map(pos=>{const f=MV.Model.createState(base);f.atoms.forEach((a,i)=>[a.x,a.y,a.z]=pos[i]);return MV.Periodic.snapshot(f);});
+    s.metadata.trajectory=frames;MV.EnergyProfile.select(1);
+  });
+  assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.renderer().projectedBonds.length),1);assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().bonds.length),0);
+  await page.locator('#profileRange').focus();await page.locator('#profileRange').press('End');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.renderer().projectedBonds.length),0);
+  await page.click('#profileRestore');await page.evaluate(()=>MoleculeVisualizer.Studio.play());
+  assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.renderer().projectedBonds.length),1);await page.evaluate(()=>MoleculeVisualizer.Studio.stop());
+  await page.click('#frameNext');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.renderer().projectedBonds.length),0);
   // Local UI fallback is served without Jekyll front matter and works at mobile width.
   const local=await browser.newPage({viewport:{width:390,height:844}});await local.goto('http://127.0.0.1:8766/');await local.waitForSelector('canvas');await local.click('#btnExternalEngine');assert.equal(await local.locator('#engineURL').inputValue(),'http://127.0.0.1:8766');
   await local.fill('#engineToken',token);await local.click('#engineConnect');await local.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));

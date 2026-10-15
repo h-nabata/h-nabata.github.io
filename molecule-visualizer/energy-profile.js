@@ -2,7 +2,7 @@
 (function(global){
   'use strict';
   const MV=global.MoleculeVisualizer,$=id=>document.getElementById(id),app=()=>MV.App,ns='http://www.w3.org/2000/svg';
-  let data=null,index=0,active=false,bound=null,marker=null,range=null,live=null,details=null;
+  let data=null,index=0,active=false,bound=null,marker=null,range=null,live=null,details=null,visible=true;
   function element(tag,attrs,text){const e=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));if(text)e.textContent=text;return e;}
   function restore(draw=true){
     if(!active)return;active=false;app().renderer().previewOnly=false;$('profilePreview').hidden=true;
@@ -23,6 +23,7 @@
     const state=MV.Model.createState(data.base(i));
     if(positions.length!==state.atoms.length||positions.some(v=>!Array.isArray(v)||v.length!==3||v.some(x=>!Number.isFinite(x)||Math.abs(x)>10000)))return;
     state.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=positions[k];});
+    MV.Bonding.refreshInferredBonds(state);
     state.viewSettings={...app().getState().viewSettings};state.selectedAtomIds.clear();state.selectedBondIds.clear();
     active=true;app().renderer().previewOnly=true;app().renderer().renderState(state,true);
     $('profilePreview').hidden=false;$('profilePreview').textContent='計算結果のプレビュー · '+(data.kind==='afir'?'ステップ '+i:'構造 '+(i+1))+'（入力座標は保持）';
@@ -48,7 +49,7 @@
       // Every small-series point is focusable. The range always covers every frame.
       if(values.length<=100)points.forEach(([x,y],p)=>{
         const i=ids[p],dot=element('circle',{cx:x,cy:y,r:4,fill:k?'#b45420':'#087e85',tabindex:k?-1:0,role:'button','aria-label':(next.kind==='afir'?'ステップ '+i:'構造 '+(i+1))+': ΔE '+values[i].toFixed(6)+' eV'});
-        const choose=()=>{pauseFollow();select(i);};dot.addEventListener('focus',choose);dot.addEventListener('click',choose);dot.addEventListener('pointerenter',choose);
+        const choose=()=>{pauseFollow();select(i);};dot.addEventListener('focus',choose);dot.addEventListener('click',choose);
         dot.addEventListener('keydown',e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();choose();}});svg.append(dot);
       });
     });
@@ -56,34 +57,36 @@
     svg.append(element('text',{x:380,y:175,'font-size':12},next.kind==='afir'?'最適化ステップ →':'経路の構造番号 →'));
     $('profileTitle').textContent=next.title;$('profileLegend').textContent=next.biasEnergies?'緑：物理エネルギー　茶：物理エネルギー＋人工項。横軸は探索ステップで、反応座標やTS検証結果ではありません。':'緑：物理エネルギー。横軸は構造番号です（単一構造の計算では1点）。';
     range=$('profileRange');range.max=next.energies.length-1;range.disabled=next.energies.length<2;
-    panel(true);select(follow?(next.focusIndex??next.energies.length-1):Math.min(index,next.energies.length-1),follow);
+    follow=follow&&visible;panel(visible);select(follow?(next.focusIndex??next.energies.length-1):Math.min(index,next.energies.length-1),follow);
   }
   function pauseFollow(){$('profileFollow').checked=false;}
-  function panel(show){$('profilePanel').hidden=!show;app().renderer().resize();app().renderer().draw();}
+  function panel(show){
+    $('profilePanel').hidden=!show;
+    const toggle=$('profileToggle');toggle.disabled=!data&&!live;toggle.textContent=show?'グラフを隠す':'グラフを表示';toggle.setAttribute('aria-expanded',String(show));
+    toggle.title=toggle.disabled?'計算結果が得られると表示できます。':'エネルギープロファイルの表示を切り替えます。';
+    app().renderer().resize();app().renderer().draw();
+  }
+  function hide(){visible=false;pauseFollow();restore();panel(false);}
   function begin(cancel,showDetails){
-    restore();live=cancel;details=showDetails;panel(true);$('profileTitle').textContent='計算中 · 最初の評価を待っています…';
+    restore();live=cancel;details=showDetails;panel(visible);$('profileTitle').textContent='計算中 · 最初の評価を待っています…';
     $('energyProfile').replaceChildren();$('profileValue').textContent='';$('profileLegend').textContent='';data=null;bound=null;
     $('profileLiveControls').hidden=false;$('profileFollow').checked=true;$('profileRange').disabled=true;
   }
-  function finish(){live=null;$('profileLiveControls').hidden=true;if($('profileTitle').textContent.includes('計算中'))$('profileTitle').textContent='計算を終了 · 途中表示';}
+  function finish(){live=null;$('profileLiveControls').hidden=true;if($('profileTitle').textContent.includes('計算中'))$('profileTitle').textContent='計算を終了 · 途中表示';panel(!$('profilePanel').hidden&&!!data);}
   function reset(){restore();finish();data=null;bound=null;panel(false);}
   function sync(){if(bound&&app().getState().metadata.trajectory===bound)select(app().getState().metadata.frameIndex||0,false);}
-  function reveal(){panel(true);$('viewer').scrollIntoView({block:'start',behavior:'smooth'});}
+  function reveal(){visible=true;panel(true);$('viewer').scrollIntoView({block:'start',behavior:'smooth'});}
   function init(){
     $('profileRange').addEventListener('input',()=>{pauseFollow();select(Number($('profileRange').value));});
-    let lastHover=0;
-    $('energyProfile').addEventListener('pointermove',e=>{
-      if(!data||Date.now()-lastHover<50)return;lastHover=Date.now();
-      const r=$('energyProfile').getBoundingClientRect(),x=(e.clientX-r.left)*560/r.width;
-      pauseFollow();select(Math.max(0,Math.min(data.energies.length-1,Math.round((x-40)/500*(data.energies.length-1)))));
-    });
+    $('profileToggle').addEventListener('click',()=>{if(!$('profilePanel').hidden){hide();return;}visible=true;panel(true);select(index);});
     $('profileRestore').addEventListener('click',()=>{pauseFollow();restore();});
-    $('profileHide').addEventListener('click',()=>{pauseFollow();restore();panel(false);});
+    $('profileHide').addEventListener('click',hide);
     $('profileFollow').addEventListener('change',()=>{if(!$('profileFollow').checked)restore();});
     $('profileCancel').addEventListener('click',()=>live?.());
     $('profileDetails').addEventListener('click',()=>details?.());
     const canvas=app().renderer().canvas;
     for(const type of ['keydown','dblclick'])canvas.addEventListener(type,e=>{if(active){e.preventDefault();e.stopImmediatePropagation();}},true);
+    panel(false);
   }
   MV.EnergyProfile={init,set,select,restore,sync,begin,finish,reset,reveal,sample,following:()=>$('profileFollow').checked,
     onStateChange(){restore(false);pauseFollow();},bindTrajectory(frames){bound=frames;sync();}};
