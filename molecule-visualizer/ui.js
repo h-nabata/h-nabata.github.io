@@ -110,10 +110,11 @@
       .filter(Boolean);
   }
 
-  function render(preserveCamera) {
+  function render(preserveCamera, persist=true) {
+    MV.EnergyProfile?.onStateChange();
     MV.Measurements?.bind(state);
     renderer.renderState(state, Boolean(preserveCamera));
-    saveLocal();
+    if(persist)saveLocal();
     updateAtomTable();
     updateBondTable();
     syncUI();
@@ -122,14 +123,15 @@
     MV.AFIRUI?.sync();
   }
 
-  function setState(nextState, preserveCamera) {
+  function setState(nextState, preserveCamera, navigation=false) {
     finishBondKeyEdit();
     state = nextState;
     Model.sanitizeSelection(state);
-    render(preserveCamera);
+    render(preserveCamera,!navigation);
   }
 
   function rerenderSelectionOnly() {
+    MV.EnergyProfile?.onStateChange();
     finishBondKeyEdit();
     renderer.updateSelection(state);
     updateAtomTable();
@@ -989,6 +991,7 @@
   MV.App = {
     init,
     getState: function () { return state; },
+    save: saveLocal,
     setState,
     renderer: () => renderer,
     change(label, fn, fit=false) { const next=Model.cloneState(state); const result=fn(next)||next; pushHistory(label); setState(result,!fit); },

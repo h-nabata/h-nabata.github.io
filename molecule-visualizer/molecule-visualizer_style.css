@@ -87,3 +87,12 @@
 #afirAlpha{font-size:12px;color:var(--muted)}#afirResult{margin-top:16px}#afirResultSummary{font-size:13px;line-height:1.7}#afirPlot{width:100%;margin:8px 0;background:#f7fafb;border:1px solid var(--border);border-radius:6px}
 
 .mv-app .mv-shortcut-table th,.mv-app .mv-shortcut-table td{white-space:normal;overflow-wrap:anywhere}.mv-app .mv-shortcut-table td:first-child{white-space:nowrap}
+
+.mv-energy-profile{margin:12px 0;padding:12px;border:1px solid #bfd7d8;border-radius:12px;background:#f6fbfb;min-width:0}
+.mv-stage:has(#profilePanel:not([hidden])) .mv-viewer-shell{height:clamp(240px,32vh,380px);min-height:0}
+.mv-energy-profile svg{display:block;width:100%;height:auto;overflow:visible;touch-action:pan-y}
+.mv-energy-profile circle{cursor:pointer;stroke:#fff;stroke-width:1}
+.mv-energy-profile circle:focus{outline:2px solid #b45420;outline-offset:3px}
+.mv-profile-range{display:flex;gap:12px;align-items:center}.mv-profile-range input{flex:1;min-width:0}
+#profileValue{display:block;font-size:12px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.mv-profile-preview{position:absolute;top:8px;left:12px;right:12px;margin:0;padding:6px 10px;background:#fff4df;border:1px solid #d69b39;border-radius:6px;pointer-events:none;font-size:12px;z-index:2}

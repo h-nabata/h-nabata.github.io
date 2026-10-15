@@ -11,6 +11,7 @@
   function sync(){
     if(!ready)return;
     const s=state(),c=s.metadata.cell,frames=s.metadata.trajectory||[];
+    MV.EnergyProfile?.sync();
     $('cellStatus').textContent=c?`周期境界 ${c.pbc.map((x,i)=>x?'abc'[i]:'—').join('')} · ${Math.abs(determinant(c.vectors)).toFixed(3)} Å³`:'非周期構造';
     $('frameRange').max=Math.max(0,frames.length-1);$('frameRange').value=s.metadata.frameIndex||0;$('frameLabel').textContent=`${(s.metadata.frameIndex||0)+1} / ${frames.length||1}`;
     ['framePrev','frameNext','framePlay','frameRange','allFrames'].forEach(id=>$(id).disabled=frames.length<2);
@@ -19,15 +20,21 @@
     $('fractionalInfo').textContent=c&&chosen.length===1?'分率座標 '+P.fractional(P.xyz(chosen[0]),c).map(x=>x.toFixed(6)).join('  '):'';
   }
   function determinant(v){return v[0][0]*(v[1][1]*v[2][2]-v[1][2]*v[2][1])-v[0][1]*(v[1][0]*v[2][2]-v[1][2]*v[2][0])+v[0][2]*(v[1][0]*v[2][1]-v[1][1]*v[2][0]);}
-  function stop(){clearInterval(timer);timer=null;$('framePlay').textContent='▶ 再生';}
-  function frame(index){
+  function stop(){if(timer)app().save?.();clearInterval(timer);timer=null;$('framePlay').textContent='▶ 再生';}
+  function play(){
+    stop();if((state().metadata.trajectory?.length||0)<2)return;
+    $('framePlay').textContent='Ⅱ 停止';
+    const advance=()=>{const frames=state().metadata.trajectory;if(!frames||frames.length<2)return stop();frame(((state().metadata.frameIndex||0)+1)%frames.length,true);};
+    advance();timer=setInterval(advance,500);
+  }
+  function frame(index,playing=false){
     const s=state(),frames=s.metadata.trajectory;if(!frames||index<0||index>=frames.length)return;
     // A frame change is navigation. Its current edits are saved in the document.
     frames[s.metadata.frameIndex||0]=P.snapshot(s);
     const next=M.createState(frames[index]);next.metadata.trajectory=frames;next.metadata.frameIndex=index;next.viewSettings={...s.viewSettings};
     if(s.metadata.measurements)next.metadata.measurements=JSON.parse(JSON.stringify(s.metadata.measurements));
     const missing=MV.Measurements?MV.Measurements.transferSelection(s,next):0;
-    app().setState(next,true);if(missing)app().setStatus(`このフレームに存在しない選択原子${missing}個を除外しました。`,true);
+    app().setState(next,true,playing);if(missing)app().setStatus(`このフレームに存在しない選択原子${missing}個を除外しました。`,true);
   }
   function allXYZ(){const s=state(),frames=s.metadata.trajectory;if(!frames)return IO.stateToXYZText(s);return frames.map((f,i)=>IO.stateToXYZText(i===(s.metadata.frameIndex||0)?s:M.createState(f))).join('');}
   function transform(fn){if(!state().selectedAtomIds.size)throw Error('原子を選択してください。');app().change('transform',s=>{const atoms=s.atoms.filter(a=>s.selectedAtomIds.has(a.id));fn(atoms);MV.Bonding.refreshInferredBonds(s);});}
@@ -81,7 +88,7 @@
     bind('allFramesSDF',()=>{const s=state(),frames=s.metadata.trajectory||[P.snapshot(s)];download(frames.map((f,i)=>IO.stateToSDFText(i===(s.metadata.frameIndex||0)?s:M.createState(f))).join(''),'structures.sdf');});
     bind('framePrev',()=>{stop();frame((state().metadata.frameIndex||0)-1);});bind('frameNext',()=>{stop();frame((state().metadata.frameIndex||0)+1);});
     $('frameRange').addEventListener('input',()=>{stop();frame(Number($('frameRange').value));});
-    bind('framePlay',()=>{if(timer)return stop();$('framePlay').textContent='Ⅱ 停止';timer=setInterval(()=>{const frames=state().metadata.trajectory;if(!frames)return stop();frame(((state().metadata.frameIndex||0)+1)%frames.length);},500);});
+    bind('framePlay',()=>timer?stop():play());
     bind('rotateSelection',rotateSelection);
     bind('btnFullScreen',async()=>{const el=document.querySelector('.mv-app');if(document.fullscreenElement)await document.exitFullscreen();else await el.requestFullscreen();});
 
@@ -101,5 +108,5 @@
     renderer.canvas.addEventListener('keydown',e=>{if(e.ctrlKey||e.metaKey||e.altKey)return;try{const key=e.key.toLowerCase();if(['x','y','z'].includes(key)){axis=axis===key?null:key;message(axis?`${axis.toUpperCase()}軸に移動を拘束（同じキーで解除）`:'移動拘束を解除');e.preventDefault();}else if(key==='escape'){axis=null;}else if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','PageUp','PageDown'].includes(e.key)){e.preventDefault();const step=e.shiftKey?.1:.01;transform(atoms=>atoms.forEach(a=>{if(e.key==='ArrowLeft')a.x-=step;if(e.key==='ArrowRight')a.x+=step;if(e.key==='ArrowUp')a.y+=step;if(e.key==='ArrowDown')a.y-=step;if(e.key==='PageUp')a.z+=step;if(e.key==='PageDown')a.z-=step;}));}}catch(err){message(err.message,true);}});
     sync();
   }
-  MV.Studio={init,sync,convert,allXYZ,frame,clearAxis(){axis=null;}};
+  MV.Studio={init,sync,convert,allXYZ,frame,play,stop,clearAxis(){axis=null;}};
 })(window);

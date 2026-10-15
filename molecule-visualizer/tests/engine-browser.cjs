@@ -9,6 +9,8 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.goto('http://127.0.0.1:8765/molecule-visualizer/');await page.waitForSelector('canvas');
   const spin=async(id,start,next)=>{const input=page.locator('#'+id);await input.fill(start);await input.press('ArrowUp');assert.equal(await input.inputValue(),next);await input.press('ArrowDown');assert.equal(await input.inputValue(),start);};
   const before=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms));
+  const previewRequests=[];page.on('request',r=>{if(r.url().includes('?preview=1'))previewRequests.push(r.url());});
+  assert.equal(await page.locator('#engineLive').isChecked(),false);assert.equal(await page.locator('#afirLive').isChecked(),false);
   await page.click('#btnExternalEngine');await page.fill('#engineURL','http://127.0.0.1:8766');await page.fill('#engineToken','incorrect');await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineMessage').textContent.includes('トークンが一致'));
   await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
   await page.selectOption('#engineMode','neb');
@@ -58,7 +60,42 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
   const afirDownload=page.waitForEvent('download');await page.click('#afirDownload');const afirFile=await afirDownload;
   const afir=JSON.parse(fs.readFileSync(await afirFile.path(),'utf8'));assert.equal(afir.input.config.maxSteps,3);assert.equal(afir.result.images.length,4);assert.equal(afir.result.validation,'biased-trajectory-not-ts');assert.ok(!JSON.stringify(afir).includes(token));
-  await page.click('#afirApply');await page.click('#frameNext');assert.match(await page.locator('#frameLabel').textContent(),/2 \/ 4/);
+  assert.equal(previewRequests.length,0,'live display must make no preview requests by default');
+  await page.click('#afirProfile');
+  const viewBox=await page.locator('#viewer').boundingBox(),plotBox=await page.locator('#profilePanel').boundingBox();
+  assert.ok(plotBox.y+plotBox.height-viewBox.y<page.viewportSize().height-100,'structure and graph fit together in the viewport');
+  await page.locator('#energyProfile circle[tabindex="0"]').nth(2).focus();
+  assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.renderer().state.atoms.map(a=>[a.x,a.y,a.z])),afir.result.images[2]);
+  assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
+  assert.equal(await page.locator('#profilePreview').isVisible(),true);
+  await page.locator('canvas').focus();await page.locator('canvas').press('ArrowRight');
+  assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before,'preview keyboard must not edit input');
+  await page.click('#profileRestore');
+  assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.renderer().previewOnly),false);
+  // Replay a completed real calculation's first two checkpoints as an in-flight
+  // response, making the live UI check deterministic even on very fast CPUs.
+  let delivered=false;
+  await page.route(/\/api\/jobs\/[a-f0-9]{32}\?preview=1&after=\d+$/,async route=>{
+    const response=await route.fetch(),body=await response.json();
+    if(!delivered&&body.status==='completed'){
+      delivered=true;const r=body.result;
+      await route.fulfill({json:{id:body.id,status:'running',progress:{step:1},preview:{mode:'afir',from:0,next:2,energies:r.energies.slice(0,2),biasEnergies:r.biasEnergies.slice(0,2),positions:r.images[1]}}});
+    }else {if(body.status==='running'&&body.preview)delivered=true;await route.fulfill({response});}
+  });
+  await page.check('#afirLive');await page.click('#afirRun');
+  await page.waitForFunction(()=>document.getElementById('profileTitle').textContent.includes('計算中（評価済み')&&!document.getElementById('profilePreview').hidden);
+  assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
+  await page.waitForSelector('#afirResult:not([hidden])');
+  assert.ok(delivered);assert.ok(previewRequests.length>=2);
+  await page.unroute(/\/api\/jobs\/[a-f0-9]{32}\?preview=1&after=\d+$/);
+  await page.click('#afirApply');assert.match(await page.locator('#framePlay').textContent(),/停止/);
+  assert.ok(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.frameIndex)>0,'apply-and-play advances immediately');
+  await page.locator('#frameRange').focus();await page.locator('#frameRange').press('Home');
+  await page.click('#frameNext');assert.match(await page.locator('#frameLabel').textContent(),/2 \/ 4/);
+  assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.renderer().state.atoms.map(a=>[a.x,a.y,a.z])),await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.trajectory[1].atoms.map(a=>[a.x,a.y,a.z])));
+  assert.equal(await page.locator('#profileRange').inputValue(),'1');
+  await page.locator('#profileRange').focus();await page.locator('#profileRange').press('End');
+  assert.match(await page.locator('#frameLabel').textContent(),/4 \/ 4/);
   await page.screenshot({path:'test-artifacts/afir.png',fullPage:true});await page.click('#btnUndo');await page.click('#afirClose');await page.click('#dataReset');
   // Actual fixed-cell path relaxation, final review, apply, navigation, export and Undo.
   const xyz=offset=>`3\npath Lattice="9 0 0 1 9 0 0 0 9" pbc="T T T"\nO 0 0 0\nH ${.96+offset} 0 0\nH -.24 .93 0\n`;
@@ -67,6 +104,10 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.click('#btnExternalEngine');await page.selectOption('#engineMode','perpendicular');await page.fill('#engineSteps','3');await page.fill('#engineFmax','0.00001');await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
   assert.equal(await page.locator('#engineEnergyRows tr').count(),3);assert.match(await page.locator('#engineResultSummary').textContent(),/接線方向の最大更新/);
   await page.screenshot({path:'test-artifacts/engine-path.png'});
+  await page.click('#engineProfile');await page.locator('#energyProfile circle[tabindex="0"]').nth(1).focus();
+  assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().metadata.trajectory)),source);
+  assert.equal(await page.locator('#profilePreview').isVisible(),true);
+  await page.click('#profileDetails');
   await page.click('#engineApply');const after=await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.trajectory);const initial=JSON.parse(source),positions=f=>f.atoms.map(a=>[a.x,a.y,a.z]);
   assert.deepEqual(positions(after[0]),positions(initial[0]));assert.deepEqual(positions(after[2]),positions(initial[2]));assert.notDeepEqual(positions(after[1]),positions(initial[1]));assert.deepEqual(after[1].metadata.cell,initial[1].metadata.cell);
   await page.evaluate(()=>MoleculeVisualizer.Studio.frame(1));assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.externalCalculation.mode),'perpendicular');assert.equal((await page.evaluate(()=>MoleculeVisualizer.Studio.allXYZ())).match(/\nO /g).length,3);

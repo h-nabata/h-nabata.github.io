@@ -76,13 +76,13 @@
     $('afirExport').disabled=!valid||!!job;$('afirCheck').disabled=!valid||!!job;$('afirAddPair').disabled=c.fragments.length<2||!!job;
     $('afirRun').disabled=!valid||!!job||!MV.AFIRRunner?.available();$('afirCancel').disabled=!job;
     const connection=MV.EngineUI?.getConnection?.();$('afirConnectionStatus').textContent=connection?`${connection.info.engine} / ${connection.info.method}`+(MV.AFIRRunner?.available()?' · AFIR対応':' · AFIRにはサービスの更新が必要です'):'未接続（設定・人工項の確認・入力保存は利用できます）';
-    $('afirSettings').disabled=!!job;$('afirFragmentSettings').disabled=!!job;
-    if(result)$('afirApply').disabled=!!job||fingerprint(s)!==result.fingerprint||dirty();
+    $('afirLive').disabled=!!job;$('afirSettings').disabled=!!job;$('afirFragmentSettings').disabled=!!job;
+    if(result)$('afirApply').disabled=!!job||!!result.applied||fingerprint(s)!==result.fingerprint||dirty();
   }
   function toggle(value){visible=value??!visible;$('afirPanel').hidden=!visible;document.querySelector('.mv-inspector').classList.toggle('mv-afir-active',visible);$('btnAFIR').setAttribute('aria-pressed',String(visible));
     if(visible){$('toolSelect').click();$('multiSelect').checked=true;app().getState().viewSettings.afirOverlay=true;sync();}
     else app().getState().viewSettings.afirOverlay=false;
-    app().renderer().renderState(app().getState(),true);
+    MV.EnergyProfile?.restore();app().renderer().renderState(app().getState(),true);
   }
   function download(payload,name,type='application/json'){const text=typeof payload==='string'?payload:JSON.stringify(payload,null,2),url=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
   function exportFiles(){if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();const out=MV.AFIR.exportInput(app().getState(),config());download(out,'afir-input.json');message('原子ID・XYZ・フラグメント・ペア・Python用設定をJSONに保存しました。');}
@@ -90,23 +90,37 @@
   async function run(){
     if(job)return;let j;
     try{if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();const s=app().getState();MV.AFIR.validate(s.atoms,config(),s.metadata.cell);
-      j={original:MV.Model.cloneState(s),fingerprint:fingerprint(s),config:JSON.parse(JSON.stringify(config())),cancelled:false};job=j;result=null;$('afirResult').hidden=true;sync();
-      const r=await MV.AFIRRunner.run(j,p=>message(p));if(r){MV.AFIRRunner.validateResult(r,j);result={...j,result:r};showResult(r);}else message('計算を中止しました。入力構造は保持しています。');
-    }catch(e){message(e.message);}finally{job=null;sync();}
+      j={original:MV.Model.cloneState(s),fingerprint:fingerprint(s),config:JSON.parse(JSON.stringify(config())),cancelled:false,livePreview:$('afirLive').checked,previewCursor:0,liveEnergies:[],liveBiases:[]};
+      if(j.livePreview&&!MV.EngineUI.getConnection()?.info.livePreview)throw Error('ライブ表示にはbridge.py 1.2.0以降が必要です。更新・再接続するか、ライブ表示をオフにしてください。');
+      MV.EnergyProfile.reset();job=j;result=null;$('afirResult').hidden=true;sync();
+      if(j.livePreview)MV.EnergyProfile.begin(()=>$('afirCancel').click(),()=>toggle(true));
+      const r=await MV.AFIRRunner.run(j,(text,p)=>{
+        message(text);if(!p||!j.livePreview)return;
+        try{
+          if(p.mode!=='afir'||p.from!==j.previewCursor||!Number.isInteger(p.next)||p.next<=p.from||p.next>j.config.maxSteps+1||p.energies?.length!==p.next-p.from||p.biasEnergies?.length!==p.energies.length||[...p.energies,...p.biasEnergies].some(e=>!Number.isFinite(e))||!Array.isArray(p.positions)||p.positions.length!==j.original.atoms.length||p.positions.some(v=>!Array.isArray(v)||v.length!==3||v.some(x=>!Number.isFinite(x)||Math.abs(x)>10000)))throw Error('進捗データの形式が不正です。');
+          j.liveEnergies.push(...p.energies);j.liveBiases.push(...p.biasEnergies);j.previewCursor=p.next;
+          const base=MV.Periodic.snapshot(j.original);
+          MV.EnergyProfile.set({title:'AFIR · 計算中（評価済みの途中結果）',kind:'afir',energies:j.liveEnergies,biasEnergies:j.liveBiases,base:()=>base,positions:i=>i===p.next-1?p.positions:null},MV.EnergyProfile.following());
+        }catch(e){j.livePreview=false;MV.EnergyProfile.restore();message(e.message+' ライブ表示を停止しました。計算は継続しています。');}
+      });if(r){MV.AFIRRunner.validateResult(r,j);result={...j,result:r};showResult(r);}else {MV.EnergyProfile.restore();message('計算を中止しました。入力構造は保持しています。');}
+    }catch(e){MV.EnergyProfile.restore();message(e.message);}finally{job=null;MV.EnergyProfile.finish();sync();}
   }
   function showResult(r){
     const reason={converged:'人工力下で収束',step_limit:'未収束（ステップ上限）',cancelled:'中止（途中までの構造列）',failed:'計算失敗（途中までの構造列）'}[r.reason]||'未検証';
     $('afirResult').hidden=false;$('afirResultSummary').textContent=`${r.engine} / ${r.method} · ${reason} · ${r.steps}ステップ · 最大有効力 ${r.effectiveFmax.toPrecision(4)} eV/Å`;
-    const svg=$('afirPlot');svg.replaceChildren();const ns='http://www.w3.org/2000/svg',series=[r.energies,r.biasedEnergies],relative=series.map(a=>a.map(e=>e-a[0])),lo=Math.min(0,...relative.flat()),hi=Math.max(0,...relative.flat()),span=Math.max(hi-lo,1e-8);
-    relative.forEach((values,k)=>{const line=document.createElementNS(ns,'polyline');line.setAttribute('points',values.map((e,i)=>`${25+i*270/Math.max(1,values.length-1)},${125-(e-lo)*95/span}`).join(' '));line.setAttribute('fill','none');line.setAttribute('stroke',k?'#b45420':'#087e85');line.setAttribute('stroke-width','2');svg.append(line);});
-    const label=document.createElementNS(ns,'text');label.setAttribute('x','10');label.setAttribute('y','16');label.setAttribute('font-size','11');label.textContent=`始点との差: ${lo.toFixed(3)}〜${hi.toFixed(3)} eV`;svg.append(label);
+    showProfile(r,result,!!job?.livePreview&&MV.EnergyProfile.following());
     message(r.error?`計算失敗: ${r.error}。保存済みの途中経過を確認できます。`:'探索を終了しました。人工力下の構造列を保存・再生できます。');
+  }
+  function showProfile(r,j,follow=false){
+    const base=MV.Periodic.snapshot(j.original);
+    MV.EnergyProfile.set({title:'AFIR探索 · エネルギープロファイル',kind:'afir',details:()=>toggle(true),energies:r.energies,biasEnergies:r.biasEnergies,positions:i=>r.images[i],base:()=>base},follow);
+    if(j.trajectory===app().getState().metadata.trajectory&&j.trajectory)MV.EnergyProfile.bindTrajectory(j.trajectory);
   }
   function apply(){
     if(!result||dirty()||fingerprint(app().getState())!==result.fingerprint)throw Error('計算開始後に構造・設定が変わったため適用できません。結果JSONは保存できます。');
     const j=result,r=j.result;MV.AFIRRunner.validateResult(r,j);
-    const frames=r.images.map((positions,i)=>{const s=MV.Model.cloneState(j.original);delete s.metadata.trajectory;delete s.metadata.frameIndex;s.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=positions[k];});s.metadata.afirCalculation={engine:r.engine,method:r.method,physicalEnergyEV:r.energies[i],biasEnergyEV:r.biasEnergies[i],step:i,validation:'biased-trajectory-not-ts',atomIds:r.atomIds};return MV.Periodic.snapshot(s);});
-    const next=MV.Model.createState(frames[0]);next.metadata.trajectory=frames;next.metadata.frameIndex=0;next.viewSettings={...j.original.viewSettings,afirOverlay:visible};app().change('AFIR trajectory',()=>next,true);$('dataReset').click();$('afirApply').disabled=true;message('構造列を適用しました。FRAMESで再生できます。「戻す」で入力へ戻ります。結合表は入力のまま保持しています。');
+    const base=MV.Periodic.snapshot(j.original);const frames=r.images.map((positions,i)=>{const s=MV.Model.createState(base);s.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=positions[k];});s.metadata.afirCalculation={engine:r.engine,method:r.method,physicalEnergyEV:r.energies[i],biasEnergyEV:r.biasEnergies[i],step:i,validation:'biased-trajectory-not-ts',atomIds:r.atomIds};return MV.Periodic.snapshot(s);});
+    const next=MV.Model.createState(frames[0]);next.metadata.trajectory=frames;next.metadata.frameIndex=0;next.viewSettings={...j.original.viewSettings,afirOverlay:visible};j.applied=true;j.trajectory=frames;app().change('AFIR trajectory',()=>next,true);$('dataReset').click();$('afirApply').disabled=true;showProfile(r,j);MV.Studio.play();message(frames.length>1?'構造列を適用し、FRAMESで再生しています。「戻す」で入力へ戻ります。結合表は入力のまま保持しています。':'評価済みの構造が1点のためアニメーションはありません。「戻す」で入力へ戻ります。');
   }
   function init(){
     ready=true;app().getState().viewSettings.afirOverlay=false;$('btnAFIR').addEventListener('click',()=>toggle());$('afirClose').addEventListener('click',()=>toggle(false));
@@ -117,6 +131,7 @@
     $('afirGamma').addEventListener('input',()=>safe(()=>{$('afirAlpha').textContent=`α = ${MV.AFIR.alphaFromGamma(readNumber('afirGamma')).toFixed(4)} eV/Å`;}));
     for(const [id,key] of [['afirCharge','charge'],['afirMultiplicity','multiplicity'],['afirSteps','maxSteps'],['afirFmax','fmax'],['afirMove','maxMove']])$(id).addEventListener('change',()=>safe(()=>edit(c=>{c[key]=readNumber(id);})));
     $('afirRun').addEventListener('click',run);$('afirCancel').addEventListener('click',()=>{if(job){job.cancelled=true;MV.AFIRRunner?.cancel(job).catch(e=>message(e.message));}});
+    $('afirProfile').addEventListener('click',()=>{if(result){showProfile(result.result,result);MV.EnergyProfile.reveal();}});
     $('afirDownload').addEventListener('click',()=>{if(result)download({schema:'molecule-afir-result/1',input:MV.AFIR.exportInput(result.original,result.config),result:result.result},'afir-result.json');});
     sync();
   }

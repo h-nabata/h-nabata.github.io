@@ -1,6 +1,6 @@
 // Browser-independent integration checks; a visual browser pass is still required.
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
-function boot(afir=false){
+function boot(afir=false,profile=false){
  const nodes=new Map(),doc={activeElement:null,events:{},addEventListener(t,f){(this.events[t]??=[]).push(f);}};
  class El{
   constructor(id=''){this.id=id;this.value='';this.children=[];this.events={};this.dataset={};this.attrs={};this.style={};this.checked=false;this.open=false;this.classList={toggle(){},add(){},remove(){}};this.clientWidth=800;this.clientHeight=500;this.tagName='DIV';}
@@ -14,13 +14,15 @@ function boot(afir=false){
  for(const m of html.matchAll(/<([\w-]+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)){const e=new El(m[3]);e.tagName=m[1].toUpperCase();e.value=m[2].match(/value="([^"]*)"/)?.[1]||'';e.dataset.tab=m[2].match(/data-tab="([^"]*)"/)?.[1];nodes.set(m[3],e);}
  for(const [k,v] of Object.entries({bondOrder:'1',bondType:'covalent',styleSelect:'stickball',addMode:'custom',fragPlace:'offset',fragScale:'1',fragAnchorIndex:'1',fragBondDistance:'1.45',fragBondOrder:'1'}))nodes.get(k).value=v;
  const app=new El();doc.getElementById=id=>nodes.get(id)||null;doc.createElement=()=>new El();doc.body=new El();
+ doc.createElementNS=()=>new El();
  const tables={'#atomTable tbody':new El(),'#bondTable tbody':new El()};
  doc.querySelector=q=>tables[q]||((q==='.mv-app'||q==='.mv-inspector')?app:q==='dialog[open]'?[...nodes.values()].find(x=>x.open):null);
  doc.querySelectorAll=q=>q==='[data-tab]'?[...nodes.values()].filter(x=>x.dataset.tab):[];
  const timers=new Map();let seq=0;const win={document:doc,devicePixelRatio:1,events:{},addEventListener(t,f){(this.events[t]??=[]).push(f);}};
  const ctx={window:win,document:doc,navigator:{clipboard:{writeText:async()=>{}}},localStorage:{getItem(){return null;},setItem(){}},setTimeout(f){timers.set(++seq,f);return seq;},clearTimeout(i){timers.delete(i);},Blob,URL,console};
  vm.createContext(ctx);for(const f of ['model','bonding','geometry','io','molfile','periodic','formats','history','renderer3dmol','ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
- if(afir)for(const f of ['afir','afir-ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);win.MoleculeVisualizer.App.init();if(afir)win.MoleculeVisualizer.AFIRUI.init();return {MV:win.MoleculeVisualizer,nodes,doc,win,timers,canvas:nodes.get('viewer').children[0]};
+ if(profile){ctx.setInterval=ctx.setTimeout;ctx.clearInterval=ctx.clearTimeout;for(const f of ['studio','energy-profile'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);}
+ if(afir)for(const f of ['afir','afir-ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);win.MoleculeVisualizer.App.init();if(profile){win.MoleculeVisualizer.Studio.init();win.MoleculeVisualizer.EnergyProfile.init();}if(afir)win.MoleculeVisualizer.AFIRUI.init();return {MV:win.MoleculeVisualizer,nodes,doc,win,timers,canvas:nodes.get('viewer').children[0]};
 }
 test('app loads, atom edit/undo, invalid import is non-destructive, export uses latest state',()=>{const {MV,nodes}=boot(),app=MV.App;assert.equal(app.getState().atoms.length,3);assert.equal(nodes.get('statusBadge').classList!==null,true);
  const s=app.getState();s.selectedAtomIds.add(s.atoms[0].id);app.setState(s,true);nodes.get('dataText').value='O 2.5 0 0\nH .9572 0 0\nH -.239987 .926627 0';nodes.get('dataText').fire('input');nodes.get('dataApply').click();assert.equal(app.getState().atoms[0].x,2.5);nodes.get('btnUndo').click();assert.equal(app.getState().atoms[0].x,0);
@@ -266,4 +268,42 @@ test('malformed imported AFIR settings cannot break the editor and can be reset 
  nodes.get('btnAFIR').click();assert.equal(nodes.get('afirPanel').hidden,false);
  nodes.get('afirReset').click();assert.equal(MV.App.getState().metadata.afir.schema,'molecule-afir/1');
  nodes.get('btnUndo').click();assert.equal(MV.App.getState().metadata.afir.schema,'bad');assert.equal(nodes.get('afirRun').disabled,true);
+});
+
+test('energy plot focus previews coordinates without changing input, export or undo; playback and plot stay synchronized',()=>{
+ const {MV,nodes}=boot(false,true),app=MV.App,profile=MV.EnergyProfile,original=app.getState(),base=MV.Periodic.snapshot(original);
+ const before=MV.IO.stateToXYZText(original),images=[0,1,2].map(dx=>original.atoms.map(a=>[a.x+dx,a.y,a.z]));
+ profile.set({title:'test',kind:'afir',energies:[-3,-2,-4],biasEnergies:[1,2,3],positions:i=>images[i],base:()=>base});
+ assert.equal(nodes.get('afirLive').checked,false);assert.equal(nodes.get('engineLive').checked,false);
+ assert.equal(app.renderer().state,original);
+ const points=nodes.get('energyProfile').children.filter(e=>e.attrs.role==='button');
+ points[1].fire('focus');assert.equal(app.renderer().state.atoms[0].x,1);assert.equal(app.getState(),original);
+ assert.equal(MV.IO.stateToXYZText(app.getState()),before);assert.equal(app.renderer().previewOnly,true);
+ assert.match(nodes.get('profileValue').textContent,/人工項 = 2.000000/);
+ nodes.get('profileRestore').click();assert.equal(app.renderer().state,original);assert.equal(app.renderer().previewOnly,false);
+ const frames=images.map(pos=>{const s=MV.Model.createState(base);s.atoms.forEach((a,i)=>[a.x,a.y,a.z]=pos[i]);return MV.Periodic.snapshot(s);});
+ app.change('apply',()=>{const s=MV.Model.createState(frames[0]);s.metadata.trajectory=frames;s.metadata.frameIndex=0;return s;});
+ profile.bindTrajectory(frames);MV.Studio.play();
+ assert.equal(app.getState().metadata.frameIndex,1);assert.equal(app.renderer().state.atoms[0].x,1);assert.equal(nodes.get('profileRange').value,1);
+ MV.Studio.stop();nodes.get('profileRange').value='2';nodes.get('profileRange').fire('input');
+ assert.equal(app.getState().metadata.frameIndex,2);assert.equal(app.renderer().state.atoms[0].x,2);
+ nodes.get('btnUndo').click();assert.equal(MV.IO.stateToXYZText(app.getState()),before);
+});
+test('long profiles retain peaks, bound DOM size, and allow selection of all 10001 frames',()=>{
+ const {MV,nodes}=boot(false,true),s=MV.App.getState(),base=MV.Periodic.snapshot(s),energies=Array(10001).fill(0);
+ energies[1234]=50;energies[4321]=-20;const sampled=MV.EnergyProfile.sample(energies);
+ assert.ok(sampled.length<=402);assert.ok(sampled.includes(1234));assert.ok(sampled.includes(4321));
+ MV.EnergyProfile.set({title:'long',kind:'afir',energies,base:()=>base,positions:i=>s.atoms.map(a=>[a.x+i/10000,a.y,a.z])});
+ assert.ok(nodes.get('energyProfile').children.length<20);assert.equal(nodes.get('profileRange').max,10000);
+ nodes.get('profileRange').value='10000';nodes.get('profileRange').fire('input');
+ assert.equal(MV.App.renderer().state.atoms[0].x,1);assert.equal(MV.App.getState().atoms[0].x,0);
+});
+test('live profile can stop following, restores input on edit, and never mismatches missing historical coordinates',()=>{
+ const {MV,nodes}=boot(false,true),s=MV.App.getState(),base=MV.Periodic.snapshot(s),p=MV.EnergyProfile;let cancelled=0;
+ p.begin(()=>cancelled++);assert.equal(p.following(),true);
+ p.set({title:'live',kind:'afir',energies:[0,1],positions:i=>i===1?s.atoms.map(a=>[a.x+2,a.y,a.z]):null,base:()=>base},true);
+ assert.equal(MV.App.renderer().state.atoms[0].x,2);
+ p.select(0);assert.equal(MV.App.renderer().state,s);assert.match(nodes.get('profileValue').textContent,/最新構造のみ/);
+ p.select(1);MV.App.change('edit',v=>{v.atoms[0].x=3;});assert.equal(MV.App.renderer().state,MV.App.getState());assert.equal(p.following(),false);
+ nodes.get('profileCancel').click();assert.equal(cancelled,1);p.finish();assert.equal(nodes.get('profileLiveControls').hidden,true);
 });

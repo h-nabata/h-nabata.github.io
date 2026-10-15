@@ -32,7 +32,7 @@ from ase.data import atomic_numbers, covalent_radii
 from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 
-VERSION = '1.1.2'
+VERSION = '1.2.0'
 MAX_BODY = 2 * 1024 * 1024
 MODES = ('evaluate', 'optimize', 'perpendicular', 'neb', 'cineb', 'afir')
 PATH_MODES = ('perpendicular', 'neb', 'cineb')
@@ -48,9 +48,11 @@ def number(value, name, lo, hi, integer=False):
 
 def validate(data, engine):
     allowed = {'symbols', 'images', 'cell', 'charge', 'multiplicity', 'mode',
-               'maxSteps', 'fmax', 'spring', 'maxMove', 'climbAfter', 'atomIds', 'afir'}
+               'maxSteps', 'fmax', 'spring', 'maxMove', 'climbAfter', 'atomIds', 'afir', 'livePreview'}
     if not isinstance(data, dict) or set(data) - allowed:
         raise ValueError('未定義の入力項目があります。コマンド・パス指定は受け付けません。')
+    if type(data.get('livePreview', False)) is not bool:
+        raise ValueError('livePreviewには真偽値が必要です。')
     symbols = data.get('symbols')
     if not isinstance(symbols, list) or not 1 <= len(symbols) <= 500:
         raise ValueError('原子数は1〜500にしてください。')
@@ -89,7 +91,7 @@ def validate(data, engine):
             if np.min(distances) < .1:
                 raise ValueError('0.1 Å未満で重なった原子があります。初期経路の衝突を解消してください。')
     result = dict(symbols=symbols, images=images.tolist(), cell=cell, charge=charge,
-                  multiplicity=multiplicity, mode=mode)
+                  multiplicity=multiplicity, mode=mode, livePreview=data.get('livePreview', False))
     step_default, step_limit = (10000 if mode == 'afir' else 150), 10000
     for key, default, low, high, integer in [('maxSteps', step_default, 1, step_limit, True), ('fmax', .05, .00001, 10, False),
             ('spring', .1, .001, 10, False), ('maxMove', .04, .001, .2, False), ('climbAfter', 10, 0, 500, True)]:
@@ -306,7 +308,8 @@ def relax(data, calculate, progress=lambda _: None):
         summary = {'step': step, 'fmax': maximum, 'energies': energies.tolist(), 'climbingImage': climbing,
                    'evaluations': evaluations}
         history.append(summary)
-        progress(summary)
+        # Coordinates leave the worker only when the user opted into live display.
+        progress({**summary, **({'preview': {'step': step, 'images': images.tolist(), 'energies': energies.tolist()}} if data.get('livePreview') else {})})
         if mode == 'evaluate' or converged or step == max_steps:
             return {'images': images.tolist(), 'energies': energies.tolist(), 'forces': physical.tolist(),
                     'effectiveFmax': maximum, 'imageFmax': [force_max(f) for f in effective],
@@ -524,6 +527,9 @@ class Jobs:
                         checkpoint = value.pop('checkpoint', None)
                         if checkpoint is not None:
                             job['checkpoints'].append(checkpoint)
+                        preview = value.pop('preview', None)
+                        if preview is not None:
+                            job['preview'] = preview
                         job['progress'].update(value)
                     elif kind == 'result':
                         job['status'], job['result'] = 'completed', value
@@ -557,11 +563,23 @@ class Jobs:
             conditionId=hashlib.sha256(json.dumps({'data':data, 'config':self.config}, sort_keys=True).encode()).hexdigest(),
             units={'length':'angstrom','energy':'eV','force':'eV/angstrom'})
 
-    def get(self, identifier):
+    def get(self, identifier, preview=False, after=0):
         with self.lock:
             if not self.job or self.job['id'] != identifier:
                 raise KeyError('計算が見つかりません。サービス再起動後は再計算してください。')
-            return self.public(self.job)
+            result = self.public(self.job)
+            if preview:
+                if self.job['data']['mode'] == 'afir':
+                    frames = self.job['checkpoints']
+                    end = min(len(frames), after + 1000)
+                    if 0 <= after < end:
+                        part = frames[after:end]
+                        result['preview'] = {'mode': 'afir', 'from': after, 'next': end,
+                            'energies': [p['energy'] for p in part], 'biasEnergies': [p['bias'] for p in part],
+                            'positions': part[-1]['positions']}
+                elif self.job.get('preview') is not None:
+                    result['preview'] = copy.deepcopy(self.job['preview'])
+            return result
 
     def cancel(self, identifier):
         with self.lock:
@@ -650,11 +668,13 @@ class Handler(BaseHTTPRequestHandler):
                 self.response(200, {'version': VERSION, 'engine': config['engine'],
                     'method': config['method'] if config['engine'] == 'tblite' else 'g-xTB (--gxtb --grad)',
                     'periodic': config['engine'] == 'tblite', 'maxAtoms': 500, 'maxImages': 20,
-                    'modes': MODES, 'maxSteps': 10000, 'maxAFIRSteps': 10000, 'jobTimeout': config['jobTimeout'],
+                    'modes': MODES, 'livePreview': 1, 'maxSteps': 10000, 'maxAFIRSteps': 10000, 'jobTimeout': config['jobTimeout'],
                     'engineVersion': importlib.metadata.version('tblite') if config['engine'] == 'tblite' else 'locally configured binary'})
-            elif re.fullmatch(r'/api/jobs/[a-f0-9]{32}', self.path):
+            elif re.fullmatch(r'/api/jobs/[a-f0-9]{32}(?:\?preview=1&after=[0-9]{1,5})?', self.path):
                 try:
-                    self.response(200, self.server.jobs.get(self.path.rsplit('/', 1)[1]))
+                    parts = self.path.rsplit('/', 1)[1].split('?', 1)
+                    after = int(parts[1].rsplit('=', 1)[1]) if len(parts) == 2 else 0
+                    self.response(200, self.server.jobs.get(parts[0], len(parts) == 2, after))
                 except KeyError as error:
                     self.response(404, {'error': str(error)})
             else:
