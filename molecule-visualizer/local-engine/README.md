@@ -4,26 +4,46 @@ Molecule Studioの「外部エンジン / 経路緩和」から、このPCで動
 
 ## 1. 導入
 
-Python 3.10以上を使用します。[bridge.py](./bridge.py) と [requirements.txt](./requirements.txt) を同じフォルダーに保存してください。アプリ内のリンクから `bridge.py` だけを保存し、`python -m pip install numpy ase psutil tblite` で必要なパッケージを導入する方法でも構いません。
+Python 3.10以上を使用します。[bridge.py](./bridge.py) を保存してください。以下の手順はbridge.pyだけをダウンロードした場合にも使えます。[requirements.txt](./requirements.txt) は基本パッケージ（numpy・ase・psutil）の一覧で、tbliteは含みません。
 
-WSL / Linux / macOSでは、例えば次のように専用環境を作ります。
+### Windowsでtbliteを使う（推奨：Miniforge）
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt 'tblite>=0.4,<1'
+1. [Miniforge公式配布ページ](https://conda-forge.org/download/)からWindows x86_64版をインストールします。
+2. スタートメニューの「Miniforge Prompt」を開き、専用環境を作ります。既存のPythonや仮想環境を削除する必要はありません。
+
+```bat
+conda create -n molecule-studio -c conda-forge --override-channels python=3.12 numpy ase psutil "tblite-python>=0.4,<1"
+conda activate molecule-studio
+python -c "import numpy, ase, psutil; from tblite.interface import Calculator; print('OK')"
+```
+
+3. `OK`が表示されたら、bridge.pyの保存先へ移動して起動します。次のパスは実際の保存先に置き換えてください。
+
+```bat
+cd /d "C:\Users\ユーザー名\Downloads"
 python bridge.py --engine tblite --allow-origin https://h-nabata.github.io
 ```
 
-Windowsでは、仮想環境内のPythonを直接指定することもできます。
+次回以降もMiniforge Promptで `conda activate molecule-studio` を実行し、保存先へ移動してから起動します。conda-forgeでのPython APIのパッケージ名は **`tblite-python`** です。`tblite`だけの導入ではPython APIを導入したことにはなりません。[tblite公式Pythonチュートリアル](https://tblite.readthedocs.io/en/latest/tutorial/python/singlepoint.html)もこのパッケージを使用しています。
 
-```powershell
-py -3 -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt tblite
-.venv\Scripts\python.exe bridge.py --engine tblite --allow-origin https://h-nabata.github.io
+#### pipで「Unknown compiler(s)」が出た場合
+
+Windows用の対応wheelが見つからないと、pipは `tblite-….tar.gz` を取得してソースからビルドします。`Unknown compiler(s): … ifort … ifx … gfortran …` は、そのビルドに必要なFortranコンパイラが見つからないというエラーです。Visual StudioのC/C++コンパイラだけでは足りません。利用者のコマンド入力の誤りではなく、以前の案内がWindowsでのバイナリ配布条件を説明していませんでした。
+
+通常の導入ではコンパイラを追加する必要はありません。上記のMiniforge環境を新しく作ってください。`pip install tblite`を繰り返したり、`--only-binary`を外してソースビルドを始めたりする必要はありません。自前ビルドを行う場合は[公式のビルド要件](https://tblite.readthedocs.io/en/latest/installation.html)を確認してください。
+
+### WSL / Linux / macOSでtbliteを使う
+
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install "numpy>=1.24,<3" "ase>=3.23,<4" "psutil>=5.9,<8"
+python -m pip install --only-binary=:all: 'tblite>=0.4,<1'
+python -c "import numpy, ase, psutil; from tblite.interface import Calculator; print('OK')"
+python bridge.py --engine tblite --allow-origin https://h-nabata.github.io
 ```
 
-tbliteのバイナリパッケージを導入できない環境では、tblite公式の導入方法を確認するか、WSL内のPythonを利用してください。Windows＋WSLで既存の計算エンジンを利用する場合は、サービスもそのWSL内で起動します。
+`--only-binary=:all:` は対応wheelがない場合にソースビルドへ進むことを防ぎます。「No matching distribution found」なら、そのOS・CPU・Pythonに対応するwheelを取得できていません。その場合はMiniforgeを導入して、Windowsの例と同じ `conda create` と `conda activate` を使えます（フォルダー移動には通常の `cd` を使用）。Windows＋WSLで既存の計算エンジンを利用する場合は、サービスもそのWSL内で起動します。
 
 起動するとURLと、起動のたびに変わる `Token` が表示されます。アプリの接続先URLと接続トークン欄へ入力し、「接続を確認」を押してください。ブラウザからローカルネットワークへの接続許可が求められた場合は許可します。接続トークンはブラウザの永続ストレージ・プロジェクト・結果JSONに保存しません。
 
@@ -32,7 +52,7 @@ tbliteのバイナリパッケージを導入できない環境では、tblite�
 このアダプタは、[公式g-xTBリポジトリ](https://github.com/grimme-lab/g-xtb) が配布する **`xtb --gxtb --grad` 対応版**を対象にしています。旧版の独立した `gxtb` 実行ファイルとはコマンド形式が異なります。実行ファイルと付属ライブラリはユーザーがローカルに導入します。g-xTB使用時はtbliteのPythonパッケージは不要です。
 
 ```bash
-python -m pip install -r requirements.txt
+python -m pip install "numpy>=1.24,<3" "ase>=3.23,<4" "psutil>=5.9,<8"
 python bridge.py --engine gxtb --binary /absolute/path/to/xtb --allow-origin https://h-nabata.github.io
 ```
 

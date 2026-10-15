@@ -343,11 +343,25 @@ H 1.0 0 0
   <h2>外部エンジン / 経路緩和</h2>
   <p class="mv-small">計算はこのPCで起動したサービス上で実行します。座標はローカルサービスへ送信されます。接続トークンはこの画面のメモリだけに保持します。</p>
   <details class="mv-engine-setup"><summary>初回のセットアップ</summary>
-    <p><a href="./local-engine/bridge.py" download>bridge.pyをダウンロード</a>し、Python 3.10以上の環境で次を実行してください。</p>
-    <pre>python -m pip install numpy ase psutil tblite
+    <p><a href="./local-engine/bridge.py" download>bridge.pyをダウンロード</a>してください。Python 3.10以上が必要です。導入方法はOSと計算エンジンによって異なります。</p>
+    <p><strong>Windowsでtbliteを使う場合（推奨）</strong>：<a href="https://conda-forge.org/download/" target="_blank" rel="noopener">Miniforge</a>のWindows x86_64版をインストールし、スタートメニューの「Miniforge Prompt」で次を実行します。</p>
+    <pre>conda create -n molecule-studio -c conda-forge --override-channels python=3.12 numpy ase psutil "tblite-python&gt;=0.4,&lt;1"
+conda activate molecule-studio
+python -c "import numpy, ase, psutil; from tblite.interface import Calculator; print('OK')"</pre>
+    <p>続いて、bridge.pyを保存したフォルダーへ移動して起動します（下のパスは実際の保存先に置き換えてください）。</p>
+    <pre>cd /d "C:\Users\ユーザー名\Downloads"
 python bridge.py --engine tblite --allow-origin https://h-nabata.github.io</pre>
-    <p>g-xTBの場合は、--gxtb --grad対応のxtbをローカルで指定します（tbliteのインストールは不要）。</p>
-    <pre>python bridge.py --engine gxtb --binary /absolute/path/to/xtb --allow-origin https://h-nabata.github.io</pre>
+    <p>Windowsのpipでtbliteの対応wheelが見つからない場合はソースビルドになり、Fortranコンパイラがないと「Unknown compiler(s)」で失敗します。通常の導入では上記のconda環境を使ってください。condaのPython APIのパッケージ名は<strong>tblite-python</strong>です。</p>
+    <p><strong>WSL / Linux / macOSでtbliteを使う場合</strong>：専用の仮想環境を作り、次を実行します。</p>
+    <pre>python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install "numpy&gt;=1.24,&lt;3" "ase&gt;=3.23,&lt;4" "psutil&gt;=5.9,&lt;8"
+python -m pip install --only-binary=:all: "tblite&gt;=0.4,&lt;1"
+python bridge.py --engine tblite --allow-origin https://h-nabata.github.io</pre>
+    <p>対応wheelがない場合は、ソースビルドを行わずに停止します。その場合もMiniforgeで上記のconda環境を作成できます。</p>
+    <p><strong>g-xTBを使う場合</strong>：Pythonの専用環境で基本パッケージだけを導入し、--gxtb --grad対応のxtbをローカルで指定します。tbliteは不要です。Windowsの実行ファイルは --binary "C:\path\to\xtb.exe" のように指定します。</p>
+    <pre>python -m pip install "numpy&gt;=1.24,&lt;3" "ase&gt;=3.23,&lt;4" "psutil&gt;=5.9,&lt;8"
+python bridge.py --engine gxtb --binary /absolute/path/to/xtb --allow-origin https://h-nabata.github.io</pre>
     <p>起動時に表示されるTokenを下欄に貼り付けます。ブラウザが要求した場合は、このサイトからのローカルネットワーク接続を許可してください。WSLではサービスも計算エンジンと同じWSL環境で起動します。</p>
     <p><a href="https://github.com/h-nabata/h-nabata.github.io/blob/main/molecule-visualizer/local-engine/README.md" target="_blank" rel="noopener">導入・周期系・計算方式の詳しい説明</a></p>
   </details>

@@ -1,4 +1,6 @@
 numpy>=1.24,<3
 ase>=3.23,<4
 psutil>=5.9,<8
-# For the tblite backend, also install: tblite>=0.4,<1
+# tblite backend: see README.md for OS-specific setup.
+# Windows: conda-forge package tblite-python (not pip source builds).
+# Other platforms: python -m pip install --only-binary=:all: "tblite>=0.4,<1"
