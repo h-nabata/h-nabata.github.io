@@ -8,6 +8,29 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  await page.click('#btnToggleAxes');assert.equal(await page.locator('#btnToggleAxes').getAttribute('aria-pressed'),'true');await page.click('#btnToggleAxes');
 
  assert.equal(await page.locator('#coordX,#coordY,#coordZ').count(),0);
+ // Resize the panel itself, keep headings usable, and contain wheel scrolling.
+ const checkPanel=async(id,prefix)=>{
+  const panel=page.locator('#'+id),draft=await page.locator('#dataText').inputValue();
+  const atoms=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms));
+  await panel.scrollIntoViewIfNeeded();const start=await panel.boundingBox();
+  await page.mouse.move(start.x+start.width-4,start.y+start.height-4);await page.mouse.down();
+  await page.mouse.move(start.x+start.width-4,start.y+start.height-104,{steps:10});await page.mouse.up();
+  const smaller=await panel.boundingBox();assert.ok(smaller.height<start.height-85,'native handle must shrink the whole panel');assert.ok(Math.abs(smaller.width-start.width)<1);
+  await page.click('#'+prefix+'Taller');assert.ok(Math.abs((await panel.boundingBox()).height-smaller.height-80)<2);
+  await page.locator('#'+prefix+'Shorter').focus();await page.keyboard.press('Enter');assert.ok(Math.abs((await panel.boundingBox()).height-smaller.height)<2);
+  for(let i=0;i<8;i++)await page.click('#'+prefix+'Shorter');
+  const small=await panel.boundingBox();assert.ok(Math.abs(small.height-240)<2);
+  const top=await page.evaluate(()=>window.scrollY);await page.mouse.move(small.x+small.width-28,small.y+small.height-30);await page.mouse.wheel(0,2000);
+  await page.waitForFunction(id=>{const e=document.getElementById(id);return e.scrollTop>0&&e.scrollTop+e.clientHeight>=e.scrollHeight-2;},id);
+  await page.mouse.wheel(0,1000);await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+  assert.ok(Math.abs(await page.evaluate(()=>window.scrollY)-top)<2,'wheel at panel boundary must not scroll the document');
+  const heading=await panel.locator('.mv-scroll-panel-header').boundingBox();assert.ok(Math.abs(heading.y-small.y)<3,'heading must stay above scrolled content');
+  await page.click('#'+prefix+'ResetHeight');assert.ok(Math.abs((await panel.boundingBox()).height-start.height)<2);
+  assert.equal(await page.locator('#dataText').inputValue(),draft);assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),atoms);
+  await page.screenshot({path:'test-artifacts/'+id+'-scroll.png'});
+ };
+ await checkPanel('coordinatePanel','coordinate');
+ await page.click('#btnAFIR');await checkPanel('afirPanel','afir');await page.click('#afirClose');
  await page.fill('#dataText','O 2.5 0 0\nH .9572 0 0\nH -.239987 .926627 0');
  await page.click('#dataApply');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[0].x),2.5);
  await page.click('#btnUndo');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[0].x),0);
@@ -134,6 +157,14 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  assert.match(await page.locator('#helpDialog').textContent(),/長押し前の構造/);
  await page.screenshot({path:'test-artifacts/keyboard-help.png',fullPage:true});await page.locator('#helpDialog [data-close]').click();
  await page.screenshot({path:'test-artifacts/studio.png',fullPage:true});
- await page.setViewportSize({width:390,height:844});await page.screenshot({path:'test-artifacts/mobile.png',fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1));
+ await page.setViewportSize({width:390,height:844});
+ for(const [id,prefix] of [['coordinatePanel','coordinate'],['afirPanel','afir']]){
+  if(prefix==='afir')await page.click('#btnAFIR');const panel=page.locator('#'+id);await panel.scrollIntoViewIfNeeded();
+  const before=await panel.boundingBox();await page.click('#'+prefix+'Shorter');assert.ok((await panel.boundingBox()).height<before.height-70);
+  await page.click('#'+prefix+'Taller');assert.ok(Math.abs((await panel.boundingBox()).height-before.height)<2);
+  assert.ok(await panel.evaluate(e=>e.scrollWidth<=e.clientWidth+1));await page.screenshot({path:'test-artifacts/'+id+'-mobile.png'});
+  if(prefix==='afir')await page.click('#afirClose');
+ }
+ await page.screenshot({path:'test-artifacts/mobile.png',fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1));
  assert.deepEqual(errors,[]);console.log('PASS: periodic cell, supercell undo, trajectory editing, shortcuts, Ketcher SMILES, UFF 3D generation, mobile layout');await browser.close();
 })().catch(error=>{console.error(error);process.exit(1);});
