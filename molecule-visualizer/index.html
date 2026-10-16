@@ -17,14 +17,14 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./studio.js?v=18"></script>
 <script defer src="./advanced.js?v=16"></script>
 <script defer src="./generator-ui.js?v=16"></script>
-<script defer src="./trajectory.js?v=3"></script>
-<script defer src="./trajectory-ui.js?v=3"></script>
-<script defer src="./energy-profile.js?v=3"></script>
-<script defer src="./engine-ui.js?v=23"></script>
+<script defer src="./trajectory.js?v=4"></script>
+<script defer src="./trajectory-ui.js?v=4"></script>
+<script defer src="./energy-profile.js?v=4"></script>
+<script defer src="./engine-ui.js?v=24"></script>
 <script defer src="./afir.js?v=17"></script>
 <script defer src="./afir-search.js?v=16"></script>
 <script defer src="./afir-runner.js?v=18"></script>
-<script defer src="./afir-ui.js?v=22"></script>
+<script defer src="./afir-ui.js?v=23"></script>
 <script defer src="./measurement-ui.js?v=16"></script>
 <script defer src="./panel-layout.js?v=1"></script>
 <script defer src="./molecule-visualizer_main.js?v=19"></script>
@@ -445,9 +445,20 @@ python bridge.py --engine gxtb --binary /absolute/path/to/xtb --allow-origin htt
   <div class="mv-grid"><label>抽出するノード数<input id="trajectoryCount" type="number" min="2" max="10001" step="1" value="10"></label>
   <label>抽出方法<select id="trajectoryMethod"><option value="index">ステップ番号を等分</option><option value="distance">原子の累積変位を等分</option></select></label></div>
   <p class="mv-small">両端点を含み、元の構造列から重複しないフレームを選びます。座標の補間は行いません。「原子の累積変位」は、隣接構造間の全原子のRMS変位を足し合わせた長さです。回転・並進の位置合わせや周期境界での折り返しは行いません。構造が離散的なため、抽出間隔は厳密に等しくなるとは限りません。</p>
+  <section id="trajectoryAFIROptions" hidden>
+    <h3>AFIRのエネルギーを考慮</h3>
+    <p class="mv-small">人工項を除いた物理エネルギーで判定します。両端点と平滑化前の最高点を必ず含めます（最高点が内部なら最低3ノード）。同率の最高点は最初の1点を必須とします。</p>
+    <label><input id="trajectoryPeaks" type="checkbox" checked> 極大点を優先して残す</label>
+    <div class="mv-grid"><label>移動平均の幅（フレーム数）<input id="trajectorySmooth" type="number" min="1" max="101" step="2" value="5"></label><label>極大点の最小突出量（eV）<input id="trajectoryProminence" type="number" min="0" step="0.01" value="0.01"></label></div>
+    <p class="mv-small">幅は奇数で指定し、1で平滑化をオフにします。極大点と左右の隣接する谷との差が小さい方を「突出量」とし、大きい極大点から優先します。指定ノード数に収まる範囲で等分抽出の点を置き換えます。平滑化は極大点の判定だけに使い、元の座標・出力エネルギーは変更しません。</p>
+    <svg id="trajectoryEnergyPlot" viewBox="0 0 560 155" role="img" aria-label="AFIR抽出候補の物理エネルギーと移動平均" style="width:100%;max-height:180px"></svg>
+    <p class="mv-small">緑：元の物理エネルギー、紫：移動平均、黒点：抽出構造、橙点：保持する最高点。横軸は元の構造番号です。エネルギーの極大点はTSと検証された構造ではありません。</p>
+  </section>
   <p id="trajectorySelection" class="mv-small" role="status"></p>
   <div class="mv-row"><button class="mv-btn primary" id="trajectorySaveSelected">抽出した構造列をXYZ保存</button><button class="mv-btn" id="trajectoryShowSelected">抽出した構造列を表示</button></div>
   <p class="mv-small">どちらの形式も全構造を1つのファイルにまとめ、原子順序を維持します。保存で編集画面の構造は変わりません。</p>
+  <div class="mv-row"><button class="mv-btn" id="trajectoryApply">抽出列を描画へ反映・再生</button><button class="mv-btn primary" id="trajectoryNEB">抽出列をNEB入力に取り込む</button></div>
+  <p id="trajectoryTransferHelp" class="mv-small"></p>
   <section id="trajectoryDisplay" hidden><h3>出力データ</h3><p id="trajectoryDisplaySummary" class="mv-small"></p><label for="trajectoryText">表示した構造列の全文</label><textarea id="trajectoryText" rows="12" wrap="off" readonly spellcheck="false" aria-describedby="trajectoryTextHelp"></textarea><p id="trajectoryTextHelp" class="mv-small">欄をクリックしてCtrl+Aで全文を選択し、Ctrl+Cでコピーできます（Macは⌘A・⌘C）。省略せず表示しています。保存形式・ノード数・抽出方法を変更したら、再度「表示」を押してください。</p><button class="mv-btn" id="trajectorySelectText">表示データを全選択</button></section>
   <p id="trajectoryMessage" role="status"></p>
   <div class="mv-row mv-end"><button class="mv-btn" id="trajectoryClose" data-close="trajectoryDialog">閉じる</button></div>

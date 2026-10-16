@@ -116,7 +116,7 @@
     MV.EnergyProfile.set({title:'AFIR探索 · エネルギープロファイル',kind:'afir',details:()=>toggle(true),energies:r.energies,biasEnergies:r.biasEnergies,positions:i=>r.images[i],base:()=>base,exportXYZ:()=>exportXYZ(r,j)},follow);
     if(j.trajectory===app().getState().metadata.trajectory&&j.trajectory)MV.EnergyProfile.bindTrajectory(j.trajectory);
   }
-  function exportXYZ(r,j){MV.TrajectoryUI.open({title:'AFIR探索',name:j.original.metadata.title,kind:'afir',symbols:r.symbols,cell:r.cell,images:r.images,energies:r.energies,biasEnergies:r.biasEnergies});}
+  function exportXYZ(r,j){const base=MV.Periodic.snapshot(j.original);MV.TrajectoryUI.open({title:'AFIR探索',name:j.original.metadata.title,kind:'afir',symbols:r.symbols,atomIds:r.atomIds,cell:r.cell,images:r.images,energies:r.energies,biasEnergies:r.biasEnergies,charge:r.charge,multiplicity:r.multiplicity,engine:r.engine,method:r.method,base:()=>base});}
   function apply(){
     if(!result||dirty()||fingerprint(app().getState())!==result.fingerprint)throw Error('計算開始後に構造・設定が変わったため適用できません。結果JSONは保存できます。');
     const j=result,r=j.result;MV.AFIRRunner.validateResult(r,j);
@@ -137,5 +137,5 @@
     $('afirXYZ').addEventListener('click',()=>{if(result)exportXYZ(result.result,result);});
     sync();
   }
-  MV.AFIRUI={init,sync,toggle,download};
+  MV.AFIRUI={init,sync,toggle,download,isBusy:()=>!!job};
 })(window);

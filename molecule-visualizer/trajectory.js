@@ -39,6 +39,49 @@
     }
     selected.push(n-1);return selected;
   }
+  // Smooth only the values used for peak detection; exported energies/coordinates stay raw.
+  function smooth(values,window=5){
+    if(!Array.isArray(values)||!values.length||values.some(e=>!Number.isFinite(e)))throw Error('極大点の判定には物理エネルギーが必要です。');
+    if(!Number.isInteger(window)||window<1||window>101||window%2!==1)throw Error('移動平均の幅は1〜101の奇数にしてください（1は平滑化なし）。');
+    const half=(window-1)/2;
+    return values.map((_,i)=>{const lo=Math.max(0,i-half),hi=Math.min(values.length-1,i+half);let sum=0;for(let j=lo;j<=hi;j++)sum+=values[j]-values[i];return values[i]+sum/(hi-lo+1);});
+  }
+  function energyFeatures(source,{window=5,minProminence=.01}={}){
+    if(!Number.isFinite(minProminence)||minProminence<0)throw Error('極大点の最小突出量は0以上のeV値にしてください。');
+    const values=smooth(source.energies,window),raw=source.energies;
+    let highest=0;for(let i=1;i<raw.length;i++)if(raw[i]>raw[highest])highest=i;
+    // Collapse flat runs. Prominence is measured against the two adjacent valleys.
+    const runs=[];for(let i=0;i<values.length;){let end=i;while(end+1<values.length&&values[end+1]===values[i])end++;runs.push({start:i,end,value:values[i]});i=end+1;}
+    const peaks=[];let valley=values[0];
+    for(let i=1;i<runs.length-1;i++){
+      const r=runs[i];if(r.value<runs[i-1].value&&r.value<runs[i+1].value)valley=r.value;
+      if(r.value<=runs[i-1].value||r.value<=runs[i+1].value)continue;
+      let j=i+1;while(j+1<runs.length&&runs[j+1].value<runs[j].value)j++;
+      const prominence=r.value-Math.max(valley,runs[j].value);
+      if(prominence>=minProminence)peaks.push({index:Math.floor((r.start+r.end)/2),prominence,energy:r.value});
+    }
+    peaks.sort((a,b)=>b.prominence-a.prominence||b.energy-a.energy||a.index-b.index);
+    return {highest,minimum:new Set([0,raw.length-1,highest]).size,values,peaks};
+  }
+  function extract(source,count,method='index',options={},cumulative){
+    validate(source);
+    const picked=indices(source.images,count,method,cumulative);
+    if(source.kind!=='afir')return {indices:picked};
+    const features=energyFeatures(source,options);
+    if(count<features.minimum)throw Error(`AFIRの両端点と最高エネルギー構造を残すには${features.minimum}ノード以上が必要です。`);
+    const anchors=new Set([0,source.images.length-1,features.highest]);
+    if(options.preservePeaks!==false)for(const p of features.peaks){if(anchors.size>=count)break;anchors.add(p.index);}
+    // Retain the uniform targets where possible, replacing the nearest unprotected ones.
+    const selected=new Set(picked),arc=method==='distance'?(cumulative||distances(source.images)):null;
+    const metric=arc?.at(-1)>0?arc:source.images.map((_,i)=>i);
+    for(const anchor of anchors){
+      if(selected.has(anchor))continue;
+      let remove=-1,best=Infinity;
+      for(const i of selected)if(!anchors.has(i)){const d=Math.abs(metric[i]-metric[anchor]);if(d<best||(d===best&&i<remove)){remove=i;best=d;}}
+      selected.delete(remove);selected.add(anchor);
+    }
+    return {...features,indices:[...selected].sort((a,b)=>a-b),retainedPeaks:features.peaks.filter(p=>selected.has(p.index)).length};
+  }
   function validateSelection(source,selected){
     validate(source);
     if(!Array.isArray(selected)||!selected.length||selected.some((i,k)=>!Number.isInteger(i)||i<0||i>=source.images.length||(k>0&&i<=selected[k-1])))throw Error('出力するフレームの指定が不正です。');
@@ -64,7 +107,7 @@
       return [source.symbols.length,comment,...coordinates(source,i)].join('\n')+'\n';
     }).join('');
   }
-  const api={validate,distances,indices,xyz,lup,lupFilename};
+  const api={validate,distances,indices,smooth,energyFeatures,extract,xyz,lup,lupFilename};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   (global.MoleculeVisualizer=global.MoleculeVisualizer||{}).Trajectory=api;
 })(typeof window!=='undefined'?window:globalThis);

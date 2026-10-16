@@ -84,6 +84,7 @@
   function resultSource(r,j){
     const t=r.trajectory||r;
     return {title:modeText[j.data.mode],name:j.original.metadata.title,kind:j.data.mode,symbols:r.symbols,cell:r.cell,images:t.images,energies:t.energies,
+      charge:j.data.charge,multiplicity:j.data.multiplicity,engine:r.engine,method:r.method,base:i=>j.frames[r.trajectory?0:i],
       stepNumbers:j.data.mode==='optimize'&&!r.trajectory?[r.steps]:null,
       notice:j.data.mode==='optimize'&&!r.trajectory?'旧bridgeの結果には最終構造しかありません。全ステップの保存にはbridge.py 1.3.0へ更新・再接続して再計算してください。':''};
   }
@@ -148,6 +149,11 @@
     if(!job&&!result){const s=app().getState();$('engineCharge').value=s.metadata.totalCharge??s.atoms.reduce((sum,a)=>sum+(Number(a.charge)||0),0);$('engineMultiplicity').value=s.metadata.multiplicity??1;$('engineScope').value=s.metadata.trajectory?'all':'current';$('engineMode').value=s.metadata.trajectory?.length>=3?'perpendicular':'evaluate';settings();}
     $('engineDialog').showModal();
   }
+  function prepareNEB(){
+    if(job)throw Error('実行中の計算を終了してください。');
+    clearResult();open();$('engineMode').value='neb';$('engineScope').value='all';settings();
+    message('抽出した構造列をNEB入力に設定しました。電荷・多重度と計算条件を確認して実行してください。AFIRの人工力はNEB計算へ加えません。');
+  }
   function init(){
     if(location.hostname==='127.0.0.1'||location.hostname==='localhost')$('engineURL').value=location.origin;
     $('btnExternalEngine').addEventListener('click',open);$('engineConnect').addEventListener('click',connect);$('engineMode').addEventListener('change',chooseMode);$('engineRun').addEventListener('click',run);$('engineCancel').addEventListener('click',cancel);$('engineApply').addEventListener('click',apply);$('engineDownload').addEventListener('click',download);
@@ -156,5 +162,5 @@
     $('engineXYZ').addEventListener('click',()=>{if(result)exportXYZ(result.result,result);});
     $('engineDialog').addEventListener('cancel',e=>{if(job){e.preventDefault();cancel();}});settings();
   }
-  MV.EngineUI={init,endpoint,frames,validateResult,request,getConnection:()=>connection?{...connection}:null};
+  MV.EngineUI={init,endpoint,frames,validateResult,request,prepareNEB,isBusy:()=>!!job,getConnection:()=>connection?{...connection}:null};
 })(window);

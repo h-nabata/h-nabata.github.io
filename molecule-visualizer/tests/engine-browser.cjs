@@ -115,9 +115,34 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.fill('#trajectoryCount','3');await page.selectOption('#trajectoryMethod','distance');const afirPicked=await saveXYZ('#trajectorySaveSelected',afir.result);
   await page.selectOption('#trajectoryFormat','lup');assert.equal(await page.locator('#trajectoryFilename').textContent(),'Water_infile.log');await saveLUP('#trajectorySaveAll',afir.result,[0,1,2,3]);await saveLUP('#trajectorySaveSelected',afir.result,afirPicked.ids);
   assert.equal(afirPicked.ids.length,3);assert.equal(afirPicked.ids[0],0);assert.equal(afirPicked.ids.at(-1),3);
+  assert.ok(afirPicked.ids.includes(afir.result.energies.indexOf(Math.max(...afir.result.energies))),'raw physical maximum must survive AFIR extraction');
   for(const f of afirPicked.parsed)assert.match(f.comment,/bias_eV=.*biased_energy_eV=/);
   await page.click('#trajectoryClose');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
   assert.equal(previewRequests.length,0,'live display must make no preview requests by default');
+  // Use the actual AFIR result as an extracted animation and then as a real NEB job.
+  await page.click('#afirXYZ');await page.fill('#trajectoryCount','3');await page.selectOption('#trajectoryMethod','distance');
+  await page.click('#trajectoryApply');assert.match(await page.locator('#framePlay').textContent(),/停止/);
+  await page.locator('#frameRange').focus();await page.locator('#frameRange').press('Home');
+  const extracted=await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.trajectory);
+  assert.deepEqual(extracted.map(f=>f.metadata.trajectoryExtraction.sourceFrame),afirPicked.ids);
+  for(let k=0;k<extracted.length;k++){
+    assert.deepEqual(extracted[k].atoms.map(a=>[a.x,a.y,a.z]),afir.result.images[afirPicked.ids[k]]);
+    assert.deepEqual(extracted[k].atoms.map(a=>a.id),afir.result.atomIds);
+    assert.equal(extracted[k].metadata.totalCharge,afir.result.charge);assert.equal(extracted[k].metadata.multiplicity,afir.result.multiplicity);
+  }
+  await page.click('#frameNext');assert.equal(await page.locator('#profileRange').inputValue(),'1');
+  assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.renderer().state.atoms.map(a=>[a.x,a.y,a.z])),afir.result.images[afirPicked.ids[1]]);
+  await page.screenshot({path:'test-artifacts/extracted-playback.png'});
+  await page.click('#btnUndo');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
+  await page.click('#afirXYZ');await page.fill('#trajectoryCount','3');await page.selectOption('#trajectoryMethod','distance');
+  let submitted=[];const record=req=>{if(req.method()==='POST'&&req.url().endsWith('/api/jobs'))submitted.push(req.postDataJSON());};page.on('request',record);
+  await page.click('#trajectoryNEB');assert.equal(await page.locator('#engineDialog').isVisible(),true);assert.equal(await page.locator('#engineMode').inputValue(),'neb');assert.equal(await page.locator('#engineScope').inputValue(),'all');
+  assert.equal(await page.locator('#engineCharge').inputValue(),String(afir.result.charge));assert.equal(await page.locator('#engineMultiplicity').inputValue(),String(afir.result.multiplicity));assert.equal(submitted.length,0,'NEB import must not start calculation');
+  await page.fill('#engineSteps','1');await page.fill('#engineFmax','0.00001');await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
+  assert.equal(submitted.length,1);assert.equal(submitted[0].mode,'neb');assert.equal(submitted[0].maxSteps,1);assert.equal(submitted[0].fmax,.00001);assert.equal(submitted[0].afir,undefined);
+  assert.deepEqual(submitted[0].images,afirPicked.ids.map(i=>afir.result.images[i]));
+  const nebFilePending=page.waitForEvent('download');await page.click('#engineDownload');const nebReport=JSON.parse(fs.readFileSync(await(await nebFilePending).path(),'utf8'));assert.equal(nebReport.result.mode,'neb');assert.equal(nebReport.result.images.length,3);assert.notEqual(nebReport.result.reason,'failed');
+  page.off('request',record);await page.click('#engineClose');await page.click('#btnUndo');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
   await page.click('#afirProfile');
   const viewBox=await page.locator('#viewer').boundingBox(),plotBox=await page.locator('#profilePanel').boundingBox();
   assert.ok(plotBox.y+plotBox.height-viewBox.y<page.viewportSize().height-100,'structure and graph fit together in the viewport');
@@ -221,6 +246,16 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await local.click('#trajectorySelectText');const selectedText=await local.locator('#trajectoryText').evaluate(e=>[e.selectionStart,e.selectionEnd,e.value.length]);assert.deepEqual(selectedText,[0,selectedText[2],selectedText[2]]);
   const exportDimensions=await local.locator('#trajectoryDialog').evaluate(e=>({client:e.clientWidth,scroll:e.scrollWidth}));assert.ok(exportDimensions.scroll<=exportDimensions.client+2,'XYZ export dialog must fit mobile width');
   assert.equal(await local.locator('#trajectoryCount').inputValue(),'1');await local.screenshot({path:'test-artifacts/trajectory-mobile.png'});
+  await local.click('#trajectoryClose');
+  // A synthetic noisy profile isolates smoothing and peak selection from chemistry.
+  const noisySource=()=>{
+    const MV=MoleculeVisualizer,base=MV.Periodic.snapshot(MV.App.getState()),energies=[0,1,.9,2,1.9,3,2.9,2,1.9,1,0];
+    MV.TrajectoryUI.open({title:'平滑化の操作確認（人工データ）',kind:'afir',symbols:base.atoms.map(a=>a.element),energies,images:energies.map((_,i)=>base.atoms.map(a=>[a.x+i*.01,a.y,a.z])),base:()=>base,charge:0,multiplicity:1});
+  };
+  await local.evaluate(noisySource);await local.fill('#trajectoryCount','4');await local.fill('#trajectorySmooth','3');
+  assert.match(await local.locator('#trajectorySelection').textContent(),/最高点: 6番/);assert.match(await local.locator('#trajectorySelection').textContent(),/極大点: 1\/1/);
+  const afirDimensions=await local.locator('#trajectoryDialog').evaluate(e=>({client:e.clientWidth,scroll:e.scrollWidth}));assert.ok(afirDimensions.scroll<=afirDimensions.client+2);
+  await local.screenshot({path:'test-artifacts/peak-extraction-mobile.png'});await page.evaluate(noisySource);await page.fill('#trajectoryCount','4');await page.fill('#trajectorySmooth','3');await page.screenshot({path:'test-artifacts/peak-extraction.png'});
   // Tokens do not enter autosave.
   const storage=await page.evaluate(()=>JSON.stringify({...localStorage}));assert.ok(!storage.includes(token));assert.deepEqual(errors,[]);console.log('External engine browser integration passed');
  }finally{if(browser)await browser.close();engine.kill('SIGINT');await new Promise(resolve=>{if(engine.exitCode!==null)return resolve();engine.on('exit',resolve);setTimeout(()=>{engine.kill('SIGKILL');resolve();},5000).unref();});}

@@ -51,3 +51,37 @@ test('XYZ has one complete block per chosen frame, preserves atom order and sepa
  for(const ids of [[0,0],[2,1],[3],[]])assert.throws(()=>T.xyz(source,ids));
  assert.throws(()=>T.xyz({...source,images:[[[NaN,0,0]]]},[0]));
 });
+
+test('AFIR retains the raw physical maximum and endpoints with smoothing on or off',()=>{
+ const energies=[0,1,.9,2,1.9,3,2.9,2,1.9,1,0],source={kind:'afir',symbols:['H'],images:frames(energies.map((_,i)=>i*i)),energies,biasEnergies:energies.map((_,i)=>100*i)};
+ const before=JSON.stringify(source);
+ for(const method of ['index','distance'])for(const window of [1,3,5,101])for(const preservePeaks of [true,false])for(let count=3;count<=energies.length;count++){
+  const result=T.extract(source,count,method,{window,preservePeaks});assert.equal(result.indices.length,count);assert.ok(result.indices.includes(5));assert.equal(result.indices[0],0);assert.equal(result.indices.at(-1),10);assert.ok(result.indices.every((x,i,a)=>!i||x>a[i-1]));
+ }
+ assert.equal(JSON.stringify(source),before);assert.throws(()=>T.extract(source,2),/3ノード以上/);
+ assert.throws(()=>T.extract({...source,energies:null}),/物理エネルギー|物理/);
+ const exportText=T.xyz(source,T.extract(source,4,'index',{window:3}).indices);assert.match(exportText,/source_frame=6\/11 .*energy_eV=3.00000000000000 /);
+});
+test('smoothed maxima suppress small oscillations, rank adjacent-valley prominence and handle plateaus',()=>{
+ const energies=[0,1,.9,2,1.9,3,2.9,2,1.9,1,0];
+ assert.equal(T.energyFeatures({energies},{window:1,minProminence:0}).peaks.length,3);
+ const smooth=T.energyFeatures({energies},{window:3,minProminence:0});assert.equal(smooth.peaks.length,1);assert.equal(smooth.peaks[0].index,6);assert.equal(smooth.highest,5);
+ assert.equal(T.energyFeatures({energies},{window:1,minProminence:.2}).peaks.length,1);
+ const source={kind:'afir',symbols:['H'],images:frames([0,1,2,3,4,5,6,7,8]),energies:[0,1,0,2,0,4,0,2,0]};
+ assert.deepEqual(T.extract(source,4,'index',{window:1,minProminence:0}).indices,[0,3,5,8]);
+ assert.deepEqual(T.extract(source,5,'distance',{window:1,minProminence:0}).indices,[0,3,5,7,8]);
+ assert.deepEqual(T.energyFeatures({energies:[0,2,2,2,0,1,0]},{window:1,minProminence:0}).peaks.map(p=>p.index),[2,5]);
+ for(const values of [[1,1,1],[1,2,3],[3,2,1],[1]])assert.equal(T.energyFeatures({energies:values}).peaks.length,0);
+ assert.deepEqual(T.smooth([0,3,6],3),[1.5,3,4.5]);
+ for(const window of [0,2,102,NaN])assert.throws(()=>T.smooth(energies,window));
+ assert.throws(()=>T.energyFeatures({energies},{minProminence:-1}));
+});
+test('AFIR maxima on endpoints, ties, stationary paths and 10001 frames preserve deterministic exact counts',()=>{
+ for(const energies of [[2],[2,1],[2,0,2],[1,1,1]]){
+  const s={kind:'afir',symbols:['H'],images:frames(energies.map(()=>0)),energies};const n=energies.length===1?1:2;
+  assert.deepEqual(T.extract(s,n,'distance').indices,n===1?[0]:[0,energies.length-1]);
+ }
+ const energies=Array.from({length:10001},(_,i)=>Math.sin(i/40)+i/100000),s={kind:'afir',symbols:['H'],images:frames(energies.map((_,i)=>i/10000)),energies};
+ const r=T.extract(s,20,'distance');assert.equal(r.indices.length,20);assert.equal(energies[r.highest],Math.max(...energies));assert.ok(r.indices.includes(r.highest));
+ assert.equal(T.extract(s,10001).indices.length,10001);
+});
