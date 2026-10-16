@@ -14,9 +14,9 @@
   const dirty=()=>/未適用|編集中/.test($('xyzEditStatus').textContent);
   function button(text,handler){const b=document.createElement('button');b.className='mv-btn';b.textContent=text;b.type='button';b.addEventListener('click',()=>safe(handler));return b;}
   function safe(f){try{return f();}catch(e){message(e.message);}}
-  function edit(f){if(job)throw Error('計算中はAFIR設定を変更できません。');if(dirty())throw Error('編集中の座標を適用するか、編集を取り消してください。');app().change('AFIR settings',s=>{s.metadata.afir=JSON.parse(JSON.stringify(s.metadata.afir||MV.AFIR.defaults()));f(s.metadata.afir,s);});}
+  function edit(f){if(job)throw Error('計算中はAFIR設定を変更できません。');if(dirty())throw Error('編集中の座標を適用するか、編集を取り消してください。');app().useDisplayedStructure();app().change('AFIR settings',s=>{s.metadata.afir=JSON.parse(JSON.stringify(s.metadata.afir||MV.AFIR.defaults()));f(s.metadata.afir,s);});}
   function selected(){const s=app().getState(),ids=s.atoms.filter(a=>s.selectedAtomIds.has(a.id)).map(a=>a.id);if(!ids.length)throw Error('描画エリアで原子を選択してください。');return ids;}
-  function selectGroup(f){const s=app().getState();s.selectedAtomIds=new Set(f.atomIds.filter(id=>s.atoms.some(a=>a.id===id)));s.selectedBondIds.clear();app().setState(s,true);}
+  function selectGroup(f){const s=app().useDisplayedStructure();s.selectedAtomIds=new Set(f.atomIds.filter(id=>s.atoms.some(a=>a.id===id)));s.selectedBondIds.clear();app().setState(s,true);}
   function addFragment(){const ids=selected(),label=$('afirName').value.trim();if(!label||label.length>40)throw Error('原子団の名前を1〜40文字で入力してください。');edit(c=>{if(c.fragments.length>=64)throw Error('フラグメント数の上限は64です。');let n=1;while(c.fragments.some(f=>f.id===`f${n}`))n++;c.fragments.push({id:`f${n}`,label,atomIds:ids});});$('afirName').value=`原子団${config().fragments.length+1}`;message(`${label}を登録しました。次の原子団を選択してください。`);$('btnClearSel').click();}
   function addPair(){
     try{
@@ -32,6 +32,7 @@
     // Read the visible values at the action boundary, including unblurred inputs.
     const c=config(),next=JSON.parse(JSON.stringify(c));for(const [id,key] of settingsFields)next[key]=readNumber(id);
     pairInputs.forEach((input,i)=>{if(!String(input.value).trim())throw Error('ペアのγを入力してください。');next.pairs[i].gamma=Number(input.value);});
+    app().useDisplayedStructure();
     MV.AFIR.validate(app().getState().atoms,next,app().getState().metadata.cell);
     if(JSON.stringify(next)!==JSON.stringify(c))edit(v=>Object.assign(v,next));
   }
@@ -79,8 +80,8 @@
     $('afirLive').disabled=!!job;$('afirSettings').disabled=!!job;$('afirFragmentSettings').disabled=!!job;
     if(result)$('afirApply').disabled=!!job||!!result.applied||fingerprint(s)!==result.fingerprint||dirty();
   }
-  function toggle(value){visible=value??!visible;$('afirPanel').hidden=!visible;document.querySelector('.mv-inspector').classList.toggle('mv-afir-active',visible);$('btnAFIR').setAttribute('aria-pressed',String(visible));
-    if(visible){$('toolSelect').click();$('multiSelect').checked=true;app().getState().viewSettings.afirOverlay=true;sync();}
+  function toggle(value){if((value??!visible)&&!job){try{app().useDisplayedStructure();}catch(e){message(e.message);return;}}visible=value??!visible;$('afirPanel').hidden=!visible;document.querySelector('.mv-inspector').classList.toggle('mv-afir-active',visible);$('btnAFIR').setAttribute('aria-pressed',String(visible));
+    if(visible){if(!job)$('toolSelect').click();$('multiSelect').checked=true;app().getState().viewSettings.afirOverlay=true;sync();}
     else app().getState().viewSettings.afirOverlay=false;
     MV.EnergyProfile?.restore();app().renderer().renderState(app().getState(),true);
   }

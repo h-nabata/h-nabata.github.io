@@ -31,6 +31,14 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.click('#engineVibrationShow');assert.equal(await page.locator('#vibrationRows tr').count(),12);await page.locator('#vibrationRows tr').first().click();
   assert.equal(await page.locator('#vibrationRows tr').first().evaluate(e=>getComputedStyle(e).color),'rgb(183, 28, 28)');
   await page.click('#btnViewXZ');assert.ok(await page.evaluate(()=>MoleculeVisualizer.App.renderer().projectedModeArrows.length)>0);
+  // Arrow scaling changes only the drawing, preserving mode ratios and physical displacement.
+  const arrowsBefore=await page.evaluate(()=>MoleculeVisualizer.App.renderer().vibrationVectors.vectors);
+  const atomsBeforeScale=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.renderer().state.atoms));
+  await page.locator('#vibrationVectorScale').focus();await page.locator('#vibrationVectorScale').press('ArrowRight');
+  const arrowsAfter=await page.evaluate(()=>MoleculeVisualizer.App.renderer().vibrationVectors.vectors);
+  arrowsBefore.forEach((v,i)=>v.forEach((x,j)=>assert.ok(Math.abs(arrowsAfter[i][j]-1.1*x)<1e-12)));
+  assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.renderer().state.atoms)),atomsBeforeScale);
+  assert.equal(await page.locator('#vibrationAmplitude').inputValue(),'0.15');
   const staticPositions=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.renderer().state.atoms));await page.click('#vibrationPlay');
   await page.waitForFunction(before=>JSON.stringify(MoleculeVisualizer.App.renderer().state.atoms)!==before,staticPositions);
   assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),original);
@@ -43,6 +51,9 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.click('#btnUndo');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),original);
   // Frequency-only analysis uses exactly the approximate, unoptimized input.
   await page.click('#btnVibrations');await page.selectOption('#engineVibrationNfree','2');await page.fill('#engineVibrationDelta','0.006');await page.click('#engineRun');await waitDone();const vib=await report();assert.equal(vib.input.mode,'vibrations');assert.deepEqual(vib.result.images,vib.input.images);assert.equal(vib.result.vibrations.status,'completed');
+  await page.click('#engineVibrationShow');await page.locator('#vibrationRows tr').first().click();
+  const visible=await page.evaluate(()=>MoleculeVisualizer.App.renderer().state.atoms.map(a=>[a.x,a.y,a.z]));
+  await page.click('#btnVibrations');await page.click('#engineRun');await waitDone();assert.deepEqual(requests.at(-1).images,[visible]);
   // Minimize with L-BFGS; optional frequencies OFF and edited value forwarded.
   await page.selectOption('#engineMode','optimize');await page.uncheck('#engineVibrationCheck');await page.selectOption('#engineOptimizer','lbfgs');await page.fill('#engineSteps','3');await page.fill('#engineMove','0.03');await page.click('#engineRun');await waitDone();const opt=await report();assert.equal(opt.result.optimizer,'lbfgs');assert.equal(opt.input.maxMove,.03);assert.equal(opt.result.vibrations,undefined);assert.equal(opt.result.trajectory.images.length,opt.result.steps+1);
   await page.click('#engineClose');await ammonia(5);
@@ -52,6 +63,13 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.equal(await page.locator('#engineMode').inputValue(),'ts');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.frameIndex),2);assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.trajectory.length),5);
   assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms.map(a=>[a.x,a.y,a.z])),neb.result.images[2]);assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms.map(a=>a.id)),nodeIDs);
   await page.click('#engineClose');
+  const bandBefore=await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.trajectory);
+  await page.evaluate(()=>{const M=MoleculeVisualizer,s=M.App.getState();M.EnergyProfile.set({title:'public NEB node',kind:'cineb',energies:[0,1,0],positions:i=>s.metadata.trajectory[i+1].atoms.map(a=>[a.x,a.y,a.z]),base:i=>s.metadata.trajectory[i+1]});M.EnergyProfile.select(0);});
+  const selectedPositions=await page.evaluate(()=>MoleculeVisualizer.App.renderer().state.atoms.map(a=>[a.x,a.y,a.z]));
+  await page.click('#btnExport');const exported=await page.locator('#exportText').evaluate(e=>MoleculeVisualizer.IO.parseXYZToState(e.value).atoms.map(a=>[a.x,a.y,a.z]));exported.forEach((p,i)=>p.forEach((x,j)=>assert.ok(Math.abs(x-selectedPositions[i][j])<1e-9)));
+  await page.locator('#exportDialog [data-close]').click();
+  await page.click('#btnTS');await page.uncheck('#engineVibrationCheck');await page.fill('#engineSteps','1');await page.click('#engineRun');await waitDone();assert.deepEqual(requests.at(-1).images,[selectedPositions]);
+  await page.click('#engineClose');await page.click('#btnUndo');assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.trajectory),bandBefore);
   // Insert only the selected interval; retain all old nodes and fixed endpoints.
   const beforeRefinement=requests.length;
   const oldFrames=await page.evaluate(()=>MoleculeVisualizer.EngineUI.frames(MoleculeVisualizer.App.getState(),'all'));

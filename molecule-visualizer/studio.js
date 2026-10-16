@@ -5,7 +5,7 @@
   const $=id=>document.getElementById(id), app=()=>MV.App, state=()=>app().getState();
   let ready=false, timer=null, axis=null, worker=null, jobId=0, pending=null, ketcherPromise=null, chemBusy=false;
   function message(text,error=false){app().setStatus(text,error);if($('chemMessage'))$('chemMessage').textContent=text;}
-  function bind(id,fn){$(id).addEventListener('click',async()=>{try{await fn();}catch(e){message(e.message,true);}});}
+  function bind(id,fn){$(id).addEventListener('click',async()=>{try{if(['btnCell','cellApply','cellRemove','cellWrap','cellSuper','chemFrom3D'].includes(id))app().useDisplayedStructure();await fn();}catch(e){message(e.message,true);}});}
   function download(text,name){const url=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
   function readNumbers(id,n){const values=$(id).value.trim().split(/[\s,]+/).map(Number);if(values.length!==n||values.some(x=>!Number.isFinite(x)))throw Error(`${n}個の数値を入力してください。`);return values;}
   function sync(){
@@ -37,7 +37,7 @@
     const missing=MV.Measurements?MV.Measurements.transferSelection(s,next):0;
     app().setState(next,true,playing);if(missing)app().setStatus(`このフレームに存在しない選択原子${missing}個を除外しました。`,true);
   }
-  function allXYZ(){const s=state(),frames=s.metadata.trajectory;if(!frames)return IO.stateToXYZText(s);return frames.map((f,i)=>IO.stateToXYZText(i===(s.metadata.frameIndex||0)?s:M.createState(f))).join('');}
+  function allXYZ(){const s=state(),frames=s.metadata.trajectory;if(!frames)return IO.stateToXYZText(app().getDisplayedState());return frames.map((f,i)=>IO.stateToXYZText(i===(s.metadata.frameIndex||0)?s:M.createState(f))).join('');}
   function transform(fn){if(!state().selectedAtomIds.size)throw Error('原子を選択してください。');app().change('transform',s=>{const atoms=s.atoms.filter(a=>s.selectedAtomIds.has(a.id));fn(atoms);MV.Bonding.refreshInferredBonds(s);});}
   function rotateSelection(){const [degrees]=readNumbers('rotationAngle',1),axis=$('rotationAxis').value,angle=degrees*Math.PI/180;transform(atoms=>{const center=[0,1,2].map(i=>atoms.reduce((sum,a)=>sum+P.xyz(a)[i],0)/atoms.length),j=axis==='x'?1:axis==='y'?2:0,k=(j+1)%3;atoms.forEach(a=>{const v=P.xyz(a).map((x,i)=>x-center[i]),b=v[j];v[j]=b*Math.cos(angle)-v[k]*Math.sin(angle);v[k]=b*Math.sin(angle)+v[k]*Math.cos(angle);[a.x,a.y,a.z]=v.map((x,i)=>x+center[i]);});});}
   function cancelChem(){if(worker)worker.terminate();worker=null;if(pending){clearTimeout(pending.timeout);pending.reject(Error('3D生成を中止しました。'));pending=null;} $('chemCancel').disabled=true;}
@@ -84,9 +84,9 @@
     bind('cellRemove',()=>{app().change('remove cell',s=>{s.metadata.cell=null;MV.Bonding.refreshInferredBonds(s);},true);$('cellDialog').close();});
     bind('cellWrap',()=>app().change('wrap',s=>{P.wrap(s);MV.Bonding.refreshInferredBonds(s);}));
     bind('cellSuper',()=>{app().change('supercell',s=>P.supercell(s,readNumbers('repeatCell',3)),true);$('cellDialog').close();});
-    bind('savePOSCAR',()=>download(P.toPOSCAR(state()),'POSCAR'));
+    bind('savePOSCAR',()=>download(P.toPOSCAR(app().getDisplayedState()),'POSCAR'));
     bind('allFrames',()=>download(allXYZ(),'trajectory.xyz'));
-    bind('allFramesSDF',()=>{const s=state(),frames=s.metadata.trajectory||[P.snapshot(s)];download(frames.map((f,i)=>IO.stateToSDFText(i===(s.metadata.frameIndex||0)?s:M.createState(f))).join(''),'structures.sdf');});
+    bind('allFramesSDF',()=>{const s=state().metadata.trajectory?state():app().getDisplayedState(),frames=s.metadata.trajectory||[P.snapshot(s)];download(frames.map((f,i)=>IO.stateToSDFText(i===(s.metadata.frameIndex||0)?s:M.createState(f))).join(''),'structures.sdf');});
     bind('framePrev',()=>{stop();frame((state().metadata.frameIndex||0)-1);});bind('frameNext',()=>{stop();frame((state().metadata.frameIndex||0)+1);});
     $('frameRange').addEventListener('input',()=>{stop();frame(Number($('frameRange').value));});
     bind('framePlay',()=>timer?stop():play());

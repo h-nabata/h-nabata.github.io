@@ -23,6 +23,7 @@
   function start(label){if(job)return null;const j={fingerprint:fingerprint(app().getState())};job=j;busy(true);app().setStatus(label);j.timeout=setTimeout(()=>{if(job===j){finish(j);app().setStatus('処理が時間制限を超えました。構造は変更していません。');}},120000);return j;}
   function unchanged(j){if(job!==j)return false;if(fingerprint(app().getState())!==j.fingerprint){finish(j);app().setStatus('処理中に構造が変更されたため、結果は適用しませんでした。');return false;}return true;}
   function relax(){
+    try{app().useDisplayedStructure();}catch(e){app().setStatus(e.message,true);return;}
     const s=app().getState();if(!s.atoms.length||s.atoms.length>500){app().setStatus('構造緩和は1〜500原子に対応しています。');return;}
     const j=start('結合距離・角度・近接反発を調整しています…');if(!j)return;
     try{
