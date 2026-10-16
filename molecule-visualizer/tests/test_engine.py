@@ -211,6 +211,7 @@ class HTTPBoundary(unittest.TestCase):
         status,_,info=self.call('GET','/api/info')
         self.assertEqual(status,200);self.assertEqual(info['maxAFIRSteps'],10000);self.assertEqual(info['maxSteps'],10000)
         self.assertEqual(info['livePreview'],1)
+        self.assertEqual(info['optimizationTrajectory'],1)
         preview='/api/jobs/'+'0'*32+'?preview=1&after=0'
         self.assertEqual(self.call('GET',preview,headers={'Authorization':''})[0],401)
         self.assertEqual(self.call('GET',preview,headers={'Origin':'https://evil.example'})[0],403)

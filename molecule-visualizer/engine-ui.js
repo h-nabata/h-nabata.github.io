@@ -58,7 +58,7 @@
     if(job)return;connection=null;$('engineRun').disabled=true;$('engineConnect').disabled=true;
     try{
       const c={url:endpoint($('engineURL').value),token:$('engineToken').value.trim()};if(!c.token)throw Error('サービス起動時に表示されるTokenを入力してください。');
-      c.info=await request(c,'/api/info');if(!['1.0.0','1.1.0','1.1.1','1.1.2','1.2.0'].includes(c.info.version)||!Array.isArray(c.info.modes))throw Error('サービスのバージョンが一致しません。最新のbridge.pyを使用してください。');connection=c;
+      c.info=await request(c,'/api/info');if(!['1.0.0','1.1.0','1.1.1','1.1.2','1.2.0','1.3.0'].includes(c.info.version)||!Array.isArray(c.info.modes))throw Error('サービスのバージョンが一致しません。最新のbridge.pyを使用してください。');connection=c;
       $('engineConnected').textContent=`接続済み: ${c.info.engine} / ${c.info.method} · ${c.info.engineVersion} · ${c.info.periodic?'固定セル周期系対応':'非周期系'}`;message('接続しました。電荷と多重度を確認して計算を実行してください。');
     }catch(error){$('engineConnected').textContent='未接続';message(error.message);}finally{$('engineConnect').disabled=false;busy(false);MV.AFIRUI?.sync();}
   }
@@ -67,17 +67,30 @@
     if(!r||JSON.stringify(r.symbols)!==JSON.stringify(j.data.symbols)||JSON.stringify(r.cell)!==JSON.stringify(j.data.cell)||r.images?.length!==j.frames.length||r.energies?.length!==j.frames.length||r.units?.energy!=='eV'||r.units?.length!=='angstrom')throw Error('結果の元素・セル・構造数・単位が入力と一致しません。');
     if(!r.images.every(p=>Array.isArray(p)&&p.length===j.data.symbols.length&&p.every(v=>Array.isArray(v)&&v.length===3&&v.every(x=>Number.isFinite(x)&&Math.abs(x)<=10000)))||!r.energies.every(Number.isFinite)||!Number.isFinite(r.effectiveFmax)||!Array.isArray(r.imageFmax)||r.imageFmax.length!==j.frames.length||!r.imageFmax.every(Number.isFinite))throw Error('計算結果に不正な座標・エネルギー・力が含まれます。');
     if(['perpendicular','neb','cineb'].includes(j.data.mode))for(const i of [0,j.frames.length-1])if(JSON.stringify(r.images[i])!==JSON.stringify(j.data.images[i]))throw Error('端点座標が変更された結果は適用できません。');
+    if(j.data.mode==='optimize'){
+      if(!r.trajectory){if(j.connection?.info.optimizationTrajectory)throw Error('最適化の構造履歴がありません。');return;}
+      const t=r.trajectory;if(!Array.isArray(t.energies))throw Error('最適化履歴のエネルギーがありません。');MV.Trajectory.validate({...t,symbols:r.symbols});
+      if(!Number.isInteger(r.steps)||r.steps<0||r.steps>j.data.maxSteps||t.images.length!==r.steps+1||JSON.stringify(t.images[0])!==JSON.stringify(j.data.images[0])||JSON.stringify(t.images.at(-1))!==JSON.stringify(r.images[0])||t.energies.at(-1)!==r.energies[0])throw Error('最適化の履歴・始点・最終構造が一致しません。');
+    }
   }
   function showResult(r,j){
     validateResult(r,j);result={...j,result:r};$('engineResult').hidden=false;$('engineApply').disabled=false;$('engineDownload').disabled=false;
-    const reason={converged:'収束',step_limit:'ステップ上限（未収束）',evaluated:'評価完了'}[r.reason]||r.reason;
+    const reason={converged:'収束',step_limit:'ステップ上限（未収束）',evaluated:'評価完了',cancelled:'中止（途中結果）',failed:'計算失敗（途中結果）'}[r.reason]||r.reason;
     $('engineResultSummary').textContent=`${modeText[r.mode]} · ${reason} · ${r.steps}ステップ · ${r.evaluations}回の評価 · 最大有効力 ${r.effectiveFmax.toPrecision(4)} eV/Å`+(r.maxTangentialStep!=null?` · 接線方向の最大更新 ${r.maxTangentialStep.toExponential(2)} Å`:'');
     const body=$('engineEnergyRows');body.replaceChildren();r.energies.forEach((energy,i)=>{const tr=document.createElement('tr');const fixed=['perpendicular','neb','cineb'].includes(r.mode)&&(i===0||i===r.energies.length-1);for(const value of [i+1,energy.toFixed(8),(energy-r.energies[0]).toFixed(6),fixed?'端点固定':r.imageFmax[i].toPrecision(4),i===r.climbingImage?'CI':'']){const td=document.createElement('td');td.textContent=value;tr.append(td);}body.append(tr);});
     showProfile(r,j,!!j.livePreview&&MV.EnergyProfile.following());
-    message('計算が完了しました。結果を確認し、「結果を構造へ適用」で反映してください。');
+    message((r.reason==='failed'?'計算に失敗しました。'+(r.error||''):r.reason==='cancelled'?'計算を中止しました。':'計算が完了しました。')+' 結果を確認し、XYZ保存・抽出または「結果を構造へ適用」で反映できます。'+(j.data.mode==='optimize'&&!r.trajectory?' 旧bridgeのため最終構造のみです。全ステップの保存にはbridge.py 1.3.0へ更新・再接続して再計算してください。':''));
   }
+  function resultSource(r,j){
+    const t=r.trajectory||r;
+    return {title:modeText[j.data.mode],kind:j.data.mode,symbols:r.symbols,cell:r.cell,images:t.images,energies:t.energies,
+      stepNumbers:j.data.mode==='optimize'&&!r.trajectory?[r.steps]:null,
+      notice:j.data.mode==='optimize'&&!r.trajectory?'旧bridgeの結果には最終構造しかありません。全ステップの保存にはbridge.py 1.3.0へ更新・再接続して再計算してください。':''};
+  }
+  function exportXYZ(r,j){$('engineDialog').close();MV.TrajectoryUI.open(resultSource(r,j));}
   function showProfile(r,j,follow=false){
-    MV.EnergyProfile.set({title:modeText[j.data.mode]+' · エネルギープロファイル'+(r.step!=null?' · ステップ '+r.step:''),kind:'path',focusIndex:Math.floor((r.images.length-1)/2),energies:r.energies,positions:i=>r.images[i],base:i=>j.frames[i],details:open},follow);
+    const t=r.trajectory||r,history=!!r.trajectory;
+    MV.EnergyProfile.set({title:modeText[j.data.mode]+' · エネルギープロファイル'+(r.step!=null?' · ステップ '+r.step:''),kind:history?'optimize':'path',focusIndex:history?t.images.length-1:Math.floor((r.images.length-1)/2),energies:t.energies,positions:i=>t.images[i],base:i=>j.frames[history?0:i],details:open,exportXYZ:r.step==null?()=>exportXYZ(r,j):null},follow);
   }
   async function run(){
     if(job||!connection)return;
@@ -93,7 +106,7 @@
       while(job===j){
         const live=j.livePreview&&MV.EnergyProfile.following();
         const state=await request(j.connection,`/api/jobs/${j.id}`+(live?'?preview=1&after=0':''));
-        if(state.status==='completed'){showResult(state.result,j);break;}
+        if(state.status==='completed'||(['cancelled','error'].includes(state.status)&&state.result)){showResult(state.result,j);break;}
         if(state.status==='error')throw Error(state.error||'計算に失敗しました。');
         if(state.status==='cancelled'){MV.EnergyProfile.restore();message('計算を中止しました。構造は変更していません。');break;}
         if(live&&state.preview&&state.preview.step!==j.previewStep){
@@ -140,6 +153,7 @@
     $('btnExternalEngine').addEventListener('click',open);$('engineConnect').addEventListener('click',connect);$('engineMode').addEventListener('change',chooseMode);$('engineRun').addEventListener('click',run);$('engineCancel').addEventListener('click',cancel);$('engineApply').addEventListener('click',apply);$('engineDownload').addEventListener('click',download);
     for(const id of ['engineURL','engineToken'])$(id).addEventListener('input',()=>{connection=null;$('engineRun').disabled=true;$('engineConnected').textContent='未接続';MV.AFIRUI?.sync();});
     $('engineProfile').addEventListener('click',()=>{if(result){showProfile(result.result,result);$('engineDialog').close();MV.EnergyProfile.reveal();}});
+    $('engineXYZ').addEventListener('click',()=>{if(result)exportXYZ(result.result,result);});
     $('engineDialog').addEventListener('cancel',e=>{if(job){e.preventDefault();cancel();}});settings();
   }
   MV.EngineUI={init,endpoint,frames,validateResult,request,getConnection:()=>connection?{...connection}:null};

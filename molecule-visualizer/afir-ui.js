@@ -113,9 +113,10 @@
   }
   function showProfile(r,j,follow=false){
     const base=MV.Periodic.snapshot(j.original);
-    MV.EnergyProfile.set({title:'AFIR探索 · エネルギープロファイル',kind:'afir',details:()=>toggle(true),energies:r.energies,biasEnergies:r.biasEnergies,positions:i=>r.images[i],base:()=>base},follow);
+    MV.EnergyProfile.set({title:'AFIR探索 · エネルギープロファイル',kind:'afir',details:()=>toggle(true),energies:r.energies,biasEnergies:r.biasEnergies,positions:i=>r.images[i],base:()=>base,exportXYZ:()=>exportXYZ(r)},follow);
     if(j.trajectory===app().getState().metadata.trajectory&&j.trajectory)MV.EnergyProfile.bindTrajectory(j.trajectory);
   }
+  function exportXYZ(r){MV.TrajectoryUI.open({title:'AFIR探索',kind:'afir',symbols:r.symbols,cell:r.cell,images:r.images,energies:r.energies,biasEnergies:r.biasEnergies});}
   function apply(){
     if(!result||dirty()||fingerprint(app().getState())!==result.fingerprint)throw Error('計算開始後に構造・設定が変わったため適用できません。結果JSONは保存できます。');
     const j=result,r=j.result;MV.AFIRRunner.validateResult(r,j);
@@ -133,6 +134,7 @@
     $('afirRun').addEventListener('click',run);$('afirCancel').addEventListener('click',()=>{if(job){job.cancelled=true;MV.AFIRRunner?.cancel(job).catch(e=>message(e.message));}});
     $('afirProfile').addEventListener('click',()=>{if(result){showProfile(result.result,result);MV.EnergyProfile.reveal();}});
     $('afirDownload').addEventListener('click',()=>{if(result)download({schema:'molecule-afir-result/1',input:MV.AFIR.exportInput(result.original,result.config),result:result.result},'afir-result.json');});
+    $('afirXYZ').addEventListener('click',()=>{if(result)exportXYZ(result.result);});
     sync();
   }
   MV.AFIRUI={init,sync,toggle,download};

@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
 const A=require('../afir.js');
-function boot(){const MV={AFIR:A},ctx={window:{MoleculeVisualizer:MV},document:{getElementById(){return {};}},URL,AbortController,setTimeout,clearTimeout};vm.createContext(ctx);for(const f of ['engine-ui.js','afir-runner.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f),'utf8'),ctx);return MV;}
+function boot(){const MV={AFIR:A},ctx={window:{MoleculeVisualizer:MV},document:{getElementById(){return {};}},URL,AbortController,setTimeout,clearTimeout};vm.createContext(ctx);for(const f of ['trajectory.js','engine-ui.js','afir-runner.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f),'utf8'),ctx);return MV;}
 function sample(){
  const atoms=[{id:'left',element:'H',x:0,y:0,z:0},{id:'right',element:'H',x:2,y:0,z:0}];
  const config={...A.defaults(),fragments:[{id:'a',label:'A',atomIds:['left']},{id:'b',label:'B',atomIds:['right']}],pairs:[{a:'a',b:'b',mode:'attract',gamma:100}]},bias=A.evaluate(atoms,config).energyEV;
@@ -24,4 +24,13 @@ test('10000-step jobs retain the budget in transport and old bridges get an upda
  await assert.rejects(()=>MV.AFIRRunner.run(j,()=>{}),/bridge.py 1\.1\.1/);assert.equal(calls.length,0);
  link.info.maxAFIRSteps=10000;await MV.AFIRRunner.run(j,()=>{});
  assert.equal(calls[0].body.maxSteps,10000);assert.equal(calls[0].body.afir.maxSteps,10000);
+});
+test('optimization history acceptance rejects mismatched endpoints, step counts, energies and incomplete new-bridge results',()=>{
+ const MV=boot(),j={frames:[{}],data:{mode:'optimize',maxSteps:2,symbols:['He'],cell:null,images:[[[0,0,0]]]},connection:{info:{optimizationTrajectory:1}}};
+ const r={mode:'optimize',steps:2,symbols:['He'],cell:null,units:{energy:'eV',length:'angstrom'},images:[[[.2,0,0]]],energies:[2],effectiveFmax:1,imageFmax:[1],trajectory:{images:[[[0,0,0]],[[.1,0,0]],[[.2,0,0]]],energies:[0,1,2]}};
+ MV.EngineUI.validateResult(r,j);
+ for(const edit of [v=>delete v.trajectory,v=>v.steps=3,v=>v.trajectory.images[0][0][0]=1,v=>v.trajectory.images[2][0][0]=3,v=>v.trajectory.energies[2]=4,v=>delete v.trajectory.energies,v=>v.trajectory.images[1][0][0]=NaN]){
+   const bad=structuredClone(r);edit(bad);assert.throws(()=>MV.EngineUI.validateResult(bad,j));
+ }
+ const legacy=structuredClone(r);delete legacy.trajectory;MV.EngineUI.validateResult(legacy,{...j,connection:{info:{}}});
 });
