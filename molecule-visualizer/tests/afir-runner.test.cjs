@@ -21,7 +21,7 @@ test('10000-step jobs retain the budget in transport and old bridges get an upda
  const MV=boot(),{j}=sample(),calls=[],link={url:'http://127.0.0.1:8766',info:{modes:['afir']}};
  MV.EngineUI.getConnection=()=>link;
  MV.EngineUI.request=async(c,path,body)=>{calls.push({path,body});return body?{id:'a'.repeat(32)}:{status:'cancelled'};};
- await assert.rejects(()=>MV.AFIRRunner.run(j,()=>{}),/bridge.py 1\.1\.1/);assert.equal(calls.length,0);
+ await assert.rejects(()=>MV.AFIRRunner.run(j,()=>{}),/bridge.pyを更新/);assert.equal(calls.length,0);
  link.info.maxAFIRSteps=10000;await MV.AFIRRunner.run(j,()=>{});
  assert.equal(calls[0].body.maxSteps,10000);assert.equal(calls[0].body.afir.maxSteps,10000);
 });

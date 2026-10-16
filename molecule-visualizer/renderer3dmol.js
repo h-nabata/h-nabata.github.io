@@ -80,6 +80,7 @@
     if (!preserveCamera || !this.cameraCenter) this.fit();
     this.resize();
     this.draw();
+    this.onStateRendered?.();
   };
 
   Renderer3DMol.prototype.updateSelection = function (state) {

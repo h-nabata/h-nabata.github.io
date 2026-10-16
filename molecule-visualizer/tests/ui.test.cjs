@@ -305,7 +305,7 @@ test('energy plot focus previews coordinates without changing input, export or u
  assert.equal(nodes.get('afirLive').checked,false);assert.equal(nodes.get('engineLive').checked,false);
  assert.equal(app.renderer().state,original);
  const points=nodes.get('energyProfile').children.filter(e=>e.attrs.role==='button');
- points[1].fire('focus');assert.equal(app.renderer().state.atoms[0].x,1);assert.equal(app.getState(),original);
+ points[1].fire('focus');assert.equal(app.renderer().state.atoms[0].x,1);assert.equal(MV.IO.parseXYZToState(nodes.get('dataText').value).atoms[0].x,1);assert.equal(app.getState(),original);
  assert.equal(MV.IO.stateToXYZText(app.getState()),before);assert.equal(app.renderer().previewOnly,true);
  assert.match(nodes.get('profileValue').textContent,/人工項 = 2.000000/);
  nodes.get('profileRestore').click();assert.equal(app.renderer().state,original);assert.equal(app.renderer().previewOnly,false);
@@ -314,9 +314,28 @@ test('energy plot focus previews coordinates without changing input, export or u
  profile.bindTrajectory(frames);MV.Studio.play();
  assert.equal(app.getState().metadata.frameIndex,1);assert.equal(app.renderer().state.atoms[0].x,1);assert.equal(nodes.get('profileRange').value,1);
  MV.Studio.stop();nodes.get('profileRange').value='2';nodes.get('profileRange').fire('input');
- assert.equal(app.getState().metadata.frameIndex,2);assert.equal(app.renderer().state.atoms[0].x,2);
+ assert.equal(app.getState().metadata.frameIndex,2);assert.equal(app.renderer().state.atoms[0].x,2);assert.equal(MV.IO.parseXYZToState(nodes.get('dataText').value).atoms[0].x,2);
  nodes.get('btnUndo').click();assert.equal(MV.IO.stateToXYZText(app.getState()),before);
 });
+test('coordinate panel follows preview frames and preserves a draft, format and input document',()=>{
+ const {MV,nodes}=boot(false,true),app=MV.App,profile=MV.EnergyProfile,box=nodes.get('dataText');
+ const before=MV.IO.stateToProjectText(app.getState()),base=MV.Periodic.snapshot(app.getState());
+ nodes.get('coordinateFormat').value='xyz';nodes.get('xyzHeader').checked=true;nodes.get('xyzHeader').fire('change');
+ const draft=box.value.replace('O 0.0000000000','O 4.0000000000');box.value=draft;box.fire('input');
+ const source={title:'coordinate synchronization',kind:'path',energies:[0,1,0],base:()=>base,positions:i=>base.atoms.map(a=>[a.x+i,a.y,a.z])};
+ profile.set(source);profile.select(1);
+ assert.equal(box.readOnly,true);assert.equal(nodes.get('dataApply').disabled,true);assert.equal(nodes.get('btnDataFile').disabled,true);
+ assert.equal(MV.IO.parseXYZToState(box.value).atoms[0].x,1);assert.match(nodes.get('xyzEditStatus').textContent,/未適用の編集は保持/);
+ profile.select(2);assert.equal(MV.IO.parseXYZToState(box.value).atoms[0].x,2);
+ nodes.get('coordinateFormat').value='mol3000';nodes.get('coordinateFormat').fire('change');assert.match(box.value,/V3000/);
+ assert.equal(MV.IO.stateToProjectText(app.getState()),before);
+ profile.restore();assert.equal(box.readOnly,false);assert.equal(nodes.get('dataApply').disabled,false);
+ assert.equal(box.value,draft);assert.equal(nodes.get('coordinateFormat').value,'xyz');assert.equal(nodes.get('xyzHeader').checked,true);assert.equal(nodes.get('xyzHeader').disabled,false);
+ nodes.get('dataReset').click();profile.select(1);nodes.get('dataReset').click();
+ assert.equal(box.readOnly,false);assert.equal(MV.IO.parseXYZToState(box.value).atoms[0].x,0);
+ assert.equal(MV.IO.stateToProjectText(app.getState()),before);
+});
+
 test('long profiles retain peaks, bound DOM size, and allow selection of all 10001 frames',()=>{
  const {MV,nodes}=boot(false,true),s=MV.App.getState(),base=MV.Periodic.snapshot(s),energies=Array(10001).fill(0);
  energies[1234]=50;energies[4321]=-20;const sampled=MV.EnergyProfile.sample(energies);
