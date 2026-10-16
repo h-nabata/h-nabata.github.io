@@ -17,9 +17,18 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  await page.fill('#dataText','O\u30000\t0 0\rH .9572 0 0\u2028H -.239987 .926627 0');await page.click('#dataApply');
  await page.check('#xyzHeader');assert.match(await page.locator('#dataText').inputValue(),/^3\n/);
  const bounds=await page.locator('canvas').boundingBox();
- await page.click('#btnViewXY');const unchanged=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),cx=bounds.x+bounds.width/2,cy=bounds.y+bounds.height/2,radius=Math.min(bounds.width,bounds.height)*.46;
- await page.mouse.move(cx+radius,cy);await page.mouse.down();for(let i=1;i<=12;i++){const a=i*Math.PI/24;await page.mouse.move(cx+radius*Math.cos(a),cy-radius*Math.sin(a));}await page.mouse.up();
- const rolled=await page.evaluate(()=>MoleculeVisualizer.App.renderer().rotate({x:1,y:0,z:0}));assert.ok(Math.abs(rolled.x)<1e-8&&Math.abs(rolled.y-1)<1e-8,'screen-normal roll must be reachable');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),unchanged);
+ await page.click('#btnViewXY');const unchanged=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),cx=bounds.x+bounds.width/2,cy=bounds.y+bounds.height/2;
+ await page.keyboard.down('Shift');await page.mouse.move(cx,cy);await page.mouse.down();await page.mouse.move(cx+180,cy,{steps:12});await page.mouse.up();await page.keyboard.up('Shift');
+ const rolled=await page.evaluate(()=>MoleculeVisualizer.App.renderer().rotate({x:1,y:0,z:0}));assert.ok(Math.abs(rolled.x-Math.cos(1.44))<1e-8&&Math.abs(rolled.y-Math.sin(1.44))<1e-8,'Shift drag provides explicit screen-normal roll');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),unchanged);
+ // The same diagonal drag must not acquire edge roll or depend on event spacing.
+ let referenceRotation;
+ for(const [x,y,steps] of [[cx,cy,12],[bounds.x+12,bounds.y+12,1],[bounds.x+bounds.width-150,bounds.y+bounds.height-80,48]]){
+  await page.click('#btnViewXY');await page.mouse.move(x,y);await page.mouse.down();await page.mouse.move(x+120,y+48,{steps});await page.mouse.up();
+  const q=await page.evaluate(()=>[...MoleculeVisualizer.App.renderer().orientation]);if(!referenceRotation)referenceRotation=q;q.forEach((v,i)=>assert.ok(Math.abs(v-referenceRotation[i])<1e-8,'center and edge drags must rotate identically'));
+ }
+ assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),unchanged);
+ assert.match(await page.locator('#rotationHint').textContent(),/どこでも同じ感度/);
+ await page.locator('#viewer').screenshot({path:'test-artifacts/free-rotation.png'});
  await page.click('#btnViewXY');
  // Pointer capture keeps delivering drag motion outside the canvas. Measure the
  // accumulated angle, since a final orientation alone cannot prove full turns.
