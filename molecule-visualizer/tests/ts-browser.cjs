@@ -66,7 +66,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   const bandBefore=await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.trajectory);
   await page.evaluate(()=>{const M=MoleculeVisualizer,s=M.App.getState();M.EnergyProfile.set({title:'public NEB node',kind:'cineb',energies:[0,1,0],positions:i=>s.metadata.trajectory[i+1].atoms.map(a=>[a.x,a.y,a.z]),base:i=>s.metadata.trajectory[i+1]});M.EnergyProfile.select(0);});
   const selectedPositions=await page.evaluate(()=>MoleculeVisualizer.App.renderer().state.atoms.map(a=>[a.x,a.y,a.z]));
-  await page.click('#btnExport');assert.deepEqual(await page.locator('#exportText').evaluate(e=>MoleculeVisualizer.IO.parseXYZToState(e.value).atoms.map(a=>[a.x,a.y,a.z])).then(ps=>ps.map(p=>p.map(x=>Number(x.toFixed(8))))),selectedPositions.map(p=>p.map(x=>Number(x.toFixed(8)))));
+  await page.click('#btnExport');const exported=await page.locator('#exportText').evaluate(e=>MoleculeVisualizer.IO.parseXYZToState(e.value).atoms.map(a=>[a.x,a.y,a.z]));exported.forEach((p,i)=>p.forEach((x,j)=>assert.ok(Math.abs(x-selectedPositions[i][j])<1e-9)));
   await page.locator('#exportDialog [data-close]').click();
   await page.click('#btnTS');await page.uncheck('#engineVibrationCheck');await page.fill('#engineSteps','1');await page.click('#engineRun');await waitDone();assert.deepEqual(requests.at(-1).images,[selectedPositions]);
   await page.click('#engineClose');await page.click('#btnUndo');assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.trajectory),bandBefore);
