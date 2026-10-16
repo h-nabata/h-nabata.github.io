@@ -101,6 +101,6 @@
     for(const type of ['keydown','dblclick'])canvas.addEventListener(type,e=>{if(active){e.preventDefault();e.stopImmediatePropagation();}},true);
     panel(false);
   }
-  MV.EnergyProfile={init,set,select,restore,sync,begin,finish,reset,reveal,sample,following:()=>$('profileFollow').checked,
+  MV.EnergyProfile={init,set,select,restore,pauseFollow,sync,begin,finish,reset,reveal,sample,following:()=>$('profileFollow').checked,
     onStateChange(){restore(false);pauseFollow();},bindTrajectory(frames){bound=frames;sync();}};
 })(window);

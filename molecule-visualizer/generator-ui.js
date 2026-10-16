@@ -6,14 +6,14 @@
   function settings(){const path=$('generationKind').value==='path';$('pathControls').hidden=!path;$('randomControls').hidden=path;$('randomRingOptions').hidden=$('randomMode').value==='orientation';$('generationCount').min=path?2:1;}
   function finish(j){if(job!==j)return;j.worker?.terminate();clearTimeout(j.timeout);job=null;$('generationRun').disabled=false;$('generationCancel').disabled=true;}
   function cancel(){if(!job)return;finish(job);message('生成を中止しました。構造は変更していません。');}
-  function current(){const s=app().getState();return s.metadata.cell?MV.IO.stateToXYZText(s):MV.IO.stateToMolV3000Text(s);}
-  function open(kind){$('generationKind').value=kind;$('generationCount').value=kind==='path'?9:5;settings();if(kind==='path'&&!$('pathStart').value.trim())$('pathStart').value=current();message('');$('generationDialog').showModal();}
+  function current(){const s=app().freezeDisplayedStructure();return s.metadata.cell?MV.IO.stateToXYZText(s):MV.IO.stateToMolV3000Text(s);}
+  function open(kind){app().freezeDisplayedStructure();$('generationKind').value=kind;$('generationCount').value=kind==='path'?9:5;settings();if(kind==='path'&&!$('pathStart').value.trim())$('pathStart').value=current();message('');$('generationDialog').showModal();}
   const formKey=()=>JSON.stringify(['generationKind','generationCount','generationSeed','randomMode','pathMethod','pathStart','pathEnd','randomRingAngle'].map(id=>$(id).value).concat($('pathMinimumImage').checked,$('randomRings').checked));
   function run(){
     if(job)return;
     try{
       if(/未適用|編集中/.test($('xyzEditStatus').textContent))throw Error('座標編集欄の未適用データを先に適用するか、「現在の構造を再表示」を押してください。');
-      const kind=$('generationKind').value,options={count:Number($('generationCount').value),seed:Number($('generationSeed').value),mode:$('randomMode').value,method:$('pathMethod').value,minimumImage:$('pathMinimumImage').checked,rings:$('randomRings').checked,ringAngle:Number($('randomRingAngle').value)};
+      const kind=$('generationKind').value;if(kind==='random')app().useDisplayedStructure();const options={count:Number($('generationCount').value),seed:Number($('generationSeed').value),mode:$('randomMode').value,method:$('pathMethod').value,minimumImage:$('pathMinimumImage').checked,rings:$('randomRings').checked,ringAngle:Number($('randomRingAngle').value)};
       if(!Number.isInteger(options.count)||options.count<(kind==='path'?2:1)||options.count>20)throw Error('生成数はランダム1〜20、経路2〜20（端点を含む）にしてください。');
       if(!Number.isInteger(options.seed)||options.seed<0||options.seed>4294967295)throw Error('乱数シードは0〜4294967295の整数にしてください。');
       const state=kind==='path'?MV.Formats.parse($('pathStart').value):MV.Model.createState(MV.Periodic.snapshot(app().getState())),end=kind==='path'?MV.Formats.parse($('pathEnd').value):null;

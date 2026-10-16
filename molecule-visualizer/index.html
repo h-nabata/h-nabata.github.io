@@ -13,20 +13,20 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./measurements.js?v=16"></script>
 <script defer src="./history.js?v=16"></script>
 <script defer src="./renderer3dmol.js?v=20"></script>
-<script defer src="./ui.js?v=24"></script>
-<script defer src="./studio.js?v=18"></script>
-<script defer src="./advanced.js?v=16"></script>
-<script defer src="./generator-ui.js?v=22"></script>
+<script defer src="./ui.js?v=displayed-28"></script>
+<script defer src="./studio.js?v=displayed-28"></script>
+<script defer src="./advanced.js?v=displayed-28"></script>
+<script defer src="./generator-ui.js?v=displayed-28"></script>
 <script defer src="./trajectory.js?v=4"></script>
 <script defer src="./trajectory-ui.js?v=6"></script>
-<script defer src="./energy-profile.js?v=6"></script>
-<script defer src="./engine-ui.js?v=27"></script>
-<script defer src="./vibration-ui.js?v=22"></script>
+<script defer src="./energy-profile.js?v=displayed-28"></script>
+<script defer src="./engine-ui.js?v=displayed-28"></script>
+<script defer src="./vibration-ui.js?v=displayed-28"></script>
 <script defer src="./path-refinement.js?v=2"></script>
 <script defer src="./afir.js?v=17"></script>
 <script defer src="./afir-search.js?v=16"></script>
 <script defer src="./afir-runner.js?v=19"></script>
-<script defer src="./afir-ui.js?v=23"></script>
+<script defer src="./afir-ui.js?v=displayed-28"></script>
 <script defer src="./measurement-ui.js?v=22"></script>
 <script defer src="./panel-layout.js?v=1"></script>
 <script defer src="./molecule-visualizer_main.js?v=20"></script>
@@ -56,8 +56,9 @@ title: 分子構造エディタ | Molecule Studio
       <section id="vibrationPanel" class="mv-energy-profile" hidden aria-label="振動モード">
         <div class="mv-row"><strong>振動数・振動モード</strong><button class="mv-btn" id="vibrationHide">表を閉じる</button></div>
         <p id="vibrationSummary" class="mv-small"></p>
-        <div class="mv-row"><label>表示・変位の最大振幅 (Å)<input id="vibrationAmplitude" class="mv-num" type="number" min="0" max="1" step="0.01" value="0.15"></label><button class="mv-btn" id="vibrationPlay">▶ モードをアニメーション</button><button class="mv-btn" id="vibrationRestore">プレビューを終了</button></div>
-        <details class="mv-help"><summary>詳しい説明</summary><p class="mv-small">行を選ぶと原子の変位方向を矢印で表示します。赤字・赤矢印は虚振動です。全3Nモードを表示し、並進・回転の射影除去はしていません。低振動数は数値誤差や残留力の影響を受けます。動画の速さ・振幅は説明用で、虚振動の時間発展を表すものではありません。</p></details>
+        <div class="mv-row"><label for="vibrationVectorScale">矢印の最大長（表示のみ）</label><input id="vibrationVectorScale" type="range" min="0.1" max="5" step="0.1" value="1"><output id="vibrationVectorValue" for="vibrationVectorScale">1.0 Å</output></div>
+        <div class="mv-row"><label>動画・構造変位の最大振幅 (Å)<input id="vibrationAmplitude" class="mv-num" type="number" min="0" max="1" step="0.01" value="0.15"></label><button class="mv-btn" id="vibrationPlay">▶ モードをアニメーション</button><button class="mv-btn" id="vibrationRestore">プレビューを終了</button></div>
+        <details class="mv-help"><summary>詳しい説明</summary><p class="mv-small">矢印の長さは各原子の相対変位に比例し、IR強度を表すものではありません。行を選ぶと原子の変位方向を矢印で表示します。赤字・赤矢印は虚振動です。全3Nモードを表示し、並進・回転の射影除去はしていません。低振動数は数値誤差や残留力の影響を受けます。動画の速さ・振幅は説明用で、虚振動の時間発展を表すものではありません。</p></details>
         <div class="mv-vibration-scroll"><table><thead><tr><th>モード</th><th>振動数 (cm⁻¹)</th><th>hν (meV)</th></tr></thead><tbody id="vibrationRows"></tbody></table></div>
         <div class="mv-row"><button class="mv-btn" id="vibrationMinus">−方向へ変位して入力に適用</button><button class="mv-btn" id="vibrationPlus">＋方向へ変位して入力に適用</button><button class="mv-btn" id="vibrationCSV">振動数表をCSV保存</button></div>
         <p id="vibrationMessage" class="mv-small" role="status"></p>

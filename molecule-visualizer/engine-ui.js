@@ -47,6 +47,7 @@
   }
   function input(){
     if(dirty())throw Error('座標編集欄の未適用データを先に適用するか、現在の構造を再表示してください。');
+    if($('engineScope').value==='current')app().useDisplayedStructure();
     const state=app().getState(),all=frames(state,$('engineScope').value),mode=$('engineMode').value;
     const symbols=all[0].atoms.map(a=>a.element),cell=all[0].metadata.cell||null;
     if(!symbols.length||symbols.length>500||all.length>(connection.info.maxImages||20))throw Error(`外部計算は1〜500原子、最大${connection.info.maxImages||20}構造です。必要に応じてbridge.pyを更新してください。`);
@@ -188,8 +189,9 @@
   }
   function download(){if(!result)return;const payload={input:result.data,result:result.result},url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='molecule-engine-result.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
   function open(){
+    if(!job&&!MV.AFIRUI?.isBusy?.())app().freezeDisplayedStructure();
     if(result&&result.fingerprint!==fingerprint(app().getState()))clearResult();
-    if(!job&&!result){const s=app().getState();$('engineCharge').value=s.metadata.totalCharge??s.atoms.reduce((sum,a)=>sum+(Number(a.charge)||0),0);$('engineMultiplicity').value=s.metadata.multiplicity??1;$('engineScope').value=s.metadata.trajectory?'all':'current';$('engineMode').value=s.metadata.trajectory?.length>=3?'cineb':'evaluate';settings();}
+    if(!job&&!result){const s=app().getDisplayedState();$('engineCharge').value=s.metadata.totalCharge??s.atoms.reduce((sum,a)=>sum+(Number(a.charge)||0),0);$('engineMultiplicity').value=s.metadata.multiplicity??1;$('engineScope').value=s.metadata.trajectory?'all':'current';$('engineMode').value=s.metadata.trajectory?.length>=3?'cineb':'evaluate';settings();}
     $('engineDialog').showModal();
   }
   function prepareNEB(){
@@ -199,6 +201,7 @@
   }
   function prepareSingle(mode){
     if(job){message('実行中の計算を終了してください。');$('engineDialog').showModal();return;}
+    try{app().useDisplayedStructure();}catch(e){message(e.message);$('engineDialog').showModal();return;}
     clearResult();open();$('engineMode').value=mode;$('engineScope').value='current';settings();
     message(mode==='ts'?'現在表示中の構造をTS入力にしました。手法・電荷・多重度・振動解析の有無を確認して実行してください。':'現在の構造で振動解析します。未収束構造も対象にできます。');
   }

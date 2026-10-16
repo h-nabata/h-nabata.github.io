@@ -337,6 +337,19 @@ test('coordinate panel follows preview frames and preserves a draft, format and 
  assert.equal(MV.IO.stateToProjectText(app.getState()),before);
 });
 
+test('current structure exports and calculation handoff use the displayed node with undo and draft protection',()=>{
+ const {MV,nodes}=boot(false,true),app=MV.App,original=MV.IO.stateToProjectText(app.getState()),base=MV.Periodic.snapshot(app.getState());
+ const source={title:'current frame',kind:'path',energies:[0,1,0],base:()=>base,positions:i=>base.atoms.map(a=>[a.x+i,a.y,a.z])};
+ MV.EnergyProfile.set(source);MV.EnergyProfile.select(2);nodes.get('profileFollow').checked=true;
+ nodes.get('btnExport').click();assert.equal(MV.IO.parseXYZToState(nodes.get('exportText').value).atoms[0].x,2);
+ assert.equal(nodes.get('profileFollow').checked,false);assert.equal(MV.IO.stateToProjectText(app.getState()),original);
+ app.useDisplayedStructure();assert.equal(app.getState().atoms[0].x,2);assert.equal(app.renderer().previewOnly,false);
+ assert.equal(app.getState().metadata.trajectory,undefined);assert.equal(app.getState().atoms[0].id,base.atoms[0].id);
+ nodes.get('btnUndo').click();assert.equal(MV.IO.stateToProjectText(app.getState()),original);
+ nodes.get('dataText').value+=' ';nodes.get('dataText').fire('input');MV.EnergyProfile.select(1);
+ assert.throws(()=>app.useDisplayedStructure(),/未適用/);assert.equal(MV.IO.stateToProjectText(app.getState()),original);
+});
+
 test('long profiles retain peaks, bound DOM size, and allow selection of all 10001 frames',()=>{
  const {MV,nodes}=boot(false,true),s=MV.App.getState(),base=MV.Periodic.snapshot(s),energies=Array(10001).fill(0);
  energies[1234]=50;energies[4321]=-20;const sampled=MV.EnergyProfile.sample(energies);
@@ -489,6 +502,8 @@ test('normal-mode rows, arrows and animation stay transient; explicit displaceme
  v.imaginary[0]=true;MV.VibrationUI.set(v,MV.Model.createState(base),'analytic test');MV.VibrationUI.show();
  assert.equal(nodes.get('vibrationRows').children.length,3*n);assert.equal(nodes.get('vibrationRows').children[0].className,'mv-imaginary');
  assert.equal(app.renderer().previewOnly,true);assert.ok(app.renderer().projectedModeArrows.length>0);assert.equal(app.renderer().vibrationVectors.color,'#c62828');
+ const beforeScale=JSON.stringify(app.renderer().state.atoms);nodes.get('vibrationVectorScale').value='2';nodes.get('vibrationVectorScale').fire('input');
+ assert.equal(app.renderer().vibrationVectors.vectors[0][0],2);assert.equal(app.renderer().vibrationVectors.vectors[1][0],-1);assert.equal(JSON.stringify(app.renderer().state.atoms),beforeScale);assert.equal(nodes.get('vibrationAmplitude').value,'0.15');
  nodes.get('vibrationRows').children[1].click();assert.equal(app.renderer().vibrationVectors.color,'#176cb0');assert.equal(JSON.stringify(app.getState().atoms),original);
  nodes.get('vibrationPlay').click();assert.match(nodes.get('vibrationPlay').textContent,/停止/);assert.equal(JSON.stringify(app.getState().atoms),original);
  nodes.get('vibrationAmplitude').value='.04';nodes.get('vibrationAmplitude').fire('input');nodes.get('vibrationPlus').click();

@@ -58,6 +58,17 @@
   }
   let xyzDirty=false, xyzBase='', xyzDisplayBase='', xyzPreviewDraft=null;
   function editorXYZ(s){const format=byId('coordinateFormat');if(s.metadata.cell)format.value='xyz';const mol=format.value==='mol3000';byId('xyzHeader').disabled=mol;return mol?IO.stateToMolV3000Text(s):MV.Periodic.editorText(s,byId('xyzHeader').checked);}
+  // Internal document state remains separate from transient result display.
+  function getDisplayedState(){return renderer?.previewOnly?renderer.state:state;}
+  function freezeDisplayedStructure(){MV.Studio?.stop();MV.VibrationUI?.pause();MV.EnergyProfile?.pauseFollow();return getDisplayedState();}
+  function useDisplayedStructure(){
+    if(!renderer?.previewOnly)return state;
+    if(xyzDirty)throw Error('未適用の座標編集を保持しています。入力構造に戻り、編集を適用または破棄してから操作してください。');
+    const next=Model.cloneState(freezeDisplayedStructure());
+    delete next.metadata.trajectory;delete next.metadata.frameIndex;
+    delete next.metadata.externalCalculation;delete next.metadata.afirCalculation;
+    pushHistory('use displayed structure');setState(next,true);return state;
+  }
   function syncXYZEditor(){
     const el=byId('dataText');if(!el)return;
     const preview=Boolean(renderer?.previewOnly);
@@ -204,8 +215,8 @@
     navigator.clipboard.writeText(text).then(() => setStatus(okMessage)).catch(() => {byId("exportText").value=text;setStatus("コピーできませんでした。下の欄から手動でコピーしてください。");});
   }
 
-  function copyXYZ() { copyText(IO.stateToXYZText(state), "XYZをコピーしました。"); }
-  function copyMol() { copyText(IO.stateToMolText(state), "MOLをコピーしました。"); }
+  function copyXYZ() { copyText(IO.stateToXYZText(getDisplayedState()), "XYZをコピーしました。"); }
+  function copyMol() { copyText(IO.stateToMolText(getDisplayedState()), "MOLをコピーしました。"); }
 
   function downloadText(text, filename) {
     const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
@@ -220,12 +231,12 @@
   }
 
   function downloadXYZ() {
-    downloadText(IO.stateToXYZText(state), safeFilename()+".xyz");
+    downloadText(IO.stateToXYZText(getDisplayedState()), safeFilename()+".xyz");
     setStatus("XYZを保存しました。");
   }
 
   function downloadSDF() {
-    downloadText(IO.stateToSDFText(state), safeFilename()+".sdf");
+    downloadText(IO.stateToSDFText(getDisplayedState()), safeFilename()+".sdf");
     setStatus("SDFを保存しました。");
   }
 
@@ -854,7 +865,7 @@
 
   function bind(id, event, handler) {
     const el = byId(id);
-    if (el) el.addEventListener(event, ev=>{try{const result=handler(ev);if(result?.catch)result.catch(report);}catch(error){report(error);}});
+    if (el) el.addEventListener(event, ev=>{try{if(event==='click'&&['toolSelect','toolBond','toolMove','btnToggleMove','btnAddAtom','btnAddFragment','btnDeleteSel','btnChangeElem','btnAddBond','btnUpdateBond','btnDeleteBond','btnReinferBonds','btnApplyDistance','btnApplyAngle','btnApplyDihedral','btnApplyCharge','btnTranslate','btnCenterOrigin','cellLowerTriangular','btnSelectAll','btnSelectNone','btnSelectInvert','btnSelectByElem'].includes(id))useDisplayedStructure();const result=handler(ev);if(result?.catch)result.catch(report);}catch(error){report(error);}});
   }
 
   function wireUI() {
@@ -934,10 +945,10 @@
     bind('dataFile','change',async e=>{try{const f=e.target.files[0];if(!f)return;if(f.size>10*1024*1024)throw Error('ファイルは10MB以下にしてください。');byId('dataText').value=await f.text();xyzDirty=true;byId('inputFormat').value='auto';syncXYZEditor();setStatus('ファイルを編集欄に読み込みました。「構造へ適用」で読み取ります。');}finally{e.target.value='';}});
     bind('btnPaste','click',()=>{byId('importError').textContent='';byId('importDialog').showModal();byId('xyz_input').focus();});
     bind('btnHelp','click',()=>byId('helpDialog').showModal());
-    bind('btnExport','click',()=>{byId('exportText').value=IO.stateToXYZText(state);byId('exportMessage').textContent='';byId('exportDialog').showModal();});
-    bind('btnDownloadMol3000','click',()=>downloadText(IO.stateToMolV3000Text(state),'structure.mol'));
-    bind('btnExportText','click',()=>byId('exportText').value=IO.stateToXYZText(state));
-    bind('btnSaveProject','click',()=>{downloadText(IO.stateToProjectText(state),safeFilename()+'.json');setStatus('プロジェクトを保存しました。');});
+    bind('btnExport','click',()=>{byId('exportText').value=IO.stateToXYZText(freezeDisplayedStructure());byId('exportMessage').textContent='';byId('exportDialog').showModal();});
+    bind('btnDownloadMol3000','click',()=>downloadText(IO.stateToMolV3000Text(getDisplayedState()),'structure.mol'));
+    bind('btnExportText','click',()=>byId('exportText').value=IO.stateToXYZText(freezeDisplayedStructure()));
+    bind('btnSaveProject','click',()=>{downloadText(IO.stateToProjectText(getDisplayedState()),safeFilename()+'.json');setStatus('プロジェクトを保存しました。');});
     bind('btnNew','click',()=>{pushHistory('new');state=Model.createState();setMode('select');render(false);setStatus('新規構造です。原子追加またはサンプルから始めてください。');});
     bind('structureTitle','change',()=>{pushHistory('rename');state.metadata.title=byId('structureTitle').value.trim()||'無題の構造';saveLocal();syncUI();});
     const readFile=async file=>{if(!file)return;if(file.size>10*1024*1024)throw Error('ファイルは10MB以下にしてください。');const text=await file.text();loadText(text);if(!state.metadata.title||state.metadata.title==='無題の構造')state.metadata.title=file.name.replace(/\.[^.]+$/,'');saveLocal();syncUI();};
@@ -1025,6 +1036,7 @@
   MV.App = {
     init,
     getState: function () { return state; },
+    getDisplayedState, freezeDisplayedStructure, useDisplayedStructure,
     save: saveLocal,
     setState,
     renderer: () => renderer,

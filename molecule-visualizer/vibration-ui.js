@@ -2,7 +2,7 @@
 (function(global){
   'use strict';
   const MV=global.MoleculeVisualizer,$=id=>document.getElementById(id),app=()=>MV.App;
-  let data=null,base=null,guard=null,index=0,timer=null,active=false;
+  let data=null,base=null,guard=null,index=0,timer=null,active=false,phaseShown=0;
   const fingerprint=s=>JSON.stringify([s.atoms,s.bonds,s.metadata]);
   function validate(v,symbols,positions){
     const n=symbols.length,m=3*n;
@@ -23,10 +23,12 @@
     if(draw)r.renderState(app().getState(),true);
   }
   function draw(phase=0){
-    const displacement=vectors(data.modes[index],Number($('vibrationAmplitude').value)),state=MV.Model.createState(base);
+    phaseShown=phase;const displacement=vectors(data.modes[index],Number($('vibrationAmplitude').value)),state=MV.Model.createState(base);
+    const arrowLength=Number($('vibrationVectorScale').value);if(!Number.isFinite(arrowLength)||arrowLength<0.1||arrowLength>5)throw Error('矢印の最大長は0.1〜5 Åにしてください。');
+    $('vibrationVectorValue').textContent=arrowLength.toFixed(1)+' Å';
     state.atoms.forEach((a,i)=>{[a.x,a.y,a.z]=data.positions[i].map((x,j)=>x+phase*displacement[i][j]);});
     MV.Bonding.refreshInferredBonds(state);state.viewSettings={...app().getState().viewSettings};state.selectedAtomIds.clear();state.selectedBondIds.clear();
-    const r=app().renderer();r.vibrationVectors={vectors:displacement,color:data.imaginary[index]?'#c62828':'#176cb0'};r.previewOnly=true;active=true;r.renderState(state,true);
+    const r=app().renderer();r.vibrationVectors={vectors:vectors(data.modes[index],1).map(v=>v.map(x=>x*arrowLength)),color:data.imaginary[index]?'#c62828':'#176cb0'};r.previewOnly=true;active=true;r.renderState(state,true);
   }
   function select(i){
     if(!data||!Number.isInteger(i)||i<0||i>=data.modes.length)return;
@@ -76,8 +78,9 @@
   function init(){
     $('vibrationToggle').addEventListener('click',()=>$('vibrationPanel').hidden?show():hide());$('vibrationHide').addEventListener('click',hide);
     $('vibrationRestore').addEventListener('click',()=>restore());$('vibrationPlay').addEventListener('click',play);$('vibrationAmplitude').addEventListener('input',()=>{if(active)select(index);});
+    $('vibrationVectorScale').addEventListener('input',()=>{try{if(active)draw(phaseShown);else $('vibrationVectorValue').textContent=Number($('vibrationVectorScale').value).toFixed(1)+' Å';}catch(e){$('vibrationMessage').textContent=e.message;}});
     $('vibrationPlus').addEventListener('click',()=>displace(1));$('vibrationMinus').addEventListener('click',()=>displace(-1));$('vibrationCSV').addEventListener('click',csv);
     const canvas=app().renderer().canvas;for(const type of ['keydown','dblclick'])canvas.addEventListener(type,e=>{if(active){e.preventDefault();e.stopImmediatePropagation();}},true);
   }
-  MV.VibrationUI={init,set,show,hide,restore,validate,vectors};
+  MV.VibrationUI={init,set,show,hide,restore,pause:stop,validate,vectors};
 })(window);

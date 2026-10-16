@@ -79,17 +79,17 @@
     $('afirLive').disabled=!!job;$('afirSettings').disabled=!!job;$('afirFragmentSettings').disabled=!!job;
     if(result)$('afirApply').disabled=!!job||!!result.applied||fingerprint(s)!==result.fingerprint||dirty();
   }
-  function toggle(value){visible=value??!visible;$('afirPanel').hidden=!visible;document.querySelector('.mv-inspector').classList.toggle('mv-afir-active',visible);$('btnAFIR').setAttribute('aria-pressed',String(visible));
-    if(visible){$('toolSelect').click();$('multiSelect').checked=true;app().getState().viewSettings.afirOverlay=true;sync();}
+  function toggle(value){if((value??!visible)&&!job){try{app().useDisplayedStructure();}catch(e){message(e.message);return;}}visible=value??!visible;$('afirPanel').hidden=!visible;document.querySelector('.mv-inspector').classList.toggle('mv-afir-active',visible);$('btnAFIR').setAttribute('aria-pressed',String(visible));
+    if(visible){if(!job)$('toolSelect').click();$('multiSelect').checked=true;app().getState().viewSettings.afirOverlay=true;sync();}
     else app().getState().viewSettings.afirOverlay=false;
     MV.EnergyProfile?.restore();app().renderer().renderState(app().getState(),true);
   }
   function download(payload,name,type='application/json'){const text=typeof payload==='string'?payload:JSON.stringify(payload,null,2),url=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-  function exportFiles(){if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();const out=MV.AFIR.exportInput(app().getState(),config());download(out,'afir-input.json');message('原子ID・XYZ・フラグメント・ペア・Python用設定をJSONに保存しました。');}
-  function check(){saveSettings();const s=app().getState(),b=MV.AFIR.evaluate(s.atoms,config(),s.metadata.cell);message(`人工項のみ評価: ${b.energyEV.toFixed(6)} eV。物理ポテンシャルのエネルギーではありません。座標は変更していません。`);}
+  function exportFiles(){if(dirty())throw Error('編集中の座標を先に適用してください。');app().useDisplayedStructure();saveSettings();const out=MV.AFIR.exportInput(app().getState(),config());download(out,'afir-input.json');message('原子ID・XYZ・フラグメント・ペア・Python用設定をJSONに保存しました。');}
+  function check(){app().useDisplayedStructure();saveSettings();const s=app().getState(),b=MV.AFIR.evaluate(s.atoms,config(),s.metadata.cell);message(`人工項のみ評価: ${b.energyEV.toFixed(6)} eV。物理ポテンシャルのエネルギーではありません。座標は変更していません。`);}
   async function run(){
     if(job)return;let j;
-    try{if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();const s=app().getState();MV.AFIR.validate(s.atoms,config(),s.metadata.cell);
+    try{if(dirty())throw Error('編集中の座標を先に適用してください。');app().useDisplayedStructure();saveSettings();const s=app().getState();MV.AFIR.validate(s.atoms,config(),s.metadata.cell);
       j={original:MV.Model.cloneState(s),fingerprint:fingerprint(s),config:JSON.parse(JSON.stringify(config())),cancelled:false,livePreview:$('afirLive').checked,previewCursor:0,liveEnergies:[],liveBiases:[]};
       if(j.livePreview&&!MV.EngineUI.getConnection()?.info.livePreview)throw Error('ライブ表示を使うにはbridge.pyを更新・再接続してください。');
       MV.EnergyProfile.reset();job=j;result=null;$('afirResult').hidden=true;sync();
