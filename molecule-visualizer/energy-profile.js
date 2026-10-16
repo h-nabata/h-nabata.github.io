@@ -38,6 +38,10 @@
     return [...ids].sort((a,b)=>a-b);
   }
   function set(next,follow=false){
+    // A path index identifies the same bead at every step, unlike a history index.
+    const keepNode=!!live&&data?.kind==='path'&&next.kind==='path';
+    const keepFocus=keepNode&&$('energyProfile').contains(document.activeElement);
+    let focusPoint=null,restoringFocus=false;
     restore();data=next;bound=null;details=next.details||details;
     const series=[next.energies];if(next.biasEnergies)series.push(next.energies.map((e,i)=>e+next.biasEnergies[i]));
     if(!series[0]?.length||series.some(a=>a.length!==series[0].length||a.some(e=>!Number.isFinite(e))))throw Error('エネルギープロファイルが不正です。');
@@ -51,8 +55,9 @@
       // Every small-series point is focusable. The range always covers every frame.
       if(values.length<=100)points.forEach(([x,y],p)=>{
         const i=ids[p],dot=element('circle',{cx:x,cy:y,r:4,fill:k?'#b45420':'#087e85',tabindex:k?-1:0,role:'button','aria-label':(isStep(next)?'ステップ '+i:'構造 '+(i+1))+': ΔE '+values[i].toFixed(6)+' eV'});
-        const choose=()=>{pauseFollow();select(i);};dot.addEventListener('focus',choose);dot.addEventListener('click',choose);
+        const choose=()=>{if(!restoringFocus)chooseFrame(i);};dot.addEventListener('focus',choose);dot.addEventListener('click',choose);
         dot.addEventListener('keydown',e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();choose();}});svg.append(dot);
+        if(keepFocus&&!k&&i===index)focusPoint=dot;
       });
     });
     marker=element('line',{y1:36,y2:150,stroke:'#55646d','stroke-dasharray':'3 3'});svg.append(marker);
@@ -60,8 +65,12 @@
     $('profileTitle').textContent=next.title;$('profileLegend').textContent=next.biasEnergies?'緑：物理エネルギー　茶：物理エネルギー＋人工項。横軸は'+(isStep(next)?'探索ステップ':'構造番号')+'で、反応座標やTS検証結果ではありません。':(isStep(next)?'緑：物理エネルギー。横軸は最適化ステップです。':'緑：物理エネルギー。横軸は構造番号です（単一構造の評価では1点）。');
     $('profileXYZ').disabled=typeof next.exportXYZ!=='function';
     range=$('profileRange');range.max=next.energies.length-1;range.disabled=next.energies.length<2;
-    follow=follow&&visible;panel(visible);select(follow?(next.focusIndex??next.energies.length-1):Math.min(index,next.energies.length-1),follow);
+    // A response already in flight must also respect an explicit pause or hide.
+    follow=follow&&visible&&(!live||$('profileFollow').checked);panel(visible);
+    select(Math.min(follow&&!keepNode?(next.focusIndex??next.energies.length-1):index,next.energies.length-1),follow);
+    if(focusPoint){restoringFocus=true;focusPoint.focus({preventScroll:true});restoringFocus=false;}
   }
+  function chooseFrame(i){if(!live||data?.kind!=='path')pauseFollow();select(i);}
   function pauseFollow(){$('profileFollow').checked=false;}
   function panel(show){
     $('profilePanel').hidden=!show;
@@ -80,7 +89,7 @@
   function sync(){if(bound&&app().getState().metadata.trajectory===bound)select(app().getState().metadata.frameIndex||0,false);}
   function reveal(){visible=true;panel(true);$('viewer').scrollIntoView({block:'start',behavior:'smooth'});}
   function init(){
-    $('profileRange').addEventListener('input',()=>{pauseFollow();select(Number($('profileRange').value));});
+    $('profileRange').addEventListener('input',()=>chooseFrame(Number($('profileRange').value)));
     $('profileToggle').addEventListener('click',()=>{if(!$('profilePanel').hidden){hide();return;}visible=true;panel(true);select(index);});
     $('profileRestore').addEventListener('click',()=>{pauseFollow();restore();});
     $('profileHide').addEventListener('click',hide);

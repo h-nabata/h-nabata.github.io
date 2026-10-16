@@ -217,7 +217,7 @@ AFIR・通常の最適化・経路計算の結果から「構造列を保存・�
 .venv-gxtb\Scripts\python.exe -m pip install --only-binary=:all: "sella>=2.6,<3"
 ```
 
-有効化済みのconda/venvなら`python -m pip install --only-binary=:all: "sella>=2.6,<3"`で構いません。Python 3.12・Sella 2.6で検証しています。対応wheelが見つからない場合はPython 3.12の環境を使用してください。基本requirementsにはSellaを含めていないため、これまでのAFIR/NEBを使うだけなら追加不要です。振動解析だけなら既存のASEを使い、Sellaは不要です。bridgeを再起動して再接続すると、接続状態にSellaのバージョンが表示されます。
+有効化済みのconda/venvなら`python -m pip install --only-binary=:all: "sella>=2.6,<3"`で構いません。Python 3.12・Sella 2.6で検証しています。対応wheelが見つからない場合はPython 3.12の環境を使用してください。Sella 2.6自体は共通wheelを配布しています。依存する[JAXの公式導入案内](https://docs.jax.dev/en/latest/installation.html#cpu)ではWindows x86_64のCPU用wheelはexperimentalとされ、Visual Studio再頒布可能パッケージが必要になる場合があります。Windowsで導入できない場合は、WSL内でSella・計算エンジン・bridgeをそろえて実行してください。基本requirementsにはSellaを含めていないため、これまでのAFIR/NEBを使うだけなら追加不要です。振動解析だけなら既存のASEを使い、Sellaは不要です。bridgeを再起動して再接続すると、接続状態にSellaのバージョンが表示されます。
 
 1. 描画エリア付近の「現在の構造をTS最適化」を押します。NEB結果からは、表の任意のノードの「TS入力」を押すと、緩和済み経路を描画へ反映し、そのノードを選択した状態でTSの条件が開きます。別の候補はFRAMESで選び直せます。
 2. TS手法はSella PRFO（既定）またはRFO。一次鞍点（`order=1`）、Cartesian座標（`internal=False`）を使います。`初期信頼半径`はSellaの`delta0`であり、計算中に調整されるため固定の最大変位ではありません。通常の極小化にはFIRE、ASE L-BFGS、ASE BFGSを選べます。L-BFGSをTS探索として実行することはできません。

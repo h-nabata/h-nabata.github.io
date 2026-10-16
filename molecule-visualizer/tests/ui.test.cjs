@@ -17,7 +17,7 @@ function boot(afir=false,profile=false,modes=false){
  doc.createElementNS=()=>new El();
  const tables={'#atomTable tbody':new El(),'#bondTable tbody':new El()};
  doc.querySelector=q=>tables[q]||((q==='.mv-app'||q==='.mv-inspector')?app:q==='dialog[open]'?[...nodes.values()].find(x=>x.open):null);
- doc.querySelectorAll=q=>q==='[data-tab]'?[...nodes.values()].filter(x=>x.dataset.tab):[];
+ doc.querySelectorAll=q=>q==='[data-tab]'?[...nodes.values()].filter(x=>x.dataset.tab):q==='dialog'?[...nodes.values()].filter(x=>x.tagName==='DIALOG'):[];
  const timers=new Map();let seq=0;const win={document:doc,devicePixelRatio:1,events:{},addEventListener(t,f){(this.events[t]??=[]).push(f);}};
  const ctx={window:win,document:doc,navigator:{clipboard:{writeText:async()=>{}}},localStorage:{getItem(){return null;},setItem(){}},setTimeout(f){timers.set(++seq,f);return seq;},clearTimeout(i){timers.delete(i);},Blob,URL,console};
  vm.createContext(ctx);for(const f of ['model','bonding','geometry','io','molfile','periodic','formats','history','renderer3dmol','ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
@@ -365,6 +365,43 @@ test('live profile can stop following, restores input on edit, and never mismatc
  p.select(0);assert.equal(MV.App.renderer().state,s);assert.match(nodes.get('profileValue').textContent,/最新構造のみ/);
  p.select(1);MV.App.change('edit',v=>{v.atoms[0].x=3;});assert.equal(MV.App.renderer().state,MV.App.getState());assert.equal(p.following(),false);
  nodes.get('profileCancel').click();assert.equal(cancelled,1);p.finish();assert.equal(nodes.get('profileLiveControls').hidden,true);
+});
+test('live path selection keeps its bead number while energies and coordinates update, including completion',()=>{
+ const {MV,nodes}=boot(false,true),p=MV.EnergyProfile,s=MV.App.getState(),base=MV.Periodic.snapshot(s),saved=MV.IO.stateToProjectText(s);
+ const update=step=>p.set({title:'NEB '+step,kind:'path',focusIndex:2,energies:[0,1,2,1,0].map(e=>e+step),base:()=>base,positions:i=>s.atoms.map(a=>[a.x+i+step/10,a.y,a.z])},true);
+ const points=()=>nodes.get('energyProfile').children.filter(e=>e.attrs.role==='button');
+ p.begin(()=>{});update(0);assert.equal(nodes.get('profileRange').value,2);
+ points()[1].fire('focus');assert.equal(p.following(),true);update(1);
+ assert.equal(nodes.get('profileRange').value,1);assert.equal(MV.App.renderer().state.atoms[0].x,1.1);assert.match(nodes.get('profileValue').textContent,/E = 2.000000/);
+ assert.match(points()[3].attrs['aria-label'],/ΔE 1.000000/);
+ nodes.get('profileRange').value='3';nodes.get('profileRange').fire('input');assert.equal(p.following(),true);update(2);
+ assert.equal(nodes.get('profileRange').value,3);assert.equal(MV.App.renderer().state.atoms[0].x,3.2);
+ update(3);p.finish();assert.equal(nodes.get('profileRange').value,3);assert.equal(MV.App.renderer().state.atoms[0].x,3.3);
+ assert.equal(MV.IO.stateToProjectText(MV.App.getState()),saved);
+ p.reset();p.begin(()=>{});update(0);assert.equal(nodes.get('profileRange').value,2,'new jobs use their initial focus');
+ // Explicit pause remains effective even if a preview was already in flight.
+ nodes.get('profileFollow').checked=false;nodes.get('profileFollow').fire('change');update(1);
+ assert.equal(p.following(),false);assert.equal(MV.App.renderer().state,s);
+ nodes.get('profileFollow').checked=true;update(2);assert.equal(MV.App.renderer().state.atoms[0].x,2.2);
+});
+test('selecting an optimization history step still pauses tail-following',()=>{
+ const {MV,nodes}=boot(false,true),p=MV.EnergyProfile,s=MV.App.getState();p.begin(()=>{});
+ p.set({title:'history',kind:'afir',energies:[0,1],base:()=>MV.Periodic.snapshot(s),positions:i=>s.atoms.map(a=>[a.x+i,a.y,a.z])},true);
+ nodes.get('energyProfile').children.find(e=>e.attrs.role==='button').fire('click');assert.equal(p.following(),false);
+});
+test('dialogs dismiss only for a primary click begun and ended on the backdrop',()=>{
+ const {nodes}=boot();
+ for(const dialog of [...nodes.values()].filter(e=>e.tagName==='DIALOG')){
+  dialog.getBoundingClientRect=()=>({left:100,right:500,top:100,bottom:500});
+  const down=(x,y,extra={})=>dialog.fire('pointerdown',{clientX:x,clientY:y,button:0,...extra});
+  const click=(x,y)=>dialog.fire('click',{clientX:x,clientY:y});
+  dialog.showModal();down(120,120);click(120,120);assert.equal(dialog.open,true,'dialog padding is not backdrop');
+  down(120,120);click(10,10);assert.equal(dialog.open,true,'drag from inside');
+  down(10,10);click(120,120);assert.equal(dialog.open,true,'drag from outside');
+  down(10,10,{button:2});click(10,10);assert.equal(dialog.open,true,'secondary button');
+  down(10,10);dialog.fire('pointercancel');click(10,10);assert.equal(dialog.open,true,'cancelled gesture');
+  down(10,10);click(10,10);assert.equal(dialog.open,false,dialog.id);
+ }
 });
 test('trajectory extraction UI rejects invalid counts and preserves the editor and its save contents',()=>{
  const {MV,nodes}=boot(false,true),before=MV.IO.stateToProjectText(MV.App.getState());
