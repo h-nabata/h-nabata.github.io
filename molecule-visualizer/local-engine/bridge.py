@@ -744,6 +744,7 @@ class Jobs:
         else:
             result.update(converged=False, reason='cancelled' if job['status']=='cancelled' else 'failed',
                           maxTangentialStep=None, history=[], error=job.get('error'))
+        result['conditionId'] = hashlib.sha256(json.dumps({'data':data, 'config':self.config}, sort_keys=True).encode()).hexdigest()
         result.update(mode=data['mode'], symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
             engine=self.config['engine'], method=self.config['method'] if self.config['engine']=='tblite' else 'g-xTB',
             provenance=provenance(self.config), units={'length':'angstrom','energy':'eV','force':'eV/angstrom'})
@@ -755,6 +756,7 @@ class Jobs:
         data, frames = job['data'], job['checkpoints']
         last = frames[-1]
         return dict(mode=data['mode'], optimizer=data.get('optimizer','fire'), engine=self.config['engine'],
+            **({'atomIds':data['atomIds']} if 'atomIds' in data else {}),
             method=self.config['method'] if self.config['engine']=='tblite' else 'g-xTB',
             symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
             images=[last['positions']], energies=[last['energy']], forces=[last['force']],
