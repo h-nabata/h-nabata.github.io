@@ -2,7 +2,7 @@
 layout: default
 title: 分子構造エディタ | Molecule Studio
 ---
-<link rel="stylesheet" href="./molecule-visualizer_style.css?v=20">
+<link rel="stylesheet" href="./molecule-visualizer_style.css?v=21">
 <script defer src="./model.js?v=16"></script>
 <script defer src="./bonding.js?v=16"></script>
 <script defer src="./geometry.js?v=19"></script>
@@ -26,7 +26,8 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./afir-runner.js?v=18"></script>
 <script defer src="./afir-ui.js?v=22"></script>
 <script defer src="./measurement-ui.js?v=16"></script>
-<script defer src="./molecule-visualizer_main.js?v=18"></script>
+<script defer src="./panel-layout.js?v=1"></script>
+<script defer src="./molecule-visualizer_main.js?v=19"></script>
 
 <div class="mv-page-buffer" aria-hidden="true"></div>
 <main class="mv-app">
@@ -75,8 +76,9 @@ title: 分子構造エディタ | Molecule Studio
       <p class="mv-footnote">座標は Å。XYZの結合は原子間距離からの推定です。結合次数・配位の妥当性は確認してください。</p>
     </section>
     <aside class="mv-inspector" aria-label="編集パネル">
-      <section id="afirPanel" class="mv-afir-panel" aria-label="複数フラグメントAFIR" hidden>
-        <div class="mv-afir-heading"><div><p class="mv-eyebrow">REACTION EXPLORER</p><h2>AFIR / 原子団に人工力</h2></div><button class="mv-btn" id="afirClose" aria-label="AFIRパネルを閉じる">閉じる</button></div>
+      <section id="afirPanel" class="mv-afir-panel mv-scroll-panel" aria-label="複数フラグメントAFIR" hidden>
+        <div class="mv-scroll-panel-header"><div class="mv-afir-heading"><div><p class="mv-eyebrow">REACTION EXPLORER</p><h2>AFIR / 原子団に人工力</h2></div><button class="mv-btn" id="afirClose" aria-label="AFIRパネルを閉じる">閉じる</button></div><div class="mv-panel-size" role="group" aria-label="AFIRパネルの高さ"><span>高さ</span><button type="button" class="mv-btn" id="afirShorter" data-panel-size="-80" aria-label="AFIRパネルを低くする">低く</button><button type="button" class="mv-btn" id="afirTaller" data-panel-size="80" aria-label="AFIRパネルを高くする">高く</button><button type="button" class="mv-btn" id="afirResetHeight" data-panel-size="reset" aria-label="AFIRパネルの高さを戻す">戻す</button></div><p class="mv-panel-size-hint">右下をドラッグして高さを変更できます。内容は内側でスクロールします。</p></div>
+        <div class="mv-scroll-panel-body">
         <p class="mv-afir-intro">描画上で原子を選び、原子団を登録します。近づける・離すペアは複数指定できます。</p>
         <fieldset id="afirFragmentSettings"><legend>1. 原子団を選ぶ</legend>
           <p id="afirSelection" aria-live="polite">選択中: 0原子</p>
@@ -105,10 +107,11 @@ title: 分子構造エディタ | Molecule Studio
         <label class="mv-check"><input id="afirLive" type="checkbox">計算中のエネルギー・構造を表示（既定オフ）</label><p class="mv-afir-note">ライブ表示には bridge.py 1.2.0 が必要です。表示は約0.6秒ごとに更新し、計算終了後は全ステップを選べます。</p>
         <section id="afirResult" hidden><h3>探索結果</h3><p id="afirResultSummary"></p><button class="mv-btn" id="afirProfile">エネルギープロファイルと構造を見る</button><p class="mv-afir-note">緑: 物理エネルギー　茶: 人工項を加えたエネルギー。各系列の始点との差 (eV)。</p><div class="mv-row"><button class="mv-btn primary" id="afirApply">構造列を適用・再生</button><button class="mv-btn" id="afirXYZ">構造列を保存・抽出</button><button class="mv-btn" id="afirDownload">結果JSONを保存</button></div></section>
         <p class="mv-afir-note">得られるのは人工力下の探索軌跡です。TSや反応生成物の確定には、人工力を外した経路緩和・TS最適化・振動解析・接続確認が必要です。</p>
+        </div>
       </section>
       <div class="mv-tabs" role="tablist" aria-label="編集項目"><button role="tab" id="tab-atoms" aria-controls="pane-atoms" aria-selected="true" data-tab="atoms">原子</button><button role="tab" id="tab-bonds" aria-controls="pane-bonds" aria-selected="false" data-tab="bonds">結合</button><button role="tab" id="tab-geometry" aria-controls="pane-geometry" aria-selected="false" data-tab="geometry">測定・移動</button></div>
       <div id="pane-atoms" role="tabpanel" aria-labelledby="tab-atoms">
-        <div class="mv-panel mv-xyz-panel"><h2>全原子の座標・構造データ</h2><p class="mv-small">XYZ / 拡張XYZ / MOL V2000・V3000 / SDF / CIF / PDB / MOL2 / POSCAR / Gaussian・ORCAのCartesian座標入力 / プロジェクトJSONを読み込めます。複数構造はフレームとして表示します。MOL・SDFでは、結合・同位体・形式電荷・ラジカル・立体指定・原子マッピングを保持します。XYZでは1行に「元素 X Y Z」を記入し、構造へ適用してください。ヘッダーの有無は自動判別し、全角スペース・タブ・各種改行も読み取ります。単位格子は末尾に TV ax 0 0 / TV bx by 0 / TV cx cy cz の3行で指定できます（Å）。TVは原子数に含めません。「格子を下三角化」は原子も一緒に回転し、構造を保ちます。</p><div class="mv-row"><label for="dataText">座標・構造データ（Å）</label><label for="coordinateFormat">表示形式</label><select id="coordinateFormat"><option value="xyz">XYZ + TV</option><option value="mol3000">MOL V3000</option></select><label class="mv-check"><input id="xyzHeader" type="checkbox" checked>ヘッダー（原子数・コメント）を表示</label></div><div class="mv-row"><label for="inputFormat">読み込み形式</label><select id="inputFormat"><option value="auto">自動判別</option><option value="xyz">XYZ / extXYZ / TV</option><option value="mol">MOL V2000 / V3000</option><option value="sdf">SDF（複数構造）</option><option value="cif">CIF</option><option value="pdb">PDB</option><option value="mol2">MOL2</option><option value="poscar">POSCAR</option><option value="gaussian">Gaussian GJF / COM</option><option value="orca">ORCA INP</option><option value="json">プロジェクトJSON</option></select><button class="mv-btn" id="btnDataFile">ファイルを欄に読み込む</button><input id="dataFile" type="file" hidden></div><textarea id="dataText" rows="18" wrap="off" spellcheck="false" aria-describedby="xyzEditStatus"></textarea><details id="previousXYZDraftPanel" hidden><summary>生成前の未適用データを復元用に表示</summary><textarea id="previousXYZDraft" rows="6" readonly></textarea></details><p id="xyzEditStatus" class="mv-small" role="status" aria-live="polite"></p><div class="mv-row"><button class="mv-btn primary" id="dataApply">構造へ適用</button><button class="mv-btn" id="cellLowerTriangular">格子を下三角化</button><button class="mv-btn" id="dataReset">現在の構造を再表示</button></div></div>
+        <div id="coordinatePanel" class="mv-panel mv-xyz-panel mv-scroll-panel" role="region" aria-labelledby="coordinatePanelTitle"><div class="mv-scroll-panel-header"><h2 id="coordinatePanelTitle">全原子の座標・構造データ</h2><div class="mv-panel-size" role="group" aria-label="座標データパネルの高さ"><span>高さ</span><button type="button" class="mv-btn" id="coordinateShorter" data-panel-size="-80" aria-label="座標データパネルを低くする">低く</button><button type="button" class="mv-btn" id="coordinateTaller" data-panel-size="80" aria-label="座標データパネルを高くする">高く</button><button type="button" class="mv-btn" id="coordinateResetHeight" data-panel-size="reset" aria-label="座標データパネルの高さを戻す">戻す</button></div><p class="mv-panel-size-hint">右下をドラッグして高さを変更できます。内容は内側でスクロールします。</p></div><div class="mv-scroll-panel-body"><p class="mv-small">XYZ / 拡張XYZ / MOL V2000・V3000 / SDF / CIF / PDB / MOL2 / POSCAR / Gaussian・ORCAのCartesian座標入力 / プロジェクトJSONを読み込めます。複数構造はフレームとして表示します。MOL・SDFでは、結合・同位体・形式電荷・ラジカル・立体指定・原子マッピングを保持します。XYZでは1行に「元素 X Y Z」を記入し、構造へ適用してください。ヘッダーの有無は自動判別し、全角スペース・タブ・各種改行も読み取ります。単位格子は末尾に TV ax 0 0 / TV bx by 0 / TV cx cy cz の3行で指定できます（Å）。TVは原子数に含めません。「格子を下三角化」は原子も一緒に回転し、構造を保ちます。</p><div class="mv-row"><label for="dataText">座標・構造データ（Å）</label><label for="coordinateFormat">表示形式</label><select id="coordinateFormat"><option value="xyz">XYZ + TV</option><option value="mol3000">MOL V3000</option></select><label class="mv-check"><input id="xyzHeader" type="checkbox" checked>ヘッダー（原子数・コメント）を表示</label></div><div class="mv-row"><label for="inputFormat">読み込み形式</label><select id="inputFormat"><option value="auto">自動判別</option><option value="xyz">XYZ / extXYZ / TV</option><option value="mol">MOL V2000 / V3000</option><option value="sdf">SDF（複数構造）</option><option value="cif">CIF</option><option value="pdb">PDB</option><option value="mol2">MOL2</option><option value="poscar">POSCAR</option><option value="gaussian">Gaussian GJF / COM</option><option value="orca">ORCA INP</option><option value="json">プロジェクトJSON</option></select><button class="mv-btn" id="btnDataFile">ファイルを欄に読み込む</button><input id="dataFile" type="file" hidden></div><textarea id="dataText" rows="18" wrap="off" spellcheck="false" aria-describedby="xyzEditStatus"></textarea><details id="previousXYZDraftPanel" hidden><summary>生成前の未適用データを復元用に表示</summary><textarea id="previousXYZDraft" rows="6" readonly></textarea></details><p id="xyzEditStatus" class="mv-small" role="status" aria-live="polite"></p><div class="mv-row"><button class="mv-btn primary" id="dataApply">構造へ適用</button><button class="mv-btn" id="cellLowerTriangular">格子を下三角化</button><button class="mv-btn" id="dataReset">現在の構造を再表示</button></div></div></div>
         <details class="mv-panel"><summary>選択原子の形式電荷</summary><label>形式電荷<input id="atomCharge" type="number" step="1" min="-15" max="15"></label><button class="mv-btn" id="btnApplyCharge">電荷を適用</button></details>
 <div class="mv-panel">
         <h2>原子の追加 / 削除</h2>

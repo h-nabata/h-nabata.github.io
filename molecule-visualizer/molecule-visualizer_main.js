@@ -11,6 +11,7 @@
     global.MoleculeVisualizer.EngineUI?.init();
     global.MoleculeVisualizer.MeasurementUI?.init();
     global.MoleculeVisualizer.AFIRUI?.init();
+    global.MoleculeVisualizer.PanelLayout?.init();
   });
 })(window);
 
