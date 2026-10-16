@@ -8,6 +8,17 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:1280,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:8765/molecule-visualizer/');await page.waitForSelector('canvas');
   const spin=async(id,start,next)=>{const input=page.locator('#'+id);await input.fill(start);await input.press('ArrowUp');assert.equal(await input.inputValue(),next);await input.press('ArrowDown');assert.equal(await input.inputValue(),start);};
+  const saveXYZ=async(button,expected,indices)=>{
+    const pending=page.waitForEvent('download');await page.click(button);const file=await pending;
+    const text=fs.readFileSync(await file.path(),'utf8');assert.ok(!text.includes(token));
+    const lines=text.trimEnd().split('\n'),parsed=[];let row=0;
+    while(row<lines.length){const n=Number(lines[row++]),comment=lines[row++],atoms=[];for(let a=0;a<n;a++){const [symbol,...pos]=lines[row++].trim().split(/\s+/);atoms.push({symbol,pos:pos.map(Number)});}parsed.push({comment,atoms});}
+    if(indices)assert.equal(parsed.length,indices.length);
+    const ids=parsed.map(f=>Number(f.comment.match(/source_frame=(\d+)/)[1])-1);
+    if(indices)assert.deepEqual(ids,indices);assert.ok(ids.every((id,i)=>!i||id>ids[i-1]));
+    parsed.forEach((f,k)=>f.atoms.forEach((a,i)=>{assert.equal(a.symbol,expected.symbols[i]);a.pos.forEach((x,j)=>assert.ok(Math.abs(x-expected.images[ids[k]][i][j])<1e-10));}));
+    return {parsed,ids};
+  };
   const before=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms));
   const previewRequests=[],jobRequests=[];page.on('request',r=>{if(r.url().includes('?preview=1'))previewRequests.push(r.url());if(r.method()==='POST'&&r.url().endsWith('/api/jobs'))jobRequests.push(r.url());});
   assert.equal(await page.locator('#engineLive').isChecked(),false);assert.equal(await page.locator('#afirLive').isChecked(),false);
@@ -35,6 +46,20 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
     const saved=page.waitForEvent('download');await page.click('#engineDownload');const file=await saved;
     const report=JSON.parse(fs.readFileSync(await file.path(),'utf8'));assert.equal(report.input.maxSteps,Number(steps));assert.equal(report.input.mode,'optimize');assert.equal(report.result.converged,true);
   }
+  // A real optimization retains every evaluated geometry even with live display off.
+  await page.fill('#engineSteps','3');await page.fill('#engineFmax','0.00001');await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
+  const optDownload=page.waitForEvent('download');await page.click('#engineDownload');const optFile=await optDownload,opt=JSON.parse(fs.readFileSync(await optFile.path(),'utf8'));
+  assert.equal(opt.result.trajectory.images.length,4);assert.deepEqual(opt.result.trajectory.images[0],opt.input.images[0]);assert.deepEqual(opt.result.trajectory.images[3],opt.result.images[0]);
+  await page.click('#engineXYZ');assert.match(await page.locator('#trajectorySummary').textContent(),/4構造/);
+  const optExpected={symbols:opt.result.symbols,...opt.result.trajectory};await saveXYZ('#trajectorySaveAll',optExpected,[0,1,2,3]);
+  await page.fill('#trajectoryCount','3');await saveXYZ('#trajectorySaveSelected',optExpected,[0,2,3]);
+  await page.selectOption('#trajectoryMethod','distance');const picked=await saveXYZ('#trajectorySaveSelected',optExpected);assert.equal(picked.ids.length,3);assert.equal(picked.ids[0],0);assert.equal(picked.ids.at(-1),3);
+  await page.fill('#trajectoryCount','5');assert.equal(await page.locator('#trajectorySaveSelected').isDisabled(),true);await page.fill('#trajectoryCount','3');
+  await page.screenshot({path:'test-artifacts/trajectory-export.png'});
+  await page.click('#trajectoryClose');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
+  await page.click('#btnExternalEngine');await page.click('#engineProfile');assert.equal(await page.locator('#profileRange').getAttribute('max'),'3');
+  await page.locator('#profileRange').focus();await page.locator('#profileRange').press('End');assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.renderer().state.atoms.map(a=>[a.x,a.y,a.z])),opt.result.images[0]);
+  await page.click('#profileRestore');await page.click('#profileDetails');
   assert.equal(await page.locator('#engineMode optgroup').getAttribute('label'),'単一構造の最適化（AFIR法を含む）');
   const jobsBefore=jobRequests.length;await page.selectOption('#engineMode','afir');
   assert.equal(await page.locator('#engineDialog').isVisible(),false);assert.equal(await page.locator('#afirPanel').isVisible(),true);
@@ -62,6 +87,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
   const afirDownload=page.waitForEvent('download');await page.click('#afirDownload');const afirFile=await afirDownload;
   const afir=JSON.parse(fs.readFileSync(await afirFile.path(),'utf8'));assert.equal(afir.input.config.maxSteps,3);assert.equal(afir.result.images.length,4);assert.equal(afir.result.validation,'biased-trajectory-not-ts');assert.ok(!JSON.stringify(afir).includes(token));
+  await page.click('#afirXYZ');await saveXYZ('#trajectorySaveAll',afir.result,[0,1,2,3]);
+  await page.fill('#trajectoryCount','3');await page.selectOption('#trajectoryMethod','distance');const afirPicked=await saveXYZ('#trajectorySaveSelected',afir.result);
+  assert.equal(afirPicked.ids.length,3);assert.equal(afirPicked.ids[0],0);assert.equal(afirPicked.ids.at(-1),3);
+  for(const f of afirPicked.parsed)assert.match(f.comment,/bias_eV=.*biased_energy_eV=/);
+  await page.click('#trajectoryClose');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
   assert.equal(previewRequests.length,0,'live display must make no preview requests by default');
   await page.click('#afirProfile');
   const viewBox=await page.locator('#viewer').boundingBox(),plotBox=await page.locator('#profilePanel').boundingBox();
@@ -145,6 +175,9 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   const local=await browser.newPage({viewport:{width:390,height:844}});await local.goto('http://127.0.0.1:8766/');await local.waitForSelector('canvas');await local.click('#btnExternalEngine');assert.equal(await local.locator('#engineURL').inputValue(),'http://127.0.0.1:8766');
   await local.fill('#engineToken',token);await local.click('#engineConnect');await local.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
   const dimensions=await local.locator('#engineDialog').evaluate(e=>({client:e.clientWidth,scroll:e.scrollWidth}));assert.ok(dimensions.scroll<=dimensions.client+2,'dialog must fit mobile width');await local.screenshot({path:'test-artifacts/engine-mobile.png'});
+  await local.click('#engineRun');await local.waitForSelector('#engineResult:not([hidden])');await local.click('#engineXYZ');
+  const exportDimensions=await local.locator('#trajectoryDialog').evaluate(e=>({client:e.clientWidth,scroll:e.scrollWidth}));assert.ok(exportDimensions.scroll<=exportDimensions.client+2,'XYZ export dialog must fit mobile width');
+  assert.equal(await local.locator('#trajectoryCount').inputValue(),'1');await local.screenshot({path:'test-artifacts/trajectory-mobile.png'});
   // Tokens do not enter autosave.
   const storage=await page.evaluate(()=>JSON.stringify({...localStorage}));assert.ok(!storage.includes(token));assert.deepEqual(errors,[]);console.log('External engine browser integration passed');
  }finally{if(browser)await browser.close();engine.kill('SIGINT');await new Promise(resolve=>{if(engine.exitCode!==null)return resolve();engine.on('exit',resolve);setTimeout(()=>{engine.kill('SIGKILL');resolve();},5000).unref();});}

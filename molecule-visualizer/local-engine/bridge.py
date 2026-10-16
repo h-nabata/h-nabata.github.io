@@ -32,7 +32,7 @@ from ase.data import atomic_numbers, covalent_radii
 from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 
-VERSION = '1.2.0'
+VERSION = '1.3.0'
 MAX_BODY = 2 * 1024 * 1024
 MODES = ('evaluate', 'optimize', 'perpendicular', 'neb', 'cineb', 'afir')
 PATH_MODES = ('perpendicular', 'neb', 'cineb')
@@ -287,6 +287,7 @@ def relax(data, calculate, progress=lambda _: None):
     dt, alpha, positive = .05, .1, 0
     previous_climbing = None
     history, max_parallel_step = [], 0.0
+    trajectory = {'images': [], 'energies': []} if mode == 'optimize' else None
     evaluations = 0
     for step in range((0 if mode == 'evaluate' else max_steps) + 1):
         for i in range(len(images)):
@@ -308,15 +309,23 @@ def relax(data, calculate, progress=lambda _: None):
         summary = {'step': step, 'fmax': maximum, 'energies': energies.tolist(), 'climbingImage': climbing,
                    'evaluations': evaluations}
         history.append(summary)
-        # Coordinates leave the worker only when the user opted into live display.
-        progress({**summary, **({'preview': {'step': step, 'images': images.tolist(), 'energies': energies.tolist()}} if data.get('livePreview') else {})})
+        checkpoint = {}
+        if trajectory is not None:
+            positions = images[0].tolist()
+            trajectory['images'].append(positions)
+            trajectory['energies'].append(float(energies[0]))
+            checkpoint = {'checkpoint': {'positions': positions, 'energy': float(energies[0]),
+                'force': physical[0].tolist(), 'fmax': maximum}}
+        # Checkpoints stay in the local service; progress responses omit coordinates.
+        progress({**summary, **checkpoint, **({'preview': {'step': step, 'images': images.tolist(), 'energies': energies.tolist()}} if data.get('livePreview') else {})})
         if mode == 'evaluate' or converged or step == max_steps:
             return {'images': images.tolist(), 'energies': energies.tolist(), 'forces': physical.tolist(),
                     'effectiveFmax': maximum, 'imageFmax': [force_max(f) for f in effective],
                     'converged': converged, 'reason': 'evaluated' if mode == 'evaluate' else 'converged' if converged else 'step_limit',
                     'steps': step, 'climbingImage': climbing, 'mode': mode, 'evaluations': evaluations,
                     'maxTangentialStep': max_parallel_step if mode == 'perpendicular' else None,
-                    'history': history, 'units': {'length': 'angstrom', 'energy': 'eV', 'force': 'eV/angstrom'}}
+                    'history': history, **({'trajectory': trajectory} if trajectory is not None else {}),
+                    'units': {'length': 'angstrom', 'energy': 'eV', 'force': 'eV/angstrom'}}
         if climbing != previous_climbing:
             velocity[:] = 0
             dt, alpha, positive = .05, .1, 0
@@ -546,6 +555,24 @@ class Jobs:
                     job['status'] = job.get('terminalStatus', 'cancelled')
                     if job['data']['mode']=='afir' and job['checkpoints']:
                         job['result'] = self.partial_afir(job)
+                    elif job['data']['mode']=='optimize' and job['checkpoints']:
+                        job['result'] = self.partial_optimization(job)
+
+    def partial_optimization(self, job):
+        data, frames = job['data'], job['checkpoints']
+        last = frames[-1]
+        return dict(mode='optimize', engine=self.config['engine'],
+            method=self.config['method'] if self.config['engine']=='tblite' else 'g-xTB',
+            symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
+            images=[last['positions']], energies=[last['energy']], forces=[last['force']],
+            imageFmax=[last['fmax']], effectiveFmax=last['fmax'], steps=len(frames)-1, evaluations=len(frames),
+            converged=False, reason='cancelled' if job['status']=='cancelled' else 'failed', error=job.get('error'),
+            climbingImage=None, maxTangentialStep=None,
+            trajectory={'images':[p['positions'] for p in frames], 'energies':[p['energy'] for p in frames]},
+            history=[{'step':i, 'fmax':p['fmax'], 'energies':[p['energy']], 'climbingImage':None, 'evaluations':i+1} for i,p in enumerate(frames)],
+            provenance=provenance(self.config),
+            conditionId=hashlib.sha256(json.dumps({'data':data, 'config':self.config}, sort_keys=True).encode()).hexdigest(),
+            units={'length':'angstrom', 'energy':'eV', 'force':'eV/angstrom'})
 
     def partial_afir(self, job):
         data, frames = job['data'], job['checkpoints']
@@ -668,7 +695,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.response(200, {'version': VERSION, 'engine': config['engine'],
                     'method': config['method'] if config['engine'] == 'tblite' else 'g-xTB (--gxtb --grad)',
                     'periodic': config['engine'] == 'tblite', 'maxAtoms': 500, 'maxImages': 20,
-                    'modes': MODES, 'livePreview': 1, 'maxSteps': 10000, 'maxAFIRSteps': 10000, 'jobTimeout': config['jobTimeout'],
+                    'modes': MODES, 'livePreview': 1, 'optimizationTrajectory': 1, 'maxSteps': 10000, 'maxAFIRSteps': 10000, 'jobTimeout': config['jobTimeout'],
                     'engineVersion': importlib.metadata.version('tblite') if config['engine'] == 'tblite' else 'locally configured binary'})
             elif re.fullmatch(r'/api/jobs/[a-f0-9]{32}(?:\?preview=1&after=[0-9]{1,5})?', self.path):
                 try:

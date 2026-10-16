@@ -21,8 +21,8 @@ function boot(afir=false,profile=false){
  const timers=new Map();let seq=0;const win={document:doc,devicePixelRatio:1,events:{},addEventListener(t,f){(this.events[t]??=[]).push(f);}};
  const ctx={window:win,document:doc,navigator:{clipboard:{writeText:async()=>{}}},localStorage:{getItem(){return null;},setItem(){}},setTimeout(f){timers.set(++seq,f);return seq;},clearTimeout(i){timers.delete(i);},Blob,URL,console};
  vm.createContext(ctx);for(const f of ['model','bonding','geometry','io','molfile','periodic','formats','history','renderer3dmol','ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
- if(profile){ctx.setInterval=ctx.setTimeout;ctx.clearInterval=ctx.clearTimeout;for(const f of ['studio','energy-profile'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);}
- if(afir)for(const f of ['afir','afir-ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);win.MoleculeVisualizer.App.init();if(profile){win.MoleculeVisualizer.Studio.init();win.MoleculeVisualizer.EnergyProfile.init();}if(afir)win.MoleculeVisualizer.AFIRUI.init();return {MV:win.MoleculeVisualizer,nodes,doc,win,timers,canvas:nodes.get('viewer').children[0]};
+ if(profile){ctx.setInterval=ctx.setTimeout;ctx.clearInterval=ctx.clearTimeout;for(const f of ['studio','trajectory','trajectory-ui','energy-profile'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);}
+ if(afir)for(const f of ['afir','afir-ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);win.MoleculeVisualizer.App.init();if(profile){win.MoleculeVisualizer.Studio.init();win.MoleculeVisualizer.EnergyProfile.init();win.MoleculeVisualizer.TrajectoryUI.init();}if(afir)win.MoleculeVisualizer.AFIRUI.init();return {MV:win.MoleculeVisualizer,nodes,doc,win,timers,canvas:nodes.get('viewer').children[0]};
 }
 test('app loads, atom edit/undo, invalid import is non-destructive, export uses latest state',()=>{const {MV,nodes}=boot(),app=MV.App;assert.equal(app.getState().atoms.length,3);assert.equal(nodes.get('statusBadge').classList!==null,true);
  const s=app.getState();s.selectedAtomIds.add(s.atoms[0].id);app.setState(s,true);nodes.get('dataText').value='O 2.5 0 0\nH .9572 0 0\nH -.239987 .926627 0';nodes.get('dataText').fire('input');nodes.get('dataApply').click();assert.equal(app.getState().atoms[0].x,2.5);nodes.get('btnUndo').click();assert.equal(app.getState().atoms[0].x,0);
@@ -337,4 +337,17 @@ test('live profile can stop following, restores input on edit, and never mismatc
  p.select(0);assert.equal(MV.App.renderer().state,s);assert.match(nodes.get('profileValue').textContent,/最新構造のみ/);
  p.select(1);MV.App.change('edit',v=>{v.atoms[0].x=3;});assert.equal(MV.App.renderer().state,MV.App.getState());assert.equal(p.following(),false);
  nodes.get('profileCancel').click();assert.equal(cancelled,1);p.finish();assert.equal(nodes.get('profileLiveControls').hidden,true);
+});
+test('trajectory extraction UI rejects invalid counts and preserves the editor and its save contents',()=>{
+ const {MV,nodes}=boot(false,true),before=MV.IO.stateToProjectText(MV.App.getState());
+ MV.TrajectoryUI.open({title:'test',kind:'optimize',symbols:['H'],images:[0,.1,.2,.3,1,2,3,4,6,8,10].map(x=>[[x,0,0]])});
+ assert.equal(nodes.get('trajectoryDialog').open,true);
+ nodes.get('trajectoryCount').value='6';nodes.get('trajectoryCount').fire('input');
+ assert.match(nodes.get('trajectorySelection').textContent,/1, 3, 5, 7, 9, 11/);
+ nodes.get('trajectoryMethod').value='distance';nodes.get('trajectoryMethod').fire('change');
+ assert.match(nodes.get('trajectorySelection').textContent,/1, 6, 8, 9, 10, 11/);
+ for(const value of ['','1','12','2.5']){nodes.get('trajectoryCount').value=value;nodes.get('trajectoryCount').fire('input');assert.equal(nodes.get('trajectorySaveSelected').disabled,true);}
+ assert.equal(MV.IO.stateToProjectText(MV.App.getState()),before);
+ MV.TrajectoryUI.open({title:'single',kind:'optimize',symbols:['H'],images:[[[0,0,0]]]});
+ assert.equal(nodes.get('trajectoryCount').value,1);assert.equal(nodes.get('trajectorySaveSelected').disabled,false);
 });

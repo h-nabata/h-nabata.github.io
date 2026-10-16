@@ -3,6 +3,7 @@
   'use strict';
   const MV=global.MoleculeVisualizer,$=id=>document.getElementById(id),app=()=>MV.App,ns='http://www.w3.org/2000/svg';
   let data=null,index=0,active=false,bound=null,marker=null,range=null,live=null,details=null,visible=true;
+  const isStep=s=>['afir','optimize'].includes(s.kind);
   function element(tag,attrs,text){const e=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));if(text)e.textContent=text;return e;}
   function restore(draw=true){
     if(!active)return;active=false;app().renderer().previewOnly=false;$('profilePreview').hidden=true;
@@ -12,7 +13,7 @@
     if(!data||!Number.isInteger(i)||i<0||i>=data.energies.length)return;
     index=i;$('profileRange').value=i;
     const energy=data.energies[i],bias=data.biasEnergies?.[i],relative=energy-data.energies[0];
-    $('profileValue').textContent=(data.kind==='afir'?'ステップ '+i:'構造 '+(i+1))+' / '+(data.kind==='afir'?data.energies.length-1:data.energies.length)+' · E = '+energy.toFixed(6)+' eV · ΔE = '+relative.toFixed(6)+' eV'+(bias==null?'':' · 人工項 = '+bias.toFixed(6)+' eV · 合計 = '+(energy+bias).toFixed(6)+' eV');
+    $('profileValue').textContent=(isStep(data)?'ステップ '+i:'構造 '+(i+1))+' / '+(isStep(data)?data.energies.length-1:data.energies.length)+' · E = '+energy.toFixed(6)+' eV · ΔE = '+relative.toFixed(6)+' eV'+(bias==null?'':' · 人工項 = '+bias.toFixed(6)+' eV · 合計 = '+(energy+bias).toFixed(6)+' eV');
     const x=40+500*i/Math.max(1,data.energies.length-1);
     marker?.setAttribute('x1',x);marker?.setAttribute('x2',x);
     if(!preview)return;
@@ -26,7 +27,7 @@
     MV.Bonding.refreshInferredBonds(state);
     state.viewSettings={...app().getState().viewSettings};state.selectedAtomIds.clear();state.selectedBondIds.clear();
     active=true;app().renderer().previewOnly=true;app().renderer().renderState(state,true);
-    $('profilePreview').hidden=false;$('profilePreview').textContent='計算結果のプレビュー · '+(data.kind==='afir'?'ステップ '+i:'構造 '+(i+1))+'（入力座標は保持）';
+    $('profilePreview').hidden=false;$('profilePreview').textContent='計算結果のプレビュー · '+(isStep(data)?'ステップ '+i:'構造 '+(i+1))+'（入力座標は保持）';
   }
   // Preserve extrema in each bucket; limit SVG size even for 10,001 frames.
   function sample(values){
@@ -48,14 +49,15 @@
       svg.append(element('polyline',{points:points.map(p=>p.join(',')).join(' '),fill:'none',stroke:k?'#b45420':'#087e85','stroke-width':2}));
       // Every small-series point is focusable. The range always covers every frame.
       if(values.length<=100)points.forEach(([x,y],p)=>{
-        const i=ids[p],dot=element('circle',{cx:x,cy:y,r:4,fill:k?'#b45420':'#087e85',tabindex:k?-1:0,role:'button','aria-label':(next.kind==='afir'?'ステップ '+i:'構造 '+(i+1))+': ΔE '+values[i].toFixed(6)+' eV'});
+        const i=ids[p],dot=element('circle',{cx:x,cy:y,r:4,fill:k?'#b45420':'#087e85',tabindex:k?-1:0,role:'button','aria-label':(isStep(next)?'ステップ '+i:'構造 '+(i+1))+': ΔE '+values[i].toFixed(6)+' eV'});
         const choose=()=>{pauseFollow();select(i);};dot.addEventListener('focus',choose);dot.addEventListener('click',choose);
         dot.addEventListener('keydown',e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();choose();}});svg.append(dot);
       });
     });
     marker=element('line',{y1:36,y2:150,stroke:'#55646d','stroke-dasharray':'3 3'});svg.append(marker);
-    svg.append(element('text',{x:380,y:175,'font-size':12},next.kind==='afir'?'最適化ステップ →':'経路の構造番号 →'));
-    $('profileTitle').textContent=next.title;$('profileLegend').textContent=next.biasEnergies?'緑：物理エネルギー　茶：物理エネルギー＋人工項。横軸は探索ステップで、反応座標やTS検証結果ではありません。':'緑：物理エネルギー。横軸は構造番号です（単一構造の計算では1点）。';
+    svg.append(element('text',{x:380,y:175,'font-size':12},isStep(next)?'最適化ステップ →':'経路の構造番号 →'));
+    $('profileTitle').textContent=next.title;$('profileLegend').textContent=next.biasEnergies?'緑：物理エネルギー　茶：物理エネルギー＋人工項。横軸は探索ステップで、反応座標やTS検証結果ではありません。':(isStep(next)?'緑：物理エネルギー。横軸は最適化ステップです。':'緑：物理エネルギー。横軸は構造番号です（単一構造の評価では1点）。');
+    $('profileXYZ').disabled=typeof next.exportXYZ!=='function';
     range=$('profileRange');range.max=next.energies.length-1;range.disabled=next.energies.length<2;
     follow=follow&&visible;panel(visible);select(follow?(next.focusIndex??next.energies.length-1):Math.min(index,next.energies.length-1),follow);
   }
@@ -69,11 +71,11 @@
   function hide(){visible=false;pauseFollow();restore();panel(false);}
   function begin(cancel,showDetails){
     restore();live=cancel;details=showDetails;panel(visible);$('profileTitle').textContent='計算中 · 最初の評価を待っています…';
-    $('energyProfile').replaceChildren();$('profileValue').textContent='';$('profileLegend').textContent='';data=null;bound=null;
+    $('energyProfile').replaceChildren();$('profileValue').textContent='';$('profileLegend').textContent='';data=null;bound=null;$('profileXYZ').disabled=true;
     $('profileLiveControls').hidden=false;$('profileFollow').checked=true;$('profileRange').disabled=true;
   }
   function finish(){live=null;$('profileLiveControls').hidden=true;if($('profileTitle').textContent.includes('計算中'))$('profileTitle').textContent='計算を終了 · 途中表示';panel(!$('profilePanel').hidden&&!!data);}
-  function reset(){restore();finish();data=null;bound=null;panel(false);}
+  function reset(){restore();finish();data=null;bound=null;$('profileXYZ').disabled=true;panel(false);}
   function sync(){if(bound&&app().getState().metadata.trajectory===bound)select(app().getState().metadata.frameIndex||0,false);}
   function reveal(){visible=true;panel(true);$('viewer').scrollIntoView({block:'start',behavior:'smooth'});}
   function init(){
@@ -83,6 +85,7 @@
     $('profileHide').addEventListener('click',hide);
     $('profileFollow').addEventListener('change',()=>{if(!$('profileFollow').checked)restore();});
     $('profileCancel').addEventListener('click',()=>live?.());
+    $('profileXYZ').addEventListener('click',()=>data?.exportXYZ?.());
     $('profileDetails').addEventListener('click',()=>details?.());
     const canvas=app().renderer().canvas;
     for(const type of ['keydown','dblclick'])canvas.addEventListener(type,e=>{if(active){e.preventDefault();e.stopImmediatePropagation();}},true);
