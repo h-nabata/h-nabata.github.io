@@ -968,7 +968,7 @@
         syncXYZEditor();
       }catch(error){byId('xyzHeader').checked=!byId('xyzHeader').checked;byId('xyzEditStatus').textContent='入力を修正してからヘッダーを切り替えてください。'+error.message;}
     });
-    bind('dataReset' ,'click',()=>{if(renderer.previewOnly){MV.VibrationUI?.restore();MV.EnergyProfile?.restore();}else xyzDirty=false;syncXYZEditor();});
+    bind('dataReset' ,'click',()=>{if(renderer.previewOnly){MV.VibrationUI?.restore();byId('profileRestore').click();}else xyzDirty=false;syncXYZEditor();});
     bind('cellLowerTriangular','click',()=>{try{if(xyzDirty)applyXYZEditor();MV.App.change('lower triangular cell',s=>{MV.Periodic.lowerTriangular(s);Bonding.refreshInferredBonds(s);},true);setStatus('原子と格子を一緒に回転し、TVを下三角化しました。');}catch(error){report(error);}});
     bind('dataApply','click',()=>{try{applyXYZEditor();}catch(error){byId('xyzEditStatus').textContent=error.message;report(error);}});
     bind('btnDataDock','click',()=>{byId('tab-atoms').click();byId('dataText').focus();byId('dataText').scrollIntoView?.({block:'center',behavior:'smooth'});});

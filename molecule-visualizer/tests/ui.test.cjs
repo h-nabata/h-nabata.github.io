@@ -331,7 +331,8 @@ test('coordinate panel follows preview frames and preserves a draft, format and 
  assert.equal(MV.IO.stateToProjectText(app.getState()),before);
  profile.restore();assert.equal(box.readOnly,false);assert.equal(nodes.get('dataApply').disabled,false);
  assert.equal(box.value,draft);assert.equal(nodes.get('coordinateFormat').value,'xyz');assert.equal(nodes.get('xyzHeader').checked,true);assert.equal(nodes.get('xyzHeader').disabled,false);
- nodes.get('dataReset').click();profile.select(1);nodes.get('dataReset').click();
+ nodes.get('dataReset').click();profile.select(1);nodes.get('profileFollow').checked=true;nodes.get('dataReset').click();
+ assert.equal(nodes.get('profileFollow').checked,false);
  assert.equal(box.readOnly,false);assert.equal(MV.IO.parseXYZToState(box.value).atoms[0].x,0);
  assert.equal(MV.IO.stateToProjectText(app.getState()),before);
 });
