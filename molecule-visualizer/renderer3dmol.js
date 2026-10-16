@@ -133,16 +133,10 @@
   };
   Renderer3DMol.prototype.rotate=function(p){return applyQuaternion(this.orientation,p);};
   Renderer3DMol.prototype.rotateTrackball=function(x0,y0,x1,y1){
-    // Integrate pointer displacement, not the endpoints on a bounded sphere.
-    // Radial drags continue to tumble even outside the virtual trackball.
-    const rect=this.canvas.getBoundingClientRect(),radius=Math.max(1,Math.min(rect.width,rect.height)*.45);
-    const ax=x0-rect.width/2-this.panX,ay=y0-rect.height/2-this.panY,bx=x1-rect.width/2-this.panX,by=y1-rect.height/2-this.panY;
-    const da=Math.hypot(ax,ay),db=Math.hypot(bx,by),dot=ax*bx+ay*by;
-    const blend=dot<0?0:Math.min(1,Math.min(da,db)/radius)**2;
-    const mid=Math.hypot(ax+bx,ay+by),nx=mid?(ax+bx)/mid:0,ny=mid?(ay+by)/mid:0;
-    const dx=(1-blend)*(x1-x0)+blend*(db-da)*nx,dy=(1-blend)*(y1-y0)+blend*(db-da)*ny;
-    const roll=blend*Math.atan2(ay*bx-ax*by,dot);
-    const v=[dy*.008,dx*.008,roll],angle=Math.hypot(...v);if(angle<1e-14)return;
+    // Use a screen-space axis perpendicular to the drag, independent of cursor
+    // position, pan and zoom. Pre-multiplication keeps it in the camera frame:
+    // no world-up constraint, poles or automatic edge roll (Shift is explicit).
+    const v=[(y1-y0)*.008,(x1-x0)*.008,0],angle=Math.hypot(...v);if(angle<1e-14)return;
     const k=Math.sin(angle/2)/angle;
     let q=multiplyQuaternion([Math.cos(angle/2),v[0]*k,v[1]*k,v[2]*k],this.orientation);
     const norm=Math.hypot(...q);this.orientation=q.map(v=>v/norm);

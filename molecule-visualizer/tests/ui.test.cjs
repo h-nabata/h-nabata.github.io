@@ -67,10 +67,10 @@ test('coordinate editor accepts V3000, applies bonds and attributes, switches fo
  nodes.get('coordinateFormat').value='xyz';nodes.get('coordinateFormat').fire('change');assert.doesNotMatch(box.value,/V3000/);nodes.get('coordinateFormat').value='mol3000';nodes.get('coordinateFormat').fire('change');assert.match(box.value,/MASS=13/);
  const before=app.getState();box.value=box.value.replace('END CTAB','END WRONG');box.fire('input');nodes.get('dataApply').click();assert.equal(app.getState(),before);assert.match(box.value,/WRONG/);
 });
-test('trackball reaches roll and inverted orientations without changing coordinates; inverse stays stable',()=>{
+test('free rotation reaches roll and inverted orientations without changing coordinates; inverse stays stable',()=>{
  const {MV,canvas,nodes}=boot(),r=MV.App.renderer(),before=JSON.stringify(MV.App.getState().atoms);
- const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-9,`${a} != ${b}`),drag=(x,y,u,v)=>{canvas.fire('pointerdown',{pointerId:21,button:0,clientX:x,clientY:y});canvas.fire('pointermove',{pointerId:21,clientX:u,clientY:v});canvas.fire('pointerup',{pointerId:21,clientX:u,clientY:v});};
- nodes.get('btnViewXY').click();drag(650,250,400,0);let p=r.rotate({x:1,y:0,z:0});near(p.x,0);near(p.y,1);near(p.z,0);p=r.rotate({x:0,y:0,z:1});near(p.z,1); // 90-degree roll: unreachable in the old two-angle camera.
+ const near=(a,b)=>assert.ok(Math.abs(a-b)<1e-9,`${a} != ${b}`),drag=(x,y,u,v,shiftKey=false)=>{canvas.fire('pointerdown',{pointerId:21,button:0,shiftKey,clientX:x,clientY:y});canvas.fire('pointermove',{pointerId:21,clientX:u,clientY:v});canvas.fire('pointerup',{pointerId:21,clientX:u,clientY:v});};
+ nodes.get('btnViewXY').click();drag(400,250,400+Math.PI/(2*.008),250,true);let p=r.rotate({x:1,y:0,z:0});near(p.x,0);near(p.y,1);near(p.z,0);p=r.rotate({x:0,y:0,z:1});near(p.z,1); // Explicit 90-degree roll, without changing the viewing direction.
  nodes.get('btnViewXY').click();drag(400,250,400+Math.PI/.008,250);p=r.rotate({x:0,y:0,z:1});near(p.z,-1); // Complete inversion, crossing the old poles.
  drag(400,250,400,100);assert.ok(Math.abs(r.rotate({x:0,y:0,z:1}).y)>.1);
  for(let i=0;i<5000;i++)r.rotateTrackball(400,250,400+80*Math.sin(i),250+70*Math.cos(i));
@@ -78,7 +78,34 @@ test('trackball reaches roll and inverted orientations without changing coordina
  const delta=r.screenDeltaToWorld(24,-16,false),screen=r.rotate(delta);near(screen.x,24/r.currentScale);near(screen.y,16/r.currentScale);near(screen.z,0);
  const basis=[{x:1,y:0,z:0},{x:0,y:1,z:0},{x:0,y:0,z:1}].map(v=>r.rotate(v));for(let i=0;i<3;i++)for(let j=0;j<3;j++)near(basis[i].x*basis[j].x+basis[i].y*basis[j].y+basis[i].z*basis[j].z,i===j?1:0);
  assert.equal(JSON.stringify(MV.App.getState().atoms),before);nodes.get('btnViewXY').click();near(r.rotate({x:1,y:2,z:3}).y,2);
- r.rotateTrackball(175,250,625,250);near(Math.hypot(...r.orientation),1); // Single-event antipodal drag.
+ r.rotateTrackball(175,250,625,250);near(Math.hypot(...r.orientation),1); // Single-event drag across the canvas.
+});
+
+test('equal drags give equal rotations at the center and edges, after pan/zoom, with any event spacing',()=>{
+ const {MV,canvas}=boot(),r=MV.App.renderer(),s=MV.App.getState(),before=JSON.stringify(s.atoms);let expected;
+ for(const [x,y,panX,panY,zoom,projection] of [[400,250,0,0,1,'orthographic'],[15,15,0,0,1,'orthographic'],[700,440,180,-90,3,'perspective']]){
+  for(const steps of [1,2,12,120]){
+   r.setViewAngles(-.45,.65);r.panX=panX;r.panY=panY;r.zoom=zoom;s.viewSettings.projection=projection;r.draw();
+   canvas.fire('pointerdown',{pointerId:27,button:0,clientX:x,clientY:y});
+   for(let i=1;i<=steps;i++)canvas.fire('pointermove',{pointerId:27,clientX:x+120*i/steps,clientY:y+48*i/steps});
+   canvas.fire('pointerup',{pointerId:27});
+   if(!expected)expected=[...r.orientation];r.orientation.forEach((v,i)=>assert.ok(Math.abs(v-expected[i])<1e-9,'cursor position and pointer event frequency must not change a straight drag'));
+  }
+ }
+ assert.equal(JSON.stringify(s.atoms),before);
+});
+
+test('rotation stays screen-relative after inversion and roll; reversing a curved drag restores the view',()=>{
+ const {MV,canvas}=boot(),r=MV.App.renderer();r.setViewAngles(0,Math.PI);r.rollCamera(.8);
+ const before=[...r.orientation],v=r.rotate({x:.7,y:-1.2,z:2.3}),a=.64;
+ r.rotateTrackball(10,10,90,10);const rotated=r.rotate({x:.7,y:-1.2,z:2.3});
+ assert.ok(Math.abs(rotated.x-(Math.cos(a)*v.x+Math.sin(a)*v.z))<1e-9);assert.ok(Math.abs(rotated.y-v.y)<1e-9);
+ r.rotateTrackball(90,10,10,10);r.orientation.forEach((v,i)=>assert.ok(Math.abs(v-before[i])<1e-9));
+ const points=[[30,30],[160,55],[230,240],[480,130],[650,460],[950,310]],path=[...points,...points.slice(0,-1).reverse()];
+ canvas.fire('pointerdown',{pointerId:28,button:0,clientX:points[0][0],clientY:points[0][1]});
+ for(const [clientX,clientY] of path.slice(1))canvas.fire('pointermove',{pointerId:28,clientX,clientY});
+ canvas.fire('pointercancel',{pointerId:28});r.orientation.forEach((v,i)=>assert.ok(Math.abs(v-before[i])<1e-9));
+ canvas.fire('pointermove',{pointerId:28,clientX:600,clientY:200});r.orientation.forEach((v,i)=>assert.ok(Math.abs(v-before[i])<1e-9));
 });
 
 test('one held drag keeps turning past 1080 degrees horizontally, vertically and diagonally',()=>{
