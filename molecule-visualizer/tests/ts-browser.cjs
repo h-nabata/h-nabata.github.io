@@ -21,6 +21,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   const report=async()=>{const pending=page.waitForEvent('download');await page.click('#engineDownload');const file=await pending;return JSON.parse(fs.readFileSync(await file.path(),'utf8'));};
   await ammonia();const original=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms));
   await page.click('#btnTS');assert.equal(await page.locator('#engineMode').inputValue(),'ts');assert.equal(await page.locator('#engineScope').inputValue(),'current');
+  assert.equal(await page.locator('#engineFmax').inputValue(),'0.05');assert.equal(await page.locator('#engineVibrationDelta').inputValue(),'0.001');
   await page.fill('#engineSteps','60');await page.fill('#engineFmax','0.00001');await page.check('#engineVibrationCheck');await page.selectOption('#engineVibrationNfree','4');await page.fill('#engineVibrationThreshold','50');await page.fill('#engineTrust','0.03');await page.fill('#engineVibrationDelta','0.004'); // intentionally no blur
   await page.click('#engineRun');await waitDone();const ts=await report();
   assert.equal(requests.at(-1).mode,'ts');assert.equal(requests.at(-1).trustRadius,.03);assert.deepEqual(requests.at(-1).vibrations,{delta:.004,nfree:4,imaginaryThreshold:50});
@@ -33,6 +34,9 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   const staticPositions=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.renderer().state.atoms));await page.click('#vibrationPlay');
   await page.waitForFunction(before=>JSON.stringify(MoleculeVisualizer.App.renderer().state.atoms)!==before,staticPositions);
   assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),original);
+
+  assert.equal(await page.evaluate(()=>{const M=MoleculeVisualizer,a=M.IO.parseAuto(document.getElementById('dataText').value,'auto').atoms,b=M.App.renderer().state.atoms;return a.every((p,i)=>['x','y','z'].every(k=>Math.abs(p[k]-b[i][k])<1e-9));}),true,'vibration animation coordinates follow the rendered displacement');
+  assert.equal(await page.locator('#dataText').evaluate(e=>e.readOnly),true);
   await page.screenshot({path:'test-artifacts/ts-vibration-modes.png'});
   const csvPending=page.waitForEvent('download');await page.click('#vibrationCSV');const csv=await csvPending,csvText=fs.readFileSync(await csv.path(),'utf8');assert.equal(csvText.trim().split('\n').length,13);assert.match(csvText,/1,[\d.]+,true,/);
   await page.fill('#vibrationAmplitude','0.03');await page.click('#vibrationPlus');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.renderer().previewOnly),false);assert.notEqual(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),original);

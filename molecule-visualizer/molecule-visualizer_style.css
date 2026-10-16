@@ -113,6 +113,11 @@
 @media(max-width:800px){.mv-app .mv-scroll-panel{height:60vh;scroll-padding-top:170px}.mv-app .mv-scroll-panel-header,.mv-app .mv-scroll-panel-body{padding:12px}.mv-app .mv-panel-size .mv-btn{min-height:36px}}
 
 /* Mode tables stay beside the viewer without growing the whole page. */
+.mv-app .mv-help{margin:8px 0;font-size:12px;color:var(--muted)}
+.mv-app .mv-help>summary{font-size:12px;font-weight:500;cursor:pointer}
+.mv-app .mv-help[open]>p{margin-top:8px}
+.mv-app .mv-calculation-controls{border-top:0;border-bottom:1px solid var(--border)}
+.mv-app #dataText[readonly]{background:#f1f8f8;border-color:#7db7bb}
 .mv-vibration-scroll { max-height:240px; min-height:100px; overflow:auto; resize:vertical; }
 .mv-vibration-scroll table { width:100%; border-collapse:collapse; }
 .mv-vibration-scroll th { position:sticky; top:0; background:#f0f5f7; z-index:1; }

@@ -3,6 +3,8 @@
   'use strict';
   const MV=global.MoleculeVisualizer,$=id=>document.getElementById(id),app=()=>MV.App;
   let connection=null,job=null,result=null;
+  let settingsMode=null;
+  const modeSettings=new Map(),relaxFields=['engineSteps','engineFmax','engineMove','engineSpring','engineClimb'];
   const fingerprint=s=>JSON.stringify([s.atoms,s.bonds,s.metadata]);
   const dirty=()=>/未適用|編集中/.test($('xyzEditStatus').textContent);
   const message=text=>{$('engineMessage').textContent=text;};
@@ -22,11 +24,16 @@
   function busy(value){$('engineSettings').disabled=value;$('engineConnection').disabled=value;$('engineRun').disabled=value||!connection;$('engineCancel').disabled=!value;$('engineClose').disabled=false;$('engineLive').disabled=value;$('enginePause').disabled=!value||!connection?.info.pathCheckpoint;}
   function settings(){
     const mode=$('engineMode').value,path=['perpendicular','neb','cineb'].includes(mode),single=['optimize','ts','vibrations'].includes(mode);
+    if(mode!==settingsMode){
+      if(settingsMode)modeSettings.set(settingsMode,relaxFields.map(id=>$(id).value));
+      const values=modeSettings.get(mode)||(mode==='cineb'?['100','0.05','0.03','1','5']:['150','0.05','0.04','1','5']);
+      relaxFields.forEach((id,i)=>{$(id).value=values[i];});settingsMode=mode;
+    }
     if(path)$('engineScope').value='all';if(single)$('engineScope').value='current';$('engineScope').disabled=path||single;
     $('engineRelaxSettings').hidden=['evaluate','vibrations'].includes(mode);$('engineSpringLabel').hidden=!['neb','cineb'].includes(mode);$('engineClimbLabel').hidden=mode!=='cineb';
     $('engineOptimizerLabel').hidden=mode!=='optimize';$('engineTSMethodLabel').hidden=$('engineTrustLabel').hidden=mode!=='ts';$('engineMoveLabel').hidden=mode==='ts';
     $('engineVibrationOptions').hidden=!single;$('engineVibrationCheckLabel').hidden=mode==='vibrations';$('enginePause').hidden=!['neb','cineb'].includes(mode);
-    $('engineModeHelp').textContent={evaluate:'座標は変更せず、指定した構造のエネルギーと力を計算します。',optimize:'現在の1構造を物理的な力のみで極小化します。人工力を加える場合は「AFIR法の設定を開く」を選んでください。',ts:'現在の構造をSellaで一次鞍点へ最適化します。NEB結果の表で任意のノードをTS入力にできます。AFIR人工力・NEBばねは加えません。Sellaの導入とbridge.py 1.4.0が必要です。',vibrations:'現在の構造の力を有限差分してASEで振動解析します。座標の最適化は行いません。未収束構造にも実行できます。',perpendicular:'全原子の3N次元接線に直交する力・座標更新だけを使います。端点固定、接線方向のばね・再配置なし。',neb:'NEBの途中で「一時停止してノード追加」を使えます。全ノードの評価が完了した直近の経路を保持し、区間を指定して補間・再開できます。端点固定。',cineb:'CI開始までは通常NEBで経路を緩和し、指定ステップ以降は最高エネルギーの内部構造を登らせます。一時停止してノードを追加できます。複数の極大候補は結果表から個別にTS最適化できます。端点固定。'}[mode];
+    $('engineModeHelp').textContent={evaluate:'指定構造のエネルギーと力を計算します。',optimize:'現在の構造を極小化します。人工力は「AFIR法の設定を開く」で指定してください。',ts:'Sellaで一次鞍点を探索します。経路の結果表からTS候補を選べます。人工力・ばねは加えません。',vibrations:'現在の構造でASEの有限差分振動解析を行います。未収束構造も解析できます。',perpendicular:'端点を固定し、経路の接線に直交する力で緩和します。',neb:'端点を固定して経路を緩和します。一時停止してノードを追加できます。',cineb:'端点固定。CI開始後は最高エネルギーの内部ノードを登らせます。一時停止してノードを追加できます。'}[mode];
   }
   function chooseMode(){
     if($('engineMode').value!=='afir'){settings();return;}
@@ -42,7 +49,7 @@
     if(dirty())throw Error('座標編集欄の未適用データを先に適用するか、現在の構造を再表示してください。');
     const state=app().getState(),all=frames(state,$('engineScope').value),mode=$('engineMode').value;
     const symbols=all[0].atoms.map(a=>a.element),cell=all[0].metadata.cell||null;
-    if(!symbols.length||symbols.length>500||all.length>(connection.info.maxImages||20))throw Error(`外部計算は1〜500原子、最大${connection.info.maxImages||20}構造です。100構造にはbridge.py 1.4.0へ更新してください。`);
+    if(!symbols.length||symbols.length>500||all.length>(connection.info.maxImages||20))throw Error(`外部計算は1〜500原子、最大${connection.info.maxImages||20}構造です。必要に応じてbridge.pyを更新してください。`);
     if(['perpendicular','neb','cineb'].includes(mode)&&all.length<3)throw Error('先に「反応経路」で端点を含む3〜100構造を生成するか、複数構造XYZなどを読み込んでください。');
     for(const f of all){
       if(JSON.stringify(f.atoms.map(a=>a.element))!==JSON.stringify(symbols))throw Error('全フレームの元素とFile-orderを一致させてください。');
@@ -52,18 +59,18 @@
     if(cell?.pbc.some(Boolean)&&!connection.info.periodic)throw Error('接続中のエンジンは周期系に対応していません。tbliteでサービスを起動してください。');
     const data={symbols,images:all.map(f=>f.atoms.map(a=>[a.x,a.y,a.z])),cell,mode,charge:Number($('engineCharge').value),multiplicity:Number($('engineMultiplicity').value),maxSteps:Number($('engineSteps').value),fmax:Number($('engineFmax').value),spring:Number($('engineSpring').value),maxMove:Number($('engineMove').value),climbAfter:Number($('engineClimb').value)};
     for(const [key,lo,hi,integer] of [['charge',-100,100,true],['multiplicity',1,101,true],['maxSteps',1,10000,true],['fmax',.00001,10,false],['spring',.001,10,false],['maxMove',.001,.2,false],['climbAfter',0,500,true]])if(!Number.isFinite(data[key])||data[key]<lo||data[key]>hi||(integer&&!Number.isInteger(data[key])))throw Error(`${key}は${lo}〜${hi}${integer?'の整数':''}にしてください。`);
-    if(['ts','vibrations'].includes(mode)&&!connection.info.modes.includes(mode))throw Error('TS・振動解析にはbridge.py 1.4.0へ更新・再接続してください。');
+    if(['ts','vibrations'].includes(mode)&&!connection.info.modes.includes(mode))throw Error('TS・振動解析にはbridge.pyを更新・再接続してください。');
     if(mode==='ts'){
       if(!connection.info.sellaVersion)throw Error('接続中のPythonにSellaがありません。python -m pip install "sella>=2.6,<3" を実行し、再接続してください。');
       data.optimizer=$('engineTSMethod').value;data.trustRadius=Number($('engineTrust').value);
       if(!Number.isFinite(data.trustRadius)||data.trustRadius<.001||data.trustRadius>.2)throw Error('初期信頼半径は0.001〜0.2 Åにしてください。');
     }
     if(mode==='optimize'&&$('engineOptimizer').value!=='fire'){
-      if(!connection.info.modes.includes('ts'))throw Error('L-BFGS・BFGSにはbridge.py 1.4.0が必要です。');
+      if(!connection.info.modes.includes('ts'))throw Error('L-BFGS・BFGSを使うにはbridge.pyを更新してください。');
       data.optimizer=$('engineOptimizer').value;
     }
     if(mode==='vibrations'||(['ts','optimize'].includes(mode)&&$('engineVibrationCheck').checked)){
-      if(!connection.info.vibrations)throw Error('振動解析にはbridge.py 1.4.0が必要です。');
+      if(!connection.info.vibrations)throw Error('振動解析を使うにはbridge.pyを更新してください。');
       if(symbols.length>(connection.info.maxVibrationAtoms||200))throw Error('振動解析は最大200原子です。');
       if(all[0].atoms.some(a=>a.mol?.props?.MASS||a.xyzExtras?.mass||a.xyzExtras?.masses))throw Error('この振動解析はASE標準原子質量を使用します。同位体・個別質量を持つ構造には未対応です。');
       data.vibrations={delta:Number($('engineVibrationDelta').value),nfree:Number($('engineVibrationNfree').value),imaginaryThreshold:Number($('engineVibrationThreshold').value)};
@@ -71,7 +78,7 @@
     }
     if((mode==='ts'||data.vibrations)&&cell?.pbc.some(Boolean))throw Error('TS・振動モード表示は非周期分子用です。');
     if(connection.info.vibrations)data.atomIds=all[0].atoms.map(a=>a.id);
-    if(data.maxSteps>(connection.info.maxSteps??1000))throw Error('1,000ステップを超える外部エンジン計算にはbridge.py 1.1.2以降が必要です。最新版へ更新・再起動し、再接続してください。');
+    if(data.maxSteps>(connection.info.maxSteps??1000))throw Error('指定したステップ数に対応するため、bridge.pyを更新・再起動して再接続してください。');
     if(mode==='cineb'&&data.climbAfter>=data.maxSteps)throw Error('CI開始ステップを最大ステップ数より小さくしてください。');
     return {data,frames:all,scope:$('engineScope').value,fingerprint:fingerprint(state),original:MV.Model.cloneState(state)};
   }
@@ -112,14 +119,14 @@
       MV.VibrationUI.set(r.vibrations,state,`${j.original.metadata.title||'構造'} · ${r.engine} / ${r.method} · ${modeText[r.mode]} · ${reason}`);
     }
     showProfile(r,j,!!j.livePreview&&MV.EnergyProfile.following());
-    message((r.vibrations&&r.vibrations.status!=='completed'?'振動解析は未完了です。構造の結果は保持しています。':r.reason==='failed'?'計算に失敗しました。'+(r.error||''):r.reason==='cancelled'?'計算を中止しました。':'計算が完了しました。')+' 結果を確認し、構造列の保存・抽出または「結果を構造へ適用」で反映できます。'+(j.data.mode==='optimize'&&!r.trajectory?' 旧bridgeのため最終構造のみです。全ステップの保存にはbridge.py 1.3.0へ更新・再接続して再計算してください。':''));
+    message((r.vibrations&&r.vibrations.status!=='completed'?'振動解析は未完了です。構造の結果は保持しています。':r.reason==='failed'?'計算に失敗しました。'+(r.error||''):r.reason==='cancelled'?'計算を中止しました。':'計算が完了しました。')+' 結果を確認し、構造列の保存・抽出または「結果を構造へ適用」で反映できます。'+(j.data.mode==='optimize'&&!r.trajectory?' 旧bridgeのため最終構造のみです。全ステップの保存にはbridge.pyを更新・再接続して再計算してください。':''));
   }
   function resultSource(r,j){
     const t=r.trajectory||r;
     return {title:modeText[j.data.mode],name:j.original.metadata.title,kind:j.data.mode,symbols:r.symbols,cell:r.cell,images:t.images,energies:t.energies,
       charge:j.data.charge,multiplicity:j.data.multiplicity,engine:r.engine,method:r.method,base:i=>j.frames[r.trajectory?0:i],
       stepNumbers:j.data.mode==='optimize'&&!r.trajectory?[r.steps]:null,
-      notice:j.data.mode==='optimize'&&!r.trajectory?'旧bridgeの結果には最終構造しかありません。全ステップの保存にはbridge.py 1.3.0へ更新・再接続して再計算してください。':''};
+      notice:j.data.mode==='optimize'&&!r.trajectory?'旧bridgeの結果には最終構造しかありません。全ステップの保存にはbridge.pyを更新・再接続して再計算してください。':''};
   }
   function exportXYZ(r,j){$('engineDialog').close();MV.TrajectoryUI.open(resultSource(r,j));}
   function showProfile(r,j,follow=false){
@@ -132,7 +139,7 @@
     let j;
     try{
       j={...input(),connection:{...connection},cancelRequested:false,livePreview:$('engineLive').checked};
-      if(j.livePreview&&!connection.info.livePreview)throw Error('ライブ表示にはbridge.py 1.2.0以降が必要です。更新・再接続するか、ライブ表示をオフにしてください。');
+      if(j.livePreview&&!connection.info.livePreview)throw Error('ライブ表示を使うにはbridge.pyを更新・再接続してください。');
       if(j.livePreview)j.data.livePreview=true;
       MV.VibrationUI.hide();MV.EnergyProfile.reset();clearResult();job=j;busy(true);message('ローカル計算を開始しています…');
       if(j.livePreview)MV.EnergyProfile.begin(cancel,open);

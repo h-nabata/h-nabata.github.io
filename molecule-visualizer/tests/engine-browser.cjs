@@ -9,6 +9,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.goto('http://127.0.0.1:8765/molecule-visualizer/');await page.waitForSelector('canvas');
   await page.context().grantPermissions(['clipboard-read','clipboard-write'],{origin:'http://127.0.0.1:8765'});
   let downloads=0;page.on('download',()=>downloads++);
+  const assertCoordinates=async()=>assert.equal(await page.evaluate(()=>{
+    const M=MoleculeVisualizer,displayed=M.IO.parseAuto(document.getElementById('dataText').value,'auto').atoms,rendered=M.App.renderer().state.atoms;
+    return displayed.length===rendered.length&&displayed.every((a,i)=>a.element===rendered[i].element&&['x','y','z'].every(k=>Math.abs(a[k]-rendered[i][k])<1e-9));
+  }),true,'coordinate text must match the rendered structure');
+
   const showText=async(button)=>{
     const before=downloads;await page.click(button);assert.equal(downloads,before,'display must not trigger a download');
     const field=page.locator('#trajectoryText'),text=await field.inputValue();assert.ok(text.length);assert.equal(await field.getAttribute('readonly'),'');
@@ -47,6 +52,10 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
   assert.equal(await page.locator('#engineMode option[value=neb]').count(),0);
   await page.selectOption('#engineMode','cineb');
+  assert.deepEqual(await page.locator('#engineSteps,#engineFmax,#engineMove,#engineSpring,#engineClimb').evaluateAll(es=>es.map(e=>e.value)),['100','0.05','0.03','1','5']);
+  await page.fill('#engineFmax','0.02');await page.selectOption('#engineMode','ts');assert.equal(await page.locator('#engineFmax').inputValue(),'0.05');
+  assert.equal(await page.locator('#engineVibrationDelta').inputValue(),'0.001');
+  await page.selectOption('#engineMode','cineb');assert.equal(await page.locator('#engineFmax').inputValue(),'0.02');
   await spin('engineFmax','0.3','0.31');await spin('engineMove','0.04','0.05');await spin('engineSpring','0.1','0.2');
   await page.fill('#engineFmax','0.00001');await page.locator('#engineFmax').press('Tab');assert.equal(await page.locator('#engineFmax').inputValue(),'0.00001');
   await page.selectOption('#engineMode','evaluate');await page.selectOption('#engineScope','current');await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
@@ -184,8 +193,9 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.check('#afirLive');await page.click('#afirRun');
   await page.waitForFunction(()=>document.getElementById('profileTitle').textContent.includes('計算中（評価済み')&&!document.getElementById('profilePreview').hidden);
   assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
+  await assertCoordinates();assert.equal(await page.locator('#dataText').evaluate(e=>e.readOnly),true);
   await page.waitForSelector('#afirResult:not([hidden])');
-  assert.ok(delivered);assert.ok(previewRequests.length>=2);
+  await assertCoordinates();assert.ok(delivered);assert.ok(previewRequests.length>=2);
   await page.unroute(/\/api\/jobs\/[a-f0-9]{32}\?preview=1&after=\d+$/);
   await page.click('#afirApply');assert.match(await page.locator('#framePlay').textContent(),/停止/);
   assert.ok(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.frameIndex)>0,'apply-and-play advances immediately');
@@ -238,7 +248,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
     const {step,...r}=checkpoint(phase);
     await route.fulfill({json:complete?{id:fixtureId,status:'completed',result:{...r,symbols:fixtureInput.symbols,cell:fixtureInput.cell,units:{energy:'eV',length:'angstrom'},engine:'UI-only fixture',method:'test',reason:'step_limit',converged:false,steps:phase,evaluations:15,effectiveFmax:1,imageFmax:[0,1,1,1,0]}}:{id:fixtureId,status:'running',progress:{step:phase},preview:{...r,step:phase}}});
   });
-  await page.fill('#dataText',[0,.1,.2,.3,.4].map(xyz).join(''));await page.click('#dataApply');
+  await page.click('#dataReset');await page.fill('#dataText',[0,.1,.2,.3,.4].map(xyz).join(''));await page.click('#dataApply');
   const fixtureSource=await page.evaluate(()=>MoleculeVisualizer.IO.stateToProjectText(MoleculeVisualizer.App.getState()));
   await page.click('#btnExternalEngine');await page.selectOption('#engineMode','cineb');await page.check('#engineLive');await page.click('#engineRun');
   await page.waitForFunction(()=>document.getElementById('profileTitle').textContent.includes('ステップ 0'));
@@ -258,10 +268,10 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.locator('#profileRange').focus();await page.locator('#profileRange').press('ArrowRight');await page.locator('#profileRange').press('ArrowRight');
   assert.equal(await page.locator('#profileRange').inputValue(),'3');assert.equal(await page.locator('#profileFollow').isChecked(),true);
   phase=2;await page.waitForFunction(()=>document.getElementById('profileTitle').textContent.includes('ステップ 2'));
-  assert.equal(await page.locator('#profileRange').inputValue(),'3');assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.renderer().state.atoms.map(a=>[a.x,a.y,a.z])),checkpoint(2).images[3]);
+  await assertCoordinates();assert.equal(await page.locator('#profileRange').inputValue(),'3');assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.renderer().state.atoms.map(a=>[a.x,a.y,a.z])),checkpoint(2).images[3]);
   await page.screenshot({path:'test-artifacts/neb-selected-live-node.png',fullPage:true});
   complete=true;await page.waitForFunction(()=>!document.getElementById('engineResult').hidden&&document.getElementById('profileLiveControls').hidden);
-  assert.equal(await page.locator('#profileRange').inputValue(),'3');assert.equal(cancelCalls,0);
+  await assertCoordinates();assert.equal(await page.locator('#profileRange').inputValue(),'3');assert.equal(cancelCalls,0);
   assert.equal(await page.evaluate(()=>MoleculeVisualizer.IO.stateToProjectText(MoleculeVisualizer.App.getState())),fixtureSource);
   await page.unroute('**/api/jobs',createFixture);await page.unroute(fixtureURL);
   await page.click('#btnHelp');await page.mouse.click(3,3);assert.equal(await page.locator('#helpDialog').isVisible(),false);

@@ -8,6 +8,12 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  await page.click('#btnToggleAxes');assert.equal(await page.locator('#btnToggleAxes').getAttribute('aria-pressed'),'true');await page.click('#btnToggleAxes');
 
  assert.equal(await page.locator('#coordX,#coordY,#coordZ').count(),0);
+ const controls=await page.locator('#calculationControls').boundingBox(),viewer=await page.locator('#viewer').boundingBox();assert.ok(controls.y+controls.height<=viewer.y+1,'calculation controls must be above the viewer');
+ assert.equal(await page.locator('#coordinatePanel').evaluate(e=>e.closest('[role=tabpanel]')),null);
+ assert.equal(await page.locator('#coordinatePanel .mv-help').first().evaluate(e=>e.open),false);
+ await page.click('#tab-bonds');assert.equal(await page.locator('#coordinatePanel').isVisible(),true);await page.click('#tab-atoms');
+ await page.screenshot({path:'test-artifacts/controls-above-viewer.png'});
+
  // Resize the panel itself, keep headings usable, and contain wheel scrolling.
  const checkPanel=async(id,prefix)=>{
   const panel=page.locator('#'+id),draft=await page.locator('#dataText').inputValue();
