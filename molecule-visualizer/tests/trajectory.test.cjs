@@ -1,5 +1,15 @@
 const test=require('node:test'),assert=require('node:assert/strict'),T=require('../trajectory.js');
 const frames=xs=>xs.map(x=>[[x,0,0]]);
+test('GRRM LUP infile has sequential zero-based NODE blocks with only coordinates and separators',()=>{
+ const source={kind:'neb',symbols:['O','H','H'],images:[0,.1,.2].map(x=>[[x,0,0],[.9572,0,0],[-.239987,.926627,0]]),energies:[-3,-2,-1],biasEnergies:[1,2,3],cell:{vectors:[[9,0,0],[0,9,0],[0,0,9]],pbc:[true,true,true]}};
+ const before=JSON.stringify(source),text=T.lup(source,[0,2]);
+ assert.equal(text,'# NODE 0\nO 0.000000000000 0.000000000000 0.000000000000\nH 0.957200000000 0.000000000000 0.000000000000\nH -0.239987000000 0.926627000000 0.000000000000\n--\n# NODE 1\nO 0.200000000000 0.000000000000 0.000000000000\nH 0.957200000000 0.000000000000 0.000000000000\nH -0.239987000000 0.926627000000 0.000000000000\n');
+ assert.equal(T.lup(source,[0,1,2]).split('\n--\n').length,3);
+ assert.equal(T.lup(source,[1]).split('\n--\n').length,1);assert.match(T.lup(source,[1]),/^# NODE 0\nO 0.100000000000/);
+ assert.equal(JSON.stringify(source),before);
+ for(const ids of [[0,0],[2,1],[-1],[3],[.5],[]])assert.throws(()=>T.lup(source,ids));
+ assert.throws(()=>T.lup({...source,images:[[[NaN,0,0]]]},[0]));
+});
 test('index and displacement sampling select distinct original frames and retain exact endpoints',()=>{
  const images=frames([0,.1,.2,.3,1,2,3,4,6,8,10]),before=JSON.stringify(images);
  assert.deepEqual(T.indices(images,6,'index'),[0,2,4,6,8,10]);

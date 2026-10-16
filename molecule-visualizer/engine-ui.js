@@ -79,7 +79,7 @@
     $('engineResultSummary').textContent=`${modeText[r.mode]} · ${reason} · ${r.steps}ステップ · ${r.evaluations}回の評価 · 最大有効力 ${r.effectiveFmax.toPrecision(4)} eV/Å`+(r.maxTangentialStep!=null?` · 接線方向の最大更新 ${r.maxTangentialStep.toExponential(2)} Å`:'');
     const body=$('engineEnergyRows');body.replaceChildren();r.energies.forEach((energy,i)=>{const tr=document.createElement('tr');const fixed=['perpendicular','neb','cineb'].includes(r.mode)&&(i===0||i===r.energies.length-1);for(const value of [i+1,energy.toFixed(8),(energy-r.energies[0]).toFixed(6),fixed?'端点固定':r.imageFmax[i].toPrecision(4),i===r.climbingImage?'CI':'']){const td=document.createElement('td');td.textContent=value;tr.append(td);}body.append(tr);});
     showProfile(r,j,!!j.livePreview&&MV.EnergyProfile.following());
-    message((r.reason==='failed'?'計算に失敗しました。'+(r.error||''):r.reason==='cancelled'?'計算を中止しました。':'計算が完了しました。')+' 結果を確認し、XYZ保存・抽出または「結果を構造へ適用」で反映できます。'+(j.data.mode==='optimize'&&!r.trajectory?' 旧bridgeのため最終構造のみです。全ステップの保存にはbridge.py 1.3.0へ更新・再接続して再計算してください。':''));
+    message((r.reason==='failed'?'計算に失敗しました。'+(r.error||''):r.reason==='cancelled'?'計算を中止しました。':'計算が完了しました。')+' 結果を確認し、構造列の保存・抽出または「結果を構造へ適用」で反映できます。'+(j.data.mode==='optimize'&&!r.trajectory?' 旧bridgeのため最終構造のみです。全ステップの保存にはbridge.py 1.3.0へ更新・再接続して再計算してください。':''));
   }
   function resultSource(r,j){
     const t=r.trajectory||r;
