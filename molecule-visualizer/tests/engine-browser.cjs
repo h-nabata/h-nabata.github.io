@@ -223,6 +223,47 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
     await page.selectOption('#trajectoryFormat','xyz');await saveXYZ('#trajectorySaveAll',report.result,[0,1,2]);
     await page.click('#trajectoryClose');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().metadata.trajectory)),source);
   }
+  // Deterministic UI-only NEB checkpoints: keep polling after selecting a bead.
+  // Numerical NEB behavior is exercised by the real calculations above.
+  const fixtureId='00000000000000000000000000000001';let fixtureInput,phase=0,complete=false,cancelCalls=0;
+  const checkpoint=step=>({mode:'neb',step,energies:[0,1+step,3+step,2+step,0],images:fixtureInput.images.map((image,i)=>image.map(p=>[p[0],p[1]+(i&&i<4?step*.02:0),p[2]]))});
+  const createFixture=async route=>{fixtureInput=route.request().postDataJSON();await route.fulfill({json:{id:fixtureId}});};
+  const fixtureURL=new RegExp('/api/jobs/'+fixtureId+'(?:[/?].*)?$');
+  await page.route('**/api/jobs',createFixture);
+  await page.route(fixtureURL,async route=>{
+    if(route.request().url().endsWith('/cancel')){cancelCalls++;await route.fulfill({json:{}});return;}
+    const {step,...r}=checkpoint(phase);
+    await route.fulfill({json:complete?{id:fixtureId,status:'completed',result:{...r,symbols:fixtureInput.symbols,cell:fixtureInput.cell,units:{energy:'eV',length:'angstrom'},engine:'UI-only fixture',method:'test',reason:'step_limit',converged:false,steps:phase,evaluations:15,effectiveFmax:1,imageFmax:[0,1,1,1,0]}}:{id:fixtureId,status:'running',progress:{step:phase},preview:{...r,step:phase}}});
+  });
+  await page.fill('#dataText',[0,.1,.2,.3,.4].map(xyz).join(''));await page.click('#dataApply');
+  const fixtureSource=await page.evaluate(()=>MoleculeVisualizer.IO.stateToProjectText(MoleculeVisualizer.App.getState()));
+  await page.click('#btnExternalEngine');await page.selectOption('#engineMode','neb');await page.check('#engineLive');await page.click('#engineRun');
+  await page.waitForFunction(()=>document.getElementById('profileTitle').textContent.includes('ステップ 0'));
+  assert.equal(await page.locator('#profileRange').inputValue(),'2');
+  await page.locator('#energyProfile circle[tabindex="0"]').nth(1).click();assert.equal(await page.locator('#profileFollow').isChecked(),true);
+  phase=1;await page.waitForFunction(()=>document.getElementById('profileTitle').textContent.includes('ステップ 1'));
+  assert.equal(await page.locator('#profileRange').inputValue(),'1');assert.match(await page.locator('#profileValue').textContent(),/E = 2.000000/);
+  assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.renderer().state.atoms.map(a=>[a.x,a.y,a.z])),checkpoint(1).images[1]);
+  assert.equal(await page.locator('#energyProfile circle[tabindex="0"]').nth(1).evaluate(e=>e===document.activeElement),true,'keyboard focus survives refresh');
+  assert.match(await page.locator('#energyProfile circle[tabindex="0"]').nth(3).getAttribute('aria-label'),/ΔE 3.000000/);
+  // Backdrop dismisses settings without stopping this in-flight job; padding
+  // and a drag out of the dialog must not dismiss it accidentally.
+  await page.click('#profileDetails');const dialog=page.locator('#engineDialog'),box=await dialog.boundingBox();
+  await page.mouse.click(box.x+8,box.y+8);assert.equal(await dialog.isVisible(),true);
+  await page.mouse.move(box.x+8,box.y+8);await page.mouse.down();await page.mouse.move(3,3);await page.mouse.up();assert.equal(await dialog.isVisible(),true);
+  await page.mouse.click(3,3);assert.equal(await dialog.isVisible(),false);assert.equal(cancelCalls,0);
+  await page.locator('#profileRange').focus();await page.locator('#profileRange').press('ArrowRight');await page.locator('#profileRange').press('ArrowRight');
+  assert.equal(await page.locator('#profileRange').inputValue(),'3');assert.equal(await page.locator('#profileFollow').isChecked(),true);
+  phase=2;await page.waitForFunction(()=>document.getElementById('profileTitle').textContent.includes('ステップ 2'));
+  assert.equal(await page.locator('#profileRange').inputValue(),'3');assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.renderer().state.atoms.map(a=>[a.x,a.y,a.z])),checkpoint(2).images[3]);
+  await page.screenshot({path:'test-artifacts/neb-selected-live-node.png',fullPage:true});
+  complete=true;await page.waitForFunction(()=>!document.getElementById('engineResult').hidden&&document.getElementById('profileLiveControls').hidden);
+  assert.equal(await page.locator('#profileRange').inputValue(),'3');assert.equal(cancelCalls,0);
+  assert.equal(await page.evaluate(()=>MoleculeVisualizer.IO.stateToProjectText(MoleculeVisualizer.App.getState())),fixtureSource);
+  await page.unroute('**/api/jobs',createFixture);await page.unroute(fixtureURL);
+  await page.click('#btnHelp');await page.mouse.click(3,3);assert.equal(await page.locator('#helpDialog').isVisible(),false);
+  await page.click('#btnPaste');await page.fill('#xyz_input','draft remains');await page.mouse.click(3,3);assert.equal(await page.locator('#importDialog').isVisible(),false);
+  await page.click('#btnPaste');assert.equal(await page.locator('#xyz_input').inputValue(),'draft remains');await page.mouse.click(3,3);
   // Generic two-carbon geometry exercises visible bond formation and cleavage.
   await page.evaluate(()=>{
     const MV=MoleculeVisualizer,s=MV.IO.parseXYZToState('C 0 0 0\nC 3 0 0'),base=MV.Periodic.snapshot(s),images=[3,1.4,3].map(x=>[[0,0,0],[x,0,0]]);

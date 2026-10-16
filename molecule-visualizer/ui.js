@@ -899,6 +899,18 @@
     byId('addElem').value='C';byId('editElem').value='C';byId('addMode').value='custom';
     const aromatic=document.createElement('option');aromatic.value='4';aromatic.textContent='芳香族';byId('bondOrder').append(aromatic);
     document.querySelectorAll('[data-close]').forEach(el=>el.addEventListener('click',()=>byId(el.dataset.close).close()));
+    document.querySelectorAll('dialog').forEach(dialog=>{
+      let backdropDown=false;
+      const outside=e=>{const r=dialog.getBoundingClientRect();return e.target===dialog&&(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom);};
+      dialog.addEventListener('pointerdown',e=>{backdropDown=e.button===0&&e.isPrimary!==false&&outside(e);});
+      dialog.addEventListener('pointercancel',()=>{backdropDown=false;});
+      dialog.addEventListener('close',()=>{backdropDown=false;});
+      dialog.addEventListener('click',e=>{
+        const dismiss=backdropDown&&outside(e);backdropDown=false;
+        // Match the Close button: do not submit settings or cancel an engine job.
+        if(dismiss)dialog.close();
+      });
+    });
     bind('toolBox','click',()=>setMode('box'));
     bind('btnOpen','click',()=>byId('fileInput').click());
     bind('btnDataFile','click',()=>byId('dataFile').click());
