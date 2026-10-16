@@ -14,9 +14,9 @@
   const dirty=()=>/未適用|編集中/.test($('xyzEditStatus').textContent);
   function button(text,handler){const b=document.createElement('button');b.className='mv-btn';b.textContent=text;b.type='button';b.addEventListener('click',()=>safe(handler));return b;}
   function safe(f){try{return f();}catch(e){message(e.message);}}
-  function edit(f){if(job)throw Error('計算中はAFIR設定を変更できません。');if(dirty())throw Error('編集中の座標を適用するか、編集を取り消してください。');app().change('AFIR settings',s=>{s.metadata.afir=JSON.parse(JSON.stringify(s.metadata.afir||MV.AFIR.defaults()));f(s.metadata.afir,s);});}
+  function edit(f){if(job)throw Error('計算中はAFIR設定を変更できません。');if(dirty())throw Error('編集中の座標を適用するか、編集を取り消してください。');app().useDisplayedStructure();app().change('AFIR settings',s=>{s.metadata.afir=JSON.parse(JSON.stringify(s.metadata.afir||MV.AFIR.defaults()));f(s.metadata.afir,s);});}
   function selected(){const s=app().getState(),ids=s.atoms.filter(a=>s.selectedAtomIds.has(a.id)).map(a=>a.id);if(!ids.length)throw Error('描画エリアで原子を選択してください。');return ids;}
-  function selectGroup(f){const s=app().getState();s.selectedAtomIds=new Set(f.atomIds.filter(id=>s.atoms.some(a=>a.id===id)));s.selectedBondIds.clear();app().setState(s,true);}
+  function selectGroup(f){const s=app().useDisplayedStructure();s.selectedAtomIds=new Set(f.atomIds.filter(id=>s.atoms.some(a=>a.id===id)));s.selectedBondIds.clear();app().setState(s,true);}
   function addFragment(){const ids=selected(),label=$('afirName').value.trim();if(!label||label.length>40)throw Error('原子団の名前を1〜40文字で入力してください。');edit(c=>{if(c.fragments.length>=64)throw Error('フラグメント数の上限は64です。');let n=1;while(c.fragments.some(f=>f.id===`f${n}`))n++;c.fragments.push({id:`f${n}`,label,atomIds:ids});});$('afirName').value=`原子団${config().fragments.length+1}`;message(`${label}を登録しました。次の原子団を選択してください。`);$('btnClearSel').click();}
   function addPair(){
     try{
@@ -32,6 +32,7 @@
     // Read the visible values at the action boundary, including unblurred inputs.
     const c=config(),next=JSON.parse(JSON.stringify(c));for(const [id,key] of settingsFields)next[key]=readNumber(id);
     pairInputs.forEach((input,i)=>{if(!String(input.value).trim())throw Error('ペアのγを入力してください。');next.pairs[i].gamma=Number(input.value);});
+    app().useDisplayedStructure();
     MV.AFIR.validate(app().getState().atoms,next,app().getState().metadata.cell);
     if(JSON.stringify(next)!==JSON.stringify(c))edit(v=>Object.assign(v,next));
   }
@@ -85,11 +86,11 @@
     MV.EnergyProfile?.restore();app().renderer().renderState(app().getState(),true);
   }
   function download(payload,name,type='application/json'){const text=typeof payload==='string'?payload:JSON.stringify(payload,null,2),url=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-  function exportFiles(){if(dirty())throw Error('編集中の座標を先に適用してください。');app().useDisplayedStructure();saveSettings();const out=MV.AFIR.exportInput(app().getState(),config());download(out,'afir-input.json');message('原子ID・XYZ・フラグメント・ペア・Python用設定をJSONに保存しました。');}
-  function check(){app().useDisplayedStructure();saveSettings();const s=app().getState(),b=MV.AFIR.evaluate(s.atoms,config(),s.metadata.cell);message(`人工項のみ評価: ${b.energyEV.toFixed(6)} eV。物理ポテンシャルのエネルギーではありません。座標は変更していません。`);}
+  function exportFiles(){if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();const out=MV.AFIR.exportInput(app().getState(),config());download(out,'afir-input.json');message('原子ID・XYZ・フラグメント・ペア・Python用設定をJSONに保存しました。');}
+  function check(){saveSettings();const s=app().getState(),b=MV.AFIR.evaluate(s.atoms,config(),s.metadata.cell);message(`人工項のみ評価: ${b.energyEV.toFixed(6)} eV。物理ポテンシャルのエネルギーではありません。座標は変更していません。`);}
   async function run(){
     if(job)return;let j;
-    try{if(dirty())throw Error('編集中の座標を先に適用してください。');app().useDisplayedStructure();saveSettings();const s=app().getState();MV.AFIR.validate(s.atoms,config(),s.metadata.cell);
+    try{if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();const s=app().getState();MV.AFIR.validate(s.atoms,config(),s.metadata.cell);
       j={original:MV.Model.cloneState(s),fingerprint:fingerprint(s),config:JSON.parse(JSON.stringify(config())),cancelled:false,livePreview:$('afirLive').checked,previewCursor:0,liveEnergies:[],liveBiases:[]};
       if(j.livePreview&&!MV.EngineUI.getConnection()?.info.livePreview)throw Error('ライブ表示を使うにはbridge.pyを更新・再接続してください。');
       MV.EnergyProfile.reset();job=j;result=null;$('afirResult').hidden=true;sync();
