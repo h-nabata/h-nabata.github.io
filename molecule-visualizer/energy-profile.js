@@ -17,6 +17,7 @@
     const x=40+500*i/Math.max(1,data.energies.length-1);
     marker?.setAttribute('x1',x);marker?.setAttribute('x2',x);
     if(!preview)return;
+    MV.VibrationUI?.restore(false);
     MV.Studio?.stop();
     if(bound&&app().getState().metadata.trajectory===bound){MV.Studio.frame(i);return;}
     const positions=data.positions(i);

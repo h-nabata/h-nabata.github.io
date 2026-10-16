@@ -2,7 +2,7 @@
 layout: default
 title: 分子構造エディタ | Molecule Studio
 ---
-<link rel="stylesheet" href="./molecule-visualizer_style.css?v=21">
+<link rel="stylesheet" href="./molecule-visualizer_style.css?v=ts1-21">
 <script defer src="./model.js?v=16"></script>
 <script defer src="./bonding.js?v=16"></script>
 <script defer src="./geometry.js?v=19"></script>
@@ -12,22 +12,24 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./formats.js?v=16"></script>
 <script defer src="./measurements.js?v=16"></script>
 <script defer src="./history.js?v=16"></script>
-<script defer src="./renderer3dmol.js?v=18"></script>
-<script defer src="./ui.js?v=21"></script>
+<script defer src="./renderer3dmol.js?v=19"></script>
+<script defer src="./ui.js?v=22"></script>
 <script defer src="./studio.js?v=18"></script>
 <script defer src="./advanced.js?v=16"></script>
-<script defer src="./generator-ui.js?v=16"></script>
+<script defer src="./generator-ui.js?v=22"></script>
 <script defer src="./trajectory.js?v=4"></script>
-<script defer src="./trajectory-ui.js?v=4"></script>
-<script defer src="./energy-profile.js?v=4"></script>
-<script defer src="./engine-ui.js?v=24"></script>
+<script defer src="./trajectory-ui.js?v=5"></script>
+<script defer src="./energy-profile.js?v=5"></script>
+<script defer src="./engine-ui.js?v=25"></script>
+<script defer src="./vibration-ui.js?v=22"></script>
+<script defer src="./path-refinement.js?v=1"></script>
 <script defer src="./afir.js?v=17"></script>
 <script defer src="./afir-search.js?v=16"></script>
 <script defer src="./afir-runner.js?v=18"></script>
-<script defer src="./afir-ui.js?v=23"></script>
-<script defer src="./measurement-ui.js?v=16"></script>
+<script defer src="./afir-ui.js?v=22"></script>
+<script defer src="./measurement-ui.js?v=22"></script>
 <script defer src="./panel-layout.js?v=1"></script>
-<script defer src="./molecule-visualizer_main.js?v=19"></script>
+<script defer src="./molecule-visualizer_main.js?v=20"></script>
 
 <div class="mv-page-buffer" aria-hidden="true"></div>
 <main class="mv-app">
@@ -49,6 +51,16 @@ title: 分子構造エディタ | Molecule Studio
         <div class="mv-row"><button class="mv-btn" id="profileToggle" aria-controls="profilePanel" aria-expanded="false" disabled>グラフを表示</button><button class="mv-btn" id="btnUndo" title="元に戻す (Ctrl / ⌘ Z)">↶ 戻す</button><button class="mv-btn" id="btnRedo" title="やり直す (Ctrl / ⌘ Shift Z)">↷ やり直す</button></div>
       </div>
       <div class="mv-viewer-shell"><div id="viewer"></div><p id="profilePreview" class="mv-profile-preview" hidden></p><div class="mv-viewer-bottom"><span id="modeBadge">選択モード</span><span id="gestureHint">左ドラッグ：表示回転 · 右：範囲選択 · Alt＋左/右：原子団移動/回転</span></div></div>
+      <div class="mv-row"><button class="mv-btn" id="btnTS">現在の構造をTS最適化</button><button class="mv-btn" id="btnVibrations">現在の構造の振動解析</button><button class="mv-btn" id="vibrationToggle" disabled aria-controls="vibrationPanel" aria-expanded="false">振動モードを表示</button><button class="mv-btn" id="btnRefinePath">経路のノードを補間・追加</button></div>
+      <section id="vibrationPanel" class="mv-energy-profile" hidden aria-label="振動モード">
+        <div class="mv-row"><strong>振動数・振動モード</strong><button class="mv-btn" id="vibrationHide">表を閉じる</button></div>
+        <p id="vibrationSummary" class="mv-small"></p>
+        <div class="mv-row"><label>表示・変位の最大振幅 (Å)<input id="vibrationAmplitude" class="mv-num" type="number" min="0" max="1" step="0.01" value="0.15"></label><button class="mv-btn" id="vibrationPlay">▶ モードをアニメーション</button><button class="mv-btn" id="vibrationRestore">プレビューを終了</button></div>
+        <p class="mv-small">行を選ぶと原子の変位方向を矢印で表示します。赤字・赤矢印は虚振動です。全3Nモードを表示し、並進・回転の射影除去はしていません。低振動数は数値誤差や残留力の影響を受けます。動画の速さ・振幅は説明用で、虚振動の時間発展を表すものではありません。</p>
+        <div class="mv-vibration-scroll"><table><thead><tr><th>モード</th><th>振動数 (cm⁻¹)</th><th>hν (meV)</th></tr></thead><tbody id="vibrationRows"></tbody></table></div>
+        <div class="mv-row"><button class="mv-btn" id="vibrationMinus">−方向へ変位して入力に適用</button><button class="mv-btn" id="vibrationPlus">＋方向へ変位して入力に適用</button><button class="mv-btn" id="vibrationCSV">振動数表をCSV保存</button></div>
+        <p id="vibrationMessage" class="mv-small" role="status"></p>
+      </section>
       <section id="profilePanel" class="mv-energy-profile" aria-label="エネルギープロファイル" hidden>
         <div class="mv-row"><strong id="profileTitle">エネルギープロファイル</strong><button class="mv-btn" id="profileHide">グラフを閉じる</button></div>
         <svg id="energyProfile" viewBox="0 0 560 180" role="group" aria-label="エネルギープロファイル。点を選択すると構造を表示します。"></svg>
@@ -360,7 +372,7 @@ H 1.0 0 0
   <h2>外部エンジン / 経路緩和</h2>
   <p class="mv-small">計算はこのPCで起動したサービス上で実行します。座標はローカルサービスへ送信されます。接続トークンはこの画面のメモリだけに保持します。</p>
   <details class="mv-engine-setup"><summary>初回のセットアップ：tblite / g-xTBを選ぶ</summary>
-    <p><a href="./local-engine/bridge.py?v=1.3.0" download>bridge.pyをダウンロード</a>し、使いたい計算手法に応じて、以下のどちらか一方の手順で起動してください。Python 3.10以上が必要です。通常の構造最適化でも初期構造から最終構造までXYZ保存するには、bridge.py 1.3.0へ差し替え、サービスを再起動して再接続してください。</p>
+    <p><a href="./local-engine/bridge.py?v=1.4.0" download>bridge.pyをダウンロード</a>し、使いたい計算手法に応じて、以下のどちらか一方の手順で起動してください。Python 3.10以上が必要です。TS最適化・振動解析・NEBノード追加を使うには、bridge.py 1.4.0へ差し替え、サービスを再起動して再接続してください。</p>
     <ul>
       <li><strong>tblite</strong>：GFN2-xTB（既定）、GFN1-xTB、IPEA1-xTBを利用します。このアプリでは非周期系と固定セルの周期系に対応します。</li>
       <li><strong>g-xTB</strong>：公式のg-xTB対応実行ファイルを別途用意します。このアプリでは非周期系に対応します。tbliteのPythonパッケージは不要です。</li>
@@ -401,6 +413,11 @@ python -m pip install "numpy&gt;=1.24,&lt;3" "ase&gt;=3.23,&lt;4" "psutil&gt;=5.
 python bridge.py --engine gxtb --binary /absolute/path/to/xtb --allow-origin https://h-nabata.github.io</pre>
       <p>tblite用の環境を既に作っている場合は、そのPython環境を再利用してg-xTB対応実行ファイルを指定することもできます。起動時の <code>--engine gxtb</code> で使用するエンジンが決まります。</p>
     </details>
+    <details><summary>SellaでTS最適化を使う場合（追加パッケージ）</summary>
+      <p>bridge.pyを実行する同じPython環境で、次を実行してください。振動解析のみならSellaは不要で、導入済みのASEを使います。</p>
+      <pre>python -m pip install --only-binary=:all: "sella&gt;=2.6,&lt;3"</pre>
+      <p>Python 3.12・Sella 2.6で確認しています。対応するwheelが見つからない場合はPython 3.12の環境を作成し、g-xTBとbridgeも同じ環境で実行してください。Sellaは最適化を担当し、エネルギー・力は選択したtbliteまたはg-xTBで計算します。更新後はbridge.pyを再起動し、再接続してください。</p>
+    </details>
     <p>どちらも起動時に表示されるURLとTokenを下欄に入力します。端末は利用中開いたままにしてください。ブラウザが要求した場合は、このサイトからのローカルネットワーク接続を許可します。WSLではサービスも計算エンジンと同じWSL環境で起動します。</p>
     <p><a href="https://github.com/h-nabata/h-nabata.github.io/blob/main/molecule-visualizer/local-engine/README.md" target="_blank" rel="noopener">導入・周期系・計算方式の詳しい説明</a></p>
   </details>
@@ -409,28 +426,41 @@ python bridge.py --engine gxtb --binary /absolute/path/to/xtb --allow-origin htt
     <label>接続トークン<input id="engineToken" type="password" autocomplete="off" spellcheck="false"></label>
   </div><div class="mv-row"><button class="mv-btn" id="engineConnect">接続を確認</button><span id="engineConnected" class="mv-small">未接続</span></div></fieldset>
   <fieldset id="engineSettings"><legend>計算条件</legend><div class="mv-grid">
-    <label>操作<select id="engineMode"><option value="evaluate">エネルギー・力を評価</option><optgroup label="単一構造の最適化（AFIR法を含む）"><option value="optimize">通常の単一構造最適化（人工力なし）</option><option value="afir">AFIR法の設定を開く</option></optgroup><option value="perpendicular">経路を直交方向のみ緩和</option><option value="neb">NEB（接線方向のばねあり）</option><option value="cineb">CI-NEB（最高点を登らせる）</option></select></label>
+    <label>操作<select id="engineMode"><option value="evaluate">エネルギー・力を評価</option><optgroup label="単一構造の最適化（AFIR法を含む）"><option value="optimize">通常の単一構造最適化（人工力なし）</option><option value="ts">SellaによるTS最適化</option><option value="afir">AFIR法の設定を開く</option></optgroup><option value="vibrations">振動解析のみ（現在の構造）</option><option value="perpendicular">経路を直交方向のみ緩和</option><option value="neb">NEB（接線方向のばねあり）</option><option value="cineb">CI-NEB（最高点を登らせる）</option></select></label>
     <label>対象<select id="engineScope"><option value="current">現在の構造</option><option value="all">全フレーム</option></select></label>
     <label>系全体の電荷<input id="engineCharge" type="number" min="-100" max="100" step="1" value="0"></label>
     <label>スピン多重度 (2S+1)<input id="engineMultiplicity" type="number" min="1" max="101" step="1" value="1"></label>
   </div><p id="engineModeHelp" class="mv-small"></p>
+  <div class="mv-grid"><label id="engineOptimizerLabel">極小化アルゴリズム<select id="engineOptimizer"><option value="fire">FIRE</option><option value="lbfgs">ASE L-BFGS</option><option value="bfgs">ASE BFGS</option></select></label><label id="engineTSMethodLabel" hidden>TSアルゴリズム<select id="engineTSMethod"><option value="sella-prfo">Sella PRFO（既定）</option><option value="sella-rfo">Sella RFO</option></select></label><label id="engineTrustLabel" hidden>初期信頼半径 (Å)<input id="engineTrust" type="number" min="0" max="0.2" step="0.01" value="0.04"></label></div>
   <div id="engineRelaxSettings" class="mv-grid">
     <label>最大ステップ数<input id="engineSteps" type="number" min="1" max="10000" step="1" value="150"></label>
     <label>最大有効力の収束閾値 (eV/Å)<input id="engineFmax" type="number" min="0" max="10" step="0.01" value="0.05" title="0.00001〜10。上下ボタンは0.01刻み。より小さな値は直接入力できます。"></label>
-    <label>1ステップの最大原子変位 (Å)<input id="engineMove" type="number" min="0" max="0.2" step="0.01" value="0.04" title="0.001〜0.2。上下ボタンは0.01刻み。"></label>
+    <label id="engineMoveLabel">1ステップの最大原子変位 (Å)<input id="engineMove" type="number" min="0" max="0.2" step="0.01" value="0.04" title="0.001〜0.2。上下ボタンは0.01刻み。"></label>
     <label id="engineSpringLabel">ばね定数 (eV/Å²)<input id="engineSpring" type="number" min="0" max="10" step="0.1" value="0.1" title="0.001〜10。上下ボタンは0.1刻み。"></label>
     <label id="engineClimbLabel">CIを開始するステップ<input id="engineClimb" type="number" min="0" max="500" step="1" value="10"></label>
-  </div><p class="mv-small">最大500原子・20構造。経路は同じ元素順序・固定セルが必要です。周期境界をまたぐ経路は連続したCartesian座標で入力してください。原子ごとの移動固定や可変セルには対応していません。</p></fieldset>
+  </div>
+  <div id="engineVibrationOptions" hidden><label id="engineVibrationCheckLabel" class="mv-check"><input id="engineVibrationCheck" type="checkbox">最適化後に振動解析を行う（未収束時も実行・既定オフ）</label>
+    <div class="mv-grid"><label>有限差分の変位幅 (Å)<input id="engineVibrationDelta" type="number" min="0" max="0.1" step="0.001" value="0.01"></label><label>差分点数<select id="engineVibrationNfree"><option value="2">2点（±δ）</option><option value="4">4点（±δ, ±2δ）</option></select></label><label>虚振動を数える閾値 (cm⁻¹)<input id="engineVibrationThreshold" type="number" min="0" max="1000" step="1" value="20"></label></div>
+    <p class="mv-small">ASE Vibrationsによる全原子の有限差分。最大200原子・非周期分子。2点法は約6N、4点法は約12N回の力計算が必要です。表には閾値以下の虚振動も表示します。TS収束の判定と虚振動の本数は別に確認してください。</p></div>
+  <p class="mv-small">最大500原子・100構造（bridge.py 1.4.0）。経路は同じ元素順序・固定セルが必要です。周期境界をまたぐ経路は連続したCartesian座標で入力してください。原子ごとの移動固定や可変セルには対応していません。Sellaは非周期系の一次鞍点探索で、初期信頼半径は計算中に自動調整されます。L-BFGSは極小化専用です。</p></fieldset>
   <label class="mv-check"><input id="engineLive" type="checkbox">計算中のエネルギー・構造を表示（既定オフ）</label><p class="mv-small">bridge.py 1.2.0 が必要です。経路計算では最新の経路全体を表示します。通常の最適化は計算中に最新の1点、終了後は全ステップを表示します（全ステップ取得にはbridge.py 1.3.0が必要です）。</p>
   <p id="engineMessage" role="status" aria-live="polite"></p>
-  <div class="mv-row"><button class="mv-btn primary" id="engineRun" disabled>計算を実行</button><button class="mv-btn" id="engineCancel" disabled>計算を中止</button></div>
+  <div class="mv-row"><button class="mv-btn primary" id="engineRun" disabled>計算を実行</button><button class="mv-btn" id="engineCancel" disabled>計算を中止</button><button class="mv-btn" id="enginePause" hidden disabled>NEBを一時停止してノード追加</button></div>
   <section id="engineResult" hidden><h3>計算結果</h3><p id="engineResultSummary" class="mv-small"></p>
     <button class="mv-btn" id="engineProfile">エネルギープロファイルと構造を見る</button>
-    <div class="mv-table-scroll"><table><thead><tr><th>構造</th><th>E (eV)</th><th>ΔE (eV)</th><th>有効力 (eV/Å)</th><th>CI</th></tr></thead><tbody id="engineEnergyRows"></tbody></table></div>
+    <div class="mv-table-scroll"><table><thead><tr><th>構造</th><th>E (eV)</th><th>ΔE (eV)</th><th>有効力 (eV/Å)</th><th>候補・操作</th></tr></thead><tbody id="engineEnergyRows"></tbody></table></div>
+    <p id="engineVibrationStatus" class="mv-small"></p><div class="mv-row"><button class="mv-btn" id="engineVibrationShow" hidden>振動数表とモードを表示</button><button class="mv-btn" id="engineRefine" hidden>結果の経路にノードを追加</button></div>
     <p class="mv-small">収束判定は選択したモードの有効力に基づきます。直交方向の収束だけでは遷移状態は確定しません。グラフから構造をプレビューできます。入力座標の置き換えは「結果を構造へ適用」で行います。</p>
     <div class="mv-row"><button class="mv-btn primary" id="engineApply" disabled>結果を構造へ適用</button><button class="mv-btn" id="engineXYZ">構造列を保存・抽出</button><button class="mv-btn" id="engineDownload" disabled>エネルギー・力・履歴をJSON保存</button></div>
   </section>
   <div class="mv-row mv-end"><button class="mv-btn" id="engineClose" data-close="engineDialog">閉じる</button></div>
+</dialog>
+
+<dialog id="refineDialog" class="mv-engine-dialog" aria-labelledby="refineTitle"><h2 id="refineTitle">経路のノードを補間・追加</h2>
+  <p id="refineSummary"></p><div class="mv-grid"><label>区間の始点（構造番号）<input id="refineFrom" type="number" min="1" step="1" value="1"></label><label>区間の終点（構造番号）<input id="refineTo" type="number" min="2" step="1" value="2"></label><label>各隣接ペアの間に追加する数<input id="refineEach" type="number" min="1" max="98" step="1" value="1"></label></div>
+  <p class="mv-small">指定区間の各隣接ノード間をCartesian座標で線形補間します。既存ノードと両端点はそのまま残し、合計100ノードまで追加できます。複数の候補付近を増やす場合は区間を分けて繰り返してください。周期系の座標は折り返しません。</p>
+  <p class="mv-small">実行中のNEBは、最後に全ノードの評価が完了した経路で停止します。補間後は速度・最適化履歴・CI開始ステップをリセットして新しい計算を開始します。追加ノードのエネルギーは再評価が必要です。</p>
+  <p id="refineMessage" role="status"></p><div class="mv-row"><button class="mv-btn" id="refineApply">補間して描画へ反映</button><button class="mv-btn primary" id="refineNEB">補間してNEB再開の設定へ</button><button class="mv-btn" data-close="refineDialog">閉じる</button></div>
 </dialog>
 
 <dialog id="trajectoryDialog" class="mv-engine-dialog" aria-labelledby="trajectoryTitle">

@@ -41,8 +41,8 @@
       }
       $('trajectorySaveSelected').disabled=false;$('trajectoryShowSelected').disabled=false;
       const canApply=typeof source.base==='function'&&selected.length<=200&&selected.length*source.symbols.length<=100000;
-      $('trajectoryApply').disabled=!canApply;$('trajectoryNEB').disabled=!canApply||selected.length<3||selected.length>20||source.symbols.length>500;
-      $('trajectoryTransferHelp').textContent='描画への反映は200フレーム・合計100000原子まで、NEB入力は3〜20ノード・500原子までです。「NEB入力に取り込む」は計算条件を開き、実行ボタンを押すまで計算を開始しません。';
+      $('trajectoryApply').disabled=!canApply;$('trajectoryNEB').disabled=!canApply||selected.length<3||selected.length>100||source.symbols.length>500;
+      $('trajectoryTransferHelp').textContent='描画への反映は200フレーム・合計100000原子まで、NEB入力は3〜100ノード・500原子までです。「NEB入力に取り込む」は計算条件を開き、実行ボタンを押すまで計算を開始しません。';
     }catch(error){$('trajectorySelection').textContent=error.message;}
   }
   function open(next){
@@ -81,7 +81,7 @@
       if(MV.EngineUI?.isBusy()||MV.AFIRUI?.isBusy())throw Error('実行中の計算を終了してから構造列を取り込んでください。');
       if(typeof source.base!=='function')throw Error('原子情報がないため描画へ反映できません。XYZ保存を利用してください。');
       if(selected.length>200||selected.length*source.symbols.length>100000)throw Error('描画への反映は200フレーム・合計100000原子までです。ノード数を減らしてください。');
-      if(toNEB&&(selected.length<3||selected.length>20||source.symbols.length>500))throw Error('NEB入力は3〜20ノード・500原子までです。');
+      if(toNEB&&(selected.length<3||selected.length>100||source.symbols.length>500))throw Error('NEB入力は3〜100ノード・500原子までです。');
       const original=source,ids=selected.slice(),method=$('trajectoryMethod').value,settings=options();
       const frames=ids.map(i=>{
         const s=MV.Model.createState(original.base(i));

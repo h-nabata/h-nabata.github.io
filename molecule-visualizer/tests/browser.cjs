@@ -39,7 +39,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  await page.uncheck('#xyzHeader');assert.match(await page.locator('#dataText').inputValue(),/^O /);
  await page.fill('#dataText','O\u30000\t0 0\rH .9572 0 0\u2028H -.239987 .926627 0');await page.click('#dataApply');
  await page.check('#xyzHeader');assert.match(await page.locator('#dataText').inputValue(),/^3\n/);
- const bounds=await page.locator('canvas').boundingBox();
+ let bounds=await page.locator('canvas').boundingBox();
  await page.click('#btnViewXY');const unchanged=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),cx=bounds.x+bounds.width/2,cy=bounds.y+bounds.height/2;
  await page.keyboard.down('Shift');await page.mouse.move(cx,cy);await page.mouse.down();await page.mouse.move(cx+180,cy,{steps:12});await page.mouse.up();await page.keyboard.up('Shift');
  const rolled=await page.evaluate(()=>MoleculeVisualizer.App.renderer().rotate({x:1,y:0,z:0}));assert.ok(Math.abs(rolled.x-Math.cos(1.44))<1e-8&&Math.abs(rolled.y-Math.sin(1.44))<1e-8,'Shift drag provides explicit screen-normal roll');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),unchanged);
@@ -61,6 +61,8 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  const picks=await page.evaluate(()=>MoleculeVisualizer.App.renderer().projectedAtoms.slice(0,2).map(p=>({id:p.atom.id,x:p.x,y:p.y})));
  for(const i of [0,1,1])await page.mouse.click(bounds.x+picks[i].x,bounds.y+picks[i].y,{button:'right'});
  assert.deepEqual(await page.evaluate(()=>[...MoleculeVisualizer.App.getState().selectedAtomIds]),[picks[0].id]);await page.click('#btnClearSel');
+ // Toolbar actions may scroll the page; always use the current canvas bounds.
+ await page.locator('canvas').scrollIntoViewIfNeeded();bounds=await page.locator('canvas').boundingBox();
  // Separate rectangles always accumulate, even without multi-select or modifiers.
  for(const i of [0,1,0]){
   await page.mouse.move(bounds.x+picks[i].x-6,bounds.y+picks[i].y-6);await page.mouse.down({button:'right'});await page.mouse.move(bounds.x+picks[i].x+6,bounds.y+picks[i].y+6,{steps:3});await page.mouse.up({button:'right'});
@@ -70,7 +72,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  await page.mouse.move(bounds.x+5,bounds.y+5);await page.mouse.down({button:'right'});await page.mouse.move(bounds.x+bounds.width-5,bounds.y+bounds.height-5,{steps:6});await page.mouse.up({button:'right'});
  assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().selectedAtomIds.size),3);
  const original=await page.evaluate(()=>({atoms:MoleculeVisualizer.App.getState().atoms.map(a=>({...a})),orientation:MoleculeVisualizer.App.renderer().orientation.slice()}));
- const altDrag=async button=>{await page.keyboard.down('Alt');await page.mouse.move(bounds.x+20,bounds.y+20);await page.mouse.down({button});await page.mouse.move(bounds.x+65,bounds.y+45,{steps:6});await page.mouse.up({button});await page.keyboard.up('Alt');};
+ const altDrag=async button=>{await page.locator('canvas').scrollIntoViewIfNeeded();bounds=await page.locator('canvas').boundingBox();await page.keyboard.down('Alt');await page.mouse.move(bounds.x+20,bounds.y+20);await page.mouse.down({button});await page.mouse.move(bounds.x+65,bounds.y+45,{steps:6});await page.mouse.up({button});await page.keyboard.up('Alt');};
  await altDrag('left');assert.notEqual(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[0].x),original.atoms[0].x);await page.click('#btnUndo');
  await altDrag('right');assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.renderer().orientation),original.orientation);
  assert.notEqual(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[1].z),original.atoms[1].z);await page.click('#btnUndo');await page.click('#btnClearSel');

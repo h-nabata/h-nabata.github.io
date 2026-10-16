@@ -110,3 +110,12 @@
 .mv-app .mv-panel-size-hint{margin-top:6px;font-size:11px;line-height:1.5;color:var(--muted)}
 .mv-app .mv-xyz-panel #dataText{min-height:200px;height:300px}
 @media(max-width:800px){.mv-app .mv-scroll-panel{height:60vh;scroll-padding-top:170px}.mv-app .mv-scroll-panel-header,.mv-app .mv-scroll-panel-body{padding:12px}.mv-app .mv-panel-size .mv-btn{min-height:36px}}
+
+/* Mode tables stay beside the viewer without growing the whole page. */
+.mv-vibration-scroll { max-height:240px; min-height:100px; overflow:auto; resize:vertical; }
+.mv-vibration-scroll table { width:100%; border-collapse:collapse; }
+.mv-vibration-scroll th { position:sticky; top:0; background:#f0f5f7; z-index:1; }
+.mv-vibration-scroll td,.mv-vibration-scroll th { padding:7px 12px; text-align:left; }
+.mv-vibration-scroll tr[role=button] { cursor:pointer; }
+.mv-vibration-scroll tr[aria-selected=true] { background:#e0f1f3; outline:2px solid #087e85; outline-offset:-2px; }
+.mv-imaginary { color:#b71c1c; font-weight:600; }

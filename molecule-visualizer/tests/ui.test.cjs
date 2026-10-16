@@ -1,12 +1,12 @@
 // Browser-independent integration checks; a visual browser pass is still required.
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
-function boot(afir=false,profile=false){
+function boot(afir=false,profile=false,modes=false){
  const nodes=new Map(),doc={activeElement:null,events:{},addEventListener(t,f){(this.events[t]??=[]).push(f);}};
  class El{
   constructor(id=''){this.id=id;this.value='';this.children=[];this.events={};this.dataset={};this.attrs={};this.style={};this.checked=false;this.open=false;this.classList={toggle(){},add(){},remove(){}};this.clientWidth=800;this.clientHeight=500;this.tagName='DIV';}
   appendChild(x){this.children.push(x);return x;}append(...xs){xs.forEach(x=>this.appendChild(x));}removeChild(x){this.children=this.children.filter(c=>c!==x);}replaceChildren(...xs){this.children=xs;if(xs[0]?.value)this.value=xs[0].value;}
   set innerHTML(v){this.children=[];}get innerHTML(){return '';}
-  setAttribute(k,v){this.attrs[k]=v;}addEventListener(t,f){(this.events[t]??=[]).push(f);}getBoundingClientRect(){return {width:800,height:500,left:0,top:0};}setPointerCapture(){}focus(){doc.activeElement=this;}showModal(){this.open=true;}close(){this.open=false;}contains(){return false;}
+  setAttribute(k,v){this.attrs[k]=v;}addEventListener(t,f){(this.events[t]??=[]).push(f);}getBoundingClientRect(){return {width:800,height:500,left:0,top:0};}setPointerCapture(){}focus(){doc.activeElement=this;}showModal(){this.open=true;}close(){this.open=false;}scrollIntoView(){}contains(){return false;}
   getContext(){return new Proxy({createRadialGradient(){return {addColorStop(){}};}},{get:(o,k)=>o[k]||(()=>{})});}
   toDataURL(){return 'data:image/png;base64,';}fire(type,extra={}){const e={type,target:this,preventDefault(){this.defaultPrevented=true;},stopPropagation(){},stopImmediatePropagation(){},...extra};for(const f of this.events[type]||[])f(e);return e;}click(){this.fire('click');}
  }
@@ -22,7 +22,8 @@ function boot(afir=false,profile=false){
  const ctx={window:win,document:doc,navigator:{clipboard:{writeText:async()=>{}}},localStorage:{getItem(){return null;},setItem(){}},setTimeout(f){timers.set(++seq,f);return seq;},clearTimeout(i){timers.delete(i);},Blob,URL,console};
  vm.createContext(ctx);for(const f of ['model','bonding','geometry','io','molfile','periodic','formats','history','renderer3dmol','ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
  if(profile){ctx.setInterval=ctx.setTimeout;ctx.clearInterval=ctx.clearTimeout;for(const f of ['studio','trajectory','trajectory-ui','energy-profile'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);}
- if(afir)for(const f of ['afir','afir-ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);win.MoleculeVisualizer.App.init();if(profile){win.MoleculeVisualizer.Studio.init();win.MoleculeVisualizer.EnergyProfile.init();win.MoleculeVisualizer.TrajectoryUI.init();}if(afir)win.MoleculeVisualizer.AFIRUI.init();return {MV:win.MoleculeVisualizer,nodes,doc,win,timers,canvas:nodes.get('viewer').children[0]};
+ if(modes)for(const f of ['vibration-ui','path-refinement'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
+ if(afir)for(const f of ['afir','afir-ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);win.MoleculeVisualizer.App.init();if(profile){win.MoleculeVisualizer.Studio.init();win.MoleculeVisualizer.EnergyProfile.init();win.MoleculeVisualizer.TrajectoryUI.init();}if(afir)win.MoleculeVisualizer.AFIRUI.init();if(modes)win.MoleculeVisualizer.VibrationUI.init();return {MV:win.MoleculeVisualizer,nodes,doc,win,timers,canvas:nodes.get('viewer').children[0]};
 }
 test('app loads, atom edit/undo, invalid import is non-destructive, export uses latest state',()=>{const {MV,nodes}=boot(),app=MV.App;assert.equal(app.getState().atoms.length,3);assert.equal(nodes.get('statusBadge').classList!==null,true);
  const s=app.getState();s.selectedAtomIds.add(s.atoms[0].id);app.setState(s,true);nodes.get('dataText').value='O 2.5 0 0\nH .9572 0 0\nH -.239987 .926627 0';nodes.get('dataText').fire('input');nodes.get('dataApply').click();assert.equal(app.getState().atoms[0].x,2.5);nodes.get('btnUndo').click();assert.equal(app.getState().atoms[0].x,0);
@@ -422,4 +423,35 @@ test('AFIR extraction offers physical peak controls and transfers exact frames, 
  const saved=MV.IO.parseProject(MV.IO.stateToProjectText(app.getState()));assert.equal(saved.metadata.trajectory.length,4);
  nodes.get('btnUndo').click();assert.equal(MV.IO.stateToProjectText(app.getState()),before);
  MV.TrajectoryUI.open(source);nodes.get('trajectoryCount').value=4;nodes.get('trajectoryCount').fire('input');nodes.get('trajectoryApply').click();assert.match(nodes.get('framePlay').textContent,/停止/);assert.equal(app.getState().metadata.trajectory.length,4);
+});
+
+test('normal-mode rows, arrows and animation stay transient; explicit displacement is undoable and stale-safe',()=>{
+ const {MV,nodes,timers}=boot(false,true,true),app=MV.App,base=MV.Periodic.snapshot(app.getState()),original=JSON.stringify(app.getState().atoms);
+ MV.EngineUI={isBusy:()=>false};
+ const n=base.atoms.length,v={schema:'molecule-vibrations/1',status:'completed',symbols:base.atoms.map(a=>a.element),positions:base.atoms.map(a=>[a.x,a.y,a.z]),frequenciesCM:Array(3*n).fill(100),quantaMEV:Array(3*n).fill(12.4),imaginary:Array(3*n).fill(false),modes:Array.from({length:3*n},()=>base.atoms.map((_,i)=>[i?-.5:1,0,0])),settings:{imaginaryThreshold:20},significantImaginaryCount:1,units:{frequency:'cm^-1',quantum:'meV'}};
+ v.imaginary[0]=true;MV.VibrationUI.set(v,MV.Model.createState(base),'analytic test');MV.VibrationUI.show();
+ assert.equal(nodes.get('vibrationRows').children.length,3*n);assert.equal(nodes.get('vibrationRows').children[0].className,'mv-imaginary');
+ assert.equal(app.renderer().previewOnly,true);assert.ok(app.renderer().projectedModeArrows.length>0);assert.equal(app.renderer().vibrationVectors.color,'#c62828');
+ nodes.get('vibrationRows').children[1].click();assert.equal(app.renderer().vibrationVectors.color,'#176cb0');assert.equal(JSON.stringify(app.getState().atoms),original);
+ nodes.get('vibrationPlay').click();assert.match(nodes.get('vibrationPlay').textContent,/停止/);assert.equal(JSON.stringify(app.getState().atoms),original);
+ nodes.get('vibrationAmplitude').value='.04';nodes.get('vibrationAmplitude').fire('input');nodes.get('vibrationPlus').click();
+ assert.ok(Math.abs(app.getState().atoms[0].x-base.atoms[0].x-.04)<1e-12);assert.equal(app.getState().atoms[0].id,base.atoms[0].id);assert.equal(app.renderer().previewOnly,false);
+ nodes.get('btnUndo').click();assert.equal(JSON.stringify(app.getState().atoms),original);
+ app.change('unrelated edit',s=>{s.atoms[0].x+=1;});nodes.get('vibrationPlus').click();assert.match(nodes.get('vibrationMessage').textContent,/変更されています/);
+ assert.equal(app.getState().atoms[0].x,base.atoms[0].x+1);
+ assert.throws(()=>MV.VibrationUI.validate({...v,positions:[[0,0,0]]},v.symbols,v.positions));assert.throws(()=>MV.VibrationUI.vectors(v.modes[0],0));
+ MV.VibrationUI.show();app.setState(app.getState(),true);assert.equal(app.renderer().vibrationVectors,null);assert.equal(app.renderer().previewOnly,false);
+});
+
+test('path insertion retains existing nodes, endpoints and IDs and interpolates only requested intervals',()=>{
+ const {MV}=boot(false,true,true),base=MV.Periodic.snapshot(MV.App.getState());
+ const frames=[0,.2,.8,1].map(x=>{const s=MV.Model.createState(base);s.atoms.forEach(a=>a.x+=x);s.metadata.externalCalculation={energyEV:x};return MV.Periodic.snapshot(s);});
+ const before=JSON.stringify(frames),out=MV.PathRefinement.refine(frames,1,2,2);
+ assert.equal(out.length,6);assert.equal(JSON.stringify(frames),before);
+ for(const [a,b] of [[0,0],[1,1],[2,4],[3,5]])assert.equal(JSON.stringify(out[b]),JSON.stringify(frames[a]));
+ assert.ok(Math.abs(out[2].atoms[0].x-.4)<1e-12);assert.ok(Math.abs(out[3].atoms[0].x-.6)<1e-12);
+ assert.equal(out[2].metadata.externalCalculation,undefined);assert.deepEqual(out[2].atoms.map(a=>a.id),frames[0].atoms.map(a=>a.id));
+ for(const args of [[1,1,1],[0,4,1],[0,3,33],[0,2,0]])assert.throws(()=>MV.PathRefinement.refine(frames,...args));
+ const swapped=frames.map(f=>JSON.parse(JSON.stringify(f)));swapped[1].atoms[0].x=swapped[0].atoms[1].x;swapped[1].atoms[0].y=0;swapped[1].atoms[1].x=0;swapped[1].atoms[1].y=0;
+ assert.throws(()=>MV.PathRefinement.refine(swapped,0,1,1),/衝突/);
 });
