@@ -26,7 +26,7 @@
     $('engineRelaxSettings').hidden=['evaluate','vibrations'].includes(mode);$('engineSpringLabel').hidden=!['neb','cineb'].includes(mode);$('engineClimbLabel').hidden=mode!=='cineb';
     $('engineOptimizerLabel').hidden=mode!=='optimize';$('engineTSMethodLabel').hidden=$('engineTrustLabel').hidden=mode!=='ts';$('engineMoveLabel').hidden=mode==='ts';
     $('engineVibrationOptions').hidden=!single;$('engineVibrationCheckLabel').hidden=mode==='vibrations';$('enginePause').hidden=!['neb','cineb'].includes(mode);
-    $('engineModeHelp').textContent={evaluate:'座標は変更せず、指定した構造のエネルギーと力を計算します。',optimize:'現在の1構造を物理的な力のみで極小化します。人工力を加える場合は「AFIR法の設定を開く」を選んでください。',ts:'現在の構造をSellaで一次鞍点へ最適化します。NEB結果の表で任意のノードをTS入力にできます。AFIR人工力・NEBばねは加えません。Sellaの導入とbridge.py 1.4.0が必要です。',vibrations:'現在の構造の力を有限差分してASEで振動解析します。座標の最適化は行いません。未収束構造にも実行できます。',perpendicular:'全原子の3N次元接線に直交する力・座標更新だけを使います。端点固定、接線方向のばね・再配置なし。',neb:'NEBの途中で「一時停止してノード追加」を使えます。全ノードの評価が完了した直近の経路を保持し、区間を指定して補間・再開できます。端点固定。',cineb:'指定ステップ以降、最高エネルギーの内部構造を登らせます。複数の極大候補は結果表から個別にTS最適化できます。端点固定。'}[mode];
+    $('engineModeHelp').textContent={evaluate:'座標は変更せず、指定した構造のエネルギーと力を計算します。',optimize:'現在の1構造を物理的な力のみで極小化します。人工力を加える場合は「AFIR法の設定を開く」を選んでください。',ts:'現在の構造をSellaで一次鞍点へ最適化します。NEB結果の表で任意のノードをTS入力にできます。AFIR人工力・NEBばねは加えません。Sellaの導入とbridge.py 1.4.0が必要です。',vibrations:'現在の構造の力を有限差分してASEで振動解析します。座標の最適化は行いません。未収束構造にも実行できます。',perpendicular:'全原子の3N次元接線に直交する力・座標更新だけを使います。端点固定、接線方向のばね・再配置なし。',neb:'NEBの途中で「一時停止してノード追加」を使えます。全ノードの評価が完了した直近の経路を保持し、区間を指定して補間・再開できます。端点固定。',cineb:'CI開始までは通常NEBで経路を緩和し、指定ステップ以降は最高エネルギーの内部構造を登らせます。一時停止してノードを追加できます。複数の極大候補は結果表から個別にTS最適化できます。端点固定。'}[mode];
   }
   function chooseMode(){
     if($('engineMode').value!=='afir'){settings();return;}
@@ -182,13 +182,13 @@
   function download(){if(!result)return;const payload={input:result.data,result:result.result},url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='molecule-engine-result.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
   function open(){
     if(result&&result.fingerprint!==fingerprint(app().getState()))clearResult();
-    if(!job&&!result){const s=app().getState();$('engineCharge').value=s.metadata.totalCharge??s.atoms.reduce((sum,a)=>sum+(Number(a.charge)||0),0);$('engineMultiplicity').value=s.metadata.multiplicity??1;$('engineScope').value=s.metadata.trajectory?'all':'current';$('engineMode').value=s.metadata.trajectory?.length>=3?'perpendicular':'evaluate';settings();}
+    if(!job&&!result){const s=app().getState();$('engineCharge').value=s.metadata.totalCharge??s.atoms.reduce((sum,a)=>sum+(Number(a.charge)||0),0);$('engineMultiplicity').value=s.metadata.multiplicity??1;$('engineScope').value=s.metadata.trajectory?'all':'current';$('engineMode').value=s.metadata.trajectory?.length>=3?'cineb':'evaluate';settings();}
     $('engineDialog').showModal();
   }
-  function prepareNEB(mode='neb'){
+  function prepareNEB(){
     if(job)throw Error('実行中の計算を終了してください。');
-    clearResult();open();$('engineMode').value=mode==='cineb'?'cineb':'neb';$('engineScope').value='all';settings();
-    message('構造列をNEB入力に設定しました。電荷・多重度と計算条件を確認して実行してください。AFIRの人工力はNEB計算へ加えません。');
+    clearResult();open();$('engineMode').value='cineb';$('engineScope').value='all';settings();
+    message('構造列をCI-NEB入力に設定しました。電荷・多重度とCI開始ステップを含む計算条件を確認して実行してください。AFIRの人工力はCI-NEB計算へ加えません。');
   }
   function prepareSingle(mode){
     if(job){message('実行中の計算を終了してください。');$('engineDialog').showModal();return;}
@@ -201,7 +201,7 @@
       if(dirty()||fingerprint(app().getState())!==j.fingerprint)throw Error('計算後に入力が変更されています。結果JSONを保存するか、再計算してください。');
       validateResult(j.result,j);
       const frames=j.frames.map((f,k)=>{const s=MV.Model.createState(f);s.atoms.forEach((a,i)=>{[a.x,a.y,a.z]=j.result.images[k][i];});s.metadata.totalCharge=j.data.charge;s.metadata.multiplicity=j.data.multiplicity;delete s.metadata.externalCalculation;delete s.metadata.afirCalculation;MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);});
-      $('engineDialog').close();MV.PathRefinement.open(frames,j.data.mode);
+      $('engineDialog').close();MV.PathRefinement.open(frames);
     }catch(e){message(e.message);}
   }
   function init(){
