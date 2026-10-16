@@ -1,5 +1,12 @@
 const test=require('node:test'),assert=require('node:assert/strict'),T=require('../trajectory.js');
 const frames=xs=>xs.map(x=>[[x,0,0]]);
+test('NODE filenames use a safe editable name followed by _infile.log',()=>{
+ assert.equal(T.lupFilename('Water'),'Water_infile.log');assert.equal(T.lupFilename(' 水の反応経路 '),'水の反応経路_infile.log');
+ assert.equal(T.lupFilename('a/b\\c:d*e?f"g<h>i|j\nk'),'a_b_c_d_e_f_g_h_i_j_k_infile.log');
+ for(const name of [undefined,'','  ','..'])assert.equal(T.lupFilename(name),'molecule_infile.log');
+ assert.equal(T.lupFilename('sample. '),'sample_infile.log');assert.equal(T.lupFilename('水'.repeat(100)),'水'.repeat(60)+'_infile.log');
+ assert.ok(Buffer.byteLength(T.lupFilename('🌊'.repeat(100)))<=255);
+});
 test('GRRM LUP infile has sequential zero-based NODE blocks with only coordinates and separators',()=>{
  const source={kind:'neb',symbols:['O','H','H'],images:[0,.1,.2].map(x=>[[x,0,0],[.9572,0,0],[-.239987,.926627,0]]),energies:[-3,-2,-1],biasEnergies:[1,2,3],cell:{vectors:[[9,0,0],[0,9,0],[0,0,9]],pbc:[true,true,true]}};
  const before=JSON.stringify(source),text=T.lup(source,[0,2]);

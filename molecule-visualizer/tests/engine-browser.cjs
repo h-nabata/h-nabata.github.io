@@ -7,10 +7,20 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  try{
   browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:1280,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:8765/molecule-visualizer/');await page.waitForSelector('canvas');
+  await page.context().grantPermissions(['clipboard-read','clipboard-write'],{origin:'http://127.0.0.1:8765'});
+  let downloads=0;page.on('download',()=>downloads++);
+  const showText=async(button)=>{
+    const before=downloads;await page.click(button);assert.equal(downloads,before,'display must not trigger a download');
+    const field=page.locator('#trajectoryText'),text=await field.inputValue();assert.ok(text.length);assert.equal(await field.getAttribute('readonly'),'');
+    await field.focus();await field.press('Control+a');assert.deepEqual(await field.evaluate(e=>[e.selectionStart,e.selectionEnd]),[0,text.length]);
+    await field.press('Control+c');assert.equal(await page.evaluate(()=>navigator.clipboard.readText()),text);
+    return text;
+  };
   const spin=async(id,start,next)=>{const input=page.locator('#'+id);await input.fill(start);await input.press('ArrowUp');assert.equal(await input.inputValue(),next);await input.press('ArrowDown');assert.equal(await input.inputValue(),start);};
   const saveXYZ=async(button,expected,indices)=>{
+    const displayed=await showText(button==='#trajectorySaveAll'?'#trajectoryShowAll':'#trajectoryShowSelected');
     const pending=page.waitForEvent('download');await page.click(button);const file=await pending;
-    const text=fs.readFileSync(await file.path(),'utf8');assert.ok(!text.includes(token));
+    const text=fs.readFileSync(await file.path(),'utf8');assert.ok(!text.includes(token));assert.equal(text,displayed);
     const lines=text.trimEnd().split('\n'),parsed=[];let row=0;
     while(row<lines.length){const n=Number(lines[row++]),comment=lines[row++],atoms=[];for(let a=0;a<n;a++){const [symbol,...pos]=lines[row++].trim().split(/\s+/);atoms.push({symbol,pos:pos.map(Number)});}parsed.push({comment,atoms});}
     if(indices)assert.equal(parsed.length,indices.length);
@@ -21,9 +31,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   };
   const before=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms));
   const saveLUP=async(button,expected,indices)=>{
+    const displayed=await showText(button==='#trajectorySaveAll'?'#trajectoryShowAll':'#trajectoryShowSelected');
+    const filename=await page.locator('#trajectoryFilename').textContent();assert.match(filename,/_infile\.log$/);
     const pending=page.waitForEvent('download');await page.click(button);const file=await pending;
-    assert.match(file.suggestedFilename(),/\.infile$/);
-    const text=fs.readFileSync(await file.path(),'utf8'),blocks=text.trimEnd().split('\n--\n');assert.ok(!text.includes(token));assert.equal(blocks.length,indices.length);
+    assert.equal(file.suggestedFilename(),filename);
+    const text=fs.readFileSync(await file.path(),'utf8'),blocks=text.trimEnd().split('\n--\n');assert.ok(!text.includes(token));assert.equal(text,displayed);assert.equal(blocks.length,indices.length);
     blocks.forEach((block,k)=>{
       const rows=block.split('\n');assert.equal(rows.shift(),`# NODE ${k}`);assert.equal(rows.length,expected.symbols.length);
       rows.forEach((row,i)=>{const [symbol,...pos]=row.split(/\s+/);assert.equal(symbol,expected.symbols[i]);assert.equal(pos.length,3);pos.forEach((x,j)=>assert.ok(Math.abs(Number(x)-expected.images[indices[k]][i][j])<1e-10));});
@@ -64,7 +76,8 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.fill('#trajectoryCount','3');await saveXYZ('#trajectorySaveSelected',optExpected,[0,2,3]);
   await page.selectOption('#trajectoryMethod','distance');const picked=await saveXYZ('#trajectorySaveSelected',optExpected);assert.equal(picked.ids.length,3);assert.equal(picked.ids[0],0);assert.equal(picked.ids.at(-1),3);
   await page.fill('#trajectoryCount','5');assert.equal(await page.locator('#trajectorySaveSelected').isDisabled(),true);await page.fill('#trajectoryCount','3');
-  await page.selectOption('#trajectoryFormat','lup');await saveLUP('#trajectorySaveAll',optExpected,[0,1,2,3]);await saveLUP('#trajectorySaveSelected',optExpected,picked.ids);
+  await page.selectOption('#trajectoryFormat','lup');assert.equal(await page.locator('#trajectoryName').inputValue(),'Water');assert.equal(await page.locator('#trajectoryFilename').textContent(),'Water_infile.log');
+  await page.fill('#trajectoryName','水/経路');assert.equal(await page.locator('#trajectoryFilename').textContent(),'水_経路_infile.log');await saveLUP('#trajectorySaveAll',optExpected,[0,1,2,3]);await saveLUP('#trajectorySaveSelected',optExpected,picked.ids);
   await page.selectOption('#trajectoryMethod','index');await saveLUP('#trajectorySaveSelected',optExpected,[0,2,3]);
   await page.screenshot({path:'test-artifacts/trajectory-export.png'});
   await page.click('#trajectoryClose');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
@@ -100,7 +113,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   const afir=JSON.parse(fs.readFileSync(await afirFile.path(),'utf8'));assert.equal(afir.input.config.maxSteps,3);assert.equal(afir.result.images.length,4);assert.equal(afir.result.validation,'biased-trajectory-not-ts');assert.ok(!JSON.stringify(afir).includes(token));
   await page.click('#afirXYZ');await saveXYZ('#trajectorySaveAll',afir.result,[0,1,2,3]);
   await page.fill('#trajectoryCount','3');await page.selectOption('#trajectoryMethod','distance');const afirPicked=await saveXYZ('#trajectorySaveSelected',afir.result);
-  await page.selectOption('#trajectoryFormat','lup');await saveLUP('#trajectorySaveAll',afir.result,[0,1,2,3]);await saveLUP('#trajectorySaveSelected',afir.result,afirPicked.ids);
+  await page.selectOption('#trajectoryFormat','lup');assert.equal(await page.locator('#trajectoryFilename').textContent(),'Water_infile.log');await saveLUP('#trajectorySaveAll',afir.result,[0,1,2,3]);await saveLUP('#trajectorySaveSelected',afir.result,afirPicked.ids);
   assert.equal(afirPicked.ids.length,3);assert.equal(afirPicked.ids[0],0);assert.equal(afirPicked.ids.at(-1),3);
   for(const f of afirPicked.parsed)assert.match(f.comment,/bias_eV=.*biased_energy_eV=/);
   await page.click('#trajectoryClose');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
@@ -204,6 +217,8 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   const dimensions=await local.locator('#engineDialog').evaluate(e=>({client:e.clientWidth,scroll:e.scrollWidth}));assert.ok(dimensions.scroll<=dimensions.client+2,'dialog must fit mobile width');await local.screenshot({path:'test-artifacts/engine-mobile.png'});
   await local.click('#engineRun');await local.waitForSelector('#engineResult:not([hidden])');await local.click('#engineXYZ');
   await local.selectOption('#trajectoryFormat','lup');
+  await local.click('#trajectoryShowAll');assert.match(await local.locator('#trajectoryText').inputValue(),/^# NODE 0\n/);
+  await local.click('#trajectorySelectText');const selectedText=await local.locator('#trajectoryText').evaluate(e=>[e.selectionStart,e.selectionEnd,e.value.length]);assert.deepEqual(selectedText,[0,selectedText[2],selectedText[2]]);
   const exportDimensions=await local.locator('#trajectoryDialog').evaluate(e=>({client:e.clientWidth,scroll:e.scrollWidth}));assert.ok(exportDimensions.scroll<=exportDimensions.client+2,'XYZ export dialog must fit mobile width');
   assert.equal(await local.locator('#trajectoryCount').inputValue(),'1');await local.screenshot({path:'test-artifacts/trajectory-mobile.png'});
   // Tokens do not enter autosave.
