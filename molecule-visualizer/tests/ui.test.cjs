@@ -396,3 +396,30 @@ test('trajectory extraction UI rejects invalid counts and preserves the editor a
  nodes.get('trajectoryFormat').value='xyz';nodes.get('trajectoryFormat').fire('change');assert.equal(nodes.get('trajectoryCellNotice').hidden,true);
  assert.equal(MV.IO.stateToProjectText(MV.App.getState()),before);
 });
+
+test('AFIR extraction offers physical peak controls and transfers exact frames, IDs, charge and energies with undo',()=>{
+ const {MV,nodes}=boot(false,true),app=MV.App,base=MV.Periodic.snapshot(app.getState()),before=MV.IO.stateToProjectText(app.getState());
+ // Stub only viewport scrolling, not frame application or profile synchronization.
+ nodes.get('viewer').scrollIntoView=()=>{};
+ let nebOpened=0;MV.EngineUI={isBusy:()=>false,prepareNEB:()=>nebOpened++};
+ const energies=[0,1,0,2,0,4,0,2,0],source={title:'AFIR',kind:'afir',symbols:base.atoms.map(a=>a.element),atomIds:base.atoms.map(a=>a.id),images:energies.map((_,i)=>base.atoms.map(a=>[a.x+i*.1,a.y,a.z])),energies,biasEnergies:energies.map(()=>10),base:()=>base,charge:-1,multiplicity:2};
+ MV.TrajectoryUI.open(source);assert.equal(nodes.get('trajectoryCount').min,3);
+ nodes.get('trajectoryCount').value=2;nodes.get('trajectoryCount').fire('input');assert.equal(nodes.get('trajectoryNEB').disabled,true);assert.match(nodes.get('trajectorySelection').textContent,/3ノード/);
+ nodes.get('trajectoryCount').value=4;nodes.get('trajectorySmooth').value=1;nodes.get('trajectorySmooth').fire('input');assert.match(nodes.get('trajectorySelection').textContent,/1, 4, 6, 9/);
+ nodes.get('trajectoryShowSelected').click();const text=nodes.get('trajectoryText').value;assert.match(text,/source_frame=6\/9/);
+ nodes.get('trajectorySmooth').value=2;nodes.get('trajectorySmooth').fire('input');assert.equal(nodes.get('trajectoryApply').disabled,true);assert.equal(nodes.get('trajectoryText').value,'');
+ nodes.get('trajectorySmooth').value=1;nodes.get('trajectorySmooth').fire('input');
+ nodes.get('dataText').value='unfinished';nodes.get('dataText').fire('input');nodes.get('trajectoryNEB').click();assert.equal(nebOpened,0);assert.equal(MV.IO.stateToProjectText(app.getState()),before);assert.equal(nodes.get('dataText').value,'unfinished');
+ nodes.get('dataReset').click();MV.EngineUI.isBusy=()=>true;nodes.get('trajectoryNEB').click();assert.equal(nebOpened,0);assert.match(nodes.get('trajectoryMessage').textContent,/実行中/);MV.EngineUI.isBusy=()=>false;
+ nodes.get('trajectoryNEB').click();assert.equal(nebOpened,1);assert.equal(nodes.get('trajectoryDialog').open,false);
+ const frames=app.getState().metadata.trajectory;assert.deepEqual(Array.from(frames,f=>f.metadata.trajectoryExtraction.sourceFrame),[0,3,5,8]);
+ for(let k=0;k<frames.length;k++){
+  const f=frames[k],i=[0,3,5,8][k];assert.equal(f.metadata.totalCharge,-1);assert.equal(f.metadata.multiplicity,2);assert.equal(f.metadata.afirCalculation.physicalEnergyEV,energies[i]);
+  assert.equal(JSON.stringify(f.atoms.map(a=>a.id)),JSON.stringify(source.atomIds));assert.equal(JSON.stringify(f.atoms.map(a=>[a.x,a.y,a.z])),JSON.stringify(source.images[i]));
+ }
+ MV.Studio.frame(2);assert.match(nodes.get('profileValue').textContent,/E = 4.000000 eV/);
+ assert.equal(JSON.stringify(app.renderer().state.atoms.map(a=>[a.x,a.y,a.z])),JSON.stringify(source.images[5]));
+ const saved=MV.IO.parseProject(MV.IO.stateToProjectText(app.getState()));assert.equal(saved.metadata.trajectory.length,4);
+ nodes.get('btnUndo').click();assert.equal(MV.IO.stateToProjectText(app.getState()),before);
+ MV.TrajectoryUI.open(source);nodes.get('trajectoryCount').value=4;nodes.get('trajectoryCount').fire('input');nodes.get('trajectoryApply').click();assert.match(nodes.get('framePlay').textContent,/停止/);assert.equal(app.getState().metadata.trajectory.length,4);
+});

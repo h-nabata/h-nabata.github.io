@@ -56,7 +56,7 @@
     });
     marker=element('line',{y1:36,y2:150,stroke:'#55646d','stroke-dasharray':'3 3'});svg.append(marker);
     svg.append(element('text',{x:380,y:175,'font-size':12},isStep(next)?'最適化ステップ →':'経路の構造番号 →'));
-    $('profileTitle').textContent=next.title;$('profileLegend').textContent=next.biasEnergies?'緑：物理エネルギー　茶：物理エネルギー＋人工項。横軸は探索ステップで、反応座標やTS検証結果ではありません。':(isStep(next)?'緑：物理エネルギー。横軸は最適化ステップです。':'緑：物理エネルギー。横軸は構造番号です（単一構造の評価では1点）。');
+    $('profileTitle').textContent=next.title;$('profileLegend').textContent=next.biasEnergies?'緑：物理エネルギー　茶：物理エネルギー＋人工項。横軸は'+(isStep(next)?'探索ステップ':'構造番号')+'で、反応座標やTS検証結果ではありません。':(isStep(next)?'緑：物理エネルギー。横軸は最適化ステップです。':'緑：物理エネルギー。横軸は構造番号です（単一構造の評価では1点）。');
     $('profileXYZ').disabled=typeof next.exportXYZ!=='function';
     range=$('profileRange');range.max=next.energies.length-1;range.disabled=next.energies.length<2;
     follow=follow&&visible;panel(visible);select(follow?(next.focusIndex??next.energies.length-1):Math.min(index,next.energies.length-1),follow);
