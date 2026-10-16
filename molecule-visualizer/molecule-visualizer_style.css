@@ -78,10 +78,11 @@
 .mv-afir-panel label{display:block;font-size:12px;color:var(--muted)}
 .mv-afir-panel input,.mv-afir-panel select{width:100%;min-width:0;padding:7px;border:1px solid var(--border);border-radius:6px;background:white;color:var(--ink)}
 .mv-afir-add{display:grid;grid-template-columns:auto minmax(50px,1fr) auto;gap:6px;align-items:center;margin:10px 0}
-.mv-afir-pair{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:8px 0}
+.mv-afir-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:8px 0}
+.mv-afir-pair label{min-width:0}.mv-afir-pair input,.mv-afir-pair select{display:block;margin-top:4px}.mv-afir-gamma{white-space:nowrap}
 .mv-afir-list{display:grid;gap:8px}.mv-afir-item{border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:7px;padding:8px;display:flex;gap:5px;flex-wrap:wrap;align-items:center;background:#f7fafb}
 .mv-afir-item .mv-btn{padding:4px 7px;min-height:30px;font-size:12px}.mv-afir-atoms{font-size:12px;flex:1;min-width:70px;overflow-wrap:anywhere}
-.mv-afir-pair-label{width:100%;font-size:13px;font-weight:600;overflow-wrap:anywhere}.mv-afir-item label{display:flex;align-items:center;gap:4px}.mv-afir-item input{max-width:90px}
+.mv-afir-pair-label{width:100%;font-size:13px;font-weight:600;overflow-wrap:anywhere}.mv-afir-item label{display:flex;align-items:center;gap:8px;white-space:nowrap;flex-shrink:0}.mv-afir-item input{width:90px;max-width:90px;flex:0 0 90px}
 .mv-app .mv-afir-note{font-size:10pt;color:#397254;line-height:1.6;white-space:pre-line;margin:8px 0}
 .mv-afir-status{padding:10px;background:#eef6f4;border-radius:6px;font-size:13px;line-height:1.7;overflow-wrap:anywhere}
 #afirAlpha{font-size:12px;color:var(--muted)}#afirResult{margin-top:16px}#afirResultSummary{font-size:13px;line-height:1.7}#afirPlot{width:100%;margin:8px 0;background:#f7fafb;border:1px solid var(--border);border-radius:6px}
