@@ -172,9 +172,12 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.click('#btnUndo');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().metadata.trajectory)),source);
   // NEB and CI-NEB export the final path, including endpoints, rather than optimizer iterations.
   for(const mode of ['neb','cineb']){
-    await page.click('#btnExternalEngine');await page.selectOption('#engineMode',mode);await page.fill('#engineSteps','3');await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
+    await page.click('#btnExternalEngine');await page.selectOption('#engineMode',mode);await page.fill('#engineSteps','3');
+    if(mode==='cineb')await page.fill('#engineClimb','1');
+    await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
     const pending=page.waitForEvent('download');await page.click('#engineDownload');const file=await pending,report=JSON.parse(fs.readFileSync(await file.path(),'utf8'));
     assert.equal(report.result.mode,mode);assert.equal(report.result.images.length,3);assert.notDeepEqual(report.result.images[1],report.input.images[1]);
+    if(mode==='cineb'){assert.equal(report.input.climbAfter,1);assert.equal(report.result.climbingImage,1);}
     await page.click('#engineProfile');await page.click('#profileXYZ');await page.selectOption('#trajectoryFormat','lup');
     assert.equal(await page.locator('#trajectoryCellNotice').isVisible(),true);await saveLUP('#trajectorySaveAll',report.result,[0,1,2]);
     await page.fill('#trajectoryCount','2');await saveLUP('#trajectorySaveSelected',report.result,[0,2]);
