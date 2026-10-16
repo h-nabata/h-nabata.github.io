@@ -20,6 +20,15 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
     return {parsed,ids};
   };
   const before=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms));
+  const saveLUP=async(button,expected,indices)=>{
+    const pending=page.waitForEvent('download');await page.click(button);const file=await pending;
+    assert.match(file.suggestedFilename(),/\.infile$/);
+    const text=fs.readFileSync(await file.path(),'utf8'),blocks=text.trimEnd().split('\n--\n');assert.ok(!text.includes(token));assert.equal(blocks.length,indices.length);
+    blocks.forEach((block,k)=>{
+      const rows=block.split('\n');assert.equal(rows.shift(),`# NODE ${k}`);assert.equal(rows.length,expected.symbols.length);
+      rows.forEach((row,i)=>{const [symbol,...pos]=row.split(/\s+/);assert.equal(symbol,expected.symbols[i]);assert.equal(pos.length,3);pos.forEach((x,j)=>assert.ok(Math.abs(Number(x)-expected.images[indices[k]][i][j])<1e-10));});
+    });
+  };
   const previewRequests=[],jobRequests=[];page.on('request',r=>{if(r.url().includes('?preview=1'))previewRequests.push(r.url());if(r.method()==='POST'&&r.url().endsWith('/api/jobs'))jobRequests.push(r.url());});
   assert.equal(await page.locator('#engineLive').isChecked(),false);assert.equal(await page.locator('#afirLive').isChecked(),false);
   await page.click('#btnExternalEngine');await page.fill('#engineURL','http://127.0.0.1:8766');await page.fill('#engineToken','incorrect');await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineMessage').textContent.includes('トークンが一致'));
@@ -55,6 +64,8 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.fill('#trajectoryCount','3');await saveXYZ('#trajectorySaveSelected',optExpected,[0,2,3]);
   await page.selectOption('#trajectoryMethod','distance');const picked=await saveXYZ('#trajectorySaveSelected',optExpected);assert.equal(picked.ids.length,3);assert.equal(picked.ids[0],0);assert.equal(picked.ids.at(-1),3);
   await page.fill('#trajectoryCount','5');assert.equal(await page.locator('#trajectorySaveSelected').isDisabled(),true);await page.fill('#trajectoryCount','3');
+  await page.selectOption('#trajectoryFormat','lup');await saveLUP('#trajectorySaveAll',optExpected,[0,1,2,3]);await saveLUP('#trajectorySaveSelected',optExpected,picked.ids);
+  await page.selectOption('#trajectoryMethod','index');await saveLUP('#trajectorySaveSelected',optExpected,[0,2,3]);
   await page.screenshot({path:'test-artifacts/trajectory-export.png'});
   await page.click('#trajectoryClose');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
   await page.click('#btnExternalEngine');await page.click('#engineProfile');assert.equal(await page.locator('#profileRange').getAttribute('max'),'3');
@@ -89,6 +100,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   const afir=JSON.parse(fs.readFileSync(await afirFile.path(),'utf8'));assert.equal(afir.input.config.maxSteps,3);assert.equal(afir.result.images.length,4);assert.equal(afir.result.validation,'biased-trajectory-not-ts');assert.ok(!JSON.stringify(afir).includes(token));
   await page.click('#afirXYZ');await saveXYZ('#trajectorySaveAll',afir.result,[0,1,2,3]);
   await page.fill('#trajectoryCount','3');await page.selectOption('#trajectoryMethod','distance');const afirPicked=await saveXYZ('#trajectorySaveSelected',afir.result);
+  await page.selectOption('#trajectoryFormat','lup');await saveLUP('#trajectorySaveAll',afir.result,[0,1,2,3]);await saveLUP('#trajectorySaveSelected',afir.result,afirPicked.ids);
   assert.equal(afirPicked.ids.length,3);assert.equal(afirPicked.ids[0],0);assert.equal(afirPicked.ids.at(-1),3);
   for(const f of afirPicked.parsed)assert.match(f.comment,/bias_eV=.*biased_energy_eV=/);
   await page.click('#trajectoryClose');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
@@ -158,6 +170,18 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.deepEqual(positions(after[0]),positions(initial[0]));assert.deepEqual(positions(after[2]),positions(initial[2]));assert.notDeepEqual(positions(after[1]),positions(initial[1]));assert.deepEqual(after[1].metadata.cell,initial[1].metadata.cell);
   await page.evaluate(()=>MoleculeVisualizer.Studio.frame(1));assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.externalCalculation.mode),'perpendicular');assert.equal((await page.evaluate(()=>MoleculeVisualizer.Studio.allXYZ())).match(/\nO /g).length,3);
   await page.click('#btnUndo');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().metadata.trajectory)),source);
+  // NEB and CI-NEB export the final path, including endpoints, rather than optimizer iterations.
+  for(const mode of ['neb','cineb']){
+    await page.click('#btnExternalEngine');await page.selectOption('#engineMode',mode);await page.fill('#engineSteps','3');await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
+    const pending=page.waitForEvent('download');await page.click('#engineDownload');const file=await pending,report=JSON.parse(fs.readFileSync(await file.path(),'utf8'));
+    assert.equal(report.result.mode,mode);assert.equal(report.result.images.length,3);assert.notDeepEqual(report.result.images[1],report.input.images[1]);
+    await page.click('#engineProfile');await page.click('#profileXYZ');await page.selectOption('#trajectoryFormat','lup');
+    assert.equal(await page.locator('#trajectoryCellNotice').isVisible(),true);await saveLUP('#trajectorySaveAll',report.result,[0,1,2]);
+    await page.fill('#trajectoryCount','2');await saveLUP('#trajectorySaveSelected',report.result,[0,2]);
+    await page.selectOption('#trajectoryMethod','distance');await saveLUP('#trajectorySaveSelected',report.result,[0,2]);
+    await page.selectOption('#trajectoryFormat','xyz');await saveXYZ('#trajectorySaveAll',report.result,[0,1,2]);
+    await page.click('#trajectoryClose');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().metadata.trajectory)),source);
+  }
   // Generic two-carbon geometry exercises visible bond formation and cleavage.
   await page.evaluate(()=>{
     const MV=MoleculeVisualizer,s=MV.IO.parseXYZToState('C 0 0 0\nC 3 0 0'),base=MV.Periodic.snapshot(s),images=[3,1.4,3].map(x=>[[0,0,0],[x,0,0]]);
@@ -176,6 +200,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await local.fill('#engineToken',token);await local.click('#engineConnect');await local.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
   const dimensions=await local.locator('#engineDialog').evaluate(e=>({client:e.clientWidth,scroll:e.scrollWidth}));assert.ok(dimensions.scroll<=dimensions.client+2,'dialog must fit mobile width');await local.screenshot({path:'test-artifacts/engine-mobile.png'});
   await local.click('#engineRun');await local.waitForSelector('#engineResult:not([hidden])');await local.click('#engineXYZ');
+  await local.selectOption('#trajectoryFormat','lup');
   const exportDimensions=await local.locator('#trajectoryDialog').evaluate(e=>({client:e.clientWidth,scroll:e.scrollWidth}));assert.ok(exportDimensions.scroll<=exportDimensions.client+2,'XYZ export dialog must fit mobile width');
   assert.equal(await local.locator('#trajectoryCount').inputValue(),'1');await local.screenshot({path:'test-artifacts/trajectory-mobile.png'});
   // Tokens do not enter autosave.

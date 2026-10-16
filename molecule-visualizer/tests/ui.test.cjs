@@ -346,8 +346,17 @@ test('trajectory extraction UI rejects invalid counts and preserves the editor a
  assert.match(nodes.get('trajectorySelection').textContent,/1, 3, 5, 7, 9, 11/);
  nodes.get('trajectoryMethod').value='distance';nodes.get('trajectoryMethod').fire('change');
  assert.match(nodes.get('trajectorySelection').textContent,/1, 6, 8, 9, 10, 11/);
+ const selection=nodes.get('trajectorySelection').textContent;
+ nodes.get('trajectoryFormat').value='lup';nodes.get('trajectoryFormat').fire('change');
+ assert.equal(nodes.get('trajectorySaveAll').textContent,'全構造をinfile保存');assert.equal(nodes.get('trajectorySaveSelected').textContent,'抽出した構造列をinfile保存');
+ assert.equal(nodes.get('trajectorySelection').textContent,selection);assert.equal(nodes.get('trajectoryCellNotice').hidden,true);
  for(const value of ['','1','12','2.5']){nodes.get('trajectoryCount').value=value;nodes.get('trajectoryCount').fire('input');assert.equal(nodes.get('trajectorySaveSelected').disabled,true);}
  assert.equal(MV.IO.stateToProjectText(MV.App.getState()),before);
  MV.TrajectoryUI.open({title:'single',kind:'optimize',symbols:['H'],images:[[[0,0,0]]]});
  assert.equal(nodes.get('trajectoryCount').value,1);assert.equal(nodes.get('trajectorySaveSelected').disabled,false);
+ assert.equal(nodes.get('trajectoryFormat').value,'xyz');assert.equal(nodes.get('trajectorySaveAll').textContent,'全構造をXYZ保存');
+ MV.TrajectoryUI.open({title:'periodic NEB',kind:'neb',symbols:['H'],images:[[[0,0,0]],[[1,0,0]]],cell:{vectors:[[9,0,0],[0,9,0],[0,0,9]],pbc:[true,false,false]}});
+ nodes.get('trajectoryFormat').value='lup';nodes.get('trajectoryFormat').fire('change');assert.equal(nodes.get('trajectoryCellNotice').hidden,false);
+ nodes.get('trajectoryFormat').value='xyz';nodes.get('trajectoryFormat').fire('change');assert.equal(nodes.get('trajectoryCellNotice').hidden,true);
+ assert.equal(MV.IO.stateToProjectText(MV.App.getState()),before);
 });

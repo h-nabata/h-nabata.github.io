@@ -39,20 +39,28 @@
     }
     selected.push(n-1);return selected;
   }
-  function xyz(source,selected,method='all'){
+  function validateSelection(source,selected){
     validate(source);
-    if(!['all','index','distance'].includes(method))throw Error('抽出方法が不正です。');
     if(!Array.isArray(selected)||!selected.length||selected.some((i,k)=>!Number.isInteger(i)||i<0||i>=source.images.length||(k>0&&i<=selected[k-1])))throw Error('出力するフレームの指定が不正です。');
+  }
+  function coordinates(source,i){return source.images[i].map((p,a)=>source.symbols[a]+' '+p.map(x=>x.toFixed(12)).join(' '));}
+  function lup(source,selected){
+    validateSelection(source,selected);
+    return selected.map((i,k)=>[`# NODE ${k}`,...coordinates(source,i)].join('\n')).join('\n--\n')+'\n';
+  }
+  function xyz(source,selected,method='all'){
+    validateSelection(source,selected);
+    if(!['all','index','distance'].includes(method))throw Error('抽出方法が不正です。');
     return selected.map((i,k)=>{
       let comment=`MoleculeStudio frame=${k+1}/${selected.length} source_frame=${i+1}/${source.images.length} selection=${method}`;
       if(source.kind==='afir'||source.kind==='optimize')comment+=` step=${source.stepNumbers?.[i]??i}`;
       if(source.energies)comment+=` energy_eV=${source.energies[i].toPrecision(15)}`;
       if(source.biasEnergies)comment+=` bias_eV=${source.biasEnergies[i].toPrecision(15)} biased_energy_eV=${(source.energies[i]+source.biasEnergies[i]).toPrecision(15)}`;
       if(source.cell)comment+=` Lattice="${source.cell.vectors.flat().join(' ')}" pbc="${source.cell.pbc.map(v=>v?'T':'F').join(' ')}" Properties=species:S:1:pos:R:3`;
-      return [source.symbols.length,comment,...source.images[i].map((p,a)=>source.symbols[a]+' '+p.map(x=>x.toFixed(12)).join(' '))].join('\n')+'\n';
+      return [source.symbols.length,comment,...coordinates(source,i)].join('\n')+'\n';
     }).join('');
   }
-  const api={validate,distances,indices,xyz};
+  const api={validate,distances,indices,xyz,lup};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   (global.MoleculeVisualizer=global.MoleculeVisualizer||{}).Trajectory=api;
 })(typeof window!=='undefined'?window:globalThis);
