@@ -17,14 +17,14 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./studio.js?v=18"></script>
 <script defer src="./advanced.js?v=16"></script>
 <script defer src="./generator-ui.js?v=16"></script>
-<script defer src="./trajectory.js?v=2"></script>
-<script defer src="./trajectory-ui.js?v=2"></script>
+<script defer src="./trajectory.js?v=3"></script>
+<script defer src="./trajectory-ui.js?v=3"></script>
 <script defer src="./energy-profile.js?v=3"></script>
-<script defer src="./engine-ui.js?v=22"></script>
+<script defer src="./engine-ui.js?v=23"></script>
 <script defer src="./afir.js?v=17"></script>
 <script defer src="./afir-search.js?v=16"></script>
 <script defer src="./afir-runner.js?v=18"></script>
-<script defer src="./afir-ui.js?v=21"></script>
+<script defer src="./afir-ui.js?v=22"></script>
 <script defer src="./measurement-ui.js?v=16"></script>
 <script defer src="./molecule-visualizer_main.js?v=18"></script>
 
@@ -435,15 +435,17 @@ python bridge.py --engine gxtb --binary /absolute/path/to/xtb --allow-origin htt
   <p id="trajectorySummary"></p><p id="trajectoryNotice" class="mv-small" hidden></p>
   <label>保存形式<select id="trajectoryFormat"><option value="xyz">XYZ（複数フレーム）</option><option value="lup">GRRM LUP infile（# NODE形式）</option></select></label>
   <p id="trajectoryFormatHelp" class="mv-small"></p>
+  <div id="trajectoryNameField" hidden><label>ファイル名の名前部分<input id="trajectoryName" type="text" maxlength="60" placeholder="molecule" aria-describedby="trajectoryFilenameHelp"></label><p id="trajectoryFilenameHelp" class="mv-small">計算開始時の構造名を初期値にします。変更可能です。ファイル名に使えない文字は「_」に置き換えます。</p><p class="mv-small">保存名：<output id="trajectoryFilename"></output></p></div>
   <p id="trajectoryCellNotice" class="mv-small" hidden>この結果は周期系です。infileには表示中のCartesian座標だけを出力し、セルと周期境界条件は含めません。周期情報の保持にはXYZを選んでください。</p>
-  <button class="mv-btn" id="trajectorySaveAll">全構造をXYZ保存</button>
+  <div class="mv-row"><button class="mv-btn" id="trajectorySaveAll">全構造をXYZ保存</button><button class="mv-btn" id="trajectoryShowAll">全構造を表示</button></div>
   <hr><h3>指定したノード数に抽出</h3>
   <div class="mv-grid"><label>抽出するノード数<input id="trajectoryCount" type="number" min="2" max="10001" step="1" value="10"></label>
   <label>抽出方法<select id="trajectoryMethod"><option value="index">ステップ番号を等分</option><option value="distance">原子の累積変位を等分</option></select></label></div>
   <p class="mv-small">両端点を含み、元の構造列から重複しないフレームを選びます。座標の補間は行いません。「原子の累積変位」は、隣接構造間の全原子のRMS変位を足し合わせた長さです。回転・並進の位置合わせや周期境界での折り返しは行いません。構造が離散的なため、抽出間隔は厳密に等しくなるとは限りません。</p>
   <p id="trajectorySelection" class="mv-small" role="status"></p>
-  <button class="mv-btn primary" id="trajectorySaveSelected">抽出した構造列をXYZ保存</button>
+  <div class="mv-row"><button class="mv-btn primary" id="trajectorySaveSelected">抽出した構造列をXYZ保存</button><button class="mv-btn" id="trajectoryShowSelected">抽出した構造列を表示</button></div>
   <p class="mv-small">どちらの形式も全構造を1つのファイルにまとめ、原子順序を維持します。保存で編集画面の構造は変わりません。</p>
+  <section id="trajectoryDisplay" hidden><h3>出力データ</h3><p id="trajectoryDisplaySummary" class="mv-small"></p><label for="trajectoryText">表示した構造列の全文</label><textarea id="trajectoryText" rows="12" wrap="off" readonly spellcheck="false" aria-describedby="trajectoryTextHelp"></textarea><p id="trajectoryTextHelp" class="mv-small">欄をクリックしてCtrl+Aで全文を選択し、Ctrl+Cでコピーできます（Macは⌘A・⌘C）。省略せず表示しています。保存形式・ノード数・抽出方法を変更したら、再度「表示」を押してください。</p><button class="mv-btn" id="trajectorySelectText">表示データを全選択</button></section>
   <p id="trajectoryMessage" role="status"></p>
   <div class="mv-row mv-end"><button class="mv-btn" id="trajectoryClose" data-close="trajectoryDialog">閉じる</button></div>
 </dialog>

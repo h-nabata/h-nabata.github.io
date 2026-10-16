@@ -340,9 +340,13 @@ test('live profile can stop following, restores input on edit, and never mismatc
 });
 test('trajectory extraction UI rejects invalid counts and preserves the editor and its save contents',()=>{
  const {MV,nodes}=boot(false,true),before=MV.IO.stateToProjectText(MV.App.getState());
- MV.TrajectoryUI.open({title:'test',kind:'optimize',symbols:['H'],images:[0,.1,.2,.3,1,2,3,4,6,8,10].map(x=>[[x,0,0]])});
+ const source={title:'test',name:'水の反応経路',kind:'optimize',symbols:['H'],images:[0,.1,.2,.3,1,2,3,4,6,8,10].map(x=>[[x,0,0]])};
+ MV.TrajectoryUI.open(source);
  assert.equal(nodes.get('trajectoryDialog').open,true);
+ assert.equal(nodes.get('trajectoryDisplay').hidden,true);assert.equal(nodes.get('trajectoryName').value,'水の反応経路');
+ nodes.get('trajectoryShowAll').click();assert.equal(nodes.get('trajectoryText').value,MV.Trajectory.xyz(source,Array.from({length:11},(_,i)=>i)));
  nodes.get('trajectoryCount').value='6';nodes.get('trajectoryCount').fire('input');
+ assert.equal(nodes.get('trajectoryDisplay').hidden,true);assert.equal(nodes.get('trajectoryText').value,'');
  assert.match(nodes.get('trajectorySelection').textContent,/1, 3, 5, 7, 9, 11/);
  nodes.get('trajectoryMethod').value='distance';nodes.get('trajectoryMethod').fire('change');
  assert.match(nodes.get('trajectorySelection').textContent,/1, 6, 8, 9, 10, 11/);
@@ -350,7 +354,12 @@ test('trajectory extraction UI rejects invalid counts and preserves the editor a
  nodes.get('trajectoryFormat').value='lup';nodes.get('trajectoryFormat').fire('change');
  assert.equal(nodes.get('trajectorySaveAll').textContent,'全構造をinfile保存');assert.equal(nodes.get('trajectorySaveSelected').textContent,'抽出した構造列をinfile保存');
  assert.equal(nodes.get('trajectorySelection').textContent,selection);assert.equal(nodes.get('trajectoryCellNotice').hidden,true);
- for(const value of ['','1','12','2.5']){nodes.get('trajectoryCount').value=value;nodes.get('trajectoryCount').fire('input');assert.equal(nodes.get('trajectorySaveSelected').disabled,true);}
+ assert.equal(nodes.get('trajectoryFilename').textContent,'水の反応経路_infile.log');
+ nodes.get('trajectoryShowSelected').click();assert.equal(nodes.get('trajectoryDisplay').hidden,false);assert.equal(nodes.get('trajectoryText').value,MV.Trajectory.lup(source,[0,5,7,8,9,10]));
+ nodes.get('trajectoryName').value='水/経路';nodes.get('trajectoryName').fire('input');assert.equal(nodes.get('trajectoryFilename').textContent,'水_経路_infile.log');assert.notEqual(nodes.get('trajectoryText').value,'');
+ for(const value of ['','1','12','2.5']){nodes.get('trajectoryCount').value=value;nodes.get('trajectoryCount').fire('input');assert.equal(nodes.get('trajectorySaveSelected').disabled,true);assert.equal(nodes.get('trajectoryShowSelected').disabled,true);assert.equal(nodes.get('trajectoryText').value,'');}
+ nodes.get('trajectoryShowAll').click();assert.equal(nodes.get('trajectoryText').value,MV.Trajectory.lup(source,Array.from({length:11},(_,i)=>i)));
+ nodes.get('trajectoryFormat').value='xyz';nodes.get('trajectoryFormat').fire('change');assert.equal(nodes.get('trajectoryDisplay').hidden,true);assert.equal(nodes.get('trajectoryText').value,'');
  assert.equal(MV.IO.stateToProjectText(MV.App.getState()),before);
  MV.TrajectoryUI.open({title:'single',kind:'optimize',symbols:['H'],images:[[[0,0,0]]]});
  assert.equal(nodes.get('trajectoryCount').value,1);assert.equal(nodes.get('trajectorySaveSelected').disabled,false);

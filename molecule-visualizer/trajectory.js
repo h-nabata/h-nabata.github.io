@@ -48,6 +48,10 @@
     validateSelection(source,selected);
     return selected.map((i,k)=>[`# NODE ${k}`,...coordinates(source,i)].join('\n')).join('\n--\n')+'\n';
   }
+  function lupFilename(name){
+    const safe=Array.from(String(name||'').trim().replace(/[<>:"/\\|?*\u0000-\u001f\u007f]/g,'_')).slice(0,60).join('').replace(/[. ]+$/g,'')||'molecule';
+    return safe+'_infile.log';
+  }
   function xyz(source,selected,method='all'){
     validateSelection(source,selected);
     if(!['all','index','distance'].includes(method))throw Error('抽出方法が不正です。');
@@ -60,7 +64,7 @@
       return [source.symbols.length,comment,...coordinates(source,i)].join('\n')+'\n';
     }).join('');
   }
-  const api={validate,distances,indices,xyz,lup};
+  const api={validate,distances,indices,xyz,lup,lupFilename};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   (global.MoleculeVisualizer=global.MoleculeVisualizer||{}).Trajectory=api;
 })(typeof window!=='undefined'?window:globalThis);

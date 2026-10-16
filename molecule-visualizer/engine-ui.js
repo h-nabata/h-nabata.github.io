@@ -83,7 +83,7 @@
   }
   function resultSource(r,j){
     const t=r.trajectory||r;
-    return {title:modeText[j.data.mode],kind:j.data.mode,symbols:r.symbols,cell:r.cell,images:t.images,energies:t.energies,
+    return {title:modeText[j.data.mode],name:j.original.metadata.title,kind:j.data.mode,symbols:r.symbols,cell:r.cell,images:t.images,energies:t.energies,
       stepNumbers:j.data.mode==='optimize'&&!r.trajectory?[r.steps]:null,
       notice:j.data.mode==='optimize'&&!r.trajectory?'旧bridgeの結果には最終構造しかありません。全ステップの保存にはbridge.py 1.3.0へ更新・再接続して再計算してください。':''};
   }
