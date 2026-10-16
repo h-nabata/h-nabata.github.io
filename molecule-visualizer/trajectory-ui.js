@@ -42,7 +42,7 @@
       $('trajectorySaveSelected').disabled=false;$('trajectoryShowSelected').disabled=false;
       const canApply=typeof source.base==='function'&&selected.length<=200&&selected.length*source.symbols.length<=100000;
       $('trajectoryApply').disabled=!canApply;$('trajectoryNEB').disabled=!canApply||selected.length<3||selected.length>100||source.symbols.length>500;
-      $('trajectoryTransferHelp').textContent='描画への反映は200フレーム・合計100000原子まで、NEB入力は3〜100ノード・500原子までです。「NEB入力に取り込む」は計算条件を開き、実行ボタンを押すまで計算を開始しません。';
+      $('trajectoryTransferHelp').textContent='描画への反映は200フレーム・合計100000原子まで、CI-NEB入力は3〜100ノード・500原子までです。「CI-NEB入力に取り込む」は計算条件を開き、実行ボタンを押すまで計算を開始しません。';
     }catch(error){$('trajectorySelection').textContent=error.message;}
   }
   function open(next){
@@ -81,7 +81,7 @@
       if(MV.EngineUI?.isBusy()||MV.AFIRUI?.isBusy())throw Error('実行中の計算を終了してから構造列を取り込んでください。');
       if(typeof source.base!=='function')throw Error('原子情報がないため描画へ反映できません。XYZ保存を利用してください。');
       if(selected.length>200||selected.length*source.symbols.length>100000)throw Error('描画への反映は200フレーム・合計100000原子までです。ノード数を減らしてください。');
-      if(toNEB&&(selected.length<3||selected.length>100||source.symbols.length>500))throw Error('NEB入力は3〜100ノード・500原子までです。');
+      if(toNEB&&(selected.length<3||selected.length>100||source.symbols.length>500))throw Error('CI-NEB入力は3〜100ノード・500原子までです。');
       const original=source,ids=selected.slice(),method=$('trajectoryMethod').value,settings=options();
       const frames=ids.map(i=>{
         const s=MV.Model.createState(original.base(i));
@@ -100,7 +100,7 @@
       if(original.energies){MV.EnergyProfile.set({title:`${original.title} · 抽出した${ids.length}構造`,kind:'path',energies:ids.map(i=>original.energies[i]),biasEnergies:original.biasEnergies?ids.map(i=>original.biasEnergies[i]):null,positions:i=>original.images[ids[i]],base:i=>frames[i],exportXYZ:()=>open(original),details:()=>open(original)});MV.EnergyProfile.bindTrajectory(frames);}
       else MV.EnergyProfile.reset();
       if(toNEB)MV.EngineUI.prepareNEB();else{MV.EnergyProfile.reveal();MV.Studio.play();}
-      MV.App.setStatus(`${ids.length}構造を${toNEB?'NEB入力に取り込みました。電荷・多重度と計算条件を確認して実行してください。':'描画へ反映しました。FRAMESで再生・移動できます。'}「戻す」で反映前に戻れます。`);
+      MV.App.setStatus(`${ids.length}構造を${toNEB?'CI-NEB入力に取り込みました。電荷・多重度と計算条件を確認して実行してください。':'描画へ反映しました。FRAMESで再生・移動できます。'}「戻す」で反映前に戻れます。`);
     }catch(error){$('trajectoryMessage').textContent=error.message;}
   }
   function init(){

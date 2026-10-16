@@ -45,7 +45,8 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.equal(await page.locator('#engineLive').isChecked(),false);assert.equal(await page.locator('#afirLive').isChecked(),false);
   await page.click('#btnExternalEngine');await page.fill('#engineURL','http://127.0.0.1:8766');await page.fill('#engineToken','incorrect');await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineMessage').textContent.includes('トークンが一致'));
   await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
-  await page.selectOption('#engineMode','neb');
+  assert.equal(await page.locator('#engineMode option[value=neb]').count(),0);
+  await page.selectOption('#engineMode','cineb');
   await spin('engineFmax','0.3','0.31');await spin('engineMove','0.04','0.05');await spin('engineSpring','0.1','0.2');
   await page.fill('#engineFmax','0.00001');await page.locator('#engineFmax').press('Tab');assert.equal(await page.locator('#engineFmax').inputValue(),'0.00001');
   await page.selectOption('#engineMode','evaluate');await page.selectOption('#engineScope','current');await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
@@ -119,7 +120,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   for(const f of afirPicked.parsed)assert.match(f.comment,/bias_eV=.*biased_energy_eV=/);
   await page.click('#trajectoryClose');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
   assert.equal(previewRequests.length,0,'live display must make no preview requests by default');
-  // Use the actual AFIR result as an extracted animation and then as a real NEB job.
+  // Use the actual AFIR result as an extracted animation and then as a real CI-NEB job.
   await page.click('#afirXYZ');await page.fill('#trajectoryCount','3');await page.selectOption('#trajectoryMethod','distance');
   await page.click('#trajectoryApply');assert.match(await page.locator('#framePlay').textContent(),/停止/);
   await page.locator('#frameRange').focus();await page.locator('#frameRange').press('Home');
@@ -136,12 +137,14 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.click('#btnUndo');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
   await page.click('#afirXYZ');await page.fill('#trajectoryCount','3');await page.selectOption('#trajectoryMethod','distance');
   let submitted=[];const record=req=>{if(req.method()==='POST'&&req.url().endsWith('/api/jobs'))submitted.push(req.postDataJSON());};page.on('request',record);
-  await page.click('#trajectoryNEB');assert.equal(await page.locator('#engineDialog').isVisible(),true);assert.equal(await page.locator('#engineMode').inputValue(),'neb');assert.equal(await page.locator('#engineScope').inputValue(),'all');
+  await page.click('#trajectoryNEB');assert.equal(await page.locator('#engineDialog').isVisible(),true);assert.equal(await page.locator('#engineMode').inputValue(),'cineb');assert.equal(await page.locator('#engineScope').inputValue(),'all');
   assert.equal(await page.locator('#engineCharge').inputValue(),String(afir.result.charge));assert.equal(await page.locator('#engineMultiplicity').inputValue(),String(afir.result.multiplicity));assert.equal(submitted.length,0,'NEB import must not start calculation');
-  await page.fill('#engineSteps','1');await page.fill('#engineFmax','0.00001');await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
-  assert.equal(submitted.length,1);assert.equal(submitted[0].mode,'neb');assert.equal(submitted[0].maxSteps,1);assert.equal(submitted[0].fmax,.00001);assert.equal(submitted[0].afir,undefined);
+  await page.fill('#engineSteps','1');await page.fill('#engineFmax','0.00001');
+  await page.click('#engineRun');assert.match(await page.locator('#engineMessage').textContent(),/CI開始ステップ/);assert.equal(submitted.length,0);
+  await page.fill('#engineClimb','0');await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
+  assert.equal(submitted.length,1);assert.equal(submitted[0].mode,'cineb');assert.equal(submitted[0].climbAfter,0);assert.equal(submitted[0].maxSteps,1);assert.equal(submitted[0].fmax,.00001);assert.equal(submitted[0].afir,undefined);
   assert.deepEqual(submitted[0].images,afirPicked.ids.map(i=>afir.result.images[i]));
-  const nebFilePending=page.waitForEvent('download');await page.click('#engineDownload');const nebReport=JSON.parse(fs.readFileSync(await(await nebFilePending).path(),'utf8'));assert.equal(nebReport.result.mode,'neb');assert.equal(nebReport.result.images.length,3);assert.notEqual(nebReport.result.reason,'failed');
+  const nebFilePending=page.waitForEvent('download');await page.click('#engineDownload');const nebReport=JSON.parse(fs.readFileSync(await(await nebFilePending).path(),'utf8'));assert.equal(nebReport.result.mode,'cineb');assert.equal(nebReport.result.climbingImage,1);assert.equal(nebReport.result.images.length,3);assert.notEqual(nebReport.result.reason,'failed');
   page.off('request',record);await page.click('#engineClose');await page.click('#btnUndo');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
   await page.click('#afirProfile');
   const viewBox=await page.locator('#viewer').boundingBox(),plotBox=await page.locator('#profilePanel').boundingBox();
@@ -197,7 +200,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   const xyz=offset=>`3\npath Lattice="9 0 0 1 9 0 0 0 9" pbc="T T T"\nO 0 0 0\nH ${.96+offset} 0 0\nH -.24 .93 0\n`;
   await page.fill('#dataText',[0,.2,.4].map(xyz).join(''));await page.click('#dataApply');
   const source=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().metadata.trajectory));
-  await page.click('#btnExternalEngine');await page.selectOption('#engineMode','perpendicular');await page.fill('#engineSteps','3');await page.fill('#engineFmax','0.00001');await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
+  await page.click('#btnExternalEngine');assert.equal(await page.locator('#engineMode').inputValue(),'cineb');await page.selectOption('#engineMode','perpendicular');await page.fill('#engineSteps','3');await page.fill('#engineFmax','0.00001');await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
   assert.equal(await page.locator('#engineEnergyRows tr').count(),3);assert.match(await page.locator('#engineResultSummary').textContent(),/接線方向の最大更新/);
   await page.screenshot({path:'test-artifacts/engine-path.png'});
   await page.click('#engineProfile');await page.locator('#energyProfile circle[tabindex="0"]').nth(1).focus();
@@ -208,14 +211,14 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.deepEqual(positions(after[0]),positions(initial[0]));assert.deepEqual(positions(after[2]),positions(initial[2]));assert.notDeepEqual(positions(after[1]),positions(initial[1]));assert.deepEqual(after[1].metadata.cell,initial[1].metadata.cell);
   await page.evaluate(()=>MoleculeVisualizer.Studio.frame(1));assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.externalCalculation.mode),'perpendicular');assert.equal((await page.evaluate(()=>MoleculeVisualizer.Studio.allXYZ())).match(/\nO /g).length,3);
   await page.click('#btnUndo');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().metadata.trajectory)),source);
-  // NEB and CI-NEB export the final path, including endpoints, rather than optimizer iterations.
-  for(const mode of ['neb','cineb']){
-    await page.click('#btnExternalEngine');await page.selectOption('#engineMode',mode);await page.fill('#engineSteps','3');
-    if(mode==='cineb')await page.fill('#engineClimb','1');
+  // CI-NEB exports the final path, including endpoints, rather than optimizer iterations.
+  {
+    await page.click('#btnExternalEngine');await page.selectOption('#engineMode','cineb');await page.fill('#engineSteps','3');
+    await page.fill('#engineClimb','1');
     await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
     const pending=page.waitForEvent('download');await page.click('#engineDownload');const file=await pending,report=JSON.parse(fs.readFileSync(await file.path(),'utf8'));
-    assert.equal(report.result.mode,mode);assert.equal(report.result.images.length,3);assert.notDeepEqual(report.result.images[1],report.input.images[1]);
-    if(mode==='cineb'){assert.equal(report.input.climbAfter,1);assert.equal(report.result.climbingImage,1);}
+    assert.equal(report.result.mode,'cineb');assert.equal(report.result.images.length,3);assert.notDeepEqual(report.result.images[1],report.input.images[1]);
+    assert.equal(report.input.climbAfter,1);assert.equal(report.result.climbingImage,1);
     await page.click('#engineProfile');await page.click('#profileXYZ');await page.selectOption('#trajectoryFormat','lup');
     assert.equal(await page.locator('#trajectoryCellNotice').isVisible(),true);await saveLUP('#trajectorySaveAll',report.result,[0,1,2]);
     await page.fill('#trajectoryCount','2');await saveLUP('#trajectorySaveSelected',report.result,[0,2]);
@@ -226,7 +229,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   // Deterministic UI-only NEB checkpoints: keep polling after selecting a bead.
   // Numerical NEB behavior is exercised by the real calculations above.
   const fixtureId='00000000000000000000000000000001';let fixtureInput,phase=0,complete=false,cancelCalls=0;
-  const checkpoint=step=>({mode:'neb',step,energies:[0,1+step,3+step,2+step,0],images:fixtureInput.images.map((image,i)=>image.map(p=>[p[0],p[1]+(i&&i<4?step*.02:0),p[2]]))});
+  const checkpoint=step=>({mode:'cineb',climbingImage:2,step,energies:[0,1+step,3+step,2+step,0],images:fixtureInput.images.map((image,i)=>image.map(p=>[p[0],p[1]+(i&&i<4?step*.02:0),p[2]]))});
   const createFixture=async route=>{fixtureInput=route.request().postDataJSON();await route.fulfill({json:{id:fixtureId}});};
   const fixtureURL=new RegExp('/api/jobs/'+fixtureId+'(?:[/?].*)?$');
   await page.route('**/api/jobs',createFixture);
@@ -237,7 +240,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   });
   await page.fill('#dataText',[0,.1,.2,.3,.4].map(xyz).join(''));await page.click('#dataApply');
   const fixtureSource=await page.evaluate(()=>MoleculeVisualizer.IO.stateToProjectText(MoleculeVisualizer.App.getState()));
-  await page.click('#btnExternalEngine');await page.selectOption('#engineMode','neb');await page.check('#engineLive');await page.click('#engineRun');
+  await page.click('#btnExternalEngine');await page.selectOption('#engineMode','cineb');await page.check('#engineLive');await page.click('#engineRun');
   await page.waitForFunction(()=>document.getElementById('profileTitle').textContent.includes('ステップ 0'));
   assert.equal(await page.locator('#profileRange').inputValue(),'2');
   await page.locator('#energyProfile circle[tabindex="0"]').nth(1).click();assert.equal(await page.locator('#profileFollow').isChecked(),true);

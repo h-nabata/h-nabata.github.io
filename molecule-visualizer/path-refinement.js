@@ -30,19 +30,19 @@
       }
     });return out;
   }
-  let source=null,guard=null,nebMode='neb';
+  let source=null,guard=null;
   function count(){
     const from=Number($('refineFrom').value),to=Number($('refineTo').value),each=Number($('refineEach').value),n=source?.length||0;
     const valid=[from,to,each].every(Number.isInteger)&&from>=1&&to<=n&&from<to&&each>=1&&n+(to-from)*each<=100;
     $('refineMessage').textContent=valid?`${n} → ${n+(to-from)*each}ノード（${(to-from)*each}ノード追加）`:'区間と追加数を確認してください。合計100ノードまでです。';
     $('refineApply').disabled=$('refineNEB').disabled=!valid;
   }
-  function open(frames=null,mode='neb'){
+  function open(frames=null){
     if(MV.EngineUI.isBusy()||MV.AFIRUI?.isBusy?.())throw Error('実行中の計算を一時停止または終了してください。');
     if(/未適用|編集中/.test($('xyzEditStatus').textContent))throw Error('座標欄の未適用の編集を先に解決してください。');
     source=frames||MV.EngineUI.frames(MV.App.getState(),'all');
-    if(source.length<3)throw Error('先に3ノード以上の経路を読み込むか、NEB結果を取得してください。');
-    guard=fingerprint(MV.App.getState());nebMode=mode==='cineb'?'cineb':'neb';
+    if(source.length<3)throw Error('先に3ノード以上の経路を読み込むか、CI-NEB結果を取得してください。');
+    guard=fingerprint(MV.App.getState());
     $('refineSummary').textContent=`対象：${source.length}ノード · ${source[0].atoms.length}原子`;
     $('refineFrom').value=1;$('refineTo').value=source.length;$('refineEach').value=1;
     $('refineFrom').max=source.length-1;$('refineTo').max=source.length;count();$('refineDialog').showModal();
@@ -54,7 +54,7 @@
       const out=refine(source,Number($('refineFrom').value)-1,Number($('refineTo').value)-1,Number($('refineEach').value));
       const next=MV.Model.createState(out[0]);next.metadata.trajectory=out;next.metadata.frameIndex=0;next.viewSettings={...MV.App.getState().viewSettings};
       MV.Studio.stop();MV.EnergyProfile.reset();MV.App.change('insert path nodes',()=>next,true);$('dataReset').click();$('refineDialog').close();
-      if(toNEB)MV.EngineUI.prepareNEB(nebMode);
+      if(toNEB)MV.EngineUI.prepareNEB();
       MV.App.setStatus(`${out.length}ノードへ補間しました。既存ノードと端点は保持しています。「戻す」で元の経路に戻せます。`);
     }catch(e){$('refineMessage').textContent=e.message;}
   }

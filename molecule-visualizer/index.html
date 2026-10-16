@@ -18,11 +18,11 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./advanced.js?v=16"></script>
 <script defer src="./generator-ui.js?v=22"></script>
 <script defer src="./trajectory.js?v=4"></script>
-<script defer src="./trajectory-ui.js?v=5"></script>
+<script defer src="./trajectory-ui.js?v=6"></script>
 <script defer src="./energy-profile.js?v=6"></script>
-<script defer src="./engine-ui.js?v=25"></script>
+<script defer src="./engine-ui.js?v=26"></script>
 <script defer src="./vibration-ui.js?v=22"></script>
-<script defer src="./path-refinement.js?v=1"></script>
+<script defer src="./path-refinement.js?v=2"></script>
 <script defer src="./afir.js?v=17"></script>
 <script defer src="./afir-search.js?v=16"></script>
 <script defer src="./afir-runner.js?v=18"></script>
@@ -426,7 +426,7 @@ python bridge.py --engine gxtb --binary /absolute/path/to/xtb --allow-origin htt
     <label>接続トークン<input id="engineToken" type="password" autocomplete="off" spellcheck="false"></label>
   </div><div class="mv-row"><button class="mv-btn" id="engineConnect">接続を確認</button><span id="engineConnected" class="mv-small">未接続</span></div></fieldset>
   <fieldset id="engineSettings"><legend>計算条件</legend><div class="mv-grid">
-    <label>操作<select id="engineMode"><option value="evaluate">エネルギー・力を評価</option><optgroup label="単一構造の最適化（AFIR法を含む）"><option value="optimize">通常の単一構造最適化（人工力なし）</option><option value="ts">SellaによるTS最適化</option><option value="afir">AFIR法の設定を開く</option></optgroup><option value="vibrations">振動解析のみ（現在の構造）</option><option value="perpendicular">経路を直交方向のみ緩和</option><option value="neb">NEB（接線方向のばねあり）</option><option value="cineb">CI-NEB（最高点を登らせる）</option></select></label>
+    <label>操作<select id="engineMode"><option value="evaluate">エネルギー・力を評価</option><optgroup label="単一構造の最適化（AFIR法を含む）"><option value="optimize">通常の単一構造最適化（人工力なし）</option><option value="ts">SellaによるTS最適化</option><option value="afir">AFIR法の設定を開く</option></optgroup><option value="vibrations">振動解析のみ（現在の構造）</option><option value="perpendicular">経路を直交方向のみ緩和</option><option value="cineb">CI-NEB（最高点を登らせる）</option></select></label>
     <label>対象<select id="engineScope"><option value="current">現在の構造</option><option value="all">全フレーム</option></select></label>
     <label>系全体の電荷<input id="engineCharge" type="number" min="-100" max="100" step="1" value="0"></label>
     <label>スピン多重度 (2S+1)<input id="engineMultiplicity" type="number" min="1" max="101" step="1" value="1"></label>
@@ -445,7 +445,7 @@ python bridge.py --engine gxtb --binary /absolute/path/to/xtb --allow-origin htt
   <p class="mv-small">最大500原子・100構造（bridge.py 1.4.0）。経路は同じ元素順序・固定セルが必要です。周期境界をまたぐ経路は連続したCartesian座標で入力してください。原子ごとの移動固定や可変セルには対応していません。Sellaは非周期系の一次鞍点探索で、初期信頼半径は計算中に自動調整されます。L-BFGSは極小化専用です。</p></fieldset>
   <label class="mv-check"><input id="engineLive" type="checkbox">計算中のエネルギー・構造を表示（既定オフ）</label><p class="mv-small">bridge.py 1.2.0 が必要です。経路計算では最新の経路全体を表示します。通常の最適化は計算中に最新の1点、終了後は全ステップを表示します（全ステップ取得にはbridge.py 1.3.0が必要です）。</p>
   <p id="engineMessage" role="status" aria-live="polite"></p>
-  <div class="mv-row"><button class="mv-btn primary" id="engineRun" disabled>計算を実行</button><button class="mv-btn" id="engineCancel" disabled>計算を中止</button><button class="mv-btn" id="enginePause" hidden disabled>NEBを一時停止してノード追加</button></div>
+  <div class="mv-row"><button class="mv-btn primary" id="engineRun" disabled>計算を実行</button><button class="mv-btn" id="engineCancel" disabled>計算を中止</button><button class="mv-btn" id="enginePause" hidden disabled>CI-NEBを一時停止してノード追加</button></div>
   <section id="engineResult" hidden><h3>計算結果</h3><p id="engineResultSummary" class="mv-small"></p>
     <button class="mv-btn" id="engineProfile">エネルギープロファイルと構造を見る</button>
     <div class="mv-table-scroll"><table><thead><tr><th>構造</th><th>E (eV)</th><th>ΔE (eV)</th><th>有効力 (eV/Å)</th><th>候補・操作</th></tr></thead><tbody id="engineEnergyRows"></tbody></table></div>
@@ -459,8 +459,8 @@ python bridge.py --engine gxtb --binary /absolute/path/to/xtb --allow-origin htt
 <dialog id="refineDialog" class="mv-engine-dialog" aria-labelledby="refineTitle"><h2 id="refineTitle">経路のノードを補間・追加</h2>
   <p id="refineSummary"></p><div class="mv-grid"><label>区間の始点（構造番号）<input id="refineFrom" type="number" min="1" step="1" value="1"></label><label>区間の終点（構造番号）<input id="refineTo" type="number" min="2" step="1" value="2"></label><label>各隣接ペアの間に追加する数<input id="refineEach" type="number" min="1" max="98" step="1" value="1"></label></div>
   <p class="mv-small">指定区間の各隣接ノード間をCartesian座標で線形補間します。既存ノードと両端点はそのまま残し、合計100ノードまで追加できます。複数の候補付近を増やす場合は区間を分けて繰り返してください。周期系の座標は折り返しません。</p>
-  <p class="mv-small">実行中のNEBは、最後に全ノードの評価が完了した経路で停止します。補間後は速度・最適化履歴・CI開始ステップをリセットして新しい計算を開始します。追加ノードのエネルギーは再評価が必要です。</p>
-  <p id="refineMessage" role="status"></p><div class="mv-row"><button class="mv-btn" id="refineApply">補間して描画へ反映</button><button class="mv-btn primary" id="refineNEB">補間してNEB再開の設定へ</button><button class="mv-btn" data-close="refineDialog">閉じる</button></div>
+  <p class="mv-small">実行中のCI-NEBは、最後に全ノードの評価が完了した経路で停止します。補間後は速度・最適化履歴・CI開始ステップをリセットして新しい計算を開始します。追加ノードのエネルギーは再評価が必要です。</p>
+  <p id="refineMessage" role="status"></p><div class="mv-row"><button class="mv-btn" id="refineApply">補間して描画へ反映</button><button class="mv-btn primary" id="refineNEB">補間してCI-NEB再開の設定へ</button><button class="mv-btn" data-close="refineDialog">閉じる</button></div>
 </dialog>
 
 <dialog id="trajectoryDialog" class="mv-engine-dialog" aria-labelledby="trajectoryTitle">
@@ -487,7 +487,7 @@ python bridge.py --engine gxtb --binary /absolute/path/to/xtb --allow-origin htt
   <p id="trajectorySelection" class="mv-small" role="status"></p>
   <div class="mv-row"><button class="mv-btn primary" id="trajectorySaveSelected">抽出した構造列をXYZ保存</button><button class="mv-btn" id="trajectoryShowSelected">抽出した構造列を表示</button></div>
   <p class="mv-small">どちらの形式も全構造を1つのファイルにまとめ、原子順序を維持します。保存で編集画面の構造は変わりません。</p>
-  <div class="mv-row"><button class="mv-btn" id="trajectoryApply">抽出列を描画へ反映・再生</button><button class="mv-btn primary" id="trajectoryNEB">抽出列をNEB入力に取り込む</button></div>
+  <div class="mv-row"><button class="mv-btn" id="trajectoryApply">抽出列を描画へ反映・再生</button><button class="mv-btn primary" id="trajectoryNEB">抽出列をCI-NEB入力に取り込む</button></div>
   <p id="trajectoryTransferHelp" class="mv-small"></p>
   <section id="trajectoryDisplay" hidden><h3>出力データ</h3><p id="trajectoryDisplaySummary" class="mv-small"></p><label for="trajectoryText">表示した構造列の全文</label><textarea id="trajectoryText" rows="12" wrap="off" readonly spellcheck="false" aria-describedby="trajectoryTextHelp"></textarea><p id="trajectoryTextHelp" class="mv-small">欄をクリックしてCtrl+Aで全文を選択し、Ctrl+Cでコピーできます（Macは⌘A・⌘C）。省略せず表示しています。保存形式・ノード数・抽出方法を変更したら、再度「表示」を押してください。</p><button class="mv-btn" id="trajectorySelectText">表示データを全選択</button></section>
   <p id="trajectoryMessage" role="status"></p>

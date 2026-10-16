@@ -43,23 +43,26 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.selectOption('#engineMode','optimize');await page.uncheck('#engineVibrationCheck');await page.selectOption('#engineOptimizer','lbfgs');await page.fill('#engineSteps','3');await page.fill('#engineMove','0.03');await page.click('#engineRun');await waitDone();const opt=await report();assert.equal(opt.result.optimizer,'lbfgs');assert.equal(opt.input.maxMove,.03);assert.equal(opt.result.vibrations,undefined);assert.equal(opt.result.trajectory.images.length,opt.result.steps+1);
   await page.click('#engineClose');await ammonia(5);
   // Relax a band, keep all its nodes when choosing one specific TS candidate.
-  await page.click('#btnExternalEngine');await page.selectOption('#engineMode','neb');await page.fill('#engineSteps','1');await page.click('#engineRun');await waitDone();const neb=await report();
+  await page.click('#btnExternalEngine');assert.equal(await page.locator('#engineMode').inputValue(),'cineb');await page.fill('#engineSteps','1');await page.fill('#engineClimb','0');await page.click('#engineRun');await waitDone();const neb=await report();
   const nodeIDs=await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms.map(a=>a.id));await page.getByRole('button',{name:'構造3をTS入力にする',exact:true}).click();
   assert.equal(await page.locator('#engineMode').inputValue(),'ts');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.frameIndex),2);assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.trajectory.length),5);
   assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms.map(a=>[a.x,a.y,a.z])),neb.result.images[2]);assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms.map(a=>a.id)),nodeIDs);
   await page.click('#engineClose');
   // Insert only the selected interval; retain all old nodes and fixed endpoints.
+  const beforeRefinement=requests.length;
   const oldFrames=await page.evaluate(()=>MoleculeVisualizer.EngineUI.frames(MoleculeVisualizer.App.getState(),'all'));
   await page.click('#btnRefinePath');await page.fill('#refineFrom','2');await page.fill('#refineTo','4');await page.fill('#refineEach','2');await page.click('#refineNEB');
   const refined=await page.evaluate(()=>MoleculeVisualizer.EngineUI.frames(MoleculeVisualizer.App.getState(),'all'));assert.equal(refined.length,9);
   for(const [i,j] of [[0,0],[1,1],[2,4],[3,7],[4,8]])assert.deepEqual(refined[j].atoms,oldFrames[i].atoms);
-  assert.equal(await page.locator('#engineMode').inputValue(),'neb');assert.equal(requests.at(-1).mode,'neb','opening settings does not launch a new job');
-  await page.click('#engineRun');await waitDone();assert.equal(requests.at(-1).images.length,9);await page.click('#engineClose');
+  assert.equal(await page.locator('#engineMode').inputValue(),'cineb');assert.equal(requests.length,beforeRefinement,'opening settings does not launch a new job');
+  await page.click('#engineRun');await waitDone();assert.equal(requests.at(-1).mode,'cineb');assert.equal(requests.at(-1).images.length,9);assert.equal((await report()).result.mode,'cineb');await page.click('#engineClose');
   // Running NEB can be stopped at its latest fully evaluated band with live preview OFF.
-  await ammonia(21);await page.click('#btnExternalEngine');await page.selectOption('#engineMode','neb');await page.fill('#engineSteps','10000');await page.fill('#engineFmax','0.00001');assert.equal(await page.locator('#engineLive').isChecked(),false);
+  await ammonia(21);await page.click('#btnExternalEngine');assert.equal(await page.locator('#engineMode').inputValue(),'cineb');await page.fill('#engineSteps','10000');await page.fill('#engineFmax','0.00001');assert.equal(await page.locator('#engineLive').isChecked(),false);
   const checkpoint=page.waitForResponse(async response=>{if(!response.url().match(/\/api\/jobs\/[a-f0-9]+$/)||response.request().method()!=='GET')return false;const j=await response.json();return j.status==='running'&&j.progress?.step>=1;},{timeout:60000});
   await page.click('#engineRun');await checkpoint;await page.click('#enginePause');await page.waitForSelector('#refineDialog[open]',{timeout:30000});
-  assert.match(await page.locator('#refineSummary').textContent(),/21ノード/);await page.fill('#refineFrom','10');await page.fill('#refineTo','12');await page.fill('#refineEach','1');await page.screenshot({path:'test-artifacts/neb-pause-refine.png'});await page.click('#refineNEB');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.trajectory.length),23);assert.equal(await page.locator('#engineMode').inputValue(),'neb');await page.click('#engineClose');
+  assert.match(await page.locator('#refineSummary').textContent(),/21ノード/);await page.fill('#refineFrom','10');await page.fill('#refineTo','12');await page.fill('#refineEach','1');await page.screenshot({path:'test-artifacts/neb-pause-refine.png'});await page.click('#refineNEB');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.trajectory.length),23);assert.equal(await page.locator('#engineMode').inputValue(),'cineb');
+  await page.fill('#engineSteps','2');await page.fill('#engineClimb','1');await page.click('#engineRun');await waitDone();
+  const resumed=await report();assert.equal(resumed.input.mode,'cineb');assert.equal(resumed.input.climbAfter,1);assert.equal(resumed.result.images.length,23);assert.ok(Number.isInteger(resumed.result.climbingImage));await page.click('#engineClose');
   // Mode table is scrollable and fits mobile width; hide restores the real input.
   await page.setViewportSize({width:390,height:844});await page.click('#vibrationToggle');await page.screenshot({path:'test-artifacts/ts-vibration-mobile.png'});const dim=await page.locator('#vibrationPanel').evaluate(e=>({w:e.clientWidth,scroll:e.scrollWidth}));assert.ok(dim.scroll<=dim.w+2);await page.click('#vibrationHide');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.renderer().previewOnly),false);
   const storage=await page.evaluate(()=>JSON.stringify({...localStorage}));assert.ok(!storage.includes(token));assert.ok(!JSON.stringify(ts).includes(token));assert.deepEqual(errors,[]);
