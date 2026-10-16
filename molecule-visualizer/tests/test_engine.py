@@ -115,7 +115,7 @@ class Validation(unittest.TestCase):
                       {'command':'rm -rf /'},{'binary':'/tmp/something'},{'maxSteps':10001},{'mode':'cineb','maxSteps':2,'climbAfter':3}):
             with self.assertRaises((ValueError,TypeError)):b.validate({**WATER,**patch},'tblite')
         with self.assertRaises(ValueError):b.validate({**WATER,'mode':'perpendicular'},'tblite')
-        with self.assertRaises(ValueError):b.validate({**WATER,'images':WATER['images']*21},'tblite')
+        with self.assertRaises(ValueError):b.validate({**WATER,'images':WATER['images']*101},'tblite')
 
     def test_all_external_modes_accept_10000_steps_and_reject_invalid_budgets(self):
         for mode in ('evaluate','optimize','perpendicular','neb','cineb'):

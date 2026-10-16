@@ -9,6 +9,8 @@
     global.MoleculeVisualizer.Advanced?.init();
     global.MoleculeVisualizer.GeneratorUI?.init();
     global.MoleculeVisualizer.EngineUI?.init();
+    global.MoleculeVisualizer.VibrationUI?.init();
+    global.MoleculeVisualizer.PathRefinement?.init();
     global.MoleculeVisualizer.MeasurementUI?.init();
     global.MoleculeVisualizer.AFIRUI?.init();
     global.MoleculeVisualizer.PanelLayout?.init();

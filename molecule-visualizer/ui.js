@@ -111,6 +111,7 @@
   }
 
   function render(preserveCamera, persist=true) {
+    MV.VibrationUI?.restore(false);
     MV.EnergyProfile?.onStateChange();
     MV.Measurements?.bind(state);
     renderer.renderState(state, Boolean(preserveCamera));
@@ -131,6 +132,7 @@
   }
 
   function rerenderSelectionOnly() {
+    MV.VibrationUI?.restore(false);
     MV.EnergyProfile?.onStateChange();
     finishBondKeyEdit();
     renderer.updateSelection(state);

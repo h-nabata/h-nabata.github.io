@@ -216,6 +216,8 @@
       .sort((a, b) => a.z - b.z)
       .forEach(pa => this.drawAtom(pa));
 
+    this.drawVibrationVectors(center,scale,width,height);
+
     const selected=[...this.state.selectedAtomIds].map(id=>atomById.get(id)).filter(Boolean);
     if(MV.Measurements)this.drawMeasurements(center,scale,width,height);
     else if(selected.length>=2&&selected.length<=4){
@@ -224,6 +226,21 @@
     }
     if(this.state.viewSettings.showAxes)this.drawAxes(center,scale,width,height);
     if (this.selectionBox) this.drawSelectionBox();
+  };
+
+  Renderer3DMol.prototype.drawVibrationVectors=function(center,scale,width,height){
+    this.projectedModeArrows=[];
+    if(!this.vibrationVectors)return;
+    const ctx=this.ctx;ctx.save();ctx.strokeStyle=this.vibrationVectors.color;ctx.fillStyle=this.vibrationVectors.color;ctx.lineWidth=2.5;
+    this.state.atoms.forEach((atom,i)=>{
+      const v=this.vibrationVectors.vectors[i];if(!v)return;
+      const a=this.project(atom,center,scale,width,height),b=this.project({x:atom.x+v[0],y:atom.y+v[1],z:atom.z+v[2]},center,scale,width,height);
+      if(!a.visible||!b.visible||Math.hypot(b.x-a.x,b.y-a.y)<.5)return;
+      this.projectedModeArrows.push({a,b,index:i});
+      const angle=Math.atan2(b.y-a.y,b.x-a.x),head=Math.min(9,Math.hypot(b.x-a.x,b.y-a.y)*.45);
+      ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(b.x,b.y);ctx.lineTo(b.x-head*Math.cos(angle-.5),b.y-head*Math.sin(angle-.5));ctx.lineTo(b.x-head*Math.cos(angle+.5),b.y-head*Math.sin(angle+.5));ctx.closePath();ctx.fill();
+    });ctx.restore();
   };
 
   Renderer3DMol.prototype.drawMeasurements=function(center,scale,width,height){

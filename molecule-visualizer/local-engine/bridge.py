@@ -32,9 +32,9 @@ from ase.data import atomic_numbers, covalent_radii
 from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 
-VERSION = '1.3.0'
-MAX_BODY = 2 * 1024 * 1024
-MODES = ('evaluate', 'optimize', 'perpendicular', 'neb', 'cineb', 'afir')
+VERSION = '1.4.0'
+MAX_BODY = 8 * 1024 * 1024
+MODES = ('evaluate', 'optimize', 'perpendicular', 'neb', 'cineb', 'afir', 'ts', 'vibrations')
 PATH_MODES = ('perpendicular', 'neb', 'cineb')
 
 
@@ -48,7 +48,8 @@ def number(value, name, lo, hi, integer=False):
 
 def validate(data, engine):
     allowed = {'symbols', 'images', 'cell', 'charge', 'multiplicity', 'mode',
-               'maxSteps', 'fmax', 'spring', 'maxMove', 'climbAfter', 'atomIds', 'afir', 'livePreview'}
+               'maxSteps', 'fmax', 'spring', 'maxMove', 'climbAfter', 'atomIds', 'afir', 'livePreview',
+               'optimizer', 'trustRadius', 'vibrations'}
     if not isinstance(data, dict) or set(data) - allowed:
         raise ValueError('未定義の入力項目があります。コマンド・パス指定は受け付けません。')
     if type(data.get('livePreview', False)) is not bool:
@@ -60,13 +61,13 @@ def validate(data, engine):
     if any(not isinstance(s, str) or s not in atomic_numbers or not 1 <= atomic_numbers[s] <= maximum_z for s in symbols):
         raise ValueError(f'このエンジンの入力元素は原子番号{maximum_z}までです。対応パラメータの有無は計算時にも検査します。')
     images = np.asarray(data.get('images'), dtype=float)
-    if images.ndim != 3 or images.shape[1:] != (len(symbols), 3) or not 1 <= len(images) <= 20:
-        raise ValueError('構造列は1〜20構造、各構造は同じ原子数・File-orderのXYZ配列にしてください。')
+    if images.ndim != 3 or images.shape[1:] != (len(symbols), 3) or not 1 <= len(images) <= 100:
+        raise ValueError('構造列は1〜100構造、各構造は同じ原子数・File-orderのXYZ配列にしてください。')
     if not np.isfinite(images).all() or np.max(np.abs(images)) > 1e4:
         raise ValueError('座標は有限値、絶対値10000 Å以下にしてください。')
     mode = data.get('mode', 'evaluate')
-    if mode not in MODES or (mode in PATH_MODES and len(images) < 3) or (mode in ('optimize', 'afir') and len(images) != 1):
-        raise ValueError('経路緩和には端点を含む3〜20構造、単一最適化には1構造が必要です。')
+    if mode not in MODES or (mode in PATH_MODES and len(images) < 3) or (mode in ('optimize', 'afir', 'ts', 'vibrations') and len(images) != 1):
+        raise ValueError('経路緩和には端点を含む3〜100構造、単一最適化・振動解析には1構造が必要です。')
     charge = number(data.get('charge', 0), '電荷', -100, 100, True)
     multiplicity = number(data.get('multiplicity', 1), '多重度', 1, 101, True)
     electrons = sum(atomic_numbers[s] for s in symbols) - charge
@@ -102,8 +103,37 @@ def validate(data, engine):
         raise ValueError('隣接構造が同一です。重複フレームを除いてください。')
     if mode == 'afir':
         result['afir'], result['atomIds'] = validate_afir(data, result)
-    elif 'afir' in data or 'atomIds' in data:
-        raise ValueError('afirとatomIdsはAFIR専用の入力項目です。')
+    elif 'afir' in data:
+        raise ValueError('afirはAFIR専用の入力項目です。')
+    elif 'atomIds' in data:
+        ids = data['atomIds']
+        if not isinstance(ids, list) or len(ids) != len(symbols) or any(not isinstance(i, str) or not i or len(i)>200 for i in ids) or len(set(ids)) != len(ids):
+            raise ValueError('全原子の一意なIDが必要です。')
+        result['atomIds'] = ids[:]
+    optimizer = data.get('optimizer', 'sella-prfo' if mode == 'ts' else 'fire')
+    choices = ('sella-prfo', 'sella-rfo') if mode == 'ts' else ('fire', 'lbfgs', 'bfgs') if mode == 'optimize' else ('fire',)
+    if optimizer not in choices:
+        raise ValueError('この操作では指定した最適化手法を使用できません。TSにはSella PRFO/RFOを指定してください。')
+    result['optimizer'] = optimizer
+    if mode == 'ts':
+        result['trustRadius'] = number(data.get('trustRadius', .04), '初期信頼半径', .001, .2)
+    elif 'trustRadius' in data:
+        raise ValueError('trustRadiusはSella TS探索専用です。')
+    vibration = data.get('vibrations')
+    if mode == 'vibrations' and vibration is None:
+        vibration = {}
+    if vibration is not None:
+        if mode not in ('ts', 'optimize', 'vibrations') or not isinstance(vibration, dict) or set(vibration)-{'delta','nfree','imaginaryThreshold'}:
+            raise ValueError('振動解析設定が不正です。単一構造に対して指定してください。')
+        if len(symbols)>200:
+            raise ValueError('振動解析は最大200原子です（有限差分の計算回数に注意してください）。')
+        nfree = number(vibration.get('nfree', 2), '有限差分点数', 2, 4, True)
+        if nfree not in (2, 4):
+            raise ValueError('有限差分点数は2または4です。')
+        result['vibrations'] = dict(delta=number(vibration.get('delta', .01), '振動解析の変位幅', .0001, .1), nfree=nfree,
+            imaginaryThreshold=number(vibration.get('imaginaryThreshold', 20), '虚振動の判定閾値', 0, 1000))
+    if (mode=='ts' or vibration is not None) and cell and any(cell['pbc']):
+        raise ValueError('Sella TS探索・振動モード表示は非周期分子用です。')
     return result
 
 
@@ -316,6 +346,11 @@ def relax(data, calculate, progress=lambda _: None):
             trajectory['energies'].append(float(energies[0]))
             checkpoint = {'checkpoint': {'positions': positions, 'energy': float(energies[0]),
                 'force': physical[0].tolist(), 'fmax': maximum}}
+        elif mode in PATH_MODES:
+            # Keep only the most recent completely evaluated band for pause/edit/resume.
+            checkpoint = {'bandCheckpoint': {'images': images.tolist(), 'energies': energies.tolist(),
+                'forces': physical.tolist(), 'effectiveFmax': maximum, 'imageFmax': [force_max(f) for f in effective],
+                'steps': step, 'evaluations': evaluations, 'climbingImage': climbing}}
         # Checkpoints stay in the local service; progress responses omit coordinates.
         progress({**summary, **checkpoint, **({'preview': {'step': step, 'images': images.tolist(), 'energies': energies.tolist()}} if data.get('livePreview') else {})})
         if mode == 'evaluate' or converged or step == max_steps:
@@ -359,6 +394,138 @@ def relax(data, calculate, progress=lambda _: None):
             raise ValueError('座標が数値範囲を超えました。初期構造を確認してください。')
 
 
+def ase_atoms(data, calculate):
+    """Use exactly the configured local potential, in ASE's eV/Å units."""
+    from ase import Atoms
+    from ase.calculators.calculator import Calculator, all_changes
+
+    class LocalCalculator(Calculator):
+        implemented_properties = ['energy', 'forces']
+        evaluations = 0
+
+        def calculate(self, atoms=None, properties=('energy', 'forces'), system_changes=all_changes):
+            super().calculate(atoms, properties, system_changes)
+            positions = self.atoms.positions
+            if not np.isfinite(positions).all() or np.max(np.abs(positions))>1e4:
+                raise ValueError('座標が数値範囲を超えました。')
+            if len(positions)>1:
+                distances = np.linalg.norm(positions[:,None]-positions[None,:], axis=-1)
+                if np.min(distances[np.triu_indices(len(positions),1)])<.1:
+                    raise ValueError('最適化・振動変位中に0.1 Å未満の原子衝突を検出しました。')
+            energy, force = calculate(0, positions.copy())
+            force = np.asarray(force, dtype=float)
+            if not math.isfinite(energy) or force.shape!=positions.shape or not np.isfinite(force).all():
+                raise ValueError('有限のエネルギー・力を取得できません。')
+            self.evaluations += 1
+            self.results = {'energy': float(energy), 'forces': force.copy()}
+
+    cell = data.get('cell')
+    atoms = Atoms(data['symbols'], positions=data['images'][0],
+                  cell=None if cell is None else cell['vectors'], pbc=False if cell is None else cell['pbc'])
+    atoms.calc = LocalCalculator()
+    return atoms
+
+
+def ase_optimize(data, calculate, progress=lambda p: None):
+    """Accepted optimization iterates only; Hessian probes are not trajectory frames."""
+    atoms = ase_atoms(data, calculate)
+    if data['mode']=='ts':
+        try:
+            from sella import Sella
+        except ImportError as error:
+            raise ValueError('SellaをこのPython環境に導入してください: python -m pip install "sella>=2.6,<3"') from error
+        optimizer = Sella(atoms, order=1, method=data['optimizer'].removeprefix('sella-'),
+                          delta0=data['trustRadius'], internal=False, logfile=None, trajectory=None)
+    else:
+        from ase.optimize import LBFGS, BFGS
+        optimizer = (LBFGS if data['optimizer']=='lbfgs' else BFGS)(atoms, maxstep=data['maxMove'], logfile=None)
+    trajectory, history = {'images': [], 'energies': []}, []
+
+    def checkpoint():
+        energy, force = atoms.get_potential_energy(), atoms.get_forces()
+        maximum = force_max(force)
+        positions = atoms.positions.tolist()
+        step = len(trajectory['images'])
+        trajectory['images'].append(positions); trajectory['energies'].append(float(energy))
+        summary = dict(step=step, fmax=maximum, energies=[float(energy)], evaluations=atoms.calc.evaluations)
+        history.append(summary)
+        progress({**summary, 'phase':'optimization', 'checkpoint':dict(positions=positions, energy=float(energy), force=force.tolist(), fmax=maximum),
+            **({'preview':dict(step=step, images=[positions], energies=[float(energy)])} if data.get('livePreview') else {})})
+
+    optimizer.attach(checkpoint, interval=1)
+    converged = bool(optimizer.run(fmax=data['fmax'], steps=data['maxSteps']))
+    force = atoms.get_forces(); maximum = force_max(force)
+    converged = converged and maximum<=data['fmax']
+    return dict(images=[atoms.positions.tolist()], energies=[float(atoms.get_potential_energy())], forces=[force.tolist()],
+        imageFmax=[maximum], effectiveFmax=maximum, converged=converged, reason='converged' if converged else 'step_limit',
+        steps=len(trajectory['images'])-1, evaluations=atoms.calc.evaluations, mode=data['mode'], optimizer=data['optimizer'],
+        climbingImage=None, maxTangentialStep=None, trajectory=trajectory, history=history,
+        validation='saddle-candidate-not-verified' if data['mode']=='ts' else 'minimum-candidate',
+        units={'length':'angstrom', 'energy':'eV', 'force':'eV/angstrom'})
+
+
+def vibration_analysis(data, calculate, directory, progress=lambda p: None):
+    """Central force differences; ASE mass-weighted Hessian, all 3N modes retained."""
+    from ase.vibrations import Vibrations
+    settings = data['vibrations']
+    total = 1 + len(data['symbols'])*3*settings['nfree']
+    done = 0
+
+    def evaluate(index, positions):
+        nonlocal done
+        answer = calculate(index, positions)
+        done += 1
+        progress({'phase':'vibrations', 'vibrationDone':done, 'vibrationTotal':total})
+        return answer
+
+    atoms = ase_atoms(data, evaluate)
+    vibrations = Vibrations(atoms, name=str(Path(directory)/'vibrations'), delta=settings['delta'], nfree=settings['nfree'])
+    try:
+        vibrations.run()
+        modes = vibrations.get_vibrations()
+        frequencies, energies = modes.get_frequencies(), modes.get_energies()
+        vectors = modes.get_modes(all_atoms=True)
+        if not np.isfinite(frequencies).all() or not np.isfinite(energies).all() or not np.isfinite(vectors).all():
+            raise ValueError('振動解析の結果が非有限値です。')
+        imaginary = frequencies.imag>0
+        return dict(schema='molecule-vibrations/1', status='completed', settings=settings,
+            frequenciesCM=[float(abs(f)) for f in frequencies], imaginary=imaginary.tolist(),
+            quantaMEV=[float(abs(e)*1000) for e in energies], modes=vectors.tolist(), masses=atoms.get_masses().tolist(),
+            significantImaginaryCount=int(np.sum(frequencies.imag>settings['imaginaryThreshold'])),
+            evaluations=done, positions=atoms.positions.tolist(), symbols=data['symbols'],
+            units={'frequency':'cm^-1', 'quantum':'meV', 'displacement':'ASE Cartesian normal modes'},
+            note='全3Nモード。並進・回転を射影除去していません。表示振幅は任意で、虚振動の動画は実時間の振動ではありません。')
+    finally:
+        vibrations.clean()
+
+
+def calculate_job(data, calculate, directory, progress=lambda p: None):
+    if data['mode']=='afir':
+        result = afir_relax(data, calculate, progress)
+    elif data['mode']=='ts' or (data['mode']=='optimize' and data.get('optimizer','fire')!='fire'):
+        result = ase_optimize(data, calculate, progress)
+    else:
+        result = relax({**data, 'mode':'evaluate'} if data['mode']=='vibrations' else data, calculate, progress)
+        result['mode'] = data['mode']
+        if data['mode']=='optimize':
+            result['optimizer'] = 'fire'
+    if 'vibrations' in data:
+        # A failed Hessian calculation must not discard a valid optimized structure.
+        progress({'structureCheckpoint':copy.deepcopy(result)})
+        try:
+            result['vibrations'] = vibration_analysis({**data, 'images':result['images']}, calculate, directory, progress)
+        except Exception as error:
+            result['vibrations'] = {'status':'failed', 'error':str(error)[:2500]}
+    return result
+
+
+def sella_version():
+    try:
+        return importlib.metadata.version('sella')
+    except importlib.metadata.PackageNotFoundError:
+        return None
+
+
 class TBLiteEngine:
     def __init__(self, data, config, directory):
         from tblite.interface import Calculator
@@ -374,7 +541,7 @@ class TBLiteEngine:
                 periodic=None if cell is None else np.array(cell['pbc'], dtype=bool))
             calc.set('verbosity', 0)
             calc.set('max-iter', 250)
-            calc.set('accuracy', 1.0)
+            calc.set('accuracy', .01 if self.data['mode']=='ts' or 'vibrations' in self.data else 1.0)
             self.calculators[index] = calc
         calc = self.calculators[index]
         calc.update(positions / Bohr)
@@ -447,11 +614,13 @@ def worker(data, config, directory, messages):
         for key in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS'):
             os.environ[key] = str(config['threads'])
         calculator = (TBLiteEngine if config['engine'] == 'tblite' else GXTBEngine)(data, config, directory)
-        result = (afir_relax if data['mode']=='afir' else relax)(data, calculator, lambda p: messages.put(('progress', p)))
+        result = calculate_job(data, calculator, directory, lambda p: messages.put(('progress', p)))
         result['engine'] = config['engine']
         result['method'] = config['method'] if config['engine'] == 'tblite' else 'g-xTB'
         result['symbols'], result['cell'] = data['symbols'], data['cell']
         result['charge'], result['multiplicity'] = data['charge'], data['multiplicity']
+        if 'atomIds' in data:
+            result['atomIds'] = data['atomIds']
         result['conditionId'] = hashlib.sha256(json.dumps({'data':data, 'config':config}, sort_keys=True).encode()).hexdigest()
         result['provenance'] = provenance(config)
         messages.put(('result', result))
@@ -462,7 +631,7 @@ def worker(data, config, directory, messages):
 def provenance(config):
     return {'bridgeVersion':VERSION, 'engine':config['engine'], 'binarySHA256':config.get('binarySHA256'),
         'threads':config['threads'], 'solvent':'gas', 'aseVersion':importlib.metadata.version('ase'),
-        'numpyVersion':np.__version__, 'afirReference':{'R0_A':3.8164,'epsilon_kJ_mol':1.0061,'power':6,'radii':'ASE covalent radii H-Cm'}}
+        'numpyVersion':np.__version__, 'sellaVersion':sella_version(), 'afirReference':{'R0_A':3.8164,'epsilon_kJ_mol':1.0061,'power':6,'radii':'ASE covalent radii H-Cm'}}
 
 
 def stop_process(process):
@@ -536,6 +705,10 @@ class Jobs:
                         checkpoint = value.pop('checkpoint', None)
                         if checkpoint is not None:
                             job['checkpoints'].append(checkpoint)
+                        for key in ('bandCheckpoint', 'structureCheckpoint'):
+                            saved = value.pop(key, None)
+                            if saved is not None:
+                                job[key] = saved
                         preview = value.pop('preview', None)
                         if preview is not None:
                             job['preview'] = preview
@@ -553,15 +726,35 @@ class Jobs:
             if job['status']=='stopping':
                 with self.lock:
                     job['status'] = job.get('terminalStatus', 'cancelled')
-                    if job['data']['mode']=='afir' and job['checkpoints']:
+                    if job.get('structureCheckpoint'):
+                        job['result'] = self.partial_structure(job)
+                    elif job['data']['mode']=='afir' and job['checkpoints']:
                         job['result'] = self.partial_afir(job)
-                    elif job['data']['mode']=='optimize' and job['checkpoints']:
+                    elif job['data']['mode'] in ('optimize', 'ts') and job['checkpoints']:
                         job['result'] = self.partial_optimization(job)
+                    elif job.get('bandCheckpoint'):
+                        job['result'] = self.partial_structure(job)
+
+    def partial_structure(self, job):
+        data = job['data']
+        result = copy.deepcopy(job.get('structureCheckpoint') or job['bandCheckpoint'])
+        if 'structureCheckpoint' in job:
+            result['vibrations'] = {'status':'cancelled' if job['status']=='cancelled' else 'failed',
+                                    'error':job.get('error', '振動解析を中止しました。構造の結果は保持しています。')}
+        else:
+            result.update(converged=False, reason='cancelled' if job['status']=='cancelled' else 'failed',
+                          maxTangentialStep=None, history=[], error=job.get('error'))
+        result.update(mode=data['mode'], symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
+            engine=self.config['engine'], method=self.config['method'] if self.config['engine']=='tblite' else 'g-xTB',
+            provenance=provenance(self.config), units={'length':'angstrom','energy':'eV','force':'eV/angstrom'})
+        if 'atomIds' in data:
+            result['atomIds'] = data['atomIds']
+        return result
 
     def partial_optimization(self, job):
         data, frames = job['data'], job['checkpoints']
         last = frames[-1]
-        return dict(mode='optimize', engine=self.config['engine'],
+        return dict(mode=data['mode'], optimizer=data.get('optimizer','fire'), engine=self.config['engine'],
             method=self.config['method'] if self.config['engine']=='tblite' else 'g-xTB',
             symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
             images=[last['positions']], energies=[last['energy']], forces=[last['force']],
@@ -694,7 +887,8 @@ class Handler(BaseHTTPRequestHandler):
                 config = self.server.config
                 self.response(200, {'version': VERSION, 'engine': config['engine'],
                     'method': config['method'] if config['engine'] == 'tblite' else 'g-xTB (--gxtb --grad)',
-                    'periodic': config['engine'] == 'tblite', 'maxAtoms': 500, 'maxImages': 20,
+                    'periodic': config['engine'] == 'tblite', 'maxAtoms': 500, 'maxImages': 100,
+                    'sellaVersion':sella_version(), 'vibrations':1, 'maxVibrationAtoms':200, 'pathCheckpoint':1,
                     'modes': MODES, 'livePreview': 1, 'optimizationTrajectory': 1, 'maxSteps': 10000, 'maxAFIRSteps': 10000, 'jobTimeout': config['jobTimeout'],
                     'engineVersion': importlib.metadata.version('tblite') if config['engine'] == 'tblite' else 'locally configured binary'})
             elif re.fullmatch(r'/api/jobs/[a-f0-9]{32}(?:\?preview=1&after=[0-9]{1,5})?', self.path):
