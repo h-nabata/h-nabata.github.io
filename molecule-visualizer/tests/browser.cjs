@@ -22,6 +22,14 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  await page.locator('[data-workspace-jump=coordinates]').click();
  await page.screenshot({path:'test-artifacts/studio-workspace-desktop.png',fullPage:true});
 
+ for(const [width,height] of [[1280,800],[1440,900],[1920,1080]]){
+  await page.setViewportSize({width,height});await page.evaluate(()=>window.scrollTo(0,0));
+  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  const left=await page.locator('.mv-stage').boundingBox(),right=await page.locator('#coordinatePanel').boundingBox();assert.ok(right.x>=left.x+left.width);
+  const c=await page.locator('#calculationControls').boundingBox(),v=await page.locator('#viewer').boundingBox();assert.ok(c.y+c.height<=v.y+1);
+  await page.screenshot({path:`test-artifacts/studio-${width}x${height}.png`});
+ }
+ await page.setViewportSize({width:1440,height:1440});
  // Resize the panel itself, keep headings usable, and contain wheel scrolling.
  const checkPanel=async(id,prefix)=>{
   const panel=page.locator('#'+id),draft=await page.locator('#dataText').inputValue();
@@ -91,7 +99,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  await altDrag('right');assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.renderer().orientation),original.orientation);
  assert.notEqual(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[1].z),original.atoms[1].z);await page.click('#btnUndo');await page.click('#btnClearSel');
  await page.click('#sampleCrystal');assert.match(await page.locator('#cellStatus').textContent(),/周期境界 abc/);
- const cellBefore=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().metadata.cell));await page.click('#btnCenterOrigin');assert.ok(await page.evaluate(()=>{const c=MoleculeVisualizer.Geometry.centerOfMass(MoleculeVisualizer.App.getState().atoms);return Math.hypot(c.x,c.y,c.z)<1e-10;}));assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().metadata.cell)),cellBefore);await page.click('#btnUndo');
+ const cellBefore=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().metadata.cell));await page.locator('#viewOptions>summary').click();await page.click('#btnCenterOrigin');assert.ok(await page.evaluate(()=>{const c=MoleculeVisualizer.Geometry.centerOfMass(MoleculeVisualizer.App.getState().atoms);return Math.hypot(c.x,c.y,c.z)<1e-10;}));assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().metadata.cell)),cellBefore);await page.click('#btnUndo');await page.locator('#viewOptions>summary').click();
  await page.click('#btnViewXY');await page.locator('canvas').scrollIntoViewIfNeeded();const cb=await page.locator('canvas').boundingBox(),mx=cb.x+cb.width/2,my=cb.y+cb.height/2;await page.mouse.move(mx,my);await page.mouse.down();let cellTurn=0,lastCell={x:0,y:0,z:1};for(let i=1;i<=260;i++){await page.mouse.move(mx+10*i,my);const v=await page.evaluate(()=>MoleculeVisualizer.App.renderer().rotate({x:0,y:0,z:1}));cellTurn+=Math.acos(Math.max(-1,Math.min(1,lastCell.x*v.x+lastCell.y*v.y+lastCell.z*v.z)));lastCell=v;}await page.mouse.up();assert.ok(cellTurn>6*Math.PI);assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().metadata.cell)),cellBefore);
  await page.click('#btnZoomIn');await page.click('#btnResetCamera');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.renderer().zoom),1);await page.click('#btnToggleAxes');
 
