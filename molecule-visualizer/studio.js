@@ -77,8 +77,18 @@
   }
   function init(){
     ready=true;
-    document.querySelector('.mv-app').addEventListener('pointerdown',e=>{if(timer&&!e.target.closest('.mv-trajectory'))stop();});
-    document.querySelector('.mv-app').addEventListener('keydown',()=>{if(timer)stop();});
+    document.querySelector('.mv-app').addEventListener('pointerdown',e=>{
+      if(!timer||e.target.closest('.mv-trajectory, .mv-display-controls'))return;
+      // The canvas has already classified this gesture before it bubbles here.
+      // Camera gestures (including two-finger pan/zoom) may span several frames.
+      if(e.target.closest('#viewer')&&(!app().renderer().pointer||['rotate','roll','pan'].includes(app().renderer().pointer.action)))return;
+      stop();
+    });
+    document.querySelector('.mv-app').addEventListener('keydown',e=>{
+      if(!timer||e.target.closest('.mv-display-controls'))return;
+      if(e.target.closest('#viewer')&&(['Shift','Control','Alt','Meta'].includes(e.key)||e.key.toLowerCase()==='r'&&!e.ctrlKey&&!e.metaKey&&!e.altKey))return;
+      stop();
+    });
     bind('btnCell',()=>{const c=state().metadata.cell||P.cell([[10,0,0],[0,10,0],[0,0,10]]);$('cellVectors').value=c.vectors.map(r=>r.join(' ')).join('\n');['pbcA','pbcB','pbcC'].forEach((id,i)=>$(id).checked=c.pbc[i]);$('cellDialog').showModal();});
     bind('cellApply',()=>{const n=readNumbers('cellVectors',9),c=P.cell([n.slice(0,3),n.slice(3,6),n.slice(6)],['pbcA','pbcB','pbcC'].map(id=>$(id).checked));app().change('cell',s=>{if($('keepFractional').checked&&s.metadata.cell)s.atoms.forEach(a=>{[a.x,a.y,a.z]=P.cartesian(P.fractional(P.xyz(a),s.metadata.cell),c);});s.metadata.cell=c;MV.Bonding.refreshInferredBonds(s);},true);$('cellDialog').close();});
     bind('cellRemove',()=>{app().change('remove cell',s=>{s.metadata.cell=null;MV.Bonding.refreshInferredBonds(s);},true);$('cellDialog').close();});

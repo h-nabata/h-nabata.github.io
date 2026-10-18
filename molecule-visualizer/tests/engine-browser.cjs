@@ -47,8 +47,10 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
     });
   };
   const previewRequests=[],jobRequests=[];page.on('request',r=>{if(r.url().includes('?preview=1'))previewRequests.push(r.url());if(r.method()==='POST'&&r.url().endsWith('/api/jobs'))jobRequests.push(r.url());});
-  assert.equal(await page.locator('#engineLive').isChecked(),false);assert.equal(await page.locator('#afirLive').isChecked(),false);
-  await page.click('#btnExternalEngine');await page.fill('#engineURL','http://127.0.0.1:8766');await page.fill('#engineToken','incorrect');await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineMessage').textContent.includes('トークンが一致'));
+  assert.equal(await page.locator('#engineLive').isChecked(),true);assert.equal(await page.locator('#afirLive').isChecked(),true);
+  // Keep explicit live-off coverage in the first calculation sequence.
+  await page.click('#btnAFIR');await page.uncheck('#afirLive');await page.click('#afirClose');
+  await page.click('#btnExternalEngine');await page.uncheck('#engineLive');await page.fill('#engineURL','http://127.0.0.1:8766');await page.fill('#engineToken','incorrect');await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineMessage').textContent.includes('トークンが一致'));
   await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
   assert.equal(await page.locator('#engineMode option[value=neb]').count(),0);
   await page.selectOption('#engineMode','cineb');
@@ -128,7 +130,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.ok(afirPicked.ids.includes(afir.result.energies.indexOf(Math.max(...afir.result.energies))),'raw physical maximum must survive AFIR extraction');
   for(const f of afirPicked.parsed)assert.match(f.comment,/bias_eV=.*biased_energy_eV=/);
   await page.click('#trajectoryClose');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
-  assert.equal(previewRequests.length,0,'live display must make no preview requests by default');
+  assert.equal(previewRequests.length,0,'disabled live display must make no preview requests');
   // Use the actual AFIR result as an extracted animation and then as a real CI-NEB job.
   await page.click('#afirXYZ');await page.fill('#trajectoryCount','3');await page.selectOption('#trajectoryMethod','distance');
   await page.click('#trajectoryApply');assert.match(await page.locator('#framePlay').textContent(),/停止/);

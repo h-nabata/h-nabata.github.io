@@ -1,6 +1,7 @@
 // Browser-independent integration checks; a visual browser pass is still required.
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
-function boot(afir=false,profile=false,modes=false){
+function boot(afir=false,profile=false,modes=false,storage=null){
+ const saved=new Map();storage??={getItem:key=>saved.get(key)??null,setItem:(key,value)=>saved.set(key,value)};
  const nodes=new Map(),doc={activeElement:null,events:{},addEventListener(t,f){(this.events[t]??=[]).push(f);}};
  class El{
   constructor(id=''){this.id=id;this.value='';this.children=[];this.events={};this.dataset={};this.attrs={};this.style={};this.checked=false;this.open=false;this.classList={toggle(){},add(){},remove(){}};this.clientWidth=800;this.clientHeight=500;this.tagName='DIV';}
@@ -19,11 +20,11 @@ function boot(afir=false,profile=false,modes=false){
  doc.querySelector=q=>tables[q]||((q==='.mv-app'||q==='.mv-inspector')?app:q==='dialog[open]'?[...nodes.values()].find(x=>x.open):null);
  doc.querySelectorAll=q=>q==='[data-tab]'?[...nodes.values()].filter(x=>x.dataset.tab):q==='dialog'?[...nodes.values()].filter(x=>x.tagName==='DIALOG'):[];
  const timers=new Map();let seq=0;const win={document:doc,devicePixelRatio:1,events:{},addEventListener(t,f){(this.events[t]??=[]).push(f);}};
- const ctx={window:win,document:doc,navigator:{clipboard:{writeText:async()=>{}}},localStorage:{getItem(){return null;},setItem(){}},setTimeout(f){timers.set(++seq,f);return seq;},clearTimeout(i){timers.delete(i);},Blob,URL,console};
+ const ctx={window:win,document:doc,navigator:{clipboard:{writeText:async()=>{}}},localStorage:storage,setTimeout(f){timers.set(++seq,f);return seq;},clearTimeout(i){timers.delete(i);},Blob,URL,console};
  vm.createContext(ctx);for(const f of ['model','bonding','geometry','io','molfile','periodic','formats','history','renderer3dmol','ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
  if(profile){ctx.setInterval=ctx.setTimeout;ctx.clearInterval=ctx.clearTimeout;for(const f of ['studio','trajectory','trajectory-ui','energy-profile'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);}
  if(modes)for(const f of ['vibration-ui','path-refinement'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
- if(afir)for(const f of ['afir','afir-ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);win.MoleculeVisualizer.App.init();if(profile){win.MoleculeVisualizer.Studio.init();win.MoleculeVisualizer.EnergyProfile.init();win.MoleculeVisualizer.TrajectoryUI.init();}if(afir)win.MoleculeVisualizer.AFIRUI.init();if(modes)win.MoleculeVisualizer.VibrationUI.init();return {MV:win.MoleculeVisualizer,nodes,doc,win,timers,canvas:nodes.get('viewer').children[0]};
+ if(afir)for(const f of ['afir','afir-ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);win.MoleculeVisualizer.App.init();if(profile){win.MoleculeVisualizer.Studio.init();win.MoleculeVisualizer.EnergyProfile.init();win.MoleculeVisualizer.TrajectoryUI.init();}if(afir)win.MoleculeVisualizer.AFIRUI.init();if(modes)win.MoleculeVisualizer.VibrationUI.init();return {MV:win.MoleculeVisualizer,nodes,doc,win,timers,storage,canvas:nodes.get('viewer').children[0]};
 }
 test('app loads, atom edit/undo, invalid import is non-destructive, export uses latest state',()=>{const {MV,nodes}=boot(),app=MV.App;assert.equal(app.getState().atoms.length,3);assert.equal(nodes.get('statusBadge').classList!==null,true);
  const s=app.getState();s.selectedAtomIds.add(s.atoms[0].id);app.setState(s,true);nodes.get('dataText').value='O 2.5 0 0\nH .9572 0 0\nH -.239987 .926627 0';nodes.get('dataText').fire('input');nodes.get('dataApply').click();assert.equal(app.getState().atoms[0].x,2.5);nodes.get('btnUndo').click();assert.equal(app.getState().atoms[0].x,0);
@@ -42,6 +43,30 @@ test('header toggle preserves pending coordinates and invalid drafts',()=>{
  box.value='O\u30002.5\t0 0\rH .9572 0 0\rH -.239987 .926627 0';box.fire('input');
  header.checked=true;header.fire('change');assert.match(box.value,/^3\n/);nodes.get('dataApply').click();assert.equal(MV.App.getState().atoms[0].x,2.5);
  box.value='bad';box.fire('input');header.checked=false;header.fire('change');assert.equal(header.checked,true);assert.equal(box.value,'bad');
+});
+test('display preferences default on, persist independently and reject an invalid header change',()=>{
+ const {nodes,storage}=boot(),ids=['engineLive','afirLive','xyzHeader'];
+ for(const id of ids){assert.equal(nodes.get(id).checked,true);nodes.get(id).checked=false;nodes.get(id).fire('change');}
+ const restored=boot(false,false,false,storage);
+ for(const id of ids)assert.equal(restored.nodes.get(id).checked,false);
+ assert.match(restored.nodes.get('dataText').value,/^O /);
+ restored.nodes.get('engineLive').checked=true;restored.nodes.get('engineLive').fire('change');
+ restored.nodes.get('dataText').value='bad';restored.nodes.get('dataText').fire('input');
+ restored.nodes.get('xyzHeader').checked=true;restored.nodes.get('xyzHeader').fire('change');
+ assert.equal(restored.nodes.get('xyzHeader').checked,false);
+ const again=boot(false,false,false,storage);
+ assert.equal(again.nodes.get('engineLive').checked,true);assert.equal(again.nodes.get('afirLive').checked,false);assert.equal(again.nodes.get('xyzHeader').checked,false);
+});
+test('display preferences tolerate malformed, partial and blocked browser storage',()=>{
+ for(const value of ['bad','null','[]','{"engineLive":false,"afirLive":"false"}']){
+  const {nodes}=boot(false,false,false,{getItem:key=>key==='molecule-studio-display-v1'?value:null,setItem(){}});
+  assert.equal(nodes.get('engineLive').checked,!value.includes('engineLive'));assert.equal(nodes.get('afirLive').checked,true);assert.equal(nodes.get('xyzHeader').checked,true);
+ }
+ const {MV,nodes}=boot(false,false,false,{getItem(){throw Error('blocked');},setItem(){throw Error('blocked');}});
+ MV.App.loadText('O 0 0 0\nH .9572 0 0\nH -.239987 .926627 0');
+ nodes.get('engineLive').checked=false;nodes.get('engineLive').fire('change');
+ nodes.get('xyzHeader').checked=false;nodes.get('xyzHeader').fire('change');
+ assert.equal(nodes.get('engineLive').checked,false);assert.match(nodes.get('dataText').value,/^O /);
 });
 test('right rectangle and Alt gestures transform only target groups with undo',()=>{
  const {MV,nodes,canvas}=boot(),app=MV.App,r=app.renderer();
@@ -302,7 +327,7 @@ test('energy plot focus previews coordinates without changing input, export or u
  const {MV,nodes}=boot(false,true),app=MV.App,profile=MV.EnergyProfile,original=app.getState(),base=MV.Periodic.snapshot(original);
  const before=MV.IO.stateToXYZText(original),images=[0,1,2].map(dx=>original.atoms.map(a=>[a.x+dx,a.y,a.z]));
  profile.set({title:'test',kind:'afir',energies:[-3,-2,-4],biasEnergies:[1,2,3],positions:i=>images[i],base:()=>base});
- assert.equal(nodes.get('afirLive').checked,false);assert.equal(nodes.get('engineLive').checked,false);
+ assert.equal(nodes.get('afirLive').checked,true);assert.equal(nodes.get('engineLive').checked,true);
  assert.equal(app.renderer().state,original);
  const points=nodes.get('energyProfile').children.filter(e=>e.attrs.role==='button');
  points[1].fire('focus');assert.equal(app.renderer().state.atoms[0].x,1);assert.equal(MV.IO.parseXYZToState(nodes.get('dataText').value).atoms[0].x,1);assert.equal(app.getState(),original);

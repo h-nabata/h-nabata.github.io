@@ -4,6 +4,18 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://127.0.0.1:8765/molecule-visualizer/');await page.waitForSelector('canvas');
  assert.match(await page.locator('#structureStats').textContent(),/3 原子/);
+ assert.equal(await page.locator('.mv-section-index').count(),0);
+ for(const id of ['engineLive','afirLive','xyzHeader'])assert.equal(await page.locator('#'+id).isChecked(),true);
+ // These display choices belong to this browser, independently of the molecule.
+ await page.uncheck('#xyzHeader');await page.click('#btnExternalEngine');await page.uncheck('#engineLive');await page.click('#engineClose');
+ await page.click('#btnAFIR');await page.uncheck('#afirLive');await page.click('#afirClose');
+ await page.reload();await page.waitForSelector('canvas');
+ for(const id of ['engineLive','afirLive','xyzHeader'])assert.equal(await page.locator('#'+id).isChecked(),false);
+ assert.match(await page.locator('#dataText').inputValue(),/^O /);
+ await page.check('#xyzHeader');await page.click('#btnExternalEngine');await page.check('#engineLive');await page.click('#engineClose');
+ await page.reload();await page.waitForSelector('canvas');
+ assert.equal(await page.locator('#engineLive').isChecked(),true);assert.equal(await page.locator('#afirLive').isChecked(),false);assert.match(await page.locator('#dataText').inputValue(),/^3\n/);
+ await page.click('#btnAFIR');await page.check('#afirLive');await page.click('#afirClose');
  assert.ok((await page.locator('.mv-app').boundingBox()).y>=81);assert.ok((await page.locator('#structureTitle').boundingBox()).width>=530);assert.equal(await page.locator('.mv-subtitle').count(),0);
  await page.click('#btnToggleAxes');assert.equal(await page.locator('#btnToggleAxes').getAttribute('aria-pressed'),'true');await page.click('#btnToggleAxes');
 
@@ -147,6 +159,28 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  const multiSdf=await page.evaluate(()=>{const m=MoleculeVisualizer,s=m.IO.parseXYZToState('C 0 0 0\nO 1.2 0 0');s.bonds[0].order=2;return m.IO.stateToSDFText(s)+m.IO.stateToSDFText(s);});await page.fill('#dataText',multiSdf);await page.click('#dataApply');assert.equal(await page.locator('#frameLabel').textContent(),'1 / 2');await page.click('#frameNext');assert.equal(await page.locator('#frameLabel').textContent(),'2 / 2');
  await page.fill('#dataText','#p hf/sto-3g\n\nwater\n\n0 1\nO 0 0 0\nH .96 0 0\nH -.24 .93 0\n\n');await page.click('#dataApply');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.sourceFormat),'gaussian');
  await page.click('#btnRandomStructures');await page.selectOption('#randomMode','orientation');await page.fill('#generationCount','20');await page.click('#generationRun');await page.waitForFunction(()=>!document.querySelector('#generationDialog').open||!document.querySelector('#generationRun').disabled);assert.equal(await page.locator('#generationDialog').evaluate(e=>e.open),false,await page.locator('#generationMessage').textContent());assert.equal(await page.locator('#frameLabel').textContent(),'1 / 20');await page.click('#frameNext');assert.equal(await page.locator('#frameLabel').textContent(),'2 / 20');
+ // Playback keeps advancing during a held camera gesture and preserves the view
+ // across frames. Actual atom-edit gestures and the Stop button still stop it.
+ const frameAtoms=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().metadata.trajectory.map(f=>f.atoms)));
+ const advancing=async()=>{
+  const index=await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.frameIndex);
+  await page.waitForFunction(i=>MoleculeVisualizer.App.getState().metadata.frameIndex!==i,index);
+  assert.match(await page.locator('#framePlay').textContent(),/停止/);
+ };
+ await page.click('#framePlay');await page.locator('canvas').scrollIntoViewIfNeeded();
+ const playbackBounds=await page.locator('canvas').boundingBox(),px=playbackBounds.x+playbackBounds.width/2,py=playbackBounds.y+playbackBounds.height/2;
+ const beforeCamera=await page.evaluate(()=>[...MoleculeVisualizer.App.renderer().orientation]);
+ await page.mouse.move(px,py);await page.mouse.down();await page.mouse.move(px+45,py+28,{steps:8});await advancing();await page.mouse.move(px+80,py+40,{steps:8});await page.mouse.up();
+ const camera=await page.evaluate(()=>[...MoleculeVisualizer.App.renderer().orientation]);assert.notDeepEqual(camera,beforeCamera);await advancing();assert.deepEqual(await page.evaluate(()=>[...MoleculeVisualizer.App.renderer().orientation]),camera);
+ await page.mouse.move(px,py);await page.mouse.down({button:'middle'});await page.mouse.move(px+30,py+12,{steps:5});await advancing();await page.mouse.up({button:'middle'});
+ await page.keyboard.down('Shift');await page.mouse.move(px,py);await page.mouse.down();await page.mouse.move(px+40,py,{steps:5});await advancing();await page.mouse.up();await page.keyboard.up('Shift');
+ const zoom=await page.evaluate(()=>MoleculeVisualizer.App.renderer().zoom);await page.mouse.wheel(0,-120);await advancing();assert.ok(await page.evaluate(z=>MoleculeVisualizer.App.renderer().zoom>z,zoom));
+ await page.click('#btnViewXZ');await advancing();await page.locator('canvas').focus();await page.keyboard.press('r');await advancing();
+ assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().metadata.trajectory.map(f=>f.atoms))),frameAtoms);
+ await page.click('#framePlay');const stoppedIndex=await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.frameIndex);await page.waitForTimeout(650);assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.frameIndex),stoppedIndex);
+ await page.click('#toolMove');await page.click('#framePlay');await page.locator('canvas').scrollIntoViewIfNeeded();
+ const editBounds=await page.locator('canvas').boundingBox(),editPick=await page.evaluate(()=>{const p=MoleculeVisualizer.App.renderer().projectedAtoms[0];return {x:p.x,y:p.y};});
+ await page.mouse.click(editBounds.x+editPick.x,editBounds.y+editPick.y);assert.match(await page.locator('#framePlay').textContent(),/再生/);await page.click('#toolSelect');
  await page.click('#btnUndo');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.sourceFormat),'gaussian');assert.equal(await page.locator('#frameLabel').textContent(),'1 / 1');
  await page.click('#btnReactionPath');await page.fill('#pathStart','C -1 0 0\nC 1 0 0');await page.fill('#pathEnd','C 1 0 0\nN -1 0 0');await page.fill('#generationCount','5');await page.click('#generationRun');await page.waitForFunction(()=>!document.querySelector('#generationRun').disabled);assert.match(await page.locator('#generationMessage').textContent(),/File-order/);
  await page.fill('#pathEnd','C 1 0 0\nC -1 0 0');await page.screenshot({path:'test-artifacts/path-dialog.png',fullPage:true});await page.click('#generationRun');await page.waitForFunction(()=>!document.querySelector('#generationDialog').open||!document.querySelector('#generationRun').disabled);assert.equal(await page.locator('#generationDialog').evaluate(e=>e.open),false,await page.locator('#generationMessage').textContent());assert.equal(await page.locator('#frameLabel').textContent(),'1 / 5');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[0].x),-1);await page.click('#frameNext');await page.click('#frameNext');assert.ok(await page.evaluate(()=>{const s=MoleculeVisualizer.App.getState();return MoleculeVisualizer.Geometry.distance(...s.atoms)>1.5;}));
