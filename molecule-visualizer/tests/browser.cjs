@@ -16,6 +16,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  await page.reload();await page.waitForSelector('canvas');
  assert.equal(await page.locator('#engineLive').isChecked(),true);assert.equal(await page.locator('#afirLive').isChecked(),false);assert.match(await page.locator('#dataText').inputValue(),/^3\n/);
  await page.click('#btnAFIR');await page.check('#afirLive');await page.click('#afirClose');
+ await page.evaluate(()=>window.scrollTo(0,0));
  assert.ok((await page.locator('.mv-app').boundingBox()).y>=81);assert.ok((await page.locator('#structureTitle').boundingBox()).width>=530);assert.equal(await page.locator('.mv-subtitle').count(),0);
  await page.click('#btnToggleAxes');assert.equal(await page.locator('#btnToggleAxes').getAttribute('aria-pressed'),'true');await page.click('#btnToggleAxes');
 
@@ -167,7 +168,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.waitForFunction(i=>MoleculeVisualizer.App.getState().metadata.frameIndex!==i,index);
   assert.match(await page.locator('#framePlay').textContent(),/停止/);
  };
- await page.click('#framePlay');await page.locator('canvas').scrollIntoViewIfNeeded();
+ await page.click('#toolSelect');await page.click('#framePlay');await page.locator('canvas').scrollIntoViewIfNeeded();
  const playbackBounds=await page.locator('canvas').boundingBox(),px=playbackBounds.x+playbackBounds.width/2,py=playbackBounds.y+playbackBounds.height/2;
  const beforeCamera=await page.evaluate(()=>[...MoleculeVisualizer.App.renderer().orientation]);
  await page.mouse.move(px,py);await page.mouse.down();await page.mouse.move(px+45,py+28,{steps:8});await advancing();await page.mouse.move(px+80,py+40,{steps:8});await page.mouse.up();

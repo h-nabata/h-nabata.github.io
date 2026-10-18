@@ -296,7 +296,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   const local=await browser.newPage({viewport:{width:390,height:844}});await local.goto('http://127.0.0.1:8766/');await local.waitForSelector('canvas');await local.click('#btnExternalEngine');assert.equal(await local.locator('#engineURL').inputValue(),'http://127.0.0.1:8766');
   await local.fill('#engineToken',token);await local.click('#engineConnect');await local.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
   const dimensions=await local.locator('#engineDialog').evaluate(e=>({client:e.clientWidth,scroll:e.scrollWidth}));assert.ok(dimensions.scroll<=dimensions.client+2,'dialog must fit mobile width');await local.screenshot({path:'test-artifacts/engine-mobile.png'});
-  await local.click('#engineRun');await local.waitForSelector('#engineResult:not([hidden])');await local.click('#engineXYZ');
+  assert.equal(await local.locator('#engineLive').isChecked(),true);
+  let defaultLiveRequest;local.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/api/jobs'))defaultLiveRequest=r.postDataJSON();});
+  await local.click('#engineRun');await local.waitForFunction(()=>!MoleculeVisualizer.EngineUI.isBusy()&&!document.getElementById('engineResult').hidden);
+  assert.equal(defaultLiveRequest.livePreview,true);assert.equal(await local.locator('#profilePanel').isVisible(),true);
+  await local.click('#profileDetails');await local.waitForSelector('#engineResult:not([hidden])');await local.click('#engineXYZ');
   await local.selectOption('#trajectoryFormat','lup');
   await local.click('#trajectoryShowAll');assert.match(await local.locator('#trajectoryText').inputValue(),/^# NODE 0\n/);
   await local.click('#trajectorySelectText');const selectedText=await local.locator('#trajectoryText').evaluate(e=>[e.selectionStart,e.selectionEnd,e.value.length]);assert.deepEqual(selectedText,[0,selectedText[2],selectedText[2]]);
