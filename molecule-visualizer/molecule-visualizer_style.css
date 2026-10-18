@@ -159,3 +159,5 @@
 .mv-app #coordinatePanel .mv-scroll-panel-body{display:flex;flex-direction:column;min-height:calc(100% - 54px)}
 .mv-app .mv-xyz-panel #dataText{flex:1 0 200px}
 .mv-app .mv-command-label{color:#60788a}
+.mv-zoom-pair{display:inline-flex;gap:4px;align-items:center}
+@media(max-width:440px){.mv-display-controls{display:block}.mv-control-cluster[aria-label="視点"]{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:7px}.mv-control-cluster[aria-label="視点"]>.mv-btn{width:100%;font-size:11px}.mv-control-cluster[aria-label="視点"] .mv-zoom-pair{justify-content:center}.mv-display-controls #btnZoomIn,.mv-display-controls #btnZoomOut{flex:1;width:auto}}
