@@ -10,7 +10,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/api/jobs'))requests.push(r.postDataJSON());});
   await page.goto('http://127.0.0.1:8765/molecule-visualizer/');await page.waitForSelector('canvas');
   assert.equal(await page.locator('#engineVibrationCheck').isChecked(),false);
-  await page.click('#btnExternalEngine');await page.fill('#engineURL','http://127.0.0.1:8767');await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('Sella 2.6'));
+  await page.click('#btnExternalEngine');await page.uncheck('#engineLive');await page.fill('#engineURL','http://127.0.0.1:8767');await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('Sella 2.6'));
   await page.click('#engineClose');
   const ammonia=async(count=1)=>page.evaluate(count=>{
     const M=MoleculeVisualizer,s=M.IO.parseXYZToState('4\nNH3 inversion test\nN 0 0 0.05\nH 1.03 0 0\nH -0.515 0.892 0\nH -0.515 -0.892 0\n');

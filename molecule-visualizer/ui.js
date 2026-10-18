@@ -33,6 +33,17 @@
   }
 
   function byId(id) { return document.getElementById(id); }
+  const displayPreferenceKey='molecule-studio-display-v1';
+  let displayPreferences={};
+  function saveDisplayPreference(id){
+    displayPreferences[id]=byId(id).checked;
+    try{localStorage.setItem(displayPreferenceKey,JSON.stringify(displayPreferences));}catch(error){/* Display still works when browser storage is unavailable. */}
+  }
+  function restoreDisplayPreferences(){
+    try{const saved=JSON.parse(localStorage.getItem(displayPreferenceKey));if(saved&&typeof saved==='object'&&!Array.isArray(saved))displayPreferences=saved;}catch(error){/* Use defaults for unavailable or invalid storage. */}
+    for(const id of ['engineLive','afirLive','xyzHeader'])byId(id).checked=typeof displayPreferences[id]==='boolean'?displayPreferences[id]:true;
+    for(const id of ['engineLive','afirLive'])byId(id).addEventListener('change',()=>saveDisplayPreference(id));
+  }
   function setStatus(msg, error) { const el = byId("statusBadge"); if (el) { el.textContent = msg; el.classList.toggle("error",Boolean(error)); } if(byId("exportDialog")?.open) byId("exportMessage").textContent=msg; }
   function report(error) { const message=error.message||String(error); setStatus(message,true); if(byId("importDialog").open)byId("importError").textContent=message; if(byId("fragDialog").open)byId("fragmentError").textContent=message; }
   function numberInput(id, min=-1e6, max=1e6) {const el=byId(id), value=Number(el.value);if(el.value.trim()==="" || !Number.isFinite(value) || value<min || value>max)throw Error("数値が空欄または範囲外です。");return value;}
@@ -83,7 +94,7 @@
       return;
     }
     if(xyzPreviewDraft){
-      if(xyzDirty){el.value=xyzPreviewDraft.text;byId('coordinateFormat').value=xyzPreviewDraft.format;byId('xyzHeader').checked=xyzPreviewDraft.header;}
+      if(xyzDirty){el.value=xyzPreviewDraft.text;byId('coordinateFormat').value=xyzPreviewDraft.format;byId('xyzHeader').checked=xyzPreviewDraft.header;saveDisplayPreference('xyzHeader');}
       xyzPreviewDraft=null;
     }
     byId('xyzHeader').disabled=byId('coordinateFormat').value==='mol3000';
@@ -923,6 +934,7 @@
     for(let i=0;i<6;i++){Model.addOrUpdateBond(result,atoms[i].id,atoms[(i+1)%6].id,i%2?1:2,'covalent','manual');Model.addOrUpdateBond(result,atoms[i].id,atoms[i+6].id,1,'covalent','manual');}return result;
   }
   function setupStudio(){
+    restoreDisplayPreferences();
     ['addElem','editElem','selByElem'].forEach(id=>{const el=byId(id);el.replaceChildren(...IO.ELEMENTS.map(e=>{const o=document.createElement('option');o.value=e;o.textContent=e;return o;}));});
     byId('addElem').value='C';byId('editElem').value='C';byId('addMode').value='custom';
     const aromatic=document.createElement('option');aromatic.value='4';aromatic.textContent='芳香族';byId('bondOrder').append(aromatic);
@@ -970,13 +982,14 @@
       catch(error){select.value=/V3000/.test(byId('dataText').value)?'mol3000':'xyz';report(error);}
     });
     bind('xyzHeader','change',()=>{
-      if(renderer.previewOnly){syncXYZEditor();return;}
+      if(renderer.previewOnly){syncXYZEditor();saveDisplayPreference('xyzHeader');return;}
       try{
         if(xyzDirty){const draft=IO.parseXYZToState(byId('dataText').value);if(draft.metadata.trajectory)throw Error('1フレームのみ入力してください。');
           if(!/^\s*\d+\s*\n/.test(IO.normalizeXYZInput(byId('dataText').value)))draft.metadata={...state.metadata,...draft.metadata,title:state.metadata.title,cell:draft.metadata.cell||state.metadata.cell};
           byId('dataText').value=editorXYZ(draft);
         }
         syncXYZEditor();
+        saveDisplayPreference('xyzHeader');
       }catch(error){byId('xyzHeader').checked=!byId('xyzHeader').checked;byId('xyzEditStatus').textContent='入力を修正してからヘッダーを切り替えてください。'+error.message;}
     });
     bind('dataReset' ,'click',()=>{if(renderer.previewOnly){MV.VibrationUI?.restore();byId('profileRestore').click();}else xyzDirty=false;syncXYZEditor();});

@@ -47,8 +47,10 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
     });
   };
   const previewRequests=[],jobRequests=[];page.on('request',r=>{if(r.url().includes('?preview=1'))previewRequests.push(r.url());if(r.method()==='POST'&&r.url().endsWith('/api/jobs'))jobRequests.push(r.url());});
-  assert.equal(await page.locator('#engineLive').isChecked(),false);assert.equal(await page.locator('#afirLive').isChecked(),false);
-  await page.click('#btnExternalEngine');await page.fill('#engineURL','http://127.0.0.1:8766');await page.fill('#engineToken','incorrect');await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineMessage').textContent.includes('トークンが一致'));
+  assert.equal(await page.locator('#engineLive').isChecked(),true);assert.equal(await page.locator('#afirLive').isChecked(),true);
+  // Keep explicit live-off coverage in the first calculation sequence.
+  await page.click('#btnAFIR');await page.uncheck('#afirLive');await page.click('#afirClose');
+  await page.click('#btnExternalEngine');await page.uncheck('#engineLive');await page.fill('#engineURL','http://127.0.0.1:8766');await page.fill('#engineToken','incorrect');await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineMessage').textContent.includes('トークンが一致'));
   await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
   assert.equal(await page.locator('#engineMode option[value=neb]').count(),0);
   await page.selectOption('#engineMode','cineb');
@@ -128,7 +130,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.ok(afirPicked.ids.includes(afir.result.energies.indexOf(Math.max(...afir.result.energies))),'raw physical maximum must survive AFIR extraction');
   for(const f of afirPicked.parsed)assert.match(f.comment,/bias_eV=.*biased_energy_eV=/);
   await page.click('#trajectoryClose');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
-  assert.equal(previewRequests.length,0,'live display must make no preview requests by default');
+  assert.equal(previewRequests.length,0,'disabled live display must make no preview requests');
   // Use the actual AFIR result as an extracted animation and then as a real CI-NEB job.
   await page.click('#afirXYZ');await page.fill('#trajectoryCount','3');await page.selectOption('#trajectoryMethod','distance');
   await page.click('#trajectoryApply');assert.match(await page.locator('#framePlay').textContent(),/停止/);
@@ -294,7 +296,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   const local=await browser.newPage({viewport:{width:390,height:844}});await local.goto('http://127.0.0.1:8766/');await local.waitForSelector('canvas');await local.click('#btnExternalEngine');assert.equal(await local.locator('#engineURL').inputValue(),'http://127.0.0.1:8766');
   await local.fill('#engineToken',token);await local.click('#engineConnect');await local.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
   const dimensions=await local.locator('#engineDialog').evaluate(e=>({client:e.clientWidth,scroll:e.scrollWidth}));assert.ok(dimensions.scroll<=dimensions.client+2,'dialog must fit mobile width');await local.screenshot({path:'test-artifacts/engine-mobile.png'});
-  await local.click('#engineRun');await local.waitForSelector('#engineResult:not([hidden])');await local.click('#engineXYZ');
+  assert.equal(await local.locator('#engineLive').isChecked(),true);
+  let defaultLiveRequest;local.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/api/jobs'))defaultLiveRequest=r.postDataJSON();});
+  await local.click('#engineRun');await local.waitForFunction(()=>!MoleculeVisualizer.EngineUI.isBusy()&&!document.getElementById('engineResult').hidden);
+  assert.equal(defaultLiveRequest.livePreview,true);assert.equal(await local.locator('#profilePanel').isVisible(),true);
+  await local.click('#profileDetails');await local.waitForSelector('#engineResult:not([hidden])');await local.click('#engineXYZ');
   await local.selectOption('#trajectoryFormat','lup');
   await local.click('#trajectoryShowAll');assert.match(await local.locator('#trajectoryText').inputValue(),/^# NODE 0\n/);
   await local.click('#trajectorySelectText');const selectedText=await local.locator('#trajectoryText').evaluate(e=>[e.selectionStart,e.selectionEnd,e.value.length]);assert.deepEqual(selectedText,[0,selectedText[2],selectedText[2]]);
