@@ -13,6 +13,14 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  assert.equal(await page.locator('#coordinatePanel .mv-help').first().evaluate(e=>e.open),false);
  await page.click('#tab-bonds');assert.equal(await page.locator('#coordinatePanel').isVisible(),true);await page.click('#tab-atoms');
  await page.screenshot({path:'test-artifacts/controls-above-viewer.png'});
+ // Workspace shortcuts navigate without replacing the coordinate draft.
+ const draftBeforeJump=await page.locator('#dataText').inputValue();
+ await page.locator('[data-workspace-jump=editing]').click();assert.equal(await page.locator('#tab-atoms').getAttribute('aria-selected'),'true');
+ await page.locator('[data-workspace-jump=coordinates]').click();assert.equal(await page.locator('#dataText').evaluate(e=>document.activeElement===e),true);
+ await page.locator('[data-workspace-jump=afir]').click();assert.equal(await page.locator('#afirPanel').isVisible(),true);
+ await page.locator('[data-workspace-jump=editing]').click();assert.equal(await page.locator('#afirPanel').isVisible(),false);assert.equal(await page.locator('#dataText').inputValue(),draftBeforeJump);
+ await page.locator('[data-workspace-jump=coordinates]').click();
+ await page.screenshot({path:'test-artifacts/studio-workspace-desktop.png',fullPage:true});
 
  // Resize the panel itself, keep headings usable, and contain wheel scrolling.
  const checkPanel=async(id,prefix)=>{
@@ -114,7 +122,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
    assert.equal(result.title,result.name,await page.locator('#statusBadge').textContent());assert.deepEqual([result.c,result.h],result.expected);assert.ok(result.finite);
  }
  await page.selectOption('#complexSample','adamantane');await page.click('#loadComplexSample');await page.waitForFunction(()=>!document.querySelector('#loadComplexSample').disabled);
- await page.selectOption('#projectionMode','perspective');await page.locator('#cameraFov').fill('70');await page.locator('#cameraFov').dispatchEvent('input');assert.equal(await page.locator('#cameraFovValue').textContent(),'70°');
+ await page.locator('#viewOptions summary').first().click();await page.selectOption('#projectionMode','perspective');await page.locator('#cameraFov').fill('70');await page.locator('#cameraFov').dispatchEvent('input');assert.equal(await page.locator('#cameraFovValue').textContent(),'70°');
  if(await page.locator('#btnToggleAxes').getAttribute('aria-pressed')!=='true')await page.click('#btnToggleAxes');
  const cameraBefore=await page.evaluate(()=>({q:[...MoleculeVisualizer.App.renderer().orientation],direction:MoleculeVisualizer.App.renderer().viewVectorToWorld([0,0,1]),atoms:JSON.stringify(MoleculeVisualizer.App.getState().atoms)}));
  await page.locator('canvas').scrollIntoViewIfNeeded();const rollBox=await page.locator('canvas').boundingBox();await page.keyboard.down('Shift');await page.mouse.move(rollBox.x+rollBox.width/2,rollBox.y+rollBox.height/2);await page.mouse.down();await page.mouse.move(rollBox.x+rollBox.width/2+110,rollBox.y+rollBox.height/2,{steps:10});await page.mouse.up();await page.keyboard.up('Shift');
