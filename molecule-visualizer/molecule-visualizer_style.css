@@ -161,3 +161,5 @@
 .mv-app .mv-command-label{color:#60788a}
 .mv-zoom-pair{display:inline-flex;gap:4px;align-items:center}
 @media(max-width:440px){.mv-display-controls{display:block}.mv-control-cluster[aria-label="視点"]{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:7px}.mv-control-cluster[aria-label="視点"]>.mv-btn{width:100%;font-size:11px}.mv-control-cluster[aria-label="視点"] .mv-zoom-pair{justify-content:center}.mv-display-controls #btnZoomIn,.mv-display-controls #btnZoomOut{flex:1;width:auto}}
+/* Laptop viewports keep the common commands and frame controls beside the canvas. */
+@media(min-width:801px) and (max-height:950px){.mv-viewer-shell{height:clamp(240px,31vh,320px)}.mv-stage:has(#profilePanel:not([hidden])) .mv-viewer-shell{height:clamp(220px,26vh,280px)}}

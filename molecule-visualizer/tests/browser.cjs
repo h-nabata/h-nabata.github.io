@@ -26,7 +26,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.setViewportSize({width,height});await page.evaluate(()=>window.scrollTo(0,0));
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   const left=await page.locator('.mv-stage').boundingBox(),right=await page.locator('#coordinatePanel').boundingBox();assert.ok(right.x>=left.x+left.width);
-  const c=await page.locator('#calculationControls').boundingBox(),v=await page.locator('#viewer').boundingBox();assert.ok(c.y+c.height<=v.y+1);
+  const c=await page.locator('#calculationControls').boundingBox(),v=await page.locator('#viewer').boundingBox(),d=await page.locator('.mv-display-controls').boundingBox(),play=await page.locator('#framePlay').boundingBox();assert.ok(c.y+c.height<=v.y+1);assert.ok(d.y+d.height<=v.y+1);assert.ok(play.y+play.height<=height+1,JSON.stringify({width,height,play}));
   await page.screenshot({path:`test-artifacts/studio-${width}x${height}.png`});
  }
  await page.setViewportSize({width:1440,height:1440});
