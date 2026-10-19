@@ -2,7 +2,7 @@
 layout: default
 title: 分子構造エディタ | Molecule Studio
 ---
-<link rel="stylesheet" href="./molecule-visualizer_style.css?v=batch-33">
+<link rel="stylesheet" href="./molecule-visualizer_style.css?v=constraints-34">
 <script defer src="./model.js?v=16"></script>
 <script defer src="./bonding.js?v=16"></script>
 <script defer src="./geometry.js?v=19"></script>
@@ -12,26 +12,28 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./formats.js?v=16"></script>
 <script defer src="./measurements.js?v=16"></script>
 <script defer src="./history.js?v=16"></script>
+<script defer src="./constraints.js?v=constraints-34"></script>
+<script defer src="./constraints-ui.js?v=constraints-34"></script>
 <script defer src="./renderer3dmol.js?v=20"></script>
-<script defer src="./ui.js?v=playback-31"></script>
-<script defer src="./studio.js?v=height-32"></script>
+<script defer src="./ui.js?v=constraints-34"></script>
+<script defer src="./studio.js?v=constraints-34"></script>
 <script defer src="./advanced.js?v=displayed-28"></script>
-<script defer src="./generator-ui.js?v=displayed-28"></script>
+<script defer src="./generator-ui.js?v=constraints-34"></script>
 <script defer src="./trajectory.js?v=4"></script>
-<script defer src="./trajectory-ui.js?v=6"></script>
-<script defer src="./energy-profile.js?v=batch-33"></script>
+<script defer src="./trajectory-ui.js?v=constraints-34"></script>
+<script defer src="./energy-profile.js?v=constraints-34"></script>
 <script defer src="./batch.js?v=batch-33"></script>
-<script defer src="./batch-ui.js?v=batch-33"></script>
-<script defer src="./engine-ui.js?v=batch-33"></script>
-<script defer src="./vibration-ui.js?v=displayed-28"></script>
+<script defer src="./batch-ui.js?v=constraints-34"></script>
+<script defer src="./engine-ui.js?v=constraints-34"></script>
+<script defer src="./vibration-ui.js?v=constraints-34"></script>
 <script defer src="./path-refinement.js?v=2"></script>
 <script defer src="./afir.js?v=17"></script>
 <script defer src="./afir-search.js?v=16"></script>
-<script defer src="./afir-runner.js?v=19"></script>
-<script defer src="./afir-ui.js?v=batch-33"></script>
-<script defer src="./measurement-ui.js?v=22"></script>
+<script defer src="./afir-runner.js?v=constraints-34"></script>
+<script defer src="./afir-ui.js?v=constraints-34"></script>
+<script defer src="./measurement-ui.js?v=constraints-34"></script>
 <script defer src="./panel-layout.js?v=height-32"></script>
-<script defer src="./molecule-visualizer_main.js?v=batch-33"></script>
+<script defer src="./molecule-visualizer_main.js?v=constraints-34"></script>
 
 <div class="mv-page-buffer" aria-hidden="true"></div>
 <main class="mv-app">
@@ -45,7 +47,7 @@ title: 分子構造エディタ | Molecule Studio
     <section class="mv-stage" aria-label="分子の表示と操作">
       <div class="mv-stage-heading"><div><h2>分子ビュー</h2><span class="mv-unit-badge">3D</span></div><div class="mv-row"><div class="mv-viewer-size" role="group" aria-label="分子描画エリアの高さ"><span>高さ</span><button type="button" class="mv-btn" id="viewerShorter" data-viewer-size="-80" aria-label="描画エリアを低くする">−</button><button type="button" class="mv-btn" id="viewerTaller" data-viewer-size="80" aria-label="描画エリアを高くする">＋</button><button type="button" class="mv-btn" id="viewerResetHeight" data-viewer-size="reset" title="画面サイズに合わせた高さに戻す">自動</button></div><button class="mv-btn" id="btnPNG">画像を保存</button><button class="mv-btn" id="btnFullScreen">全画面</button></div></div>
       <div class="mv-stage-toolbar"><div class="mv-toolbar" role="toolbar" aria-label="操作モード"><button class="mv-tool active" id="toolSelect" title="クリックで選択、ドラッグで回転 (V)">選択</button><button class="mv-tool" id="toolMove" title="選択原子をドラッグして移動 (M)">原子移動</button><button class="mv-tool" id="toolBond" title="原子を2つ順にクリックして結合 (B)">結合</button><button class="mv-tool" id="toolBox" title="ドラッグした範囲の原子を現在の選択へ追加">範囲選択</button></div><div class="mv-history-actions"><button class="mv-btn" id="btnUndo" title="元に戻す (Ctrl / ⌘ Z)">↶ 戻す</button><button class="mv-btn" id="btnRedo" title="やり直す (Ctrl / ⌘ Shift Z)">↷ やり直す</button></div></div>
-      <div class="mv-calculation-controls" id="calculationControls"><div class="mv-command-group"><span class="mv-command-label">構造作成</span><div><button class="mv-btn primary" id="btnRelax" title="現在の結合を保ち、距離・角度・近接反発を軽量に緩和。最大500原子、セル固定。">構造を整える</button><button class="mv-btn" aria-label="ランダム配座・配向" id="btnRandomStructures">配座・配向</button><button class="mv-btn" aria-label="反応経路の初期構造" id="btnReactionPath">初期経路</button><button class="mv-btn" aria-label="経路のノードを補間・追加" id="btnRefinePath">ノード追加</button></div></div><div class="mv-command-group"><span class="mv-command-label">計算</span><div><button class="mv-btn primary" aria-label="外部エンジン / 経路緩和" id="btnExternalEngine">計算エンジン / CI-NEB</button><button class="mv-btn" aria-label="AFIR / 原子団に人工力" id="btnAFIR" aria-pressed="false">AFIR</button><button class="mv-btn" id="btnBatchOptimize">一括最適化</button><button class="mv-btn" aria-label="現在の構造をTS最適化" id="btnTS">TS最適化</button><button class="mv-btn" aria-label="現在の構造の振動解析" id="btnVibrations">振動解析</button><button class="mv-btn" id="cancelAdvanced" disabled>処理を中止</button></div></div></div>
+      <div class="mv-calculation-controls" id="calculationControls"><div class="mv-command-group"><span class="mv-command-label">構造作成</span><div><button class="mv-btn primary" id="btnRelax" title="現在の結合を保ち、距離・角度・近接反発を軽量に緩和。最大500原子、セル固定。">構造を整える</button><button class="mv-btn" aria-label="ランダム配座・配向" id="btnRandomStructures">配座・配向</button><button class="mv-btn" aria-label="反応経路の初期構造" id="btnReactionPath">初期経路</button><button class="mv-btn" aria-label="経路のノードを補間・追加" id="btnRefinePath">ノード追加</button></div></div><div class="mv-command-group"><span class="mv-command-label">計算</span><div><button class="mv-btn primary" aria-label="外部エンジン / 経路緩和" id="btnExternalEngine">計算エンジン / CI-NEB</button><button class="mv-btn" aria-label="AFIR / 原子団に人工力" id="btnAFIR" aria-pressed="false">AFIR</button><button class="mv-btn" id="btnConstraints" aria-pressed="false" aria-controls="constraintPanel">原子固定</button><button class="mv-btn" id="btnBatchOptimize">一括最適化</button><button class="mv-btn" aria-label="現在の構造をTS最適化" id="btnTS">TS最適化</button><button class="mv-btn" aria-label="現在の構造の振動解析" id="btnVibrations">振動解析</button><button class="mv-btn" id="cancelAdvanced" disabled>処理を中止</button></div></div></div>
       <div class="mv-view-controls mv-display-controls"><div class="mv-control-cluster" role="group" aria-label="分子の表示"><label for="styleSelect">表示</label><select id="styleSelect"><option value="stickball">球と棒</option><option value="stick">棒</option><option value="wire">ワイヤー</option><option value="vdw">空間充填（概略）</option></select><button class="mv-btn" aria-label="原子番号" id="btnToggleIndex" aria-pressed="false">原子番号</button><button class="mv-btn" aria-label="XYZ座標軸" id="btnToggleAxes" aria-pressed="false" title="世界座標の原点からX・Y・Z軸を表示（Å）">座標軸</button></div><div class="mv-control-cluster" role="group" aria-label="視点"><button class="mv-btn" id="btnViewXY">XY</button><button class="mv-btn" id="btnViewXZ">XZ</button><button class="mv-btn" id="btnViewYZ">YZ</button><button class="mv-btn" aria-label="全体を表示" id="btnFit">全体表示</button><button class="mv-btn" aria-label="カメラをリセット" id="btnResetCamera">視点リセット</button><span class="mv-zoom-pair"><button class="mv-btn" id="btnZoomOut" aria-label="縮小">−</button><button class="mv-btn" id="btnZoomIn" aria-label="拡大">＋</button></span></div></div>
       <div class="mv-viewer-shell"><div id="viewer"></div><p id="profilePreview" class="mv-profile-preview" hidden></p><div class="mv-viewer-bottom"><span id="modeBadge">選択モード</span><span id="gestureHint">左ドラッグ：表示回転 · 右：範囲選択 · Alt＋左/右：原子団移動/回転</span></div><div id="viewerResizeHandle" class="mv-viewer-resize" role="separator" tabindex="0" aria-orientation="horizontal" aria-label="描画エリアの高さを変更" aria-controls="viewer" aria-valuemin="160" aria-valuemax="1600" title="上下にドラッグして高さを変更。上下キーでも調整できます。Enterで自動に戻します。"><span aria-hidden="true">↕ ドラッグで高さを変更</span></div></div>
       <div class="mv-trajectory"><span class="mv-eyebrow">構造列</span><button class="mv-btn" id="framePrev" aria-label="前のフレーム">‹</button><button class="mv-btn" id="framePlay">▶ 再生</button><input id="frameRange" type="range" min="0" max="0" value="0" aria-label="フレーム"><button class="mv-btn" id="frameNext" aria-label="次のフレーム">›</button><output id="frameLabel">1 / 1</output></div>
@@ -81,12 +83,24 @@ title: 分子構造エディタ | Molecule Studio
         <div class="mv-row"><button class="mv-btn" id="downloadMeasurements" disabled>全フレームの計測値をCSV保存</button><button class="mv-btn" id="clearMeasurements" disabled>固定表示を全解除</button></div>
       </details>
       <div class="mv-feedback" id="statusBadge" role="status" aria-live="polite">準備完了</div>
-      <p class="mv-footnote">座標は Å。XYZの結合は原子間距離からの推定です。結合次数・配位の妥当性は確認してください。</p>
+      <p class="mv-footnote">座標は Å。XYZ読込時・最適化結果の結合は距離から推定します。手動編集中は自動更新しません。結合次数・配位の妥当性は確認してください。</p>
     </section>
     <aside class="mv-inspector" aria-label="編集パネル">
       <div class="mv-inspector-heading"><div><h2>構造データと編集</h2></div><nav class="mv-inspector-nav" aria-label="編集パネル内の移動"><button type="button" class="mv-btn" data-workspace-jump="coordinates">座標</button><button type="button" class="mv-btn" data-workspace-jump="editing">原子・結合</button><button type="button" class="mv-btn" data-workspace-jump="afir">AFIR</button></nav></div>
         <div id="coordinatePanel" class="mv-panel mv-xyz-panel mv-scroll-panel" role="region" aria-labelledby="coordinatePanelTitle"><div class="mv-scroll-panel-header"><h2 id="coordinatePanelTitle">全原子の座標・構造データ</h2><div class="mv-panel-size" role="group" aria-label="座標データパネルの高さ"><span class="mv-small">高さ</span><button type="button" class="mv-btn" id="coordinateShorter" data-panel-size="-80" aria-label="座標データパネルを低くする">−</button><button type="button" class="mv-btn" id="coordinateTaller" data-panel-size="80" aria-label="座標データパネルを高くする">＋</button><button type="button" class="mv-btn" id="coordinateResetHeight" data-panel-size="reset" aria-label="座標データパネルの高さを戻す">↺</button></div></div><div class="mv-scroll-panel-body"><div class="mv-row"><label class="mv-coordinate-label" for="dataText">座標 (Å)</label><label for="coordinateFormat">表示形式</label><select id="coordinateFormat"><option value="xyz">XYZ + TV</option><option value="mol3000">MOL V3000</option></select><label class="mv-check"><input id="xyzHeader" type="checkbox" checked>ヘッダー</label></div><textarea id="dataText" rows="18" wrap="off" spellcheck="false" aria-describedby="xyzEditStatus"></textarea><details id="previousXYZDraftPanel" hidden><summary>生成前の未適用データを復元用に表示</summary><textarea id="previousXYZDraft" rows="6" readonly></textarea></details><p id="xyzEditStatus" class="mv-small" role="status" aria-live="polite"></p><div class="mv-row mv-coordinate-actions"><button class="mv-btn primary" id="dataApply">構造へ適用</button><button class="mv-btn" id="cellLowerTriangular">格子を下三角化</button><button class="mv-btn" id="dataReset">現在の構造を再表示</button></div><details class="mv-help" id="coordinateImportHelp"><summary>入力形式・ファイル読み込み</summary><div class="mv-row"><label for="inputFormat">読み込み形式</label><select id="inputFormat"><option value="auto">自動判別</option><option value="xyz">XYZ / extXYZ / TV</option><option value="mol">MOL V2000 / V3000</option><option value="sdf">SDF（複数構造）</option><option value="cif">CIF</option><option value="pdb">PDB</option><option value="mol2">MOL2</option><option value="poscar">POSCAR</option><option value="gaussian">Gaussian GJF / COM</option><option value="orca">ORCA INP</option><option value="json">プロジェクトJSON</option></select><button class="mv-btn" id="btnDataFile">ファイルを欄に読み込む</button><input id="dataFile" type="file" hidden></div></details><details class="mv-help"><summary>使い方・対応形式</summary><p class="mv-small">XYZ / 拡張XYZ / MOL V2000・V3000 / SDF / CIF / PDB / MOL2 / POSCAR / Gaussian・ORCAのCartesian座標入力 / プロジェクトJSONを読み込めます。複数構造はフレームとして表示します。MOL・SDFでは、結合・同位体・形式電荷・ラジカル・立体指定・原子マッピングを保持します。XYZでは1行に「元素 X Y Z」を記入し、構造へ適用してください。ヘッダーの有無は自動判別し、全角スペース・タブ・各種改行も読み取ります。単位格子は末尾に TV ax 0 0 / TV bx by 0 / TV cx cy cz の3行で指定できます（Å）。TVは原子数に含めません。「格子を下三角化」は原子も一緒に回転し、構造を保ちます。</p></details></div></div>
-      <section id="afirPanel" class="mv-afir-panel mv-scroll-panel" aria-label="複数フラグメントAFIR" hidden>
+      <details id="constraintPanel" class="mv-panel mv-constraints"><summary>原子固定 <span id="constraintSummary">オフ</span></summary>
+          <div id="constraintFields">
+            <p class="mv-small">MIN・AFIR-MIN用。指定原子のX・Y・Z座標を計算開始時の位置に固定します。</p>
+            <label class="mv-check"><input id="constraintEnabled" type="checkbox">座標固定を有効にする</label>
+            <div class="mv-row"><label for="constraintAtoms">原子番号（File-order）</label><input id="constraintAtoms" type="text" placeholder="1, 4-8" autocomplete="off"><button class="mv-btn" id="constraintApply">番号を適用</button></div>
+            <div class="mv-row"><span id="constraintSelection"></span><button class="mv-btn" id="constraintAddSelected">選択原子を追加</button><button class="mv-btn" id="constraintRemoveSelected">選択原子を除外</button></div>
+            <div class="mv-row"><label for="constraintGroup">AFIR原子団</label><select id="constraintGroup"></select><button class="mv-btn" id="constraintAddGroup">原子団を追加</button></div>
+            <div class="mv-row"><button class="mv-btn" id="constraintSelect">固定原子を選択</button><button class="mv-btn" id="constraintClear">すべて解除</button></div>
+          </div>
+          <p class="mv-small" id="constraintStatus" role="status"></p>
+          <details class="mv-help"><summary>適用範囲</summary><p class="mv-small">収束判定には可動原子の有効力を使います。一括最適化では、現在の構造と同じ元素・原子順序の各入力に同じ番号を適用し、それぞれの初期位置に固定します。距離・角度拘束、TS・CI-NEB・振動解析との併用は対象外です。固定条件はプロジェクトと結果JSONに保存されます。</p></details>
+        </details>
+        <section id="afirPanel" class="mv-afir-panel mv-scroll-panel" aria-label="複数フラグメントAFIR" hidden>
         <div class="mv-scroll-panel-header"><div class="mv-afir-heading"><div><p class="mv-eyebrow">REACTION EXPLORER</p><h2>AFIR / 原子団に人工力</h2></div><button class="mv-btn" id="afirClose" aria-label="AFIRパネルを閉じる">閉じる</button></div><div class="mv-panel-size" role="group" aria-label="AFIRパネルの高さ"><span>高さ</span><button type="button" class="mv-btn" id="afirShorter" data-panel-size="-80" aria-label="AFIRパネルを低くする">低く</button><button type="button" class="mv-btn" id="afirTaller" data-panel-size="80" aria-label="AFIRパネルを高くする">高く</button><button type="button" class="mv-btn" id="afirResetHeight" data-panel-size="reset" aria-label="AFIRパネルの高さを戻す">戻す</button></div><p class="mv-panel-size-hint">右下をドラッグして高さを変更。</p></div>
         <div class="mv-scroll-panel-body">
         <p class="mv-afir-intro">描画上で原子を選び、原子団を登録します。近づける・離すペアは複数指定できます。</p>
@@ -103,7 +117,8 @@ title: 分子構造エディタ | Molecule Studio
           <p class="mv-afir-note">γは衝突エネルギーの尺度です。Arの基準値からαに換算します。γ = 0でそのペアの人工力を解除します。</p>
           <div id="afirPairs" class="mv-afir-list"></div>
         </fieldset>
-        <fieldset id="afirSettings"><legend>3. 探索条件</legend>
+        <div class="mv-row"><span class="mv-small" id="afirConstraintSummary"></span><button class="mv-btn" id="afirConstraints">原子固定を設定</button></div>
+          <fieldset id="afirSettings"><legend>3. 探索条件</legend>
           <div class="mv-afir-pair"><label>全電荷<input id="afirCharge" type="number" min="-100" max="100" step="1" value="0"></label><label>スピン多重度<input id="afirMultiplicity" type="number" min="1" max="101" step="1" value="1"></label></div>
           <!-- A zero step base keeps native spinner increments on the decimal grid. JS/Python enforce the positive lower limits. -->
           <div class="mv-afir-pair"><label>最大ステップ<input id="afirSteps" type="number" min="1" max="10000" step="1" value="10000"></label><label>収束 (eV/Å)<input id="afirFmax" type="number" min="0" max="10" step="0.01" value="0.05" title="0.00001〜10。上下ボタンは0.01刻み。より小さな値は直接入力できます。"></label></div>
@@ -371,7 +386,7 @@ H 1.0 0 0
   <h2>外部エンジン / 経路緩和</h2>
   <p class="mv-small">計算はこのPCで起動したサービス上で実行します。座標はローカルサービスへ送信されます。接続トークンはこの画面のメモリだけに保持します。</p>
   <details class="mv-engine-setup"><summary>初回のセットアップ：tblite / g-xTBを選ぶ</summary>
-    <p><a href="./local-engine/bridge.py?v=1.4.0" download>bridge.pyをダウンロード</a>し、使いたい計算手法に応じて、以下のどちらか一方の手順で起動してください。Python 3.10以上が必要です。</p>
+    <p><a href="./local-engine/bridge.py?v=1.5.0" download>bridge.pyをダウンロード</a>し、使いたい計算手法に応じて、以下のどちらか一方の手順で起動してください。Python 3.10以上が必要です。</p>
     <ul>
       <li><strong>tblite</strong>：GFN2-xTB（既定）、GFN1-xTB、IPEA1-xTBを利用します。このアプリでは非周期系と固定セルの周期系に対応します。</li>
       <li><strong>g-xTB</strong>：公式のg-xTB対応実行ファイルを別途用意します。このアプリでは非周期系に対応します。tbliteのPythonパッケージは不要です。</li>
@@ -429,7 +444,8 @@ python bridge.py --engine gxtb --binary /absolute/path/to/xtb --allow-origin htt
     <label>対象<select id="engineScope"><option value="current">現在の構造</option><option value="all">全フレーム</option></select></label>
     <label>系全体の電荷<input id="engineCharge" type="number" min="-100" max="100" step="1" value="0"></label>
     <label>スピン多重度 (2S+1)<input id="engineMultiplicity" type="number" min="1" max="101" step="1" value="1"></label>
-  </div><p id="engineModeHelp" class="mv-small"></p>
+  </div><div class="mv-row"><span class="mv-small" id="engineConstraintSummary"></span><button class="mv-btn" id="engineConstraints">原子固定を設定</button></div>
+  <p id="engineModeHelp" class="mv-small"></p>
   <section id="batchInput" hidden>
     <label>入力元<select id="batchSource"><option value="text">テキスト / XYZファイル</option><option value="frames">読み込み済みの全フレーム</option></select></label>
     <div id="batchTextInput"><label for="batchText">複数構造の座標 (Å)</label><textarea id="batchText" rows="8" spellcheck="false" placeholder="O 0 0 0
@@ -454,7 +470,7 @@ H -0.3 1.0 0"></textarea>
   <div id="engineVibrationOptions" hidden><label id="engineVibrationCheckLabel" class="mv-check"><input id="engineVibrationCheck" type="checkbox">最適化後に振動解析を行う（未収束時も実行・既定オフ）</label>
     <div class="mv-grid"><label>有限差分の変位幅 (Å)<input id="engineVibrationDelta" type="number" min="0" max="0.1" step="0.001" value="0.001"></label><label>差分点数<select id="engineVibrationNfree"><option value="2">2点（±δ）</option><option value="4">4点（±δ, ±2δ）</option></select></label><label>虚振動を数える閾値 (cm⁻¹)<input id="engineVibrationThreshold" type="number" min="0" max="1000" step="1" value="20"></label></div>
     <details class="mv-help"><summary>詳しい説明</summary><p class="mv-small">ASE Vibrationsによる全原子の有限差分。最大200原子・非周期分子。2点法は約6N、4点法は約12N回の力計算が必要です。表には閾値以下の虚振動も表示します。TS収束の判定と虚振動の本数は別に確認してください。</p></details></div>
-  <details class="mv-help"><summary>詳しい説明</summary><p class="mv-small">最大500原子・100構造。経路は同じ元素順序・固定セルが必要です。周期境界をまたぐ経路は連続したCartesian座標で入力してください。原子ごとの移動固定や可変セルには対応していません。Sellaは非周期系の一次鞍点探索で、初期信頼半径は計算中に自動調整されます。L-BFGSは極小化専用です。</p></details></fieldset>
+  <details class="mv-help"><summary>詳しい説明</summary><p class="mv-small">最大500原子・100構造。経路は同じ元素順序・固定セルが必要です。周期境界をまたぐ経路は連続したCartesian座標で入力してください。原子固定はMIN・AFIR-MINに対応。可変セルには対応していません。Sellaは非周期系の一次鞍点探索で、初期信頼半径は計算中に自動調整されます。L-BFGSは極小化専用です。</p></details></fieldset>
   <label class="mv-check"><input id="engineLive" type="checkbox" checked>計算中のエネルギー・構造を表示</label><p class="mv-small">経路計算では最新の経路全体を表示します。通常の最適化は計算中に最新の1点、終了後は全ステップを表示します。</p>
   <p id="engineMessage" role="status" aria-live="polite"></p>
 

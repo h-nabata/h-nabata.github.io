@@ -1,6 +1,6 @@
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
 const A=require('../afir.js');
-function boot(){const MV={AFIR:A},ctx={window:{MoleculeVisualizer:MV},document:{getElementById(){return {};}},URL,AbortController,setTimeout,clearTimeout};vm.createContext(ctx);for(const f of ['trajectory.js','engine-ui.js','afir-runner.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f),'utf8'),ctx);return MV;}
+function boot(){const MV={AFIR:A},ctx={window:{MoleculeVisualizer:MV},document:{getElementById(){return {};}},URL,AbortController,setTimeout,clearTimeout};vm.createContext(ctx);for(const f of ['constraints.js','trajectory.js','engine-ui.js','afir-runner.js'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f),'utf8'),ctx);return MV;}
 function sample(){
  const atoms=[{id:'left',element:'H',x:0,y:0,z:0},{id:'right',element:'H',x:2,y:0,z:0}];
  const config={...A.defaults(),fragments:[{id:'a',label:'A',atomIds:['left']},{id:'b',label:'B',atomIds:['right']}],pairs:[{a:'a',b:'b',mode:'attract',gamma:100}]},bias=A.evaluate(atoms,config).energyEV;

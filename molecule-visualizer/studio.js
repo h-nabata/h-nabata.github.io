@@ -32,13 +32,12 @@
     // A frame change is navigation. Its current edits are saved in the document.
     frames[s.metadata.frameIndex||0]=P.snapshot(s);
     const next=M.createState(frames[index]);next.metadata.trajectory=frames;next.metadata.frameIndex=index;next.viewSettings={...s.viewSettings};
-    MV.Bonding.refreshInferredBonds(next);
     if(s.metadata.measurements)next.metadata.measurements=JSON.parse(JSON.stringify(s.metadata.measurements));
     const missing=MV.Measurements?MV.Measurements.transferSelection(s,next):0;
     app().setState(next,true,playing);if(missing)app().setStatus(`このフレームに存在しない選択原子${missing}個を除外しました。`,true);
   }
   function allXYZ(){const s=state(),frames=s.metadata.trajectory;if(!frames)return IO.stateToXYZText(app().getDisplayedState());return frames.map((f,i)=>IO.stateToXYZText(i===(s.metadata.frameIndex||0)?s:M.createState(f))).join('');}
-  function transform(fn){if(!state().selectedAtomIds.size)throw Error('原子を選択してください。');app().change('transform',s=>{const atoms=s.atoms.filter(a=>s.selectedAtomIds.has(a.id));fn(atoms);MV.Bonding.refreshInferredBonds(s);});}
+  function transform(fn){if(!state().selectedAtomIds.size)throw Error('原子を選択してください。');app().change('transform',s=>{const atoms=s.atoms.filter(a=>s.selectedAtomIds.has(a.id));fn(atoms);});}
   function rotateSelection(){const [degrees]=readNumbers('rotationAngle',1),axis=$('rotationAxis').value,angle=degrees*Math.PI/180;transform(atoms=>{const center=[0,1,2].map(i=>atoms.reduce((sum,a)=>sum+P.xyz(a)[i],0)/atoms.length),j=axis==='x'?1:axis==='y'?2:0,k=(j+1)%3;atoms.forEach(a=>{const v=P.xyz(a).map((x,i)=>x-center[i]),b=v[j];v[j]=b*Math.cos(angle)-v[k]*Math.sin(angle);v[k]=b*Math.sin(angle)+v[k]*Math.cos(angle);[a.x,a.y,a.z]=v.map((x,i)=>x+center[i]);});});}
   function cancelChem(){if(worker)worker.terminate();worker=null;if(pending){clearTimeout(pending.timeout);pending.reject(Error('3D生成を中止しました。'));pending=null;} $('chemCancel').disabled=true;}
   function convert(data,input,output,generate=false){
@@ -90,9 +89,9 @@
       stop();
     });
     bind('btnCell',()=>{const c=state().metadata.cell||P.cell([[10,0,0],[0,10,0],[0,0,10]]);$('cellVectors').value=c.vectors.map(r=>r.join(' ')).join('\n');['pbcA','pbcB','pbcC'].forEach((id,i)=>$(id).checked=c.pbc[i]);$('cellDialog').showModal();});
-    bind('cellApply',()=>{const n=readNumbers('cellVectors',9),c=P.cell([n.slice(0,3),n.slice(3,6),n.slice(6)],['pbcA','pbcB','pbcC'].map(id=>$(id).checked));app().change('cell',s=>{if($('keepFractional').checked&&s.metadata.cell)s.atoms.forEach(a=>{[a.x,a.y,a.z]=P.cartesian(P.fractional(P.xyz(a),s.metadata.cell),c);});s.metadata.cell=c;MV.Bonding.refreshInferredBonds(s);},true);$('cellDialog').close();});
-    bind('cellRemove',()=>{app().change('remove cell',s=>{s.metadata.cell=null;MV.Bonding.refreshInferredBonds(s);},true);$('cellDialog').close();});
-    bind('cellWrap',()=>app().change('wrap',s=>{P.wrap(s);MV.Bonding.refreshInferredBonds(s);}));
+    bind('cellApply',()=>{const n=readNumbers('cellVectors',9),c=P.cell([n.slice(0,3),n.slice(3,6),n.slice(6)],['pbcA','pbcB','pbcC'].map(id=>$(id).checked));app().change('cell',s=>{if($('keepFractional').checked&&s.metadata.cell)s.atoms.forEach(a=>{[a.x,a.y,a.z]=P.cartesian(P.fractional(P.xyz(a),s.metadata.cell),c);});s.metadata.cell=c;},true);$('cellDialog').close();});
+    bind('cellRemove',()=>{app().change('remove cell',s=>{s.metadata.cell=null;},true);$('cellDialog').close();});
+    bind('cellWrap',()=>app().change('wrap',s=>{P.wrap(s);}));
     bind('cellSuper',()=>{app().change('supercell',s=>P.supercell(s,readNumbers('repeatCell',3)),true);$('cellDialog').close();});
     bind('savePOSCAR',()=>download(P.toPOSCAR(app().getDisplayedState()),'POSCAR'));
     bind('allFrames',()=>download(allXYZ(),'trajectory.xyz'));

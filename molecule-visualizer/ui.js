@@ -117,7 +117,7 @@
     else{next.atoms=parsed.atoms;next.bonds=[];next.selectedAtomIds.clear();next.selectedBondIds.clear();next.metadata.suppressedBondKeys=[];}
     if(/^\s*\d+\s*\n/.test(input))next.metadata.title=parsed.metadata.title;
     if(parsed.metadata.cell){if(next.metadata.cell&&!/\bLattice=/.test(input))parsed.metadata.cell.pbc=next.metadata.cell.pbc.slice();next.metadata.cell=parsed.metadata.cell;}
-    if(!isMol)Bonding.refreshInferredBonds(next);
+    if(!isMol&&!same)Bonding.refreshInferredBonds(next);
     pushHistory('structure text');xyzDirty=false;byId('inputFormat').value='auto';setState(next,true);setStatus('座標・構造データを適用しました。「戻す」で復元できます。');
   }
   function setMeasure(msg) { const el = byId("measureBadge"); if (el) el.textContent = msg; }
@@ -161,6 +161,7 @@
     MV.Studio?.sync();
     MV.MeasurementUI?.sync();
     MV.AFIRUI?.sync();
+    MV.ConstraintUI?.sync();
   }
 
   function setState(nextState, preserveCamera, navigation=false) {
@@ -181,10 +182,10 @@
     MV.Studio?.sync();
     MV.MeasurementUI?.sync();
     MV.AFIRUI?.sync();
+    MV.ConstraintUI?.sync();
   }
 
-  function refreshBondsAndRender(preserveCamera) {
-    Bonding.refreshInferredBonds(state);
+  function renderAfterEdit(preserveCamera) {
     render(preserveCamera);
   }
 
@@ -262,7 +263,7 @@
     if (state.selectedAtomIds.size === 0) return;
     pushHistory("deleteAtoms");
     Model.removeSelectedAtoms(state);
-    refreshBondsAndRender(true);
+    renderAfterEdit(true);
     setStatus("選択原子を削除しました。");
   }
 
@@ -274,7 +275,7 @@
     state.atoms.forEach(atom => {
       if (state.selectedAtomIds.has(atom.id)) atom.element = newElem;
     });
-    refreshBondsAndRender(true);
+    renderAfterEdit(true);
     setStatus(`Element changed to ${newElem}`);
   }
 
@@ -398,7 +399,7 @@
     const atom = Model.createAtom({ element, x, y, z });
     state.atoms.push(atom);
     Model.setSelectedAtoms(state, [atom.id]);
-    refreshBondsAndRender(true);
+    renderAfterEdit(true);
     setStatus(`Added atom: ${element}`);
   }
 
@@ -468,11 +469,13 @@
       if (i === anchorIndex) newAnchorId = newAtom.id;
     });
 
+    const fragmentIds=new Map(parsed.atoms.map((a,i)=>[a.id,addedIds[i]]));
+    for(const b of parsed.bonds)Model.addOrUpdateBond(state,fragmentIds.get(b.atom1),fragmentIds.get(b.atom2),b.order,b.type,b.source);
     if (place === "anchorBond" && hostAnchor && newAnchorId) {
       Model.addOrUpdateBond(state, hostAnchor.id, newAnchorId, bondOrder, "covalent", "manual");
     }
     Model.setSelectedAtoms(state, addedIds);
-    refreshBondsAndRender(true);
+    renderAfterEdit(true);
     setStatus(`Fragment added: +${addedIds.length} atoms${place === "anchorBond" ? ", anchored" : ""}`);
   }
 
@@ -588,7 +591,6 @@
   function handleCanvasDragEnd() {
     if (!dragMoved) return;
     dragMoved = false;
-    Bonding.refreshInferredBonds(state);
     render(true);
     groupDragIds=[];setStatus("構造の移動・回転を確定しました。");
   }
@@ -647,7 +649,8 @@
   function reinferBonds() {
     pushHistory("reinferBonds");
     state.metadata.suppressedBondKeys=[];
-    refreshBondsAndRender(true);
+    Bonding.refreshInferredBonds(state);
+    renderAfterEdit(true);
     setStatus("推定結合を再計算しました。手動の結合は保持しています。");
   }
 
@@ -659,7 +662,7 @@
     pushHistory("setDistance");
     const moved = Geometry.setDistance(atoms[0], atoms[1], target);
     Object.assign(atoms[1], moved);
-    refreshBondsAndRender(true);
+    renderAfterEdit(true);
     setMeasure(`d=${Geometry.distance(atoms[0], atoms[1]).toFixed(3)} A`);
     setStatus("距離を変更しました。");
   }
@@ -680,7 +683,7 @@
     const result=Geometry.setAngle(atoms[0], atoms[1], atoms[2], target);
     pushHistory("setAngle");
     Object.assign(atoms[2], result);
-    refreshBondsAndRender(true);
+    renderAfterEdit(true);
     setMeasure(`angle=${Geometry.angle(atoms[0], atoms[1], atoms[2]).toFixed(2)} deg`);
     setStatus("角度を変更しました。");
   }
@@ -701,7 +704,7 @@
     const result=Geometry.setDihedral(atoms[0], atoms[1], atoms[2], atoms[3], target);
     pushHistory("setDihedral");
     Object.assign(atoms[3], result);
-    refreshBondsAndRender(true);
+    renderAfterEdit(true);
     setMeasure(`dihedral=${Geometry.dihedral(atoms[0], atoms[1], atoms[2], atoms[3]).toFixed(2)} deg`);
     setStatus("二面角を変更しました。");
   }
@@ -993,10 +996,10 @@
       }catch(error){byId('xyzHeader').checked=!byId('xyzHeader').checked;byId('xyzEditStatus').textContent='入力を修正してからヘッダーを切り替えてください。'+error.message;}
     });
     bind('dataReset' ,'click',()=>{if(renderer.previewOnly){MV.VibrationUI?.restore();byId('profileRestore').click();}else xyzDirty=false;syncXYZEditor();});
-    bind('cellLowerTriangular','click',()=>{try{if(xyzDirty)applyXYZEditor();MV.App.change('lower triangular cell',s=>{MV.Periodic.lowerTriangular(s);Bonding.refreshInferredBonds(s);},true);setStatus('原子と格子を一緒に回転し、TVを下三角化しました。');}catch(error){report(error);}});
+    bind('cellLowerTriangular','click',()=>{try{if(xyzDirty)applyXYZEditor();MV.App.change('lower triangular cell',s=>{MV.Periodic.lowerTriangular(s);},true);setStatus('原子と格子を一緒に回転し、TVを下三角化しました。');}catch(error){report(error);}});
     bind('dataApply','click',()=>{try{applyXYZEditor();}catch(error){byId('xyzEditStatus').textContent=error.message;report(error);}});
     bind('btnDataDock','click',()=>{byId('tab-atoms').click();byId('dataText').focus();byId('dataText').scrollIntoView?.({block:'center',behavior:'smooth'});});
-    bind('btnTranslate','click',()=>{const delta=['translateX','translateY','translateZ'].map(id=>numberInput(id));if(!state.selectedAtomIds.size)return;pushHistory('translate');selectedAtoms().forEach(a=>['x','y','z'].forEach((k,i)=>a[k]+=delta[i]));refreshBondsAndRender(true);setStatus('選択原子を平行移動しました。');});
+    bind('btnTranslate','click',()=>{const delta=['translateX','translateY','translateZ'].map(id=>numberInput(id));if(!state.selectedAtomIds.size)return;pushHistory('translate');selectedAtoms().forEach(a=>['x','y','z'].forEach((k,i)=>a[k]+=delta[i]));renderAfterEdit(true);setStatus('選択原子を平行移動しました。');});
     bind('btnFit','click',()=>renderer.fit());
     bind('btnResetCamera','click',()=>{renderer.resetCamera();setStatus('カメラの向き・拡大率・表示位置をリセットしました。');});
     bind('btnToggleAxes','click',()=>{state.viewSettings.showAxes=!state.viewSettings.showAxes;render(true);setStatus(state.viewSettings.showAxes?'XYZ座標軸を表示しました。':'XYZ座標軸を非表示にしました。');});

@@ -177,3 +177,12 @@
 
 /* Independent optimization inputs and comparison results. */
 #batchInput{padding:14px;background:#f3f8f8;border:1px solid #d4e4e5;border-radius:10px;margin:12px 0}#batchInput>label{display:block;margin-bottom:10px}#batchText{width:100%;min-height:150px;max-height:500px;resize:vertical;font-family:monospace}#batchTextInput>label{display:block;margin:8px 0}#batchFile{max-width:100%}#batchResult{margin-top:16px;padding-top:12px;border-top:1px solid #d4e4e5}#batchRows td{font-variant-numeric:tabular-nums}#batchRows td:nth-child(2){max-width:180px;overflow-wrap:anywhere}#batchRows td:last-child{min-width:110px;max-width:260px}#batchRows td:last-child span{display:block;overflow-wrap:anywhere}#batchResult .mv-table-scroll{max-height:360px;overflow:auto}#batchResult thead{position:sticky;top:0;background:#f3f8f8}#batchInput[hidden],#batchTextInput[hidden],#batchResult[hidden]{display:none}
+
+/* Fixed atom controls remain next to the editable structure. */
+.mv-constraints>summary{cursor:pointer;font-weight:650;display:flex;justify-content:space-between;gap:12px;align-items:center}
+.mv-constraints>summary span{font-size:12px;font-weight:400;color:var(--muted,#64748b)}
+.mv-constraints[open]>summary{margin-bottom:12px}
+.mv-constraints .mv-row{margin:10px 0;flex-wrap:wrap}
+#constraintAtoms{flex:1;min-width:100px}
+#constraintGroup{max-width:180px}
+#constraintStatus{overflow-wrap:anywhere}
