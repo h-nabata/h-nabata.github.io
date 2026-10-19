@@ -13,7 +13,7 @@
     if(!data||!Number.isInteger(i)||i<0||i>=data.energies.length)return;
     index=i;$('profileRange').value=i;
     const energy=data.energies[i],bias=data.biasEnergies?.[i],relative=energy-(data.referenceEnergy??data.energies[0]);
-    $('profileValue').textContent=(isStep(data)?'ステップ '+i:(data.labels?.[i]||'構造 '+(i+1)))+' / '+(isStep(data)?data.energies.length-1:data.energies.length)+' · E = '+energy.toFixed(6)+' eV · ΔE = '+relative.toFixed(6)+' eV'+(bias==null?'':' · 人工項 = '+bias.toFixed(6)+' eV · 合計 = '+(energy+bias).toFixed(6)+' eV');
+    $('profileValue').textContent=(data.labels?data.labels[i]+' · 比較 '+data.energies.length+'構造':(isStep(data)?'ステップ '+i:'構造 '+(i+1))+' / '+(isStep(data)?data.energies.length-1:data.energies.length))+' · E = '+energy.toFixed(6)+' eV · ΔE = '+relative.toFixed(6)+' eV'+(bias==null?'':' · 人工項 = '+bias.toFixed(6)+' eV · 合計 = '+(energy+bias).toFixed(6)+' eV');
     const x=40+500*i/Math.max(1,data.energies.length-1);
     marker?.setAttribute('x1',x);marker?.setAttribute('x2',x);
     if(!preview)return;

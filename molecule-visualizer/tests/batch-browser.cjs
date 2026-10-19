@@ -22,7 +22,9 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.equal(report.entries[0].result.energies[0],report.entries[2].result.energies[0]);assert.notDeepEqual(report.entries[0].result.images[0],requests[0].images[0]);
   const csv=await download('#batchCSV');assert.match(csv,/relative_kJ_mol/);assert.ok(!csv.includes(token));
   const xyz=await download('#batchXYZ');assert.equal((xyz.match(/energy_eV=/g)||[]).length,3);assert.match(xyz,/status=step_limit/);
+  await page.locator('#batchResult').scrollIntoViewIfNeeded();
   await page.selectOption('#batchSort','energy');const energies=await page.locator('#batchRows tr').evaluateAll(rows=>rows.map(r=>Number(r.children[3].textContent)));assert.deepEqual(energies,[...energies].sort((a,b)=>a-b));
+  await page.locator('#batchResult').scrollIntoViewIfNeeded();assert.equal(await page.locator('#batchSummary').isVisible(),true);
   await page.screenshot({path:'test-artifacts/batch-comparison.png',fullPage:true});
   await page.locator('#batchRows button').first().click();assert.equal(await page.locator('#engineDialog').isVisible(),false);
   assert.equal(await page.evaluate(()=>{const MV=MoleculeVisualizer,a=MV.IO.parseXYZToState(document.getElementById('dataText').value).atoms,b=MV.App.getDisplayedState().atoms;return a.every((v,i)=>['x','y','z'].every(k=>Math.abs(v[k]-b[i][k])<1e-8));}),true);
@@ -48,7 +50,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   // Live batch execution still sends isolated inputs and ends on the comparison profile.
   held=false;await page.check('#engineLive');await page.click('#engineRun');await page.waitForFunction(()=>!MoleculeVisualizer.EngineUI.isBusy()&&document.getElementById('profileTitle').textContent.includes('最終エネルギー比較'));
   assert.equal(fixtureCount,7);assert.ok(requests.slice(-3).every(r=>r.livePreview));
-  await page.click('#profileDetails');await page.setViewportSize({width:390,height:844});const dimensions=await page.locator('#engineDialog').evaluate(e=>[e.clientWidth,e.scrollWidth]);assert.ok(dimensions[1]<=dimensions[0]+2);await page.screenshot({path:'test-artifacts/batch-mobile.png',fullPage:true});
+  await page.click('#profileDetails');await page.setViewportSize({width:390,height:844});const dimensions=await page.locator('#engineDialog').evaluate(e=>[e.clientWidth,e.scrollWidth]);assert.ok(dimensions[1]<=dimensions[0]+2);await page.locator('#batchResult').scrollIntoViewIfNeeded();await page.screenshot({path:'test-artifacts/batch-mobile.png',fullPage:true});
   assert.ok(!(await page.evaluate(()=>JSON.stringify({...localStorage}))).includes(token));assert.deepEqual(errors,[]);console.log('Batch optimization: real tblite, isolated jobs, input, comparison, exports, preview, failure and cancellation passed');
  }finally{if(browser)await browser.close();engine.kill('SIGINT');await new Promise(resolve=>{if(engine.exitCode!==null)return resolve();engine.on('exit',resolve);setTimeout(()=>{engine.kill('SIGKILL');resolve();},5000).unref();});}
 })().catch(e=>{console.error(e);process.exitCode=1;});

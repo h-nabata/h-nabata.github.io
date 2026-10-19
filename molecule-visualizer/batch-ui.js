@@ -23,19 +23,21 @@
     MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);
   }
   function available(){return batch?.entries.map((e,i)=>({entry:e,index:i})).filter(({entry:e})=>MV.Batch.completed(e))||[];}
+  function openResults(){MV.EngineUI.open();$('batchResult').scrollIntoView({block:'start'});}
   function profile(selected){
     const rows=available();if(!rows.length)return;
-    MV.EnergyProfile.set({title:'一括最適化 · 最終エネルギー比較',kind:'batch',referenceEnergy:MV.Batch.minimum(batch.entries),labels:rows.map(x=>`入力 ${x.index+1}`),energies:rows.map(x=>x.entry.result.energies[0]),positions:i=>rows[i].entry.result.images[0],base:i=>resultFrame(rows[i].entry,rows[i].index),details:()=>MV.EngineUI.open(),exportXYZ:()=>downloadXYZ()});
+    MV.EnergyProfile.set({title:'一括最適化 · 最終エネルギー比較',kind:'batch',referenceEnergy:MV.Batch.minimum(batch.entries),labels:rows.map(x=>`入力 ${x.index+1}`),energies:rows.map(x=>x.entry.result.energies[0]),positions:i=>rows[i].entry.result.images[0],base:i=>resultFrame(rows[i].entry,rows[i].index),details:openResults,exportXYZ:()=>downloadXYZ()});
     if(selected!==undefined){$('engineDialog').close();MV.EnergyProfile.reveal();MV.EnergyProfile.select(Math.max(0,rows.findIndex(x=>x.index===selected)));}
   }
   function view(entry,index){
     if(MV.Batch.completed(entry)){profile(index);return;}
-    MV.EnergyProfile.set({title:`一括最適化 · 入力 ${index+1} · ${statusText[entry.status]}`,kind:'batch',energies:entry.result.energies,positions:()=>entry.result.images[0],base:()=>resultFrame(entry,index),details:()=>MV.EngineUI.open()});
+    MV.EnergyProfile.set({title:`一括最適化 · 入力 ${index+1} · ${statusText[entry.status]}`,kind:'batch',energies:entry.result.energies,positions:()=>entry.result.images[0],base:()=>resultFrame(entry,index),details:openResults});
     $('engineDialog').close();MV.EnergyProfile.reveal();MV.EnergyProfile.select(0);
   }
   function render(){
     if(!batch)return;
-    const es=batch.entries,min=MV.Batch.minimum(es),body=$('batchRows');body.replaceChildren();
+    const es=batch.entries,min=MV.Batch.minimum(es),body=$('batchRows'),dialog=$('engineDialog'),scroller=body.closest('.mv-table-scroll'),top=dialog.scrollTop,tableTop=scroller.scrollTop;
+    body.replaceChildren();
     const rows=es.map((entry,index)=>({entry,index}));
     if($('batchSort').value==='energy')rows.sort((a,b)=>(MV.Batch.completed(a.entry)?a.entry.result.energies[0]:Infinity)-(MV.Batch.completed(b.entry)?b.entry.result.energies[0]:Infinity)||a.index-b.index);
     for(const {entry:e,index} of rows){
@@ -47,11 +49,13 @@
       tr.append(td);body.append(tr);
     }
     const count=available().length;
-    $('batchSummary').textContent=`${es.length}構造 · 収束 ${es.filter(e=>e.status==='converged').length} · 未収束 ${es.filter(e=>e.status==='step_limit').length} · 失敗 ${es.filter(e=>['failed','unknown'].includes(e.status)).length} · 待機/未実行 ${es.filter(e=>['waiting','not_run'].includes(e.status)).length}`;
+    const engine=es.find(e=>e.result)?.result,conditions=batch.plan.data;
+    $('batchSummary').textContent=(engine?`${engine.engine} / ${engine.method} · `:'')+`電荷 ${conditions.charge} · 多重度 ${conditions.multiplicity} · ${conditions.optimizer||'FIRE'} · ${es.length}構造 · 収束 ${es.filter(e=>e.status==='converged').length} · 未収束 ${es.filter(e=>e.status==='step_limit').length} · 失敗 ${es.filter(e=>['failed','unknown'].includes(e.status)).length} · 待機/未実行 ${es.filter(e=>['waiting','not_run'].includes(e.status)).length}`;
     for(const id of ['batchCompare','batchXYZ','batchApply'])$(id).disabled=!count||MV.EngineUI.isBusy();
     $('batchJSON').disabled=$('batchCSV').disabled=MV.EngineUI.isBusy();
+    dialog.scrollTop=top;scroller.scrollTop=tableTop;
   }
-  function finish(){if(!batch)return;batch.entries.filter(e=>e.status==='waiting').forEach(e=>{e.status='not_run';});render();if(available().length)profile();}
+  function finish(){if(!batch)return;batch.entries.filter(e=>e.status==='waiting').forEach(e=>{e.status='not_run';});render();if(available().length)profile();if($('engineDialog').open)$('batchResult').scrollIntoView({block:'start'});}
   function save(text,name,type){const url=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
   function downloadXYZ(){
     const text=available().map(({entry:e,index})=>{
