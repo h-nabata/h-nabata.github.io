@@ -32,8 +32,9 @@ from ase.data import atomic_numbers, covalent_radii
 from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 
-VERSION = '1.6.0'
+VERSION = '1.7.0'
 UMA_MODELS = ('uma-s-1p2p1', 'uma-s-1p2', 'uma-s-1p1', 'uma-m-1p1')
+ANYSOLV_MODELS = ('model_compact', 'model_moe')
 MAX_BODY = 8 * 1024 * 1024
 MODES = ('evaluate', 'optimize', 'perpendicular', 'neb', 'cineb', 'afir', 'ts', 'vibrations')
 PATH_MODES = ('perpendicular', 'neb', 'cineb')
@@ -50,7 +51,7 @@ def number(value, name, lo, hi, integer=False):
 def validate(data, engine):
     allowed = {'symbols', 'images', 'cell', 'charge', 'multiplicity', 'mode',
                'maxSteps', 'fmax', 'spring', 'maxMove', 'climbAfter', 'atomIds', 'afir', 'livePreview',
-               'optimizer', 'trustRadius', 'vibrations', 'fixedAtoms'}
+               'optimizer', 'trustRadius', 'vibrations', 'fixedAtoms', 'umaDevice', 'solvation'}
     if not isinstance(data, dict) or set(data) - allowed:
         raise ValueError('未定義の入力項目があります。コマンド・パス指定は受け付けません。')
     if type(data.get('livePreview', False)) is not bool:
@@ -146,6 +147,17 @@ def validate(data, engine):
         if len(fixed) == len(symbols):
             raise ValueError('全原子は固定できません。可動原子を1個以上残してください。')
         result['fixedAtoms'] = sorted(fixed)
+    if 'umaDevice' in data:
+        if engine != 'uma':
+            raise ValueError('umaDeviceはUMA専用です。')
+        result['umaDevice'] = device_name(data['umaDevice'])
+    if 'solvation' in data:
+        s = data['solvation']
+        if engine != 'uma' or not isinstance(s, dict) or set(s) != {'model', 'solvent', 'device'}:
+            raise ValueError('AnySolvはUMA専用です。model・solvent・deviceを指定してください。')
+        if s['model'] not in ANYSOLV_MODELS or not isinstance(s['solvent'], str) or not 1 <= len(s['solvent']) <= 100:
+            raise ValueError('AnySolvのモデル・溶媒指定が不正です。')
+        result['solvation'] = {**s, 'device':device_name(s['device'])}
     return result
 
 
@@ -634,6 +646,192 @@ class GXTBEngine:
             return parse_gradient(gradient.read_text(), symbols, positions)
 
 
+def device_name(value):
+    if not isinstance(value, str) or not re.fullmatch(r'cpu|cuda(?::(?:0|[1-9][0-9]?))?', value):
+        raise ValueError('デバイスはcpuまたはcuda:0、cuda:1の形式で指定してください。')
+    return 'cuda:0' if value == 'cuda' else value
+
+
+def device_inventory(torch):
+    """UI ordinals refer to the parent's visible CUDA devices, including masks/UUIDs."""
+    devices = [{'id':'cpu', 'label':'CPU'}]
+    masks = {}
+    visible = os.environ.get('CUDA_VISIBLE_DEVICES')
+    tokens = visible.split(',') if visible is not None else None
+    for i in range(torch.cuda.device_count() if torch.cuda.is_available() else 0):
+        key = f'cuda:{i}'
+        devices.append({'id':key, 'label':f'{key} · {torch.cuda.get_device_name(i)}'})
+        masks[key] = tokens[i].strip() if tokens is not None else str(i)
+    return devices, masks
+
+
+def isolate_device(config, key):
+    """Call in a freshly spawned process BEFORE torch/fairchem imports."""
+    device = device_name(config[key])
+    if device == 'cpu':
+        os.environ['CUDA_VISIBLE_DEVICES'] = ''
+        return 'cpu'
+    os.environ['CUDA_VISIBLE_DEVICES'] = config['cudaMasks'][device]
+    return 'cuda'  # fairchem accepts only cpu/cuda; this process sees one GPU.
+
+
+def anysolv_catalog(config, checkpoint=None):
+    if package_version('anysolv') != '0.1.0':
+        raise ValueError('AnySolvには anysolv==0.1.0 を同じPython環境へ導入してください。')
+    try:
+        import anysolv
+        from anysolv.solvent import list_solvents
+        root = Path(anysolv.__file__).resolve().parent / 'models'
+        paths = {m:str(root/f'{m}.pt') for m in ANYSOLV_MODELS if (root/f'{m}.pt').is_file()}
+        if checkpoint:
+            path = Path(checkpoint)
+            if not path.is_absolute() or not path.is_file():
+                raise ValueError('checkpoint')
+            paths[config['anysolvModel']] = str(path.resolve())
+        if config['anysolvModel'] not in paths:
+            raise ValueError('model missing')
+        config['anysolvPaths'] = paths
+        config['anysolvHashes'] = {}
+        for model, path in paths.items():
+            digest = hashlib.sha256()
+            with open(path, 'rb') as stream:
+                for chunk in iter(lambda:stream.read(1024*1024), b''):
+                    digest.update(chunk)
+            config['anysolvHashes'][model] = digest.hexdigest()
+        config['anysolvSolvents'] = list_solvents()
+    except Exception as error:
+        raise ValueError('AnySolvの溶媒表・モデルを確認できません。--anysolv-model と --anysolv-checkpoint のローカルファイルを確認してください。モデルの自動切り替えは行いません。') from error
+
+
+def job_config(data, config):
+    result = dict(config)
+    if 'umaDevice' in data:
+        if data['umaDevice'] not in [d['id'] for d in config.get('devices', [])]:
+            raise ValueError('選択したUMAデバイスを利用できません。再接続してください。')
+        result['umaDevice'] = data['umaDevice']
+    if 'solvation' in data:
+        s = data['solvation']
+        if not config.get('anysolv') or s['model'] not in config.get('anysolvPaths', {}):
+            raise ValueError('AnySolvモデルが有効ではありません。--anysolv で起動し、モデルを導入して再接続してください。')
+        if s['solvent'] not in config['anysolvSolvents']:
+            raise ValueError('AnySolvの溶媒一覧から選択してください。')
+        if s['device'] not in [d['id'] for d in config['devices']]:
+            raise ValueError('選択したAnySolvデバイスを利用できません。')
+        result['solvation'] = dict(s)
+    return result
+
+
+class AnySolvEngine:
+    def __init__(self, data, config, directory):
+        import torch
+        from anysolv.predict import predict_solvation_energy
+        torch.set_num_threads(config['threads'])
+        self.predict, self.data = predict_solvation_energy, data
+        s = config['solvation']
+        self.kwargs = dict(charge=data['charge'], spin=data['multiplicity'], solvent=s['solvent'],
+            checkpoint=config['anysolvPaths'][s['model']], device=config['anysolvRuntimeDevice'],
+            dtype=getattr(torch, config['umaPrecision']), inference_settings='default')
+        self.numbers = np.array([atomic_numbers[s] for s in data['symbols']])
+
+    def __call__(self, index, positions):
+        # Reference conservative forces; no no_grad/TF32/compile/MoE merge.
+        energy, forces = self.predict((self.numbers, positions), **self.kwargs)
+        return float(energy), np.asarray(forces, dtype=float)
+
+
+def anysolv_worker(data, config, directory, pipe):
+    try:
+        local = dict(config, anysolvDevice=config['solvation']['device'])
+        local['anysolvRuntimeDevice'] = isolate_device(local, 'anysolvDevice')
+        engine = AnySolvEngine(data, local, directory)
+        pipe.send(('ready', None))
+        while True:
+            request = pipe.recv()
+            if request is None:
+                break
+            pipe.send(('result', engine(*request)))
+    except EOFError:
+        pass
+    except Exception:
+        # Never expose package exceptions containing checkpoint paths or hub credentials.
+        try:
+            pipe.send(('error', 'AnySolvの読み込み・計算に失敗しました。選択モデル、溶媒、GPUメモリ、PyTorch環境を確認してください。補正なしの計算には切り替えません。'))
+        except (EOFError, BrokenPipeError):
+            pass
+    finally:
+        pipe.close()
+
+
+class SolvatedUMAEngine:
+    """UMA in the job process, AnySolv in a persistent spawn child on another GPU.
+
+    Send the delta request before UMA evaluation, allowing concurrent inference.
+    Only CPU coordinates/energies/forces cross the process boundary.
+    """
+    def __init__(self, data, config, directory):
+        self.process = self.pipe = None
+        self.components = {}
+        self.timeout = config['jobTimeout']  # Includes first checkpoint load.
+        context = mp.get_context('spawn')
+        self.pipe, child = context.Pipe()
+        self.process = context.Process(target=anysolv_worker, args=(data, config, directory, child))
+        try:
+            self.process.start()
+            child.close()
+            self._receive('ready')
+            self.uma = UMAEngine(data, config, directory)
+        except BaseException:
+            child.close()
+            self.close()
+            raise
+
+    def _receive(self, expected):
+        started = time.monotonic()
+        while not self.pipe.poll(.1):
+            if not self.process.is_alive():
+                raise ValueError('AnySolvプロセスが終了しました。GPUメモリと導入状態を確認してください。')
+            if time.monotonic()-started > self.timeout:
+                raise ValueError('AnySolvの計算時間上限に達しました。')
+        kind, value = self.pipe.recv()
+        if kind != expected:
+            raise ValueError(value if kind == 'error' else 'AnySolvの応答が不正です。')
+        return value
+
+    @staticmethod
+    def key(positions):
+        return hashlib.sha256(np.asarray(positions, dtype=np.float64).tobytes()).digest()
+
+    def __call__(self, index, positions):
+        self.pipe.send((index, np.asarray(positions, dtype=float)))
+        gas, force = self.uma(index, positions)
+        delta, correction = self._receive('result')
+        correction = np.asarray(correction, dtype=float)
+        if not math.isfinite(delta) or correction.shape != np.shape(positions) or not np.isfinite(correction).all():
+            raise ValueError('AnySolvが不正なエネルギー・力を返しました。計算を停止しました。')
+        self.components[self.key(positions)] = dict(uma=gas, solvation=delta)
+        return gas+delta, force+correction
+
+    def annotate(self, result):
+        if 'positions' in result:
+            result['energyComponents'] = self.components[self.key(result['positions'])].copy()
+        elif 'images' in result:
+            rows = [self.components[self.key(p)] for p in result['images']]
+            result['energyComponents'] = {key:[r[key] for r in rows] for key in ('uma', 'solvation')}
+        if 'trajectory' in result:
+            self.annotate(result['trajectory'])
+
+    def close(self):
+        if self.pipe:
+            try:
+                self.pipe.send(None)
+            except (EOFError, BrokenPipeError, OSError):
+                pass
+            self.pipe.close()
+        if self.process and self.process.pid:
+            self.process.join(timeout=1)
+            stop_process(self.process)
+
+
 def uma_settings(config):
     # A fixed numerical surface across MIN, AFIR, CI-NEB, TS and finite differences.
     # Do not use the changing upstream default/turbo presets or direct-force models.
@@ -653,7 +851,7 @@ def uma_packages(config):
         from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
     except Exception as error:
         raise ValueError('fairchem-core/PyTorchを読み込めません。UMA用Python環境の導入状態を確認してください。') from error
-    if config['umaDevice'] == 'cuda' and not torch.cuda.is_available():
+    if config['umaDevice'].startswith('cuda') and not torch.cuda.is_available():
         raise ValueError('CUDAを利用できません。対応するPyTorch・GPUドライバーを確認するか、--uma-device cpu で起動してください。')
     if config['umaModel'] not in pretrained_mlip.available_models:
         raise ValueError('指定したUMAモデルがfairchem-coreに登録されていません。パッケージを更新するか別の --uma-model を選んでください。')
@@ -679,7 +877,7 @@ class UMAEngine:
         os.environ['HF_HUB_DISABLE_TELEMETRY'] = '1'
         try:
             self.predictor = pretrained.get_predict_unit(config['umaModel'],
-                device=config['umaDevice'], inference_settings=Settings(**uma_settings(config)))
+                device=config.get('umaRuntimeDevice', config['umaDevice']), inference_settings=Settings(**uma_settings(config)))
         except Exception as error:
             raise ValueError(uma_failure(error)) from error
         self.Atoms, self.Calculator, self.data = Atoms, Calculator, data
@@ -706,9 +904,12 @@ class UMAEngine:
         return energy, force.copy()
 
 
-def engine_method(config):
+def engine_method(config, data=None):
+    if data is not None:
+        config = job_config(data, config)
     if config['engine'] == 'uma':
-        return f"UMA / {config['umaModel']} / omol"
+        s = config.get('solvation')
+        return f"UMA / {config['umaModel']} / omol" + (f" + AnySolv / {s['model']} / {s['solvent']}" if s else '')
     return config['method'] if config['engine'] == 'tblite' else 'g-xTB'
 
 
@@ -720,16 +921,28 @@ def package_version(name):
 
 
 def worker(data, config, directory, messages):
+    calculator = None
     try:
+        config = job_config(data, config)
         # Spawned before importing native tblite; bound CPU use for responsiveness.
         for key in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS'):
             os.environ[key] = str(config['threads'])
         if config['engine'] == 'uma':
             messages.put(('progress', {'phase':'loading_model'}))
-        calculator = {'tblite':TBLiteEngine, 'gxtb':GXTBEngine, 'uma':UMAEngine}[config['engine']](data, config, directory)
+            config['umaRuntimeDevice'] = isolate_device(config, 'umaDevice')
+        cls = SolvatedUMAEngine if config.get('solvation') else {'tblite':TBLiteEngine, 'gxtb':GXTBEngine, 'uma':UMAEngine}[config['engine']]
+        calculator = cls(data, config, directory)
         if config['engine'] == 'uma':
             messages.put(('progress', {'phase':'calculating'}))
-        result = calculate_job(data, calculator, directory, lambda p: messages.put(('progress', p)))
+        def progress(p):
+            if isinstance(calculator, SolvatedUMAEngine):
+                for key in ('checkpoint', 'bandCheckpoint', 'structureCheckpoint', 'preview'):
+                    if key in p:
+                        calculator.annotate(p[key])
+            messages.put(('progress', p))
+        result = calculate_job(data, calculator, directory, progress)
+        if isinstance(calculator, SolvatedUMAEngine):
+            calculator.annotate(result)
         result['engine'] = config['engine']
         result['method'] = engine_method(config)
         result['symbols'], result['cell'] = data['symbols'], data['cell']
@@ -741,15 +954,23 @@ def worker(data, config, directory, messages):
         messages.put(('result', result))
     except Exception as error:
         messages.put(('error', str(error)[:2500]))
+    finally:
+        if isinstance(calculator, SolvatedUMAEngine):
+            calculator.close()
 
 
-def provenance(config):
+def provenance(config, data=None):
+    if data is not None:
+        config = job_config(data, config)
+    s = config.get('solvation')
     return {'bridgeVersion':VERSION, 'engine':config['engine'], 'binarySHA256':config.get('binarySHA256'),
-        'threads':config['threads'], 'solvent':'gas', 'aseVersion':importlib.metadata.version('ase'),
+        'threads':config['threads'], 'solvent':s['solvent'] if s else 'gas', 'aseVersion':importlib.metadata.version('ase'),
         'numpyVersion':np.__version__, 'sellaVersion':sella_version(),
         **({'uma':{'model':config['umaModel'], 'task':'omol', 'device':config['umaDevice'],
                    'inference':uma_settings(config), 'fairchemVersion':package_version('fairchem-core'),
                    'torchVersion':package_version('torch')}} if config['engine']=='uma' else {}),
+        **({'anysolv':{**s, 'version':package_version('anysolv'), 'precision':config['umaPrecision'],
+                       'inference':'default', 'checkpointSHA256':config['anysolvHashes'][s['model']]}} if s else {}),
         'afirReference':{'R0_A':3.8164,'epsilon_kJ_mol':1.0061,'power':6,'radii':'ASE covalent radii H-Cm'}}
 
 
@@ -772,11 +993,18 @@ def stop_process(process):
     process.join(timeout=3)
 
 
+def checkpoint_components(frames):
+    if not all('energyComponents' in p for p in frames):
+        return {}
+    return {'energyComponents':{key:[p['energyComponents'][key] for p in frames] for key in ('uma', 'solvation')}}
+
+
 class Jobs:
     def __init__(self, config):
         self.config, self.lock, self.job = config, threading.RLock(), None
 
     def start(self, data):
+        job_config(data, self.config)  # Validate available models/devices before spawning.
         with self.lock:
             if self.job and self.job['status'] in ('running', 'stopping'):
                 raise RuntimeError('別の計算が実行中です。中止または完了後に実行してください。')
@@ -789,7 +1017,7 @@ class Jobs:
                 os.environ[key] = str(self.config['threads'])
             context = mp.get_context('spawn')
             messages = context.Queue()
-            process = context.Process(target=worker, args=(data, self.config, directory, messages), daemon=True)
+            process = context.Process(target=worker, args=(data, self.config, directory, messages), daemon=False)
             job = {'id': secrets.token_hex(16), 'status': 'running', 'progress': {}, 'process': process,
                    'directory': directory, 'queue': messages, 'started': time.monotonic(), 'data':data, 'checkpoints':[]}
             self.job = job
@@ -865,8 +1093,8 @@ class Jobs:
                           maxTangentialStep=None, history=[], error=job.get('error'))
         result['conditionId'] = hashlib.sha256(json.dumps({'data':data, 'config':self.config}, sort_keys=True).encode()).hexdigest()
         result.update(mode=data['mode'], symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
-            engine=self.config['engine'], method=engine_method(self.config),
-            provenance=provenance(self.config), units={'length':'angstrom','energy':'eV','force':'eV/angstrom'})
+            engine=self.config['engine'], method=engine_method(self.config, data),
+            provenance=provenance(self.config, data), units={'length':'angstrom','energy':'eV','force':'eV/angstrom'})
         result['fixedAtoms'] = data.get('fixedAtoms', [])
         if 'atomIds' in data:
             result['atomIds'] = data['atomIds']
@@ -878,15 +1106,16 @@ class Jobs:
         return dict(mode=data['mode'], optimizer=data.get('optimizer','fire'), engine=self.config['engine'],
             fixedAtoms=data.get('fixedAtoms', []),
             **({'atomIds':data['atomIds']} if 'atomIds' in data else {}),
-            method=engine_method(self.config),
+            method=engine_method(self.config, data),
             symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
             images=[last['positions']], energies=[last['energy']], forces=[last['force']],
             imageFmax=[last['fmax']], effectiveFmax=last['fmax'], steps=len(frames)-1, evaluations=len(frames),
             converged=False, reason='cancelled' if job['status']=='cancelled' else 'failed', error=job.get('error'),
             climbingImage=None, maxTangentialStep=None,
-            trajectory={'images':[p['positions'] for p in frames], 'energies':[p['energy'] for p in frames]},
+            trajectory={'images':[p['positions'] for p in frames], 'energies':[p['energy'] for p in frames], **checkpoint_components(frames)},
+            **checkpoint_components([last]),
             history=[{'step':i, 'fmax':p['fmax'], 'energies':[p['energy']], 'climbingImage':None, 'evaluations':i+1} for i,p in enumerate(frames)],
-            provenance=provenance(self.config),
+            provenance=provenance(self.config, data),
             conditionId=hashlib.sha256(json.dumps({'data':data, 'config':self.config}, sort_keys=True).encode()).hexdigest(),
             units={'length':'angstrom', 'energy':'eV', 'force':'eV/angstrom'})
 
@@ -895,15 +1124,16 @@ class Jobs:
         energies, biases = [p['energy'] for p in frames], [p['bias'] for p in frames]
         return dict(schema='molecule-afir-trajectory/1', mode='afir', engine=self.config['engine'],
             fixedAtoms=data.get('fixedAtoms', []),
-            method=engine_method(self.config), atomIds=data['atomIds'],
+            method=engine_method(self.config, data), atomIds=data['atomIds'],
             symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
             images=[p['positions'] for p in frames], energies=energies, biasEnergies=biases,
+            **checkpoint_components(frames),
             biasedEnergies=[e+b for e,b in zip(energies,biases)], forces=[p['force'] for p in frames],
             imageFmax=[p['fmax'] for p in frames], physicalFmax=[p['physicalFmax'] for p in frames],
             effectiveFmax=frames[-1]['fmax'], steps=len(frames)-1, evaluations=len(frames),
             converged=False, reason='cancelled' if job['status']=='cancelled' else 'failed',
             error=job.get('error'), validation='biased-trajectory-not-ts',
-            provenance=provenance(self.config),
+            provenance=provenance(self.config, data),
             conditionId=hashlib.sha256(json.dumps({'data':data, 'config':self.config}, sort_keys=True).encode()).hexdigest(),
             units={'length':'angstrom','energy':'eV','force':'eV/angstrom'})
 
@@ -1014,6 +1244,10 @@ class Handler(BaseHTTPRequestHandler):
                     'periodic': config['engine'] == 'tblite', 'maxAtoms': 500, 'maxImages': 100,
                     **({'uma':{'model':config['umaModel'], 'task':'omol', 'device':config['umaDevice'],
                                'precision':config['umaPrecision'], 'tf32':False, 'compile':False, 'mergeMole':False},
+                        'devices':config.get('devices', []),
+                        'anysolv':{'enabled':bool(config.get('anysolv')), 'models':list(config.get('anysolvPaths', {})),
+                                   'solvents':config.get('anysolvSolvents', []), 'model':config.get('anysolvModel'),
+                                   'device':config.get('anysolvDevice'), 'precision':config['umaPrecision']},
                         'maxMultiplicity':100, 'maxAtomicNumber':83} if config['engine']=='uma' else {}),
                     'sellaVersion':sella_version(), 'vibrations':1, 'maxVibrationAtoms':200, 'pathCheckpoint':1, 'fixedAtoms':True,
                     'modes': MODES, 'livePreview': 1, 'optimizationTrajectory': 1, 'maxSteps': 10000, 'maxAFIRSteps': 10000, 'jobTimeout': config['jobTimeout'],
@@ -1097,8 +1331,12 @@ def main():
     parser.add_argument('--method', choices=('GFN1-xTB', 'GFN2-xTB', 'IPEA1-xTB'), help='tblite only; default GFN2-xTB')
     parser.add_argument('--binary', help='Absolute path to the locally installed xtb with --gxtb --grad support')
     parser.add_argument('--uma-model', choices=UMA_MODELS, help='UMA only; default uma-s-1p2p1 (molecular omol task)')
-    parser.add_argument('--uma-device', choices=('cpu', 'cuda'), help='UMA only; default cpu; cuda requires a compatible GPU/PyTorch')
+    parser.add_argument('--uma-device', type=device_name, help='UMA only; cpu (default), cuda:0, cuda:1, ...')
     parser.add_argument('--uma-precision', choices=('float32', 'float64'), help='UMA only; default float64 for TS/finite differences; float32 uses less memory')
+    parser.add_argument('--anysolv', action='store_true', help='Enable optional AnySolv solvent correction for UMA')
+    parser.add_argument('--anysolv-model', choices=ANYSOLV_MODELS, help='Default UI selection; model_compact unless specified')
+    parser.add_argument('--anysolv-checkpoint', help='Absolute local .pt path for --anysolv-model; never accepted over HTTP')
+    parser.add_argument('--anysolv-device', type=device_name, help='Default AnySolv device; separate GPU when available, otherwise cpu')
     parser.add_argument('--port', type=int, default=8766)
     parser.add_argument('--threads', type=int, default=1)
     parser.add_argument('--job-timeout', type=int, default=1800, help='Maximum seconds per job')
@@ -1112,6 +1350,10 @@ def main():
         parser.error('--binary is for gxtb only. UMA uses the locally installed fairchem-core package.')
     if args.engine != 'uma' and any(x is not None for x in (args.uma_model, args.uma_device, args.uma_precision)):
         parser.error('--uma-model/--uma-device/--uma-precision require --engine uma')
+    if args.anysolv and args.engine != 'uma':
+        parser.error('--anysolv requires --engine uma')
+    if not args.anysolv and any(x is not None for x in (args.anysolv_model, args.anysolv_checkpoint, args.anysolv_device)):
+        parser.error('--anysolv-model/--anysolv-checkpoint/--anysolv-device require --anysolv')
     if not 1 <= args.threads <= 64 or not 1 <= args.port <= 65535 or not 1 <= args.job_timeout <= 86400 or not 1 <= args.evaluation_timeout <= 3600:
         parser.error('Port/threads/timeouts are out of range')
     for origin in args.allow_origin:
@@ -1135,7 +1377,16 @@ def main():
                       umaPrecision=args.uma_precision or 'float64')
         config['method'] = engine_method(config)
         try:
-            uma_packages(config)  # Check dependencies/device without downloading weights or running a molecule.
+            torch, *_ = uma_packages(config)  # No weights or molecular inference at startup.
+            config['devices'], config['cudaMasks'] = device_inventory(torch)
+            if config['umaDevice'] not in [d['id'] for d in config['devices']]:
+                raise ValueError('指定したUMAのCUDAデバイスを利用できません。')
+            if args.anysolv:
+                other = next((d['id'] for d in config['devices'] if d['id'].startswith('cuda:') and d['id'] != config['umaDevice']), 'cpu')
+                config.update(anysolv=True, anysolvModel=args.anysolv_model or 'model_compact', anysolvDevice=args.anysolv_device or other)
+                if config['anysolvDevice'] not in [d['id'] for d in config['devices']]:
+                    raise ValueError('指定したAnySolvのCUDAデバイスを利用できません。')
+                anysolv_catalog(config, args.anysolv_checkpoint)
         except ValueError as error:
             parser.error(str(error))
     if args.engine=='gxtb':

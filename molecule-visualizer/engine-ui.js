@@ -61,7 +61,7 @@
     if(cell?.pbc.some(Boolean)&&!connection.info.periodic)throw Error('接続中のエンジンは非周期系専用です。周期セルを無効にするか、周期系対応のエンジンへ接続してください。');
     const data={symbols,images:all.map(f=>f.atoms.map(a=>[a.x,a.y,a.z])),cell,mode,charge:Number($('engineCharge').value),multiplicity:Number($('engineMultiplicity').value),maxSteps:Number($('engineSteps').value),fmax:Number($('engineFmax').value),spring:Number($('engineSpring').value),maxMove:Number($('engineMove').value),climbAfter:Number($('engineClimb').value)};
     for(const [key,lo,hi,integer] of [['charge',-100,100,true],['multiplicity',1,101,true],['maxSteps',1,10000,true],['fmax',.00001,10,false],['spring',.001,10,false],['maxMove',.001,.2,false],['climbAfter',0,500,true]])if(!Number.isFinite(data[key])||data[key]<lo||data[key]>hi||(integer&&!Number.isInteger(data[key])))throw Error(`${key}は${lo}〜${hi}${integer?'の整数':''}にしてください。`);
-    validateEngineInput(data,connection.info);
+    Object.assign(data,modelInput());validateEngineInput(data,connection.info);
     if(['ts','vibrations'].includes(mode)&&!connection.info.modes.includes(mode))throw Error('TS・振動解析にはbridge.pyを更新・再接続してください。');
     if(mode==='ts'){
       if(!connection.info.sellaVersion)throw Error('接続中のPythonにSellaがありません。python -m pip install "sella>=2.6,<3" を実行し、再接続してください。');
@@ -90,23 +90,63 @@
   function validateEngineInput(data,info){
     if(info.uma&&data.multiplicity>100)throw Error('UMAのスピン多重度は1〜100にしてください。');
     if(info.uma&&data.cell?.pbc.some(Boolean))throw Error('このUMA接続は分子用omol・非周期系専用です。');
+    if(data.solvation&&(!info.anysolv?.enabled||!info.anysolv.models.includes(data.solvation.model)||!info.anysolv.solvents.includes(data.solvation.solvent)))throw Error('AnySolvの接続条件を確認してください。');
+  }
+  function modelInput(){
+    const info=connection?.info;if(!info?.uma)return {};
+    const data=info.devices?.length?{umaDevice:$('engineUMADevice').value}:{};
+    if($('engineAnySolv').checked){
+      if(!info.anysolv?.enabled)throw Error('AnySolvを使用するには --anysolv で起動して再接続してください。');
+      data.solvation={model:$('engineAnySolvModel').value,solvent:$('engineSolvent').value,device:$('engineAnySolvDevice').value};
+    }
+    return data;
+  }
+  function modelSummary(){
+    if(!connection?.info.uma)return '';
+    return $('engineAnySolv').checked?`AnySolv · ${$('engineSolvent').value} · ${$('engineAnySolvModel').value}`:'気相（溶媒補正なし）';
+  }
+  function modelControls(){
+    const info=connection?.info,on=$('engineAnySolv').checked;
+    $('engineAnySolvFields').hidden=!on;
+    $('engineSolvationHelp').textContent=!info?.anysolv?.enabled?'AnySolvを追加するにはセットアップ案内を開き、--anysolv で起動してください。':on?
+      'E = UMA + 溶媒補正、力も加算します。MIN・AFIR・CI-NEB・TS・振動解析に共通です。'+($('engineUMADevice').value===$('engineAnySolvDevice').value&&$('engineUMADevice').value!=='cpu'?' 同じGPUを選択中：2モデル分のメモリが必要です。':''):'溶媒補正なしで計算します。';
+    MV.AFIRUI?.sync();
+  }
+  function validateSolvationResult(r,data){
+    if(!data.solvation)return;
+    const p=r?.provenance?.anysolv;
+    if(!p||['model','solvent','device'].some(k=>p[k]!==data.solvation[k])||(data.umaDevice&&r.provenance.uma?.device!==data.umaDevice))throw Error('結果のAnySolv条件が入力と一致しません。');
+    for(const item of [r,...(r.trajectory?[r.trajectory]:[])]){
+      const c=item.energyComponents;
+      if(!c||!['uma','solvation'].every(k=>Array.isArray(c[k])&&c[k].length===item.energies.length&&c[k].every(Number.isFinite))||item.energies.some((e,i)=>Math.abs(e-c.uma[i]-c.solvation[i])>1e-7))throw Error('UMA・溶媒補正・合計エネルギーの対応が不正です。');
+    }
   }
   function connectionDetails(){
     const u=connection?.info.uma;
     $('engineUMADetails').hidden=!u;
     $('engineMultiplicity').max=u?'100':'101';
-    if(u)$('engineUMASummary').textContent=`${u.model} · task: ${u.task} · ${u.device.toUpperCase()} · ${u.precision} · TF32無効。モデル・デバイス・精度の変更はPythonの起動引数で行います。${u.precision==='float32'?' TS・振動解析ではfloat64を推奨します。':''}`;
+    if(u)$('engineUMASummary').textContent=`${u.model} · task: ${u.task} · ${u.device.toUpperCase()} · ${u.precision} · TF32無効。${u.precision==='float32'?' TS・振動解析ではfloat64を推奨します。':''}`;
+    const info=connection?.info,a=info?.anysolv;
+    $('engineModelSettings').hidden=!u;$('engineUMADeviceLabel').hidden=!info?.devices?.length;
+    $('engineAnySolv').checked=false;$('engineAnySolv').disabled=!a?.enabled;
+    const options=(id,items,selected)=>{const el=$(id);el.replaceChildren(...items.map(x=>{const o=document.createElement('option');o.value=x.id;o.textContent=x.label;return o;}));el.value=selected||items[0]?.id||'';};
+    options('engineUMADevice',info?.devices||[],u?.device);
+    options('engineAnySolvDevice',info?.devices||[],a?.device);
+    options('engineAnySolvModel',(a?.models||[]).map(id=>({id,label:id==='model_moe'?'MoE（大規模モデル）':'Compact（軽量モデル）'})),a?.model);
+    options('engineSolvent',(a?.solvents||[]).map(id=>({id,label:id})),a?.solvents?.includes('water')?'water':a?.solvents?.[0]);
+    modelControls();
   }
   async function connect(){
     if(job)return;connection=null;connectionDetails();$('engineRun').disabled=true;$('engineConnect').disabled=true;
     try{
       const c={url:endpoint($('engineURL').value),token:$('engineToken').value.trim()};if(!c.token)throw Error('サービス起動時に表示されるTokenを入力してください。');
-      c.info=await request(c,'/api/info');if(!['1.0.0','1.1.0','1.1.1','1.1.2','1.2.0','1.3.0','1.4.0','1.5.0','1.6.0'].includes(c.info.version)||!Array.isArray(c.info.modes))throw Error('サービスのバージョンが一致しません。最新のbridge.pyを使用してください。');connection=c;connectionDetails();
+      c.info=await request(c,'/api/info');if(!['1.0.0','1.1.0','1.1.1','1.1.2','1.2.0','1.3.0','1.4.0','1.5.0','1.6.0','1.7.0'].includes(c.info.version)||!Array.isArray(c.info.modes))throw Error('サービスのバージョンが一致しません。最新のbridge.pyを使用してください。');connection=c;connectionDetails();
       $('engineConnected').textContent=`接続済み: ${c.info.engine} / ${c.info.method} · ${c.info.engineVersion} · ${c.info.periodic?'固定セル周期系対応':'非周期系'} · Sella ${c.info.sellaVersion||'未導入'}`;message(c.info.uma?'サービスに接続しました。モデルは計算実行時に読み込みます。電荷とスピン多重度を確認してください。':'接続しました。電荷と多重度を確認して計算を実行してください。');
     }catch(error){$('engineConnected').textContent='未接続';message(error.message);}finally{$('engineConnect').disabled=false;busy(false);MV.AFIRUI?.sync();}
   }
   function clearResult(){result=null;$('engineResult').hidden=true;$('engineApply').disabled=true;$('engineDownload').disabled=true;}
   function validateResult(r,j){
+    validateSolvationResult(r,j.data);
     MV.Constraints?.validateResult(r,j.data);
     if(!r||JSON.stringify(r.symbols)!==JSON.stringify(j.data.symbols)||JSON.stringify(r.cell)!==JSON.stringify(j.data.cell)||r.images?.length!==j.frames.length||r.energies?.length!==j.frames.length||r.units?.energy!=='eV'||r.units?.length!=='angstrom')throw Error('結果の元素・セル・構造数・単位が入力と一致しません。');
     if(!r.images.every(p=>Array.isArray(p)&&p.length===j.data.symbols.length&&p.every(v=>Array.isArray(v)&&v.length===3&&v.every(x=>Number.isFinite(x)&&Math.abs(x)<=10000)))||!r.energies.every(Number.isFinite)||!Number.isFinite(r.effectiveFmax)||!Array.isArray(r.imageFmax)||r.imageFmax.length!==j.frames.length||!r.imageFmax.every(Number.isFinite))throw Error('計算結果に不正な座標・エネルギー・力が含まれます。');
@@ -120,10 +160,10 @@
   function showResult(r,j){
     validateResult(r,j);if(r.vibrations?.status==='completed')MV.VibrationUI.validate(r.vibrations,r.symbols,r.images[0]);result={...j,result:r};$('engineResult').hidden=false;$('engineApply').disabled=false;$('engineDownload').disabled=false;
     const reason=r.mode==='vibrations'?(r.vibrations?.status==='completed'?'振動解析完了':'振動解析未完了（構造評価は完了）'):{converged:'収束',step_limit:'ステップ上限（未収束）',evaluated:'評価完了',cancelled:'中止（途中結果）',failed:'計算失敗（途中結果）'}[r.reason]||r.reason;
-    $('engineResultSummary').textContent=`${modeText[r.mode]} · ${reason} · ${r.steps}ステップ · ${r.evaluations}回の評価 · 最大有効力 ${r.effectiveFmax.toPrecision(4)} eV/Å${j.data.fixedAtoms?.length?'（可動原子のみ） · 固定 '+j.data.fixedAtoms.length+'原子':''}`+(r.maxTangentialStep!=null?` · 接線方向の最大更新 ${r.maxTangentialStep.toExponential(2)} Å`:'');
+    $('engineResultSummary').textContent=`${modeText[r.mode]}${j.data.solvation?" · AnySolv / "+j.data.solvation.solvent:""} · ${reason} · ${r.steps}ステップ · ${r.evaluations}回の評価 · 最大有効力 ${r.effectiveFmax.toPrecision(4)} eV/Å${j.data.fixedAtoms?.length?'（可動原子のみ） · 固定 '+j.data.fixedAtoms.length+'原子':''}`+(r.maxTangentialStep!=null?` · 接線方向の最大更新 ${r.maxTangentialStep.toExponential(2)} Å`:'');
     const body=$('engineEnergyRows');body.replaceChildren();r.energies.forEach((energy,i)=>{
       const tr=document.createElement('tr'),path=['perpendicular','neb','cineb'].includes(r.mode),fixed=path&&(i===0||i===r.energies.length-1),peak=path&&i>0&&i<r.energies.length-1&&energy>r.energies[i-1]&&energy>=r.energies[i+1];
-      for(const value of [i+1,energy.toFixed(8),(energy-r.energies[0]).toFixed(6),fixed?'端点固定':r.imageFmax[i].toPrecision(4)]){const td=document.createElement('td');td.textContent=value;tr.append(td);}
+      for(const value of [i+1,energy.toFixed(8),(energy-r.energies[0]).toFixed(6),fixed?'端点固定':r.imageFmax[i].toPrecision(4)]){const td=document.createElement('td');td.textContent=value;if(tr.children.length===1&&r.energyComponents)td.title=`UMA ${r.energyComponents.uma[i].toFixed(8)} + 溶媒補正 ${r.energyComponents.solvation[i].toFixed(8)} eV`;tr.append(td);}
       const td=document.createElement('td');td.textContent=i===r.climbingImage?'CI ':peak?'極大候補 ':'';
       const button=document.createElement('button');button.className='mv-btn';button.textContent='TS入力';button.setAttribute('aria-label',`構造${i+1}をTS入力にする`);button.addEventListener('click',()=>{if(apply(i))prepareSingle('ts');});td.append(button);tr.append(td);body.append(tr);
     });
@@ -147,7 +187,7 @@
   function exportXYZ(r,j){$('engineDialog').close();MV.TrajectoryUI.open(resultSource(r,j));}
   function showProfile(r,j,follow=false){
     const t=r.trajectory||r,history=!!r.trajectory;
-    MV.EnergyProfile.set({title:modeText[j.data.mode]+' · エネルギープロファイル'+(r.step!=null?' · ステップ '+r.step:''),kind:history?'optimize':j.data.mode==='evaluate'?'evaluate':'path',focusIndex:history?t.images.length-1:Math.floor((r.images.length-1)/2),energies:t.energies,positions:i=>t.images[i],base:i=>j.frames[history?0:i],details:open,exportXYZ:r.step==null?()=>exportXYZ(r,j):null},follow);
+    MV.EnergyProfile.set({title:modeText[j.data.mode]+(j.data.solvation?' · '+j.data.solvation.solvent:'')+' · エネルギープロファイル'+(r.step!=null?' · ステップ '+r.step:''),kind:history?'optimize':j.data.mode==='evaluate'?'evaluate':'path',focusIndex:history?t.images.length-1:Math.floor((r.images.length-1)/2),energies:t.energies,positions:i=>t.images[i],base:i=>j.frames[history?0:i],details:open,exportXYZ:r.step==null?()=>exportXYZ(r,j):null},follow);
   }
   async function run(){
     if(job||!connection)return;
@@ -237,7 +277,7 @@
         const s=MV.Model.createState(f);s.atoms.forEach((a,i)=>{[a.x,a.y,a.z]=r.images[k][i];});
         s.metadata.totalCharge=j.data.charge;s.metadata.multiplicity=j.data.multiplicity;
         delete s.metadata.afirCalculation;
-        s.metadata.externalCalculation={fixedAtoms:j.data.fixedAtoms||[],engine:r.engine,method:r.method,energyEV:r.energies[k],mode:r.mode,converged:r.converged,reason:r.reason,steps:r.steps,effectiveFmax:r.imageFmax[k],charge:j.data.charge,multiplicity:j.data.multiplicity};
+        s.metadata.externalCalculation={...(j.data.solvation?{solvation:j.data.solvation,umaDevice:j.data.umaDevice}:{}),fixedAtoms:j.data.fixedAtoms||[],engine:r.engine,method:r.method,energyEV:r.energies[k],mode:r.mode,converged:r.converged,reason:r.reason,steps:r.steps,effectiveFmax:r.imageFmax[k],charge:j.data.charge,multiplicity:j.data.multiplicity};
         if(r.mode!=='evaluate')MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);
       });
       let next;
@@ -286,10 +326,11 @@
     $('engineVibrationShow').addEventListener('click',()=>{$('engineDialog').close();MV.VibrationUI.show();});$('engineRefine').addEventListener('click',refineResult);
     $('enginePause').addEventListener('click',()=>{if(job){job.pauseRequested=true;cancel();}});
     $('btnExternalEngine').addEventListener('click',open);$('engineConnect').addEventListener('click',connect);$('engineMode').addEventListener('change',chooseMode);$('engineRun').addEventListener('click',run);$('engineCancel').addEventListener('click',cancel);$('engineApply').addEventListener('click',()=>apply());$('engineDownload').addEventListener('click',download);
+    for(const id of ['engineAnySolv','engineAnySolvModel','engineSolvent','engineUMADevice','engineAnySolvDevice'])$(id).addEventListener('change',modelControls);
     for(const id of ['engineURL','engineToken'])$(id).addEventListener('input',()=>{connection=null;connectionDetails();$('engineRun').disabled=true;$('engineConnected').textContent='未接続';MV.AFIRUI?.sync();});
     $('engineProfile').addEventListener('click',()=>{if(result){showProfile(result.result,result);$('engineDialog').close();MV.EnergyProfile.reveal();}});
     $('engineXYZ').addEventListener('click',()=>{if(result)exportXYZ(result.result,result);});
     $('engineDialog').addEventListener('cancel',e=>{if(job){e.preventDefault();cancel();}});settings();
   }
-  MV.EngineUI={init,open,prepareBatch,endpoint,frames,validateResult,validateEngineInput,request,prepareNEB,prepareSingle,isBusy:()=>!!job,getConnection:()=>connection?{...connection}:null};
+  MV.EngineUI={init,open,modelInput,modelSummary,validateSolvationResult,syncModelBusy:()=>{$('engineModelSettings').disabled=!!job||!!MV.AFIRUI?.isBusy?.();},prepareBatch,endpoint,frames,validateResult,validateEngineInput,request,prepareNEB,prepareSingle,isBusy:()=>!!job,getConnection:()=>connection?{...connection}:null};
 })(window);
