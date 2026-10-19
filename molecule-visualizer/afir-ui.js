@@ -89,7 +89,7 @@
   function exportFiles(){if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();const out=MV.AFIR.exportInput(app().getState(),config());download(out,'afir-input.json');message('原子ID・XYZ・フラグメント・ペア・Python用設定をJSONに保存しました。');}
   function check(){saveSettings();const s=app().getState(),b=MV.AFIR.evaluate(s.atoms,config(),s.metadata.cell);message(`人工項のみ評価: ${b.energyEV.toFixed(6)} eV。物理ポテンシャルのエネルギーではありません。座標は変更していません。`);}
   async function run(){
-    if(job)return;let j;
+    if(job)return;if(MV.EngineUI?.isBusy()){message('外部エンジンの計算を終了してから実行してください。');return;}let j;
     try{if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();const s=app().getState();MV.AFIR.validate(s.atoms,config(),s.metadata.cell);
       j={original:MV.Model.cloneState(s),fingerprint:fingerprint(s),config:JSON.parse(JSON.stringify(config())),cancelled:false,livePreview:$('afirLive').checked,previewCursor:0,liveEnergies:[],liveBiases:[]};
       if(j.livePreview&&!MV.EngineUI.getConnection()?.info.livePreview)throw Error('ライブ表示を使うにはbridge.pyを更新・再接続してください。');

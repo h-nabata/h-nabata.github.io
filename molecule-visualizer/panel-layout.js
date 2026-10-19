@@ -1,7 +1,66 @@
 (function(global){
   'use strict';
   const MV=global.MoleculeVisualizer=global.MoleculeVisualizer||{};
+  function initViewerHeight(){
+    const shell=document.querySelector('.mv-viewer-shell'),handle=document.getElementById('viewerResizeHandle');
+    const storageKey='molecule-studio-viewer-height-v1',min=160,max=1600;
+    let drag=null;
+    function sync(){
+      const height=Math.round(shell.getBoundingClientRect().height);
+      handle.setAttribute('aria-valuenow',height);
+      handle.setAttribute('aria-valuetext',height+'ピクセル');
+    }
+    function setHeight(value,persist=true){
+      if(!Number.isFinite(value))return;
+      const height=Math.round(Math.max(min,Math.min(max,value)));
+      shell.style.height=height+'px';
+      shell.classList.add('mv-custom-height');
+      sync();
+      if(persist)try{global.localStorage.setItem(storageKey,String(height));}catch(error){/* Resizing also works without storage. */}
+    }
+    function reset(){
+      shell.classList.remove('mv-custom-height');
+      shell.style.removeProperty('height');
+      try{global.localStorage.removeItem(storageKey);}catch(error){/* Storage may be disabled. */}
+      sync();
+    }
+    try{
+      const saved=global.localStorage.getItem(storageKey),height=Number(saved);
+      if(saved&&Number.isFinite(height)&&height>=min&&height<=max)setHeight(height,false);
+    }catch(error){/* Keep the responsive default if storage is unavailable. */}
+    document.querySelectorAll('[data-viewer-size]').forEach(button=>{
+      button.addEventListener('click',()=>{
+        if(button.dataset.viewerSize==='reset')reset();
+        else setHeight(shell.getBoundingClientRect().height+Number(button.dataset.viewerSize));
+      });
+    });
+    handle.addEventListener('pointerdown',e=>{
+      if(e.button!==0||drag)return;
+      e.preventDefault();handle.focus({preventScroll:true});
+      drag={id:e.pointerId,y:e.clientY,height:shell.getBoundingClientRect().height};
+      handle.setPointerCapture(e.pointerId);
+    });
+    handle.addEventListener('pointermove',e=>{
+      if(drag&&e.pointerId===drag.id)setHeight(drag.height+e.clientY-drag.y,false);
+    });
+    function finish(e){
+      if(!drag||e.pointerId!==drag.id)return;
+      const id=drag.id;drag=null;
+      setHeight(shell.getBoundingClientRect().height);
+      if(handle.hasPointerCapture(id))handle.releasePointerCapture(id);
+    }
+    ['pointerup','pointercancel','lostpointercapture'].forEach(type=>handle.addEventListener(type,finish));
+    handle.addEventListener('keydown',e=>{
+      if(!['ArrowUp','ArrowDown','Home','End','Enter'].includes(e.key))return;
+      e.preventDefault();
+      if(e.key==='Enter')reset();
+      else setHeight(e.key==='Home'?min:e.key==='End'?max:shell.getBoundingClientRect().height+(e.key==='ArrowUp'?-1:1)*(e.shiftKey?80:20));
+    });
+    if(global.ResizeObserver)new global.ResizeObserver(sync).observe(shell);
+    sync();
+  }
   function init(){
+    initViewerHeight();
     document.querySelectorAll('[data-workspace-jump]').forEach(button=>{
       button.addEventListener('click',()=>{
         const kind=button.dataset.workspaceJump;
