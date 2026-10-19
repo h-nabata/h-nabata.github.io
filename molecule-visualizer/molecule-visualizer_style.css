@@ -16,7 +16,7 @@
 .mv-app #ketcherFrame{display:block;width:100%;height:58vh;min-height:360px;border:1px solid #d9e3e7;border-radius:8px;margin:12px 0;background:white}
 .mv-app #chemMessage{min-height:1.5em;font-size:13px;color:#345865}
 .mv-app:fullscreen{overflow:auto;background:#eef3f5;padding:20px;max-width:none;width:100%;box-sizing:border-box}
-.mv-app:fullscreen #viewer{height:62vh}
+.mv-app:fullscreen #viewer{height:100%}
 @media(min-width:1450px){.mv-app .mv-workspace{grid-template-columns:minmax(0,1fr) 370px}}
 @media(max-width:650px){.mv-app dialog.mv-chem-dialog{padding:10px}.mv-app #ketcherFrame{min-height:320px;height:52vh}.mv-app .mv-trajectory{gap:4px}}
 
@@ -163,3 +163,14 @@
 @media(max-width:440px){.mv-display-controls{display:block}.mv-control-cluster[aria-label="視点"]{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;margin-top:7px}.mv-control-cluster[aria-label="視点"]>.mv-btn{width:100%;font-size:11px}.mv-control-cluster[aria-label="視点"] .mv-zoom-pair{justify-content:center}.mv-display-controls #btnZoomIn,.mv-display-controls #btnZoomOut{flex:1;width:auto}}
 /* Laptop viewports keep the common commands and frame controls beside the canvas. */
 @media(min-width:801px) and (max-height:950px){.mv-viewer-shell{height:clamp(240px,31vh,320px)}.mv-stage:has(#profilePanel:not([hidden])) .mv-viewer-shell{height:clamp(220px,26vh,280px)}}
+
+/* User-sized canvas keeps its height across profiles, screen widths and fullscreen. */
+.mv-app .mv-stage .mv-viewer-shell.mv-custom-height{min-height:160px;max-height:1600px}
+.mv-stage-heading{flex-wrap:wrap}
+.mv-stage-heading>.mv-row{flex-wrap:wrap}
+.mv-viewer-size{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);padding-right:8px;border-right:1px solid var(--border)}
+.mv-stage-heading .mv-viewer-size .mv-btn{min-width:28px}
+.mv-viewer-bottom{bottom:28px}
+.mv-viewer-resize{position:absolute;bottom:0;left:0;right:0;height:22px;display:flex;align-items:center;justify-content:center;cursor:ns-resize;touch-action:none;user-select:none;background:#eff4f8;border-top:1px solid var(--border);color:#60788a;font-size:10px}
+.mv-viewer-resize:hover,.mv-viewer-resize:focus-visible{background:#d9eff0;color:#056167}
+.mv-app .mv-viewer-resize:focus-visible{outline-offset:-3px}
