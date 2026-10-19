@@ -24,12 +24,12 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./energy-profile.js?v=constraints-34"></script>
 <script defer src="./batch.js?v=batch-33"></script>
 <script defer src="./batch-ui.js?v=constraints-34"></script>
-<script defer src="./engine-ui.js?v=constraints-34"></script>
+<script defer src="./engine-ui.js?v=uma-35"></script>
 <script defer src="./vibration-ui.js?v=constraints-34"></script>
 <script defer src="./path-refinement.js?v=2"></script>
 <script defer src="./afir.js?v=17"></script>
 <script defer src="./afir-search.js?v=16"></script>
-<script defer src="./afir-runner.js?v=constraints-34"></script>
+<script defer src="./afir-runner.js?v=uma-35"></script>
 <script defer src="./afir-ui.js?v=constraints-34"></script>
 <script defer src="./measurement-ui.js?v=constraints-34"></script>
 <script defer src="./panel-layout.js?v=height-32"></script>
@@ -385,11 +385,12 @@ H 1.0 0 0
 <dialog id="engineDialog" class="mv-engine-dialog">
   <h2>外部エンジン / 経路緩和</h2>
   <p class="mv-small">計算はこのPCで起動したサービス上で実行します。座標はローカルサービスへ送信されます。接続トークンはこの画面のメモリだけに保持します。</p>
-  <details class="mv-engine-setup"><summary>初回のセットアップ：tblite / g-xTBを選ぶ</summary>
-    <p><a href="./local-engine/bridge.py?v=1.5.0" download>bridge.pyをダウンロード</a>し、使いたい計算手法に応じて、以下のどちらか一方の手順で起動してください。Python 3.10以上が必要です。</p>
+  <details class="mv-engine-setup"><summary>初回のセットアップ：tblite / g-xTB / UMAを選ぶ</summary>
+    <p><a href="./local-engine/bridge.py?v=1.6.0" download>bridge.pyをダウンロード</a>し、使いたいエンジンの手順で起動してください。tblite / g-xTBはPython 3.10以上、UMAはPython 3.12の専用環境を推奨します。</p>
     <ul>
       <li><strong>tblite</strong>：GFN2-xTB（既定）、GFN1-xTB、IPEA1-xTBを利用します。このアプリでは非周期系と固定セルの周期系に対応します。</li>
       <li><strong>g-xTB</strong>：公式のg-xTB対応実行ファイルを別途用意します。このアプリでは非周期系に対応します。tbliteのPythonパッケージは不要です。</li>
+      <li><strong>UMA</strong>：fairchem-coreの学習済みモデルをローカルで実行します。この接続は非周期分子用のomolタスクです。CPU / CUDAを選べます。</li>
     </ul>
     <p>通常配布版tblite 0.7.0はg-xTBに対応していません（2026年10月15日確認）。g-xTBを使いたい場合は、下の「g-xTBを使う」を選んでください。両方をインストールする必要はありません。</p>
     <details><summary>tbliteを使う（GFN2-xTB / GFN1-xTB / IPEA1-xTB）</summary>
@@ -427,18 +428,31 @@ python -m pip install "numpy&gt;=1.24,&lt;3" "ase&gt;=3.23,&lt;4" "psutil&gt;=5.
 python bridge.py --engine gxtb --binary /absolute/path/to/xtb --allow-origin https://h-nabata.github.io</pre>
       <p>tblite用の環境を既に作っている場合は、そのPython環境を再利用してg-xTB対応実行ファイルを指定することもできます。起動時の <code>--engine gxtb</code> で使用するエンジンが決まります。</p>
     </details>
+    <details><summary>UMAを使う（fairchem-core / 分子用omol）</summary>
+      <p><a href="https://huggingface.co/facebook/UMA" target="_blank" rel="noopener">Hugging FaceのUMAモデル</a>で利用申請・承認を済ませ、下記を実行してください。Linux / WSL2のPython 3.12環境を推奨します。g-xTB用の実行ファイルは使いません。</p>
+      <pre>python3.12 -m venv .venv-uma
+source .venv-uma/bin/activate
+python -m pip install --upgrade pip
+python -m pip install "fairchem-core&gt;=2.23,&lt;3" "psutil&gt;=5.9,&lt;8" huggingface_hub
+hf auth login
+python bridge.py --engine uma --uma-model uma-s-1p2p1 --uma-device cpu --uma-precision float64 --allow-origin https://h-nabata.github.io</pre>
+      <p>対応するNVIDIA GPUとPyTorch環境では <code>--uma-device cuda</code> を指定します。Hugging Faceの認証トークンは端末でのみ使用してください。このページには起動後に表示されるbridgeの接続Tokenを入力します。</p>
+      <details class="mv-help"><summary>モデル・精度・初回読み込み</summary><p class="mv-small">モデルは <code>uma-s-1p2p1</code>（既定）、<code>uma-s-1p2</code>、<code>uma-s-1p1</code>、<code>uma-m-1p1</code> から選べます。既定はfloat64・TF32無効。<code>--uma-precision float32</code> はメモリを節約しますが、TS・微小変位の振動解析ではfloat64を推奨します。電荷と多重度はページで指定します。GFN法・SCF設定・実行ファイルの指定は不要です。エネルギーは選択したモデルのomol基準なので、tbliteやg-xTBの値と直接比較しないでください。</p>
+      <p class="mv-small">初回の計算で重みをダウンロードします。以後もジョブごとにメモリへ読み込み、一括最適化では各構造で読み込みます。初回取得に時間がかかる場合は <code>--job-timeout 7200</code> などで上限を延長できます。モデルのキャッシュは通常 <code>~/.cache/fairchem</code> に残ります。分子の座標は外部へ送信しません。<a href="https://facebookresearch.github.io/fairchem/install/" target="_blank" rel="noopener">公式導入手順</a></p></details>
+    </details>
     <details><summary>SellaでTS最適化を使う場合（追加パッケージ）</summary>
       <p>bridge.pyを実行する同じPython環境で、次を実行してください。振動解析のみならSellaは不要で、導入済みのASEを使います。</p>
       <pre>python -m pip install --only-binary=:all: "sella&gt;=2.6,&lt;3"</pre>
-      <p>Python 3.12・Sella 2.6で確認しています。対応するwheelが見つからない場合はPython 3.12の環境を作成し、g-xTBとbridgeも同じ環境で実行してください。Sellaは最適化を担当し、エネルギー・力は選択したtbliteまたはg-xTBで計算します。更新後はbridge.pyを再起動し、再接続してください。</p>
+      <p>Python 3.12・Sella 2.6で確認しています。対応するwheelが見つからない場合はPython 3.12の環境を作成してください。Sellaはbridgeと同じPython環境に追加します。エネルギー・力は接続中のtblite / g-xTB / UMAで計算します。導入後はbridgeを再起動し、再接続してください。</p>
     </details>
-    <p>どちらも起動時に表示されるURLとTokenを下欄に入力します。端末は利用中開いたままにしてください。ブラウザが要求した場合は、このサイトからのローカルネットワーク接続を許可します。WSLではサービスも計算エンジンと同じWSL環境で起動します。</p>
+    <p>起動時に表示されるURLとTokenを下欄に入力します。端末は利用中開いたままにしてください。ブラウザが要求した場合は、このサイトからのローカルネットワーク接続を許可します。WSLではサービスも計算エンジンと同じWSL環境で起動します。</p>
     <p><a href="https://github.com/h-nabata/h-nabata.github.io/blob/main/molecule-visualizer/local-engine/README.md" target="_blank" rel="noopener">導入・周期系・計算方式の詳しい説明</a></p>
   </details>
   <fieldset id="engineConnection"><legend>ローカルサービスへ接続</legend><div class="mv-grid">
     <label>接続先URL<input id="engineURL" value="http://127.0.0.1:8766" autocomplete="off" spellcheck="false"></label>
     <label>接続トークン<input id="engineToken" type="password" autocomplete="off" spellcheck="false"></label>
   </div><div class="mv-row"><button class="mv-btn" id="engineConnect">接続を確認</button><span id="engineConnected" class="mv-small">未接続</span></div></fieldset>
+  <section id="engineUMADetails" hidden><h3>UMAの接続条件</h3><p id="engineUMASummary" class="mv-small"></p><p class="mv-small">分子用omol・非周期系。電荷と多重度は下の計算条件を使用します。接続確認だけではモデルの読み込みは行いません。</p></section>
   <fieldset id="engineSettings"><legend>計算条件</legend><div class="mv-grid">
     <label>操作<select id="engineMode"><option value="evaluate">エネルギー・力を評価</option><optgroup label="単一構造の最適化（AFIR法を含む）"><option value="optimize">通常の単一構造最適化（人工力なし）</option><option value="ts">SellaによるTS最適化</option><option value="afir">AFIR法の設定を開く</option></optgroup><option value="batch">複数構造を一括最適化・比較</option><option value="vibrations">振動解析のみ（現在の構造）</option><option value="perpendicular">経路を直交方向のみ緩和</option><option value="cineb">CI-NEB（最高点を登らせる）</option></select></label>
     <label>対象<select id="engineScope"><option value="current">現在の構造</option><option value="all">全フレーム</option></select></label>

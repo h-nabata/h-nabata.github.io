@@ -32,7 +32,8 @@ from ase.data import atomic_numbers, covalent_radii
 from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 
-VERSION = '1.5.0'
+VERSION = '1.6.0'
+UMA_MODELS = ('uma-s-1p2p1', 'uma-s-1p2', 'uma-s-1p1', 'uma-m-1p1')
 MAX_BODY = 8 * 1024 * 1024
 MODES = ('evaluate', 'optimize', 'perpendicular', 'neb', 'cineb', 'afir', 'ts', 'vibrations')
 PATH_MODES = ('perpendicular', 'neb', 'cineb')
@@ -57,7 +58,7 @@ def validate(data, engine):
     symbols = data.get('symbols')
     if not isinstance(symbols, list) or not 1 <= len(symbols) <= 500:
         raise ValueError('原子数は1〜500にしてください。')
-    maximum_z = 103 if engine == 'gxtb' else 86
+    maximum_z = {'gxtb':103, 'tblite':86, 'uma':83}[engine]
     if any(not isinstance(s, str) or s not in atomic_numbers or not 1 <= atomic_numbers[s] <= maximum_z for s in symbols):
         raise ValueError(f'このエンジンの入力元素は原子番号{maximum_z}までです。対応パラメータの有無は計算時にも検査します。')
     images = np.asarray(data.get('images'), dtype=float)
@@ -69,7 +70,7 @@ def validate(data, engine):
     if mode not in MODES or (mode in PATH_MODES and len(images) < 3) or (mode in ('optimize', 'afir', 'ts', 'vibrations') and len(images) != 1):
         raise ValueError('経路緩和には端点を含む3〜100構造、単一最適化・振動解析には1構造が必要です。')
     charge = number(data.get('charge', 0), '電荷', -100, 100, True)
-    multiplicity = number(data.get('multiplicity', 1), '多重度', 1, 101, True)
+    multiplicity = number(data.get('multiplicity', 1), '多重度', 1, 100 if engine == 'uma' else 101, True)
     electrons = sum(atomic_numbers[s] for s in symbols) - charge
     if electrons < multiplicity - 1 or electrons <= 0 or (electrons - multiplicity + 1) % 2:
         raise ValueError('電子数・電荷・スピン多重度の偶奇または大きさが一致しません。')
@@ -85,6 +86,8 @@ def validate(data, engine):
             raise ValueError('pbcには3つの真偽値が必要です。')
         if any(pbc) and engine == 'gxtb':
             raise ValueError('このg-xTBアダプタは非周期系専用です。周期系にはtbliteを選んで起動してください。')
+        if any(pbc) and engine == 'uma':
+            raise ValueError('このUMA接続は分子用omol・非周期系専用です。周期系には対応していません。')
     for image in images:
         for i in range(len(symbols) - 1):
             vectors = image[i+1:] - image[i]
@@ -631,15 +634,104 @@ class GXTBEngine:
             return parse_gradient(gradient.read_text(), symbols, positions)
 
 
+def uma_settings(config):
+    # A fixed numerical surface across MIN, AFIR, CI-NEB, TS and finite differences.
+    # Do not use the changing upstream default/turbo presets or direct-force models.
+    return dict(tf32=False, compile=False, merge_mole=False,
+                base_precision_dtype=config['umaPrecision'], execution_mode='general',
+                torch_num_threads=config['threads'])
+
+
+def uma_packages(config):
+    version = package_version('fairchem-core')
+    parts = re.match(r'^(\d+)\.(\d+)\.(\d+)', version or '')
+    if not parts or not ( (2,23,0) <= tuple(map(int, parts.groups())) < (3,0,0) ):
+        raise ValueError('UMAにはfairchem-core >=2.23,<3が必要です。専用環境で python -m pip install "fairchem-core>=2.23,<3" を実行してください。')
+    try:
+        import torch
+        from fairchem.core import FAIRChemCalculator, pretrained_mlip
+        from fairchem.core.units.mlip_unit.api.inference import InferenceSettings
+    except Exception as error:
+        raise ValueError('fairchem-core/PyTorchを読み込めません。UMA用Python環境の導入状態を確認してください。') from error
+    if config['umaDevice'] == 'cuda' and not torch.cuda.is_available():
+        raise ValueError('CUDAを利用できません。対応するPyTorch・GPUドライバーを確認するか、--uma-device cpu で起動してください。')
+    if config['umaModel'] not in pretrained_mlip.available_models:
+        raise ValueError('指定したUMAモデルがfairchem-coreに登録されていません。パッケージを更新するか別の --uma-model を選んでください。')
+    return torch, FAIRChemCalculator, pretrained_mlip, InferenceSettings
+
+
+def uma_failure(error):
+    # Upstream HTTP errors can contain credentials/URLs. Never send those to the UI/export.
+    name = type(error).__name__
+    if 'outofmemory' in name.lower() or 'out of memory' in str(error).lower():
+        return 'UMAのメモリが不足しました。原子数を減らすか、--uma-device cpu を選んで再起動してください。'
+    return ('UMAのモデル読み込み・計算に失敗しました。Hugging Faceのfacebook/UMA利用承認と、'
+            '同じ端末環境での hf auth login、モデルのキャッシュ・通信・PyTorchの導入を確認してください。'
+            '認証情報はページへ入力しないでください。')
+
+
+class UMAEngine:
+    """Local conservative UMA/OMol inference; ASE returns eV and eV/angstrom already."""
+    def __init__(self, data, config, directory):
+        from ase import Atoms
+        torch, Calculator, pretrained, Settings = uma_packages(config)
+        torch.set_num_threads(config['threads'])
+        os.environ['HF_HUB_DISABLE_TELEMETRY'] = '1'
+        try:
+            self.predictor = pretrained.get_predict_unit(config['umaModel'],
+                device=config['umaDevice'], inference_settings=Settings(**uma_settings(config)))
+        except Exception as error:
+            raise ValueError(uma_failure(error)) from error
+        self.Atoms, self.Calculator, self.data = Atoms, Calculator, data
+        self.atoms = {}
+
+    def __call__(self, index, positions):
+        try:
+            if index not in self.atoms:
+                cell = self.data['cell']
+                atoms = self.Atoms(self.data['symbols'], positions=positions,
+                    cell=None if cell is None else cell['vectors'], pbc=False)
+                # UMA spin is 2S+1, NOT g-xTB's number of unpaired electrons (2S).
+                atoms.info.update(charge=self.data['charge'], spin=self.data['multiplicity'])
+                atoms.calc = self.Calculator(self.predictor, task_name='omol')
+                self.atoms[index] = atoms
+            atoms = self.atoms[index]
+            atoms.set_positions(positions)
+            # Autograd must remain enabled for the conservative forces.
+            energy, force = float(atoms.get_potential_energy()), np.asarray(atoms.get_forces(), dtype=float)
+        except Exception as error:
+            raise ValueError(uma_failure(error)) from error
+        if not math.isfinite(energy) or force.shape != (len(self.data['symbols']), 3) or not np.isfinite(force).all():
+            raise ValueError('UMAが不正なエネルギー・力を返しました。計算を停止しました。')
+        return energy, force.copy()
+
+
+def engine_method(config):
+    if config['engine'] == 'uma':
+        return f"UMA / {config['umaModel']} / omol"
+    return config['method'] if config['engine'] == 'tblite' else 'g-xTB'
+
+
+def package_version(name):
+    try:
+        return importlib.metadata.version(name)
+    except importlib.metadata.PackageNotFoundError:
+        return None
+
+
 def worker(data, config, directory, messages):
     try:
         # Spawned before importing native tblite; bound CPU use for responsiveness.
         for key in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS'):
             os.environ[key] = str(config['threads'])
-        calculator = (TBLiteEngine if config['engine'] == 'tblite' else GXTBEngine)(data, config, directory)
+        if config['engine'] == 'uma':
+            messages.put(('progress', {'phase':'loading_model'}))
+        calculator = {'tblite':TBLiteEngine, 'gxtb':GXTBEngine, 'uma':UMAEngine}[config['engine']](data, config, directory)
+        if config['engine'] == 'uma':
+            messages.put(('progress', {'phase':'calculating'}))
         result = calculate_job(data, calculator, directory, lambda p: messages.put(('progress', p)))
         result['engine'] = config['engine']
-        result['method'] = config['method'] if config['engine'] == 'tblite' else 'g-xTB'
+        result['method'] = engine_method(config)
         result['symbols'], result['cell'] = data['symbols'], data['cell']
         result['charge'], result['multiplicity'] = data['charge'], data['multiplicity']
         if 'atomIds' in data:
@@ -654,7 +746,11 @@ def worker(data, config, directory, messages):
 def provenance(config):
     return {'bridgeVersion':VERSION, 'engine':config['engine'], 'binarySHA256':config.get('binarySHA256'),
         'threads':config['threads'], 'solvent':'gas', 'aseVersion':importlib.metadata.version('ase'),
-        'numpyVersion':np.__version__, 'sellaVersion':sella_version(), 'afirReference':{'R0_A':3.8164,'epsilon_kJ_mol':1.0061,'power':6,'radii':'ASE covalent radii H-Cm'}}
+        'numpyVersion':np.__version__, 'sellaVersion':sella_version(),
+        **({'uma':{'model':config['umaModel'], 'task':'omol', 'device':config['umaDevice'],
+                   'inference':uma_settings(config), 'fairchemVersion':package_version('fairchem-core'),
+                   'torchVersion':package_version('torch')}} if config['engine']=='uma' else {}),
+        'afirReference':{'R0_A':3.8164,'epsilon_kJ_mol':1.0061,'power':6,'radii':'ASE covalent radii H-Cm'}}
 
 
 def stop_process(process):
@@ -769,7 +865,7 @@ class Jobs:
                           maxTangentialStep=None, history=[], error=job.get('error'))
         result['conditionId'] = hashlib.sha256(json.dumps({'data':data, 'config':self.config}, sort_keys=True).encode()).hexdigest()
         result.update(mode=data['mode'], symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
-            engine=self.config['engine'], method=self.config['method'] if self.config['engine']=='tblite' else 'g-xTB',
+            engine=self.config['engine'], method=engine_method(self.config),
             provenance=provenance(self.config), units={'length':'angstrom','energy':'eV','force':'eV/angstrom'})
         result['fixedAtoms'] = data.get('fixedAtoms', [])
         if 'atomIds' in data:
@@ -782,7 +878,7 @@ class Jobs:
         return dict(mode=data['mode'], optimizer=data.get('optimizer','fire'), engine=self.config['engine'],
             fixedAtoms=data.get('fixedAtoms', []),
             **({'atomIds':data['atomIds']} if 'atomIds' in data else {}),
-            method=self.config['method'] if self.config['engine']=='tblite' else 'g-xTB',
+            method=engine_method(self.config),
             symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
             images=[last['positions']], energies=[last['energy']], forces=[last['force']],
             imageFmax=[last['fmax']], effectiveFmax=last['fmax'], steps=len(frames)-1, evaluations=len(frames),
@@ -799,7 +895,7 @@ class Jobs:
         energies, biases = [p['energy'] for p in frames], [p['bias'] for p in frames]
         return dict(schema='molecule-afir-trajectory/1', mode='afir', engine=self.config['engine'],
             fixedAtoms=data.get('fixedAtoms', []),
-            method=self.config['method'] if self.config['engine']=='tblite' else 'g-xTB', atomIds=data['atomIds'],
+            method=engine_method(self.config), atomIds=data['atomIds'],
             symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
             images=[p['positions'] for p in frames], energies=energies, biasEnergies=biases,
             biasedEnergies=[e+b for e,b in zip(energies,biases)], forces=[p['force'] for p in frames],
@@ -914,11 +1010,14 @@ class Handler(BaseHTTPRequestHandler):
             if self.path == '/api/info':
                 config = self.server.config
                 self.response(200, {'version': VERSION, 'engine': config['engine'],
-                    'method': config['method'] if config['engine'] == 'tblite' else 'g-xTB (--gxtb --grad)',
+                    'method': engine_method(config),
                     'periodic': config['engine'] == 'tblite', 'maxAtoms': 500, 'maxImages': 100,
+                    **({'uma':{'model':config['umaModel'], 'task':'omol', 'device':config['umaDevice'],
+                               'precision':config['umaPrecision'], 'tf32':False, 'compile':False, 'mergeMole':False},
+                        'maxMultiplicity':100, 'maxAtomicNumber':83} if config['engine']=='uma' else {}),
                     'sellaVersion':sella_version(), 'vibrations':1, 'maxVibrationAtoms':200, 'pathCheckpoint':1, 'fixedAtoms':True,
                     'modes': MODES, 'livePreview': 1, 'optimizationTrajectory': 1, 'maxSteps': 10000, 'maxAFIRSteps': 10000, 'jobTimeout': config['jobTimeout'],
-                    'engineVersion': importlib.metadata.version('tblite') if config['engine'] == 'tblite' else 'locally configured binary'})
+                    'engineVersion': package_version('fairchem-core' if config['engine']=='uma' else 'tblite') if config['engine']!='gxtb' else 'locally configured binary'})
             elif re.fullmatch(r'/api/jobs/[a-f0-9]{32}(?:\?preview=1&after=[0-9]{1,5})?', self.path):
                 try:
                     parts = self.path.rsplit('/', 1)[1].split('?', 1)
@@ -994,9 +1093,12 @@ def make_server(config, token, port=8766, origins=(), site_dir=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--engine', choices=('tblite', 'gxtb'), default='tblite')
-    parser.add_argument('--method', choices=('GFN1-xTB', 'GFN2-xTB', 'IPEA1-xTB'), default='GFN2-xTB')
+    parser.add_argument('--engine', choices=('tblite', 'gxtb', 'uma'), default='tblite')
+    parser.add_argument('--method', choices=('GFN1-xTB', 'GFN2-xTB', 'IPEA1-xTB'), help='tblite only; default GFN2-xTB')
     parser.add_argument('--binary', help='Absolute path to the locally installed xtb with --gxtb --grad support')
+    parser.add_argument('--uma-model', choices=UMA_MODELS, help='UMA only; default uma-s-1p2p1 (molecular omol task)')
+    parser.add_argument('--uma-device', choices=('cpu', 'cuda'), help='UMA only; default cpu; cuda requires a compatible GPU/PyTorch')
+    parser.add_argument('--uma-precision', choices=('float32', 'float64'), help='UMA only; default float64 for TS/finite differences; float32 uses less memory')
     parser.add_argument('--port', type=int, default=8766)
     parser.add_argument('--threads', type=int, default=1)
     parser.add_argument('--job-timeout', type=int, default=1800, help='Maximum seconds per job')
@@ -1004,6 +1106,12 @@ def main():
     parser.add_argument('--allow-origin', action='append', default=[], help='Exact trusted origin, e.g. https://h-nabata.github.io')
     parser.add_argument('--site-dir', help='Optional molecule-visualizer folder to serve the UI locally')
     args = parser.parse_args()
+    if args.engine != 'tblite' and args.method is not None:
+        parser.error('--method is for tblite only. UMA uses --uma-model and the molecular omol task.')
+    if args.engine != 'gxtb' and args.binary is not None:
+        parser.error('--binary is for gxtb only. UMA uses the locally installed fairchem-core package.')
+    if args.engine != 'uma' and any(x is not None for x in (args.uma_model, args.uma_device, args.uma_precision)):
+        parser.error('--uma-model/--uma-device/--uma-precision require --engine uma')
     if not 1 <= args.threads <= 64 or not 1 <= args.port <= 65535 or not 1 <= args.job_timeout <= 86400 or not 1 <= args.evaluation_timeout <= 3600:
         parser.error('Port/threads/timeouts are out of range')
     for origin in args.allow_origin:
@@ -1013,15 +1121,23 @@ def main():
     if args.engine == 'gxtb':
         if not args.binary or not Path(args.binary).is_absolute() or not Path(args.binary).is_file() or not os.access(args.binary, os.X_OK) or Path(args.binary).suffix.lower() in ('.bat', '.cmd'):
             parser.error('--binary must be an absolute executable path (not a shell script wrapper .bat/.cmd)')
-    else:
+    elif args.engine == 'tblite':
         try:
             importlib.metadata.version('tblite')
         except importlib.metadata.PackageNotFoundError:
             parser.error('Install tblite: python -m pip install tblite')
     if args.site_dir and not (Path(args.site_dir)/'index.html').is_file():
         parser.error('--site-dir must contain the Molecule Studio index.html')
-    config = {'engine': args.engine, 'method': args.method, 'binary': args.binary, 'threads': args.threads,
+    config = {'engine': args.engine, 'method': args.method or 'GFN2-xTB', 'binary': args.binary, 'threads': args.threads,
               'jobTimeout': args.job_timeout, 'evaluationTimeout': args.evaluation_timeout}
+    if args.engine == 'uma':
+        config.update(umaModel=args.uma_model or 'uma-s-1p2p1', umaDevice=args.uma_device or 'cpu',
+                      umaPrecision=args.uma_precision or 'float64')
+        config['method'] = engine_method(config)
+        try:
+            uma_packages(config)  # Check dependencies/device without downloading weights or running a molecule.
+        except ValueError as error:
+            parser.error(str(error))
     if args.engine=='gxtb':
         digest=hashlib.sha256()
         with open(args.binary,'rb') as source:
@@ -1031,6 +1147,10 @@ def main():
     token = secrets.token_urlsafe(32)
     server = make_server(config, token, args.port, args.allow_origin, args.site_dir)
     print(f'Molecule Studio bridge {VERSION}\nURL: http://127.0.0.1:{args.port}\nToken: {token}\nEngine: {args.engine}', flush=True)
+    if args.engine == 'uma':
+        print(f"Model: {config['umaModel']} / omol / {config['umaDevice']} / {config['umaPrecision']} (TF32 off)\n"
+              'The model is loaded on each job. First use may download weights from Hugging Face.\n'
+              'Hugging Face credentials stay in the local environment; do not enter them in the web page.', flush=True)
     print('Only keep this service running while you use it. Ctrl+C to stop.', flush=True)
     try:
         server.serve_forever(poll_interval=.2)

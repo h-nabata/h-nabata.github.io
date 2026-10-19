@@ -24,6 +24,7 @@
   async function run(j,progress){
     if(!available())throw Error('AFIRに対応したローカルサービス1.1.0以降へ接続してください。');
     j.connection=connection();j.connection.url=MV.EngineUI.endpoint(j.connection.url);
+    MV.EngineUI.validateEngineInput(input(j),j.connection.info);
     if(j.config.maxSteps>(j.connection.info.maxAFIRSteps??500))throw Error('指定したAFIRステップ数に対応するため、bridge.pyを更新・再起動して再接続してください。');
     MV.Constraints?.forJob(j.original,input(j),j.connection.info);
     progress('このPCの計算エンジンで探索を開始しています…');
@@ -37,7 +38,7 @@
           if(state.result){validateResult(state.result,j);return state.result;}
           if(state.status==='error')throw Error(state.error||'計算エンジンが失敗しました。');return null;
         }
-        const p=state.progress||{};progress(`AFIR探索中: ${p.step??0} / ${j.config.maxSteps} ステップ`+(p.fmax!=null?` · 最大有効力 ${p.fmax.toPrecision(4)} eV/Å`:'')+(j.cancelled||state.status==='stopping'?' · 停止処理中':''),state.preview);
+        const p=state.progress||{};progress((p.phase==='loading_model'?'UMAモデルを読み込み中（初回はダウンロードを含みます）…':`AFIR探索中: ${p.step??0} / ${j.config.maxSteps} ステップ`)+(p.fmax!=null?` · 最大有効力 ${p.fmax.toPrecision(4)} eV/Å`:'')+(j.cancelled||state.status==='stopping'?' · 停止処理中':''),state.preview);
         await new Promise(resolve=>setTimeout(resolve,600));
       }
     }catch(e){throw Error(e.message+(j.id?' 接続が途切れた場合はローカル端末でCtrl+Cを押して停止できます。':''));}
