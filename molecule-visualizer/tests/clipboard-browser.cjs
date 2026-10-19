@@ -30,7 +30,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.evaluate(()=>navigator.clipboard.writeText('He 0 0 0'));await page.keyboard.press('Control+v');assert.equal((await state()).atoms.length,4);assert.equal(await page.locator('#dataText').inputValue(),'He 0 0 0');
   await page.click('#btnPasteSelection');assert.match(await page.locator('#statusBadge').textContent(),/未適用/);assert.equal((await state()).atoms.length,4);await page.click('#dataReset');
   // Browser denial uses the exact page copy and announces the fallback.
-  await page.evaluate(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:{readText:async()=>{throw Error('permission denied');},writeText:async()=>{throw Error('permission denied');}});});
+  await page.evaluate(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:{readText:async()=>{throw Error('permission denied');},writeText:async()=>{throw Error('permission denied');}}});});
   await page.click('#btnPasteSelection');await count(6);assert.match(await page.locator('#statusBadge').textContent(),/ページ内/);
   await page.setViewportSize({width:390,height:844});await page.locator('.mv-stage-toolbar').scrollIntoViewIfNeeded();
   for(const selector of ['.mv-stage-toolbar','#btnCopySelection','#btnPasteSelection']){const box=await page.locator(selector).boundingBox();assert.ok(box.x>=0&&box.x+box.width<=390);}
