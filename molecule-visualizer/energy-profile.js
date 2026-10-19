@@ -12,8 +12,8 @@
   function select(i,preview=true){
     if(!data||!Number.isInteger(i)||i<0||i>=data.energies.length)return;
     index=i;$('profileRange').value=i;
-    const energy=data.energies[i],bias=data.biasEnergies?.[i],relative=energy-data.energies[0];
-    $('profileValue').textContent=(isStep(data)?'ステップ '+i:'構造 '+(i+1))+' / '+(isStep(data)?data.energies.length-1:data.energies.length)+' · E = '+energy.toFixed(6)+' eV · ΔE = '+relative.toFixed(6)+' eV'+(bias==null?'':' · 人工項 = '+bias.toFixed(6)+' eV · 合計 = '+(energy+bias).toFixed(6)+' eV');
+    const energy=data.energies[i],bias=data.biasEnergies?.[i],relative=energy-(data.referenceEnergy??data.energies[0]);
+    $('profileValue').textContent=(data.labels?data.labels[i]+' · 比較 '+data.energies.length+'構造':(isStep(data)?'ステップ '+i:'構造 '+(i+1))+' / '+(isStep(data)?data.energies.length-1:data.energies.length))+' · E = '+energy.toFixed(6)+' eV · ΔE = '+relative.toFixed(6)+' eV'+(bias==null?'':' · 人工項 = '+bias.toFixed(6)+' eV · 合計 = '+(energy+bias).toFixed(6)+' eV');
     const x=40+500*i/Math.max(1,data.energies.length-1);
     marker?.setAttribute('x1',x);marker?.setAttribute('x2',x);
     if(!preview)return;
@@ -45,24 +45,24 @@
     restore();data=next;bound=null;details=next.details||details;
     const series=[next.energies];if(next.biasEnergies)series.push(next.energies.map((e,i)=>e+next.biasEnergies[i]));
     if(!series[0]?.length||series.some(a=>a.length!==series[0].length||a.some(e=>!Number.isFinite(e))))throw Error('エネルギープロファイルが不正です。');
-    const relative=series.map(a=>a.map(e=>e-a[0]));let lo=0,hi=0;for(const values of relative)for(const v of values){lo=Math.min(lo,v);hi=Math.max(hi,v);}
+    const relative=series.map(a=>a.map(e=>e-(next.referenceEnergy??a[0])));let lo=0,hi=0;for(const values of relative)for(const v of values){lo=Math.min(lo,v);hi=Math.max(hi,v);}
     const span=Math.max(hi-lo,1e-8),svg=$('energyProfile');svg.replaceChildren();
-    svg.append(element('text',{x:12,y:16,'font-size':12},'ΔE (eV) · 各系列の始点基準'));
+    svg.append(element('text',{x:12,y:16,'font-size':12},next.kind==='batch'?'ΔE (eV) · 最低エネルギー基準':'ΔE (eV) · 各系列の始点基準'));
     svg.append(element('text',{x:12,y:34,'font-size':11},lo.toFixed(4)+' 〜 '+hi.toFixed(4)));
     relative.forEach((values,k)=>{
       const ids=sample(values),points=ids.map(i=>[40+500*i/Math.max(1,values.length-1),144-(values[i]-lo)*100/span]);
       svg.append(element('polyline',{points:points.map(p=>p.join(',')).join(' '),fill:'none',stroke:k?'#b45420':'#087e85','stroke-width':2}));
       // Every small-series point is focusable. The range always covers every frame.
       if(values.length<=100)points.forEach(([x,y],p)=>{
-        const i=ids[p],dot=element('circle',{cx:x,cy:y,r:4,fill:k?'#b45420':'#087e85',tabindex:k?-1:0,role:'button','aria-label':(isStep(next)?'ステップ '+i:'構造 '+(i+1))+': ΔE '+values[i].toFixed(6)+' eV'});
+        const i=ids[p],dot=element('circle',{cx:x,cy:y,r:4,fill:k?'#b45420':'#087e85',tabindex:k?-1:0,role:'button','aria-label':(isStep(next)?'ステップ '+i:(next.labels?.[i]||'構造 '+(i+1)))+': ΔE '+values[i].toFixed(6)+' eV'});
         const choose=()=>{if(!restoringFocus)chooseFrame(i);};dot.addEventListener('focus',choose);dot.addEventListener('click',choose);
         dot.addEventListener('keydown',e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();choose();}});svg.append(dot);
         if(keepFocus&&!k&&i===index)focusPoint=dot;
       });
     });
     marker=element('line',{y1:36,y2:150,stroke:'#55646d','stroke-dasharray':'3 3'});svg.append(marker);
-    svg.append(element('text',{x:380,y:175,'font-size':12},isStep(next)?'最適化ステップ →':'経路の構造番号 →'));
-    $('profileTitle').textContent=next.title;$('profileLegend').textContent=next.biasEnergies?'緑：物理エネルギー　茶：物理エネルギー＋人工項。横軸は'+(isStep(next)?'探索ステップ':'構造番号')+'で、反応座標やTS検証結果ではありません。':(isStep(next)?'緑：物理エネルギー。横軸は最適化ステップです。':'緑：物理エネルギー。横軸は構造番号です（単一構造の評価では1点）。');
+    svg.append(element('text',{x:380,y:175,'font-size':12},isStep(next)?'最適化ステップ →':next.kind==='batch'?'入力構造 →':'経路の構造番号 →'));
+    $('profileTitle').textContent=next.title;$('profileLegend').textContent=next.kind==='batch'?'各入力を独立に最適化した最終電子エネルギー。収束状態は結果表で確認してください。':next.biasEnergies?'緑：物理エネルギー　茶：物理エネルギー＋人工項。横軸は'+(isStep(next)?'探索ステップ':'構造番号')+'で、反応座標やTS検証結果ではありません。':(isStep(next)?'緑：物理エネルギー。横軸は最適化ステップです。':'緑：物理エネルギー。横軸は構造番号です（単一構造の評価では1点）。');
     $('profileXYZ').disabled=typeof next.exportXYZ!=='function';
     range=$('profileRange');range.max=next.energies.length-1;range.disabled=next.energies.length<2;
     // A response already in flight must also respect an explicit pause or hide.

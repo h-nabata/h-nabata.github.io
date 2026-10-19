@@ -35,6 +35,7 @@ jobs:
           molecule_test_status=0
           node molecule-visualizer/tests/browser.cjs || molecule_test_status=1
           node molecule-visualizer/tests/engine-browser.cjs || molecule_test_status=1
+          node molecule-visualizer/tests/batch-browser.cjs || molecule_test_status=1
           node molecule-visualizer/tests/ts-browser.cjs || molecule_test_status=1
           node molecule-visualizer/tests/measurements-browser.cjs || molecule_test_status=1
           exit "$molecule_test_status"

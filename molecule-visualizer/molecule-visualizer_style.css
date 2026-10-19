@@ -174,3 +174,6 @@
 .mv-viewer-resize{position:absolute;bottom:0;left:0;right:0;height:22px;display:flex;align-items:center;justify-content:center;cursor:ns-resize;touch-action:none;user-select:none;background:#eff4f8;border-top:1px solid var(--border);color:#60788a;font-size:10px}
 .mv-viewer-resize:hover,.mv-viewer-resize:focus-visible{background:#d9eff0;color:#056167}
 .mv-app .mv-viewer-resize:focus-visible{outline-offset:-3px}
+
+/* Independent optimization inputs and comparison results. */
+#batchInput{padding:14px;background:#f3f8f8;border:1px solid #d4e4e5;border-radius:10px;margin:12px 0}#batchInput>label{display:block;margin-bottom:10px}#batchText{width:100%;min-height:150px;max-height:500px;resize:vertical;font-family:monospace}#batchTextInput>label{display:block;margin:8px 0}#batchFile{max-width:100%}#batchResult{margin-top:16px;padding-top:12px;border-top:1px solid #d4e4e5}#batchRows td{font-variant-numeric:tabular-nums}#batchRows td:nth-child(2){max-width:180px;overflow-wrap:anywhere}#batchRows td:last-child{min-width:110px;max-width:260px}#batchRows td:last-child span{display:block;overflow-wrap:anywhere}#batchResult .mv-table-scroll{max-height:360px;overflow:auto}#batchResult thead{position:sticky;top:0;background:#f3f8f8}#batchInput[hidden],#batchTextInput[hidden],#batchResult[hidden]{display:none}

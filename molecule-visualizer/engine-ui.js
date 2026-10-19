@@ -21,19 +21,19 @@
       const data=await response.json();if(!response.ok)throw Error(data.error||`HTTP ${response.status}`);return data;
     }catch(error){if(error.name==='TypeError'||error.name==='AbortError')throw Error('ローカルサービスに接続できません。起動状態・URL・許可Origin・ブラウザのローカルネットワーク許可を確認してください。接続が遮断される場合は --site-dir で画面もローカル配信できます。');throw error;}finally{clearTimeout(timer);}
   }
-  function busy(value){$('engineSettings').disabled=value;$('engineConnection').disabled=value;$('engineRun').disabled=value||!connection;$('engineCancel').disabled=!value;$('engineClose').disabled=false;$('engineLive').disabled=value;$('enginePause').disabled=!value||!connection?.info.pathCheckpoint;}
+  function busy(value){$('engineSettings').disabled=value;$('engineConnection').disabled=value;$('engineRun').disabled=value||!connection;$('engineCancel').disabled=!value;$('engineClose').disabled=false;$('engineLive').disabled=value;$('enginePause').disabled=!value||!connection?.info.pathCheckpoint;MV.BatchUI?.render();}
   function settings(){
-    const mode=$('engineMode').value,path=['perpendicular','neb','cineb'].includes(mode),single=['optimize','ts','vibrations'].includes(mode);
+    const mode=$('engineMode').value,path=['perpendicular','neb','cineb'].includes(mode),single=['optimize','ts','vibrations'].includes(mode),batch=mode==='batch';
     if(mode!==settingsMode){
       if(settingsMode)modeSettings.set(settingsMode,relaxFields.map(id=>$(id).value));
       const values=modeSettings.get(mode)||(mode==='cineb'?['100','0.05','0.03','1','5']:['150','0.05','0.04','1','5']);
       relaxFields.forEach((id,i)=>{$(id).value=values[i];});settingsMode=mode;
     }
-    if(path)$('engineScope').value='all';if(single)$('engineScope').value='current';$('engineScope').disabled=path||single;
+    if(path)$('engineScope').value='all';if(single)$('engineScope').value='current';$('engineScope').disabled=path||single||batch;$('engineScope').closest('label').hidden=batch;$('batchInput').hidden=!batch;
     $('engineRelaxSettings').hidden=['evaluate','vibrations'].includes(mode);$('engineSpringLabel').hidden=!['neb','cineb'].includes(mode);$('engineClimbLabel').hidden=mode!=='cineb';
-    $('engineOptimizerLabel').hidden=mode!=='optimize';$('engineTSMethodLabel').hidden=$('engineTrustLabel').hidden=mode!=='ts';$('engineMoveLabel').hidden=mode==='ts';
+    $('engineOptimizerLabel').hidden=!['optimize','batch'].includes(mode);$('engineTSMethodLabel').hidden=$('engineTrustLabel').hidden=mode!=='ts';$('engineMoveLabel').hidden=mode==='ts';
     $('engineVibrationOptions').hidden=!single;$('engineVibrationCheckLabel').hidden=mode==='vibrations';$('enginePause').hidden=!['neb','cineb'].includes(mode);
-    $('engineModeHelp').textContent={evaluate:'指定構造のエネルギーと力を計算します。',optimize:'現在の構造を極小化します。人工力は「AFIR法の設定を開く」で指定してください。',ts:'Sellaで一次鞍点を探索します。経路の結果表からTS候補を選べます。人工力・ばねは加えません。',vibrations:'現在の構造でASEの有限差分振動解析を行います。未収束構造も解析できます。',perpendicular:'端点を固定し、経路の接線に直交する力で緩和します。',neb:'端点を固定して経路を緩和します。一時停止してノードを追加できます。',cineb:'端点固定。CI開始後は最高エネルギーの内部ノードを登らせます。一時停止してノードを追加できます。'}[mode];
+    $('engineModeHelp').textContent={batch:'複数構造を同じ条件で、1構造ずつ独立に最適化します。人工力や経路のばねは加えません。',evaluate:'指定構造のエネルギーと力を計算します。',optimize:'現在の構造を極小化します。人工力は「AFIR法の設定を開く」で指定してください。',ts:'Sellaで一次鞍点を探索します。経路の結果表からTS候補を選べます。人工力・ばねは加えません。',vibrations:'現在の構造でASEの有限差分振動解析を行います。未収束構造も解析できます。',perpendicular:'端点を固定し、経路の接線に直交する力で緩和します。',neb:'端点を固定して経路を緩和します。一時停止してノードを追加できます。',cineb:'端点固定。CI開始後は最高エネルギーの内部ノードを登らせます。一時停止してノードを追加できます。'}[mode];
   }
   function chooseMode(){
     if($('engineMode').value!=='afir'){settings();return;}
@@ -45,12 +45,12 @@
     if(scope==='current'||!state.metadata.trajectory)return [MV.Periodic.snapshot(state)];
     const all=JSON.parse(JSON.stringify(state.metadata.trajectory));all[state.metadata.frameIndex||0]=MV.Periodic.snapshot(state);return all;
   }
-  function input(){
+  function input(batchFrames){
     if(dirty())throw Error('座標編集欄の未適用データを先に適用するか、現在の構造を再表示してください。');
-    if($('engineScope').value==='current')app().useDisplayedStructure();
-    const state=app().getState(),all=frames(state,$('engineScope').value),mode=$('engineMode').value;
+    if(!batchFrames&&$('engineScope').value==='current')app().useDisplayedStructure();
+    const state=app().getState(),all=batchFrames||frames(state,$('engineScope').value),mode=batchFrames?'optimize':$('engineMode').value;
     const symbols=all[0].atoms.map(a=>a.element),cell=all[0].metadata.cell||null;
-    if(!symbols.length||symbols.length>500||all.length>(connection.info.maxImages||20))throw Error(`外部計算は1〜500原子、最大${connection.info.maxImages||20}構造です。必要に応じてbridge.pyを更新してください。`);
+    if(!symbols.length||symbols.length>500||all.length>(batchFrames?100:connection.info.maxImages||20))throw Error(`外部計算は1〜500原子、最大${connection.info.maxImages||20}構造です。必要に応じてbridge.pyを更新してください。`);
     if(['perpendicular','neb','cineb'].includes(mode)&&all.length<3)throw Error('先に「反応経路」で端点を含む3〜100構造を生成するか、複数構造XYZなどを読み込んでください。');
     for(const f of all){
       if(JSON.stringify(f.atoms.map(a=>a.element))!==JSON.stringify(symbols))throw Error('全フレームの元素とFile-orderを一致させてください。');
@@ -70,7 +70,7 @@
       if(!connection.info.modes.includes('ts'))throw Error('L-BFGS・BFGSを使うにはbridge.pyを更新してください。');
       data.optimizer=$('engineOptimizer').value;
     }
-    if(mode==='vibrations'||(['ts','optimize'].includes(mode)&&$('engineVibrationCheck').checked)){
+    if(mode==='vibrations'||(!batchFrames&&['ts','optimize'].includes(mode)&&$('engineVibrationCheck').checked)){
       if(!connection.info.vibrations)throw Error('振動解析を使うにはbridge.pyを更新してください。');
       if(symbols.length>(connection.info.maxVibrationAtoms||200))throw Error('振動解析は最大200原子です。');
       if(all[0].atoms.some(a=>a.mol?.props?.MASS||a.xyzExtras?.mass||a.xyzExtras?.masses))throw Error('この振動解析はASE標準原子質量を使用します。同位体・個別質量を持つ構造には未対応です。');
@@ -136,6 +136,7 @@
   }
   async function run(){
     if(job||!connection)return;
+    if($('engineMode').value==='batch'){await runBatch();return;}
     if(MV.AFIRUI?.isBusy?.()){message('AFIR計算の完了または中止後に実行してください。');return;}
     let j;
     try{
@@ -164,6 +165,50 @@
     }catch(error){MV.EnergyProfile.restore();message(error.message+(j?.id?' 接続が途切れた場合、計算はローカル側で継続している可能性があります。サービスをCtrl+Cで停止できます。':''));}
     finally{if(job===j){job=null;MV.EnergyProfile.finish();busy(false);if(j.pauseRequested&&result)refineResult();}}
   }
+  async function runBatch(){
+    if(MV.AFIRUI?.isBusy()){message('AFIR計算の完了または中止後に実行してください。');return;}
+    let j;
+    try{
+      const plan=input(MV.BatchUI.prepare());
+      j={...plan,batch:true,connection:{...connection},cancelRequested:false,livePreview:$('engineLive').checked};
+      if(j.livePreview&&!connection.info.livePreview)throw Error('接続中のエンジンは計算中の表示に対応していません。');
+      MV.VibrationUI.hide();MV.EnergyProfile.reset();clearResult();job=j;busy(true);
+      const entries=MV.BatchUI.begin(plan);
+      await MV.Batch.run(entries,async(entry,index)=>{
+        const single={...plan,frames:[entry.frame],connection:j.connection,data:{...plan.data,images:[plan.data.images[index]],...(plan.data.atomIds?{atomIds:entry.frame.atoms.map(a=>a.id)}:{})}};
+        if(j.livePreview){single.data.livePreview=true;MV.EnergyProfile.begin(cancel,open);}
+        message(`一括最適化: ${index+1} / ${entries.length} を開始しています…`);j.id=null;
+        const created=await request(j.connection,'/api/jobs',single.data);
+        if(!/^[a-f0-9]{32}$/.test(created.id))throw Error('不正な計算IDです。');j.id=created.id;
+        if(j.livePreview){$('engineDialog').close();MV.EnergyProfile.reveal();}
+        if(j.cancelRequested)await request(j.connection,`/api/jobs/${j.id}/cancel`,{});
+        let previewStep=-1;
+        while(true){
+          const live=j.livePreview&&MV.EnergyProfile.following(),state=await request(j.connection,`/api/jobs/${j.id}`+(live?'?preview=1&after=0':''));
+          if(['completed','cancelled','error'].includes(state.status)){
+            j.id=null;MV.EnergyProfile.finish();
+            if(state.result){
+              validateResult(state.result,single);
+              const {trajectory,forces,...r}=state.result;
+              if(r.mode!=='optimize'||!['converged','step_limit','cancelled','failed'].includes(r.reason)||r.converged!==(r.reason==='converged'))throw Error('最適化結果の状態が不正です。');
+              return {status:state.status==='error'?'failed':state.status==='cancelled'?'cancelled':r.reason,result:r,error:state.error||r.error||''};
+            }
+            if(state.status==='completed')throw Error('最適化結果がありません。');
+            return {status:state.status==='error'?'failed':'cancelled',error:state.error||''};
+          }
+          if(!['running','stopping'].includes(state.status))throw Error('計算状態が不正です。');
+          const p=state.preview;
+          if(live&&p&&p.step!==previewStep&&Number.isInteger(p.step)&&p.step>=0&&p.step<=single.data.maxSteps&&p.images?.length===1&&p.images[0].length===single.data.symbols.length&&p.images[0].every(v=>Array.isArray(v)&&v.length===3&&v.every(x=>Number.isFinite(x)&&Math.abs(x)<=10000))&&p.energies?.length===1&&p.energies.every(Number.isFinite)){
+            previewStep=p.step;showProfile(p,single,true);$('profileTitle').textContent=`一括最適化 · 入力 ${index+1} / ${entries.length} · ステップ ${p.step}`;
+          }
+          message(`一括最適化: ${index+1} / ${entries.length} · ステップ ${state.progress?.step??0} / ${single.data.maxSteps}`+(j.cancelRequested?' · 中止処理中':''));
+          await new Promise(resolve=>setTimeout(resolve,600));
+        }
+      },()=>j.cancelRequested,()=>MV.BatchUI.render());
+      message(j.cancelRequested?'一括最適化を中止しました。完了分と取得済みの途中結果を保持しています。':'一括最適化が終了しました。結果表で収束状態とエネルギーを比較できます。');
+    }catch(error){MV.EnergyProfile.restore();message(error.message+(j?.id?' 状態を確認できないため後続の計算を止めました。ローカル側で継続している場合は端末でCtrl+Cを押して停止してください。':''));}
+    finally{if(job===j){job=null;MV.EnergyProfile.finish();busy(false);MV.BatchUI.finish();}}
+  }
   async function cancel(){
     const j=job;if(!j)return;j.cancelRequested=true;$('engineCancel').disabled=true;message('計算を中止しています…');
     try{if(j.id)await request(j.connection,`/api/jobs/${j.id}/cancel`,{});}catch(error){message(error.message+' ローカル端末でCtrl+Cを押して停止してください。');$('engineCancel').disabled=false;}
@@ -191,8 +236,12 @@
   function open(){
     if(!job&&!MV.AFIRUI?.isBusy?.())app().freezeDisplayedStructure();
     if(result&&result.fingerprint!==fingerprint(app().getState()))clearResult();
-    if(!job&&!result){const s=app().getDisplayedState();$('engineCharge').value=s.metadata.totalCharge??s.atoms.reduce((sum,a)=>sum+(Number(a.charge)||0),0);$('engineMultiplicity').value=s.metadata.multiplicity??1;$('engineScope').value=s.metadata.trajectory?'all':'current';$('engineMode').value=s.metadata.trajectory?.length>=3?'cineb':'evaluate';settings();}
+    if(!job&&!result&&$('engineMode').value!=='batch'){const s=app().getDisplayedState();$('engineCharge').value=s.metadata.totalCharge??s.atoms.reduce((sum,a)=>sum+(Number(a.charge)||0),0);$('engineMultiplicity').value=s.metadata.multiplicity??1;$('engineScope').value=s.metadata.trajectory?'all':'current';$('engineMode').value=s.metadata.trajectory?.length>=3?'cineb':'evaluate';settings();}
     $('engineDialog').showModal();
+  }
+  function prepareBatch(){
+    if(job){message('実行中の計算が終わるまでお待ちください。');$('engineDialog').showModal();return;}
+    open();$('engineMode').value='batch';settings();
   }
   function prepareNEB(){
     if(job)throw Error('実行中の計算を終了してください。');
@@ -225,5 +274,5 @@
     $('engineXYZ').addEventListener('click',()=>{if(result)exportXYZ(result.result,result);});
     $('engineDialog').addEventListener('cancel',e=>{if(job){e.preventDefault();cancel();}});settings();
   }
-  MV.EngineUI={init,endpoint,frames,validateResult,request,prepareNEB,prepareSingle,isBusy:()=>!!job,getConnection:()=>connection?{...connection}:null};
+  MV.EngineUI={init,open,prepareBatch,endpoint,frames,validateResult,request,prepareNEB,prepareSingle,isBusy:()=>!!job,getConnection:()=>connection?{...connection}:null};
 })(window);
