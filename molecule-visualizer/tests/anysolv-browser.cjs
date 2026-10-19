@@ -26,7 +26,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   // Select fragments via the canvas and use the SAME potential settings for AFIR.
   await page.click('#btnAFIR');await page.click('#btnClearSel');
   for(const i of [0,1]){
-   const p=await page.evaluate(i=>{const a=MoleculeVisualizer.App.renderer().projectedAtoms.find(a=>a.index===i);return {x:a.x,y:a.y};},i);
+   const p=await page.evaluate(i=>{const a=MoleculeVisualizer.App.renderer().projectedAtoms.find(a=>a.index===i+1);return {x:a.x,y:a.y};},i);
    await page.locator('canvas').click({position:p});await page.fill('#afirName','Group '+i);await page.click('#afirAddFragment');
   }
   await page.click('#afirAddPair');await page.fill('#afirSteps','2');await page.fill('#afirFmax','0.00001');await page.uncheck('#afirLive');await page.click('#afirRun');

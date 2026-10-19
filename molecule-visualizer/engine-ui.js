@@ -21,7 +21,7 @@
       const data=await response.json();if(!response.ok)throw Error(data.error||`HTTP ${response.status}`);return data;
     }catch(error){if(error.name==='TypeError'||error.name==='AbortError')throw Error('ローカルサービスに接続できません。起動状態・URL・許可Origin・ブラウザのローカルネットワーク許可を確認してください。接続が遮断される場合は --site-dir で画面もローカル配信できます。');throw error;}finally{clearTimeout(timer);}
   }
-  function busy(value){$('engineSettings').disabled=value;$('engineConnection').disabled=value;$('engineRun').disabled=value||!connection;$('engineCancel').disabled=!value;$('engineClose').disabled=false;$('engineLive').disabled=value;$('enginePause').disabled=!value||!connection?.info.pathCheckpoint;MV.BatchUI?.render();MV.ConstraintUI?.sync();}
+  function busy(value){$('engineModelSettings').disabled=value||!!MV.AFIRUI?.isBusy?.();$('engineSettings').disabled=value;$('engineConnection').disabled=value;$('engineRun').disabled=value||!connection;$('engineCancel').disabled=!value;$('engineClose').disabled=false;$('engineLive').disabled=value;$('enginePause').disabled=!value||!connection?.info.pathCheckpoint;MV.BatchUI?.render();MV.ConstraintUI?.sync();}
   function settings(){
     const mode=$('engineMode').value,path=['perpendicular','neb','cineb'].includes(mode),single=['optimize','ts','vibrations'].includes(mode),batch=mode==='batch';
     if(mode!==settingsMode){

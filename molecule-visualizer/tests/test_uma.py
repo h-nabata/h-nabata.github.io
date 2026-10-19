@@ -96,7 +96,7 @@ class Adapter(unittest.TestCase):
     def test_worker_and_partial_results_keep_uma_identity(self):
         data=b.validate({**WATER,'mode':'optimize','maxSteps':2,'fmax':.00001},'uma')
         messages=queue.Queue()
-        with tempfile.TemporaryDirectory() as directory:b.worker(data,UMA,directory,messages)
+        with tempfile.TemporaryDirectory() as directory,patch.dict(os.environ):b.worker(data,UMA,directory,messages)
         entries=[]
         while not messages.empty():entries.append(messages.get_nowait())
         self.assertEqual(entries[0],('progress',{'phase':'loading_model'}))
