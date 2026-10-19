@@ -22,11 +22,11 @@ function boot(afir=false,profile=false,modes=false,storage=null,constraints=fals
  doc.querySelectorAll=q=>q==='[data-tab]'?[...nodes.values()].filter(x=>x.dataset.tab):q==='dialog'?[...nodes.values()].filter(x=>x.tagName==='DIALOG'):[];
  const timers=new Map();let seq=0;const win={document:doc,devicePixelRatio:1,events:{},addEventListener(t,f){(this.events[t]??=[]).push(f);}};
  const ctx={window:win,document:doc,navigator:{clipboard:{writeText:async()=>{}}},localStorage:storage,setTimeout(f){timers.set(++seq,f);return seq;},clearTimeout(i){timers.delete(i);},Blob,URL,console};
- vm.createContext(ctx);for(const f of ['model','bonding','geometry','io','molfile','periodic','formats','history','renderer3dmol','ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
+ vm.createContext(ctx);for(const f of ['model','bonding','geometry','io','molfile','periodic','formats','history','fragment-clipboard','renderer3dmol','ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
  if(constraints)for(const f of ['constraints','constraints-ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
  if(profile){ctx.setInterval=ctx.setTimeout;ctx.clearInterval=ctx.clearTimeout;for(const f of ['studio','trajectory','trajectory-ui','energy-profile'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);}
  if(modes)for(const f of ['vibration-ui','path-refinement'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
- if(afir)for(const f of ['afir','afir-ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);win.MoleculeVisualizer.App.init();if(constraints)win.MoleculeVisualizer.ConstraintUI.init();if(profile){win.MoleculeVisualizer.Studio.init();win.MoleculeVisualizer.EnergyProfile.init();win.MoleculeVisualizer.TrajectoryUI.init();}if(afir)win.MoleculeVisualizer.AFIRUI.init();if(modes)win.MoleculeVisualizer.VibrationUI.init();return {MV:win.MoleculeVisualizer,nodes,doc,win,timers,storage,canvas:nodes.get('viewer').children[0]};
+ if(afir)for(const f of ['afir','afir-ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);win.MoleculeVisualizer.App.init();if(constraints)win.MoleculeVisualizer.ConstraintUI.init();if(profile){win.MoleculeVisualizer.Studio.init();win.MoleculeVisualizer.EnergyProfile.init();win.MoleculeVisualizer.TrajectoryUI.init();}if(afir)win.MoleculeVisualizer.AFIRUI.init();if(modes)win.MoleculeVisualizer.VibrationUI.init();return {MV:win.MoleculeVisualizer,nodes,doc,win,timers,storage,navigator:ctx.navigator,canvas:nodes.get('viewer').children[0]};
 }
 test('app loads, atom edit/undo, invalid import is non-destructive, export uses latest state',()=>{const {MV,nodes}=boot(),app=MV.App;assert.equal(app.getState().atoms.length,3);assert.equal(nodes.get('statusBadge').classList!==null,true);
  const s=app.getState();s.selectedAtomIds.add(s.atoms[0].id);app.setState(s,true);nodes.get('dataText').value='O 2.5 0 0\nH .9572 0 0\nH -.239987 .926627 0';nodes.get('dataText').fire('input');nodes.get('dataApply').click();assert.equal(app.getState().atoms[0].x,2.5);nodes.get('btnUndo').click();assert.equal(app.getState().atoms[0].x,0);
@@ -581,4 +581,41 @@ test('fixed atom panel stores stable selections, flushes the visible draft and r
  nodes.get('constraintClear').click();assert.deepEqual(Array.from(MV.Constraints.indices(app.getState())),[]);
  const ids=app.getState().atoms.map(a=>a.id);app.change('fragment',s=>{s.metadata.afir={fragments:[{id:'f',label:'group',atomIds:ids.slice(1)}]};});nodes.get('constraintGroup').value='f';nodes.get('constraintAddGroup').click();assert.deepEqual(Array.from(MV.Constraints.indices(app.getState())),[1,2]);
  app.getState().selectedAtomIds=new Set([ids[1]]);nodes.get('btnDeleteSel').click();assert.throws(()=>MV.Constraints.indices(app.getState()),/削除済み/);assert.match(nodes.get('constraintSummary').textContent,/削除済み/);
+});
+
+function fragmentEvent(env,type,text='',target=env.canvas){
+ const data=new Map([['text/plain',text]]),event={type,target,clipboardData:{getData:t=>data.get(t)||'',setData:(t,v)=>data.set(t,v)},preventDefault(){this.defaultPrevented=true;}};
+ for(const fn of env.doc.events[type]||[])fn(event);return {event,text:data.get('text/plain')};
+}
+const flushClipboard=()=>new Promise(resolve=>setImmediate(resolve));
+test('native group clipboard adds selected internal bonds, one undo/redo and leaves text editors alone',()=>{
+ const env=boot(),{MV,nodes,canvas,doc}=env,app=MV.App,s=app.getState();s.selectedAtomIds=new Set(s.atoms.slice(0,2).map(a=>a.id));app.setState(s,true);canvas.focus();
+ const before=MV.IO.stateToProjectText(s),copy=fragmentEvent(env,'copy');assert.equal(copy.event.defaultPrevented,true);assert.match(copy.text,/V3000/);assert.equal(MV.IO.stateToProjectText(app.getState()),before);
+ fragmentEvent(env,'paste',copy.text);const pasted=MV.IO.stateToProjectText(app.getState());assert.equal(app.getState().atoms.length,5);assert.equal(app.getState().bonds.length,3);assert.equal(app.getState().selectedAtomIds.size,2);assert.equal(nodes.get('toolMove').attrs['aria-pressed'],'true');assert.equal(doc.activeElement,canvas);
+ nodes.get('btnUndo').click();assert.equal(MV.IO.stateToProjectText(app.getState()),before);nodes.get('btnRedo').click();assert.equal(MV.IO.stateToProjectText(app.getState()),pasted);
+ const editor=nodes.get('dataText');editor.focus();assert.equal(fragmentEvent(env,'paste',copy.text,editor).event.defaultPrevented,undefined);assert.equal(fragmentEvent(env,'copy','',editor).event.defaultPrevented,undefined);assert.equal(MV.IO.stateToProjectText(app.getState()),pasted);
+ canvas.focus();nodes.get('helpDialog').open=true;assert.equal(fragmentEvent(env,'paste',copy.text).event.defaultPrevented,undefined);nodes.get('helpDialog').open=false;
+ fragmentEvent(env,'paste','bad clipboard');assert.equal(MV.IO.stateToProjectText(app.getState()),pasted);nodes.get('btnUndo').click();assert.equal(MV.IO.stateToProjectText(app.getState()),before);
+});
+test('clipboard buttons fall back on denial, survive new document, and prefer actual OS clipboard when available',async()=>{
+ const env=boot(),{MV,nodes,navigator}=env,app=MV.App,s=app.getState();s.selectedAtomIds=new Set(s.atoms.map(a=>a.id));app.setState(s,true);
+ navigator.clipboard.writeText=async()=>{throw Error('denied');};nodes.get('btnCopySelection').click();await flushClipboard();assert.match(nodes.get('statusBadge').textContent,/ページ内/);
+ nodes.get('btnNew').click();navigator.clipboard.readText=async()=>{throw Error('denied');};nodes.get('btnPasteSelection').click();await flushClipboard();assert.equal(app.getState().atoms.length,3);assert.equal(app.getState().atoms[0].x,0);assert.equal(app.getState().bonds.length,2);
+ navigator.clipboard.readText=async()=> 'He 0 0 0';nodes.get('btnPasteSelection').click();await flushClipboard();assert.equal(app.getState().atoms.length,4);assert.equal(app.getState().atoms[3].element,'He');
+ navigator.clipboard.readText=async()=> '';nodes.get('btnPasteSelection').click();await flushClipboard();assert.equal(app.getState().atoms.length,4);assert.match(nodes.get('statusBadge').textContent,/クリップボード/);
+ nodes.get('btnUndo').click();assert.equal(app.getState().atoms.length,3);nodes.get('btnUndo').click();assert.equal(app.getState().atoms.length,0);
+});
+test('paste protects coordinate drafts, running calculations and changes during asynchronous clipboard access',async()=>{
+ const env=boot(),{MV,nodes,navigator,canvas}=env,app=MV.App,s=app.getState();s.selectedAtomIds.add(s.atoms[0].id);app.setState(s,true);canvas.focus();const copy=fragmentEvent(env,'copy').text,before=MV.IO.stateToProjectText(s);
+ nodes.get('dataText').value='C 0 0 0';nodes.get('dataText').fire('input');fragmentEvent(env,'paste',copy);assert.equal(MV.IO.stateToProjectText(app.getState()),before);assert.equal(nodes.get('dataText').value,'C 0 0 0');assert.match(nodes.get('statusBadge').textContent,/未適用/);
+ nodes.get('dataReset').click();MV.EngineUI={isBusy:()=>true};fragmentEvent(env,'paste',copy);assert.match(nodes.get('statusBadge').textContent,/計算/);assert.equal(MV.IO.stateToProjectText(app.getState()),before);MV.EngineUI={isBusy:()=>false};
+ let resolve;navigator.clipboard.readText=()=>new Promise(r=>resolve=r);nodes.get('btnPasteSelection').click();nodes.get('btnNew').click();resolve(copy);await flushClipboard();assert.equal(app.getState().atoms.length,0);assert.match(nodes.get('statusBadge').textContent,/待機中に構造/);
+ nodes.get('btnUndo').click();assert.equal(MV.IO.stateToProjectText(app.getState()),before);
+});
+test('copy and paste use displayed calculation geometry; paste adopts it in one undo step',()=>{
+ const env=boot(false,true),{MV,nodes,canvas}=env,app=MV.App,s=app.getState();s.selectedAtomIds.add(s.atoms[0].id);app.setState(s,true);const before=MV.IO.stateToProjectText(s),base=MV.Periodic.snapshot(s);
+ MV.EnergyProfile.set({title:'copy displayed',kind:'path',energies:[0,1],base:()=>base,positions:i=>base.atoms.map(a=>[a.x+2*i,a.y,a.z])});MV.EnergyProfile.select(1);canvas.focus();
+ const copy=fragmentEvent(env,'copy').text;assert.equal(MV.IO.parseMolToState(copy).atoms[0].x,2);assert.equal(MV.IO.stateToProjectText(app.getState()),before);
+ fragmentEvent(env,'paste',copy);assert.equal(app.getState().atoms.length,4);assert.equal(app.getState().atoms[0].x,2);assert.equal(app.renderer().previewOnly,false);assert.equal(app.getState().metadata.trajectory,undefined);
+ nodes.get('btnUndo').click();assert.equal(MV.IO.stateToProjectText(app.getState()),before);
 });

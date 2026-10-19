@@ -82,6 +82,7 @@
   }
   function syncXYZEditor(){
     const el=byId('dataText');if(!el)return;
+    byId('btnCopySelection').disabled=!getDisplayedState().atoms.some(a=>state.selectedAtomIds.has(a.id));
     const preview=Boolean(renderer?.previewOnly);
     el.readOnly=preview;
     for(const id of ['dataApply','cellLowerTriangular','btnDataFile','inputFormat'])byId(id).disabled=preview;
@@ -229,6 +230,71 @@
 
   function copyXYZ() { copyText(IO.stateToXYZText(getDisplayedState()), "XYZをコピーしました。"); }
   function copyMol() { copyText(IO.stateToMolText(getDisplayedState()), "MOLをコピーしました。"); }
+
+  // Keep an exact, page-local fallback; never persist clipboard contents in a project.
+  let copiedFragment=null,copiedFragmentText='',clipboardPending=false;
+  function selectionCopy(){
+    const fragment=MV.FragmentClipboard.extract(getDisplayedState(),state.selectedAtomIds);
+    const text=IO.stateToMolV3000Text(fragment);
+    copiedFragment=fragment;copiedFragmentText=text;
+    return {fragment,text};
+  }
+  async function copySelection(){
+    const {fragment,text}=selectionCopy();
+    try{
+      if(!navigator.clipboard?.writeText)throw Error('clipboard unavailable');
+      await navigator.clipboard.writeText(text);
+      setStatus(`${fragment.atoms.length}原子と内部の結合をコピーしました。`);
+    }catch(error){setStatus(`${fragment.atoms.length}原子をページ内にコピーしました。「原子団を貼付」で貼り付けられます（このページを閉じるまで）。`);}
+    finally{if(document.activeElement===byId('btnCopySelection'))renderer.canvas?.focus();}
+  }
+  function checkPaste(){
+    if(xyzDirty)throw Error('未適用の座標編集があります。適用または破棄してから原子団を貼り付けてください。');
+    if(MV.EngineUI?.isBusy()||MV.AFIRUI?.isBusy())throw Error('計算の完了または中止後に原子団を貼り付けてください。');
+  }
+  function pasteFragment(fragment,localOnly=false){
+    checkPaste();
+    const next=MV.FragmentClipboard.append(getDisplayedState(),fragment);
+    if(renderer.previewOnly){delete next.metadata.trajectory;delete next.metadata.frameIndex;}
+    freezeDisplayedStructure();
+    pushHistory('paste selected atoms');setState(next,false);setMode('move');
+    renderer.canvas?.focus();
+    setStatus(`${fragment.atoms.length}原子を貼り付けました。選択原子をドラッグして移動できます。「戻す」で取り消せます。${localOnly?'（ページ内のコピーを使用）':''}`);
+  }
+  function fragmentFromText(text){return copiedFragment&&text===copiedFragmentText?copiedFragment:MV.FragmentClipboard.parse(text);}
+  async function pasteSelection(){
+    if(clipboardPending)return;
+    checkPaste();
+    // A permission prompt must not paste into a document that changed while awaiting it.
+    const displayed=getDisplayedState(),before=IO.stateToProjectText(displayed);
+    clipboardPending=true;
+    try{
+      let text,localOnly=false;
+      try{
+        if(!navigator.clipboard?.readText)throw Error('clipboard unavailable');
+        text=await navigator.clipboard.readText();
+      }catch(error){
+        if(!copiedFragment)throw Error('クリップボードを読み取れません。分子ビューをクリックして Ctrl / ⌘ V を押すか、このページで原子を選択してコピーしてください。');
+        localOnly=true;
+      }
+      if(displayed!==getDisplayedState()||before!==IO.stateToProjectText(getDisplayedState()))throw Error('貼り付け待機中に構造が変更されました。貼り付けをもう一度実行してください。');
+      pasteFragment(localOnly?copiedFragment:fragmentFromText(text),localOnly);
+    }finally{clipboardPending=false;}
+  }
+  function onFragmentClipboard(event){
+    const tag=event.target?.tagName?.toLowerCase();
+    if(event.defaultPrevented||!canvasHasFocus()||['input','textarea','select'].includes(tag)||event.target?.isContentEditable||document.querySelector('dialog[open]')||!event.clipboardData)return;
+    event.preventDefault();
+    try{
+      if(event.type==='copy'){
+        const {fragment,text}=selectionCopy();event.clipboardData.setData('text/plain',text);
+        setStatus(`${fragment.atoms.length}原子と内部の結合をコピーしました。`);
+      }else{
+        if(clipboardPending)return;
+        checkPaste();pasteFragment(fragmentFromText(event.clipboardData.getData('text/plain')));
+      }
+    }catch(error){report(error);}
+  }
 
   function downloadText(text, filename) {
     const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
@@ -893,6 +959,8 @@
     bind("btnCopyXYZ", "click", copyXYZ);
     bind("btnDownloadXYZ", "click", downloadXYZ);
     bind("btnCopyMol", "click", copyMol);
+    bind('btnCopySelection','click',copySelection);
+    bind('btnPasteSelection','click',pasteSelection);
     bind("btnDownloadSdf", "click", downloadSDF);
     bind("btnUndo", "click", undo);
     bind("btnRedo", "click", redo);
@@ -921,6 +989,8 @@
       if(applyFragment()!==false) byId("fragDialog").close();
     });
     document.addEventListener("keydown", e=>{try{onKeyDown(e);}catch(error){report(error);}}, true);
+    document.addEventListener('copy',onFragmentClipboard);
+    document.addEventListener('paste',onFragmentClipboard);
     document.addEventListener('keyup',e=>{if(bondKeyEdit&&bondKeyId(e)===bondKeyEdit.keyId)finishBondKeyEdit();},true);
     document.addEventListener('pointerdown',finishBondKeyEdit,true);
     document.addEventListener('focusout',finishBondKeyEdit,true);
