@@ -2,6 +2,17 @@
 
 公開可能な汎用の水分子サンプルによる機能試験の記録です。実測した範囲と未実施の範囲を区別します。
 
+## 2026-10-19: UMA / fairchem-core接続
+
+公式ドキュメントとPyPI配布版fairchem-core 2.23.0の`pretrained_mlip`・`InferenceSettings`・`FAIRChemCalculator`を確認し、非周期分子用omolの接続を追加しました。CPU/CUDA、モデル名、float32/64はCLIで指定します。TF32・compile・MoLE mergeは無効です。MIN・AFIR-MIN・CI-NEB・Sella・ASE振動解析の共通処理へeV・eV/Åで渡します。
+
+- ローカルJavaScript: 100件合格。
+- ローカルPython: 49件中45件合格、実g-xTB 2件と実UMA 1件skip。既存のネイティブ子PID列挙試験1件はこの実行環境の`psutil.NoSuchProcess`で失敗し、GitHub Actionsで再確認します。
+- UMA専用9件は、偽の予測器と実ASEを組み合わせた契約試験です。電荷1・多重度2をそのまま渡すこと、単位・力の符号とエネルギー有限差分、画像ごとのキャッシュ分離・モデル1回ロード、固定MIN（FIRE/L-BFGS/BFGS）・固定AFIR・CI端点保持・ASE振動解析、CLI引数の分離、モデル未読込での接続確認、途中結果のUMA来歴、非有限値と認証情報を含む例外の処理を検証しました。
+- ChromiumへUMA用の契約試験を追加しました。実HTTPサービス・ワーカープロセス・ASE最適化を通し、予測器だけをテスト用に差し替えます。原子選択・固定、電荷/多重度を未blurのまま送信、結果適用、モデル条件を含むJSON保存、接続解除時の表示復元を検査します。製品bridgeに偽エンジンの起動オプションは設けていません。
+- **実UMAモデル推論は未実施**。利用承認付きの重み・認証情報・GPUをこの試験環境へ用意していません。`UMA_TEST_MODEL=uma-s-1p2p1`（任意で`UMA_TEST_DEVICE=cuda`）を明示したローカル環境では、水の実エネルギーと力の有限差分試験を実行できます。skipや偽予測器の合格を実モデルの精度・収束性の検証とは扱いません。CUDA/Windowsネイティブの実機検証も未実施です。
+- [GitHub Actions 39208075383](https://github.com/h-nabata/h-nabata.github.io/actions/runs/39208075383)（検証コミット `9bf48c5eff0520183e77d8f0b68b8f0e7c1c5a8f`）は成功。JavaScript100件、Python46件が合格、実g-xTB2件・実UMA1件はskipです。ローカル環境で失敗した既存の子プロセス停止試験も合格しました。Chromium全7スイートが合格し、UMA接続の条件表示・未blur入力の送信・固定MIN・結果適用・JSON保存・接続解除を確認しました。既存の実tblite/Sella、AFIR、CI-NEB、一括MIN、振動モード、手動編集の回帰試験も成功しています。
+
 ## 2026-10-19: 分子描画エリアの高さ調整
 
 分子ビューの下端にドラッグ用ハンドルを追加し、見出しの「高さ −／＋」でも80pxずつ調整できます。手動の高さは160〜1600pxで、このブラウザのlocalStorageへ保存します。「自動」で保存値を削除して画面サイズに応じた従来の高さへ戻します。ハンドルは上下キーで20px、Shift併用で80px調整でき、Home／Endで最小／最大、Enterで自動に戻ります。結果グラフの開閉、全画面、モバイル幅への変更でも手動の高さを保持します。描画領域とcanvasの高さを同期し、高さ操作中も構造列の再生を継続します。分子座標・数値計算・bridge.pyは変更していません。

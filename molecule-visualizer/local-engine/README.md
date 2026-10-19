@@ -1,19 +1,58 @@
 # 外部エンジン連携と経路緩和
 
-Molecule Studioの「外部エンジン / 経路緩和」から、このPCで動く **tblite** または **g-xTB** を利用できます。ブラウザに実行ファイルのパスを渡す方式ではなく、ユーザーが起動した `bridge.py` が計算を仲介します。GitHub Pagesに計算サーバーや座標をアップロードする必要はありません。
+Molecule Studioの「外部エンジン / 経路緩和」から、このPCで動く **tblite / g-xTB / UMA** を利用できます。ユーザーが起動した `bridge.py` が計算を仲介します。GitHub Pagesに計算サーバーや座標をアップロードする必要はありません。
 
-## 1. 導入
+## UMA（fairchem-core）の導入と設定
+
+この接続は**非周期分子のomolタスク**を対象にします。材料・表面用のomat/oc20等へ自動的に切り替えることはありません。エネルギー・力の評価、MIN、一括MIN、AFIR-MIN、CI-NEB、Sella TS、ASE振動解析を同じUMAポテンシャルで実行します。原子固定はMIN/AFIR-MINで使用できます。入力上限は500原子・100構造・Z=83、多重度1〜100です。これは入力範囲であり、その全範囲でのモデル精度を保証するものではありません。
+
+1. [facebook/UMA](https://huggingface.co/facebook/UMA)で利用条件を確認し、モデルへのアクセス承認を取得します。
+2. Linux / WSL2のPython 3.12専用環境で、次を実行します（Windowsネイティブでの動作確認は未実施）。
+
+```bash
+python3.12 -m venv .venv-uma
+source .venv-uma/bin/activate
+python -m pip install --upgrade pip
+python -m pip install "fairchem-core>=2.23,<3" "psutil>=5.9,<8" huggingface_hub
+hf auth login
+python bridge.py --engine uma --uma-model uma-s-1p2p1 --uma-device cpu --uma-precision float64 --allow-origin https://h-nabata.github.io
+```
+
+3. 起動時のURLとbridgeのTokenをページへ入力し「接続を確認」を押します。モデル・omol・デバイス・精度の表示を確認し、電荷と多重度を指定して計算します。**Hugging Faceのトークンは端末の認証専用**です。ページの接続Token欄へ貼り付けないでください。
+
+| 起動引数 | 設定 |
+|---|---|
+| `--uma-model` | `uma-s-1p2p1`（既定）、`uma-s-1p2`、`uma-s-1p1`、`uma-m-1p1` |
+| `--uma-device` | `cpu`（既定）/ `cuda`。CUDAは対応GPU・ドライバー・PyTorchが必要。使用不可なら起動時にエラーとし、CPUへ黙って切り替えません。 |
+| `--uma-precision` | `float64`（既定）/ `float32`。TS・微小変位の振動解析ではfloat64を推奨。float32はメモリ・計算時間を抑える選択肢。 |
+| `--threads` | CPUスレッド数（既定1）。PyTorchにも設定します。 |
+| `--job-timeout` | モデル読み込みを含む1ジョブの上限秒数。既定1800。初回取得が長い場合は例：`--job-timeout 7200`。 |
+
+UMAには`--method`（GFN法）や`--binary`（g-xTB実行ファイル）を指定できません。SCF反復・電子温度・暗黙溶媒の設定も流用しません。`--evaluation-timeout`はg-xTB専用で、UMAはジョブ全体の時間上限と中止処理を使います。Sellaは必要な場合に同じ環境へ `python -m pip install "sella>=2.6,<3"` で追加します。
+
+計算実行時にモデルを読み込みます。「接続を確認」の成功はモデル取得・推論の成功を意味しません。1ジョブ内ではモデルを1つだけ保持し、経路の各画像と有限差分評価で共有します。ジョブ終了時にメモリを解放します。一括MINでは各構造が別ジョブなので、その都度モデルを読み込みます。初回のみ重み等の取得が必要で、通常 `~/.cache/fairchem` にキャッシュが残ります。Hugging Faceの認証情報は同サービスのローカル設定に保存されます。計算座標や結果はHugging Faceへ送信しません。中間ファイルは既存の一時ディレクトリ管理と同様に終了時に削除します。
+
+`FAIRChemCalculator(predictor, task_name="omol")`を使用し、`atoms.info['charge']`へ全電荷、`atoms.info['spin']`へ**2S+1の多重度**を渡します。g-xTBの`--uhf`の値（2S）とは異なります。ASEの出力は既にeV・eV/ÅなのでHartree/Bohr変換を行いません。conservative UMAモデルのみを選択肢とし、`InferenceSettings(tf32=False, compile=False, merge_mole=False, execution_mode='general', base_precision_dtype=...)`を明示します。ジョブ種別によって精度を自動変更せず、MINからCI-NEB・TS・振動解析まで同じ設定を使用します。
+
+結果JSONにはモデル名・task・device・精度・推論設定・fairchem-core/PyTorchの版を記録します。UMAは学習済みポテンシャルの予測で、DFTのSCFを実行するわけではありません。モデルやタスクが異なるエネルギー、tblite/g-xTBの絶対エネルギーとは直接比較しないでください。未知の構造や反応に対する精度・TSの妥当性は別途検証が必要です。
+
+接続エラー時は利用承認、同じ環境での`hf auth login`、PyTorchの導入、モデルキャッシュを確認してください。上流のHTTP例外に含まれる認証情報やURLはページへ返しません。メモリ不足は中止として扱い、構造が得られていれば既存の途中結果保存を使います。
+
+実装参照：[公式導入手順](https://facebookresearch.github.io/fairchem/install/)、[omolの電荷・多重度](https://facebookresearch.github.io/fairchem/quickstart/)、[推論設定・精度](https://facebookresearch.github.io/fairchem/ase-calculator/)、[モデル一覧](https://huggingface.co/facebook/UMA)。配布版fairchem-core 2.23.0のAPIを確認しました。検証範囲は[AFIR-VALIDATION.md](../AFIR-VALIDATION.md)を参照してください。
+
+## 1. tblite / g-xTBの導入
 
 Python 3.10以上を使用します。[bridge.py](./bridge.py) を保存してください。以下の手順はbridge.pyだけをダウンロードした場合にも使えます。[requirements.txt](./requirements.txt) は基本パッケージ（numpy・ase・psutil）の一覧で、tbliteは含みません。
 
 ### 計算エンジンを選ぶ
 
-使いたい計算手法に応じて、**tbliteまたはg-xTBのどちらか一方**を導入します。
+使いたい計算エンジンを選んで導入します。UMAは後述の専用環境を使用してください。
 
 | 起動時の指定 | 計算手法 | 必要なもの | このアプリで扱える系 |
 |---|---|---|---|
 | `--engine tblite` | GFN2-xTB（既定）、GFN1-xTB、IPEA1-xTB | tbliteのPython API（condaでは`tblite-python`） | 非周期系・固定セルの周期系 |
 | `--engine gxtb --binary …` | g-xTB | 公式のg-xTB対応xtb実行ファイルと付属ライブラリ | 非周期系 |
+| `--engine uma` | 学習済みUMA / omol | fairchem-core、PyTorch、利用承認済みUMAモデル | 非周期分子 |
 
 **通常配布版tblite 0.7.0はg-xTBに対応していません（2026年10月15日確認）。** [tbliteの組み込み手法](https://tblite.readthedocs.io/en/latest/spec/methods.html)は上表の3種類です。[公式g-xTB](https://github.com/grimme-lab/g-xtb)は改変版tbliteを内部で使用していますが、通常配布版tbliteのPython APIとは異なります。g-xTBが目的なら、下の「g-xTBの実行ファイルを使う」へ進んでください。
 
