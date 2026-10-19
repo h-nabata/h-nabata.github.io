@@ -19,7 +19,7 @@
     s.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=r.images[0][k];});
     delete s.metadata.afirCalculation;delete s.metadata.trajectoryExtraction;
     s.metadata.totalCharge=batch.plan.data.charge;s.metadata.multiplicity=batch.plan.data.multiplicity;
-    s.metadata.externalCalculation={engine:r.engine,method:r.method,mode:'optimize',energyEV:r.energies[0],converged:r.converged,reason:r.reason,steps:r.steps,effectiveFmax:r.effectiveFmax,charge:batch.plan.data.charge,multiplicity:batch.plan.data.multiplicity,batchInput:index+1};
+    s.metadata.externalCalculation={fixedAtoms:batch.plan.data.fixedAtoms||[],engine:r.engine,method:r.method,mode:'optimize',energyEV:r.energies[0],converged:r.converged,reason:r.reason,steps:r.steps,effectiveFmax:r.effectiveFmax,charge:batch.plan.data.charge,multiplicity:batch.plan.data.multiplicity,batchInput:index+1};
     MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);
   }
   function available(){return batch?.entries.map((e,i)=>({entry:e,index:i})).filter(({entry:e})=>MV.Batch.completed(e))||[];}
@@ -50,7 +50,7 @@
     }
     const count=available().length;
     const engine=es.find(e=>e.result)?.result,conditions=batch.plan.data;
-    $('batchSummary').textContent=(engine?`${engine.engine} / ${engine.method} · `:'')+`電荷 ${conditions.charge} · 多重度 ${conditions.multiplicity} · ${conditions.optimizer||'FIRE'} · ${es.length}構造 · 収束 ${es.filter(e=>e.status==='converged').length} · 未収束 ${es.filter(e=>e.status==='step_limit').length} · 失敗 ${es.filter(e=>['failed','unknown'].includes(e.status)).length} · 待機/未実行 ${es.filter(e=>['waiting','not_run'].includes(e.status)).length}`;
+    $('batchSummary').textContent=(engine?`${engine.engine} / ${engine.method} · `:'')+`固定 ${conditions.fixedAtoms?.length||0}原子 · 電荷 ${conditions.charge} · 多重度 ${conditions.multiplicity} · ${conditions.optimizer||'FIRE'} · ${es.length}構造 · 収束 ${es.filter(e=>e.status==='converged').length} · 未収束 ${es.filter(e=>e.status==='step_limit').length} · 失敗 ${es.filter(e=>['failed','unknown'].includes(e.status)).length} · 待機/未実行 ${es.filter(e=>['waiting','not_run'].includes(e.status)).length}`;
     for(const id of ['batchCompare','batchXYZ','batchApply'])$(id).disabled=!count||MV.EngineUI.isBusy();
     $('batchJSON').disabled=$('batchCSV').disabled=MV.EngineUI.isBusy();
     dialog.scrollTop=top;scroller.scrollTop=tableTop;

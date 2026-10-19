@@ -284,7 +284,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
     const MV=MoleculeVisualizer,s=MV.IO.parseXYZToState('C 0 0 0\nC 3 0 0'),base=MV.Periodic.snapshot(s),images=[3,1.4,3].map(x=>[[0,0,0],[x,0,0]]);
     MV.App.change('bond display fixture',()=>s,true);
     MV.EnergyProfile.set({title:'Bond display check',kind:'afir',energies:[0,-1,0],base:()=>base,positions:i=>images[i]});
-    const frames=images.map(pos=>{const f=MV.Model.createState(base);f.atoms.forEach((a,i)=>[a.x,a.y,a.z]=pos[i]);return MV.Periodic.snapshot(f);});
+    const frames=images.map(pos=>{const f=MV.Model.createState(base);f.atoms.forEach((a,i)=>[a.x,a.y,a.z]=pos[i]);MV.Bonding.refreshInferredBonds(f);return MV.Periodic.snapshot(f);});
     s.metadata.trajectory=frames;MV.EnergyProfile.select(1);
   });
   assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.renderer().projectedBonds.length),1);assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().bonds.length),0);

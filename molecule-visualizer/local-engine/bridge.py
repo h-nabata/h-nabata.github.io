@@ -32,7 +32,7 @@ from ase.data import atomic_numbers, covalent_radii
 from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 
-VERSION = '1.4.0'
+VERSION = '1.5.0'
 MAX_BODY = 8 * 1024 * 1024
 MODES = ('evaluate', 'optimize', 'perpendicular', 'neb', 'cineb', 'afir', 'ts', 'vibrations')
 PATH_MODES = ('perpendicular', 'neb', 'cineb')
@@ -49,7 +49,7 @@ def number(value, name, lo, hi, integer=False):
 def validate(data, engine):
     allowed = {'symbols', 'images', 'cell', 'charge', 'multiplicity', 'mode',
                'maxSteps', 'fmax', 'spring', 'maxMove', 'climbAfter', 'atomIds', 'afir', 'livePreview',
-               'optimizer', 'trustRadius', 'vibrations'}
+               'optimizer', 'trustRadius', 'vibrations', 'fixedAtoms'}
     if not isinstance(data, dict) or set(data) - allowed:
         raise ValueError('未定義の入力項目があります。コマンド・パス指定は受け付けません。')
     if type(data.get('livePreview', False)) is not bool:
@@ -134,6 +134,15 @@ def validate(data, engine):
             imaginaryThreshold=number(vibration.get('imaginaryThreshold', 20), '虚振動の判定閾値', 0, 1000))
     if (mode=='ts' or vibration is not None) and cell and any(cell['pbc']):
         raise ValueError('Sella TS探索・振動モード表示は非周期分子用です。')
+    if 'fixedAtoms' in data:
+        fixed = data['fixedAtoms']
+        if not isinstance(fixed, list) or any(type(i) is not int or not 0 <= i < len(symbols) for i in fixed) or len(set(fixed)) != len(fixed):
+            raise ValueError('fixedAtomsは重複のない0始まりの原子インデックス配列にしてください。')
+        if fixed and (mode not in ('optimize', 'afir') or vibration is not None):
+            raise ValueError('原子固定はMIN・AFIR-MIN専用です。TS・経路計算・振動解析との併用には対応していません。')
+        if len(fixed) == len(symbols):
+            raise ValueError('全原子は固定できません。可動原子を1個以上残してください。')
+        result['fixedAtoms'] = sorted(fixed)
     return result
 
 
@@ -208,6 +217,7 @@ def afir_bias(positions, symbols, ids, config):
 def afir_relax(data, calculate, progress=lambda p:None):
     """FIRE minimizes physical energy plus independent pair biases; no TS claim."""
     positions = np.array(data['images'][0], dtype=float)
+    fixed, anchors = data.get('fixedAtoms', []), positions.copy()
     velocity = np.zeros_like(positions)
     dt, mix, positive = .05, .1, 0
     result = dict(schema='molecule-afir-trajectory/1', mode='afir', atomIds=data['atomIds'],
@@ -224,6 +234,7 @@ def afir_relax(data, calculate, progress=lambda p:None):
             raise ValueError('物理計算から有限のエネルギー・力を取得できません。')
         bias, artificial = afir_bias(positions, data['symbols'], data['atomIds'], data['afir'])
         effective = force+artificial
+        effective[fixed] = 0
         fmax = float(np.linalg.norm(effective, axis=1).max())
         result['images'].append(positions.tolist()); result['energies'].append(float(energy))
         result['biasEnergies'].append(bias); result['biasedEnergies'].append(float(energy+bias))
@@ -249,6 +260,9 @@ def afir_relax(data, calculate, progress=lambda p:None):
         displacement=dt*velocity
         displacement *= min(1., data['maxMove']/max(float(np.linalg.norm(displacement,axis=1).max()),1e-300))
         positions += displacement
+        positions[fixed] = anchors[fixed]
+        velocity[fixed] = 0
+    result['fixedAtoms'] = fixed
     return result
 
 
@@ -311,6 +325,7 @@ def relax(data, calculate, progress=lambda _: None):
     belong to the returned coordinates. No hidden alignment or reparametrization.
     """
     images = np.array(data['images'], float)
+    fixed, anchors = data.get('fixedAtoms', []), images.copy()
     energies, physical = np.zeros(len(images)), np.zeros_like(images)
     velocity = np.zeros_like(images)
     mode, max_steps = data['mode'], data['maxSteps']
@@ -334,6 +349,8 @@ def relax(data, calculate, progress=lambda _: None):
         effective, tangents = band_forces(images, energies, physical, mode, data['spring'], climbing)
         if mode == 'evaluate':
             effective = physical.copy()
+        if fixed:
+            effective[:, fixed, :] = 0
         maximum = force_max(effective)
         converged = mode != 'evaluate' and maximum <= data['fmax'] and (mode != 'cineb' or climbing is not None)
         summary = {'step': step, 'fmax': maximum, 'energies': energies.tolist(), 'climbingImage': climbing,
@@ -359,7 +376,7 @@ def relax(data, calculate, progress=lambda _: None):
                     'converged': converged, 'reason': 'evaluated' if mode == 'evaluate' else 'converged' if converged else 'step_limit',
                     'steps': step, 'climbingImage': climbing, 'mode': mode, 'evaluations': evaluations,
                     'maxTangentialStep': max_parallel_step if mode == 'perpendicular' else None,
-                    'history': history, **({'trajectory': trajectory} if trajectory is not None else {}),
+                    'history': history, 'fixedAtoms': fixed, **({'trajectory': trajectory} if trajectory is not None else {}),
                     'units': {'length': 'angstrom', 'energy': 'eV', 'force': 'eV/angstrom'}}
         if climbing != previous_climbing:
             velocity[:] = 0
@@ -390,6 +407,8 @@ def relax(data, calculate, progress=lambda _: None):
             if mode == 'perpendicular':
                 max_parallel_step = max(max_parallel_step, abs(float(np.sum(displacement*tangents[i]))))
             images[i] += displacement
+            images[i, fixed] = anchors[i, fixed]
+            velocity[i, fixed] = 0
         if not np.isfinite(images).all() or np.max(np.abs(images)) > 1e4:
             raise ValueError('座標が数値範囲を超えました。初期構造を確認してください。')
 
@@ -423,6 +442,9 @@ def ase_atoms(data, calculate):
     atoms = Atoms(data['symbols'], positions=data['images'][0],
                   cell=None if cell is None else cell['vectors'], pbc=False if cell is None else cell['pbc'])
     atoms.calc = LocalCalculator()
+    if data.get('fixedAtoms'):
+        from ase.constraints import FixAtoms
+        atoms.set_constraint(FixAtoms(indices=data['fixedAtoms']))
     return atoms
 
 
@@ -443,23 +465,24 @@ def ase_optimize(data, calculate, progress=lambda p: None):
 
     def checkpoint():
         energy, force = atoms.get_potential_energy(), atoms.get_forces()
+        physical = atoms.get_forces(apply_constraint=False)
         maximum = force_max(force)
         positions = atoms.positions.tolist()
         step = len(trajectory['images'])
         trajectory['images'].append(positions); trajectory['energies'].append(float(energy))
         summary = dict(step=step, fmax=maximum, energies=[float(energy)], evaluations=atoms.calc.evaluations)
         history.append(summary)
-        progress({**summary, 'phase':'optimization', 'checkpoint':dict(positions=positions, energy=float(energy), force=force.tolist(), fmax=maximum),
+        progress({**summary, 'phase':'optimization', 'checkpoint':dict(positions=positions, energy=float(energy), force=physical.tolist(), fmax=maximum),
             **({'preview':dict(step=step, images=[positions], energies=[float(energy)])} if data.get('livePreview') else {})})
 
     optimizer.attach(checkpoint, interval=1)
     converged = bool(optimizer.run(fmax=data['fmax'], steps=data['maxSteps']))
     force = atoms.get_forces(); maximum = force_max(force)
     converged = converged and maximum<=data['fmax']
-    return dict(images=[atoms.positions.tolist()], energies=[float(atoms.get_potential_energy())], forces=[force.tolist()],
+    return dict(images=[atoms.positions.tolist()], energies=[float(atoms.get_potential_energy())], forces=[atoms.get_forces(apply_constraint=False).tolist()],
         imageFmax=[maximum], effectiveFmax=maximum, converged=converged, reason='converged' if converged else 'step_limit',
         steps=len(trajectory['images'])-1, evaluations=atoms.calc.evaluations, mode=data['mode'], optimizer=data['optimizer'],
-        climbingImage=None, maxTangentialStep=None, trajectory=trajectory, history=history,
+        climbingImage=None, maxTangentialStep=None, trajectory=trajectory, history=history, fixedAtoms=data.get('fixedAtoms', []),
         validation='saddle-candidate-not-verified' if data['mode']=='ts' else 'minimum-candidate',
         units={'length':'angstrom', 'energy':'eV', 'force':'eV/angstrom'})
 
@@ -748,6 +771,7 @@ class Jobs:
         result.update(mode=data['mode'], symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
             engine=self.config['engine'], method=self.config['method'] if self.config['engine']=='tblite' else 'g-xTB',
             provenance=provenance(self.config), units={'length':'angstrom','energy':'eV','force':'eV/angstrom'})
+        result['fixedAtoms'] = data.get('fixedAtoms', [])
         if 'atomIds' in data:
             result['atomIds'] = data['atomIds']
         return result
@@ -756,6 +780,7 @@ class Jobs:
         data, frames = job['data'], job['checkpoints']
         last = frames[-1]
         return dict(mode=data['mode'], optimizer=data.get('optimizer','fire'), engine=self.config['engine'],
+            fixedAtoms=data.get('fixedAtoms', []),
             **({'atomIds':data['atomIds']} if 'atomIds' in data else {}),
             method=self.config['method'] if self.config['engine']=='tblite' else 'g-xTB',
             symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
@@ -773,6 +798,7 @@ class Jobs:
         data, frames = job['data'], job['checkpoints']
         energies, biases = [p['energy'] for p in frames], [p['bias'] for p in frames]
         return dict(schema='molecule-afir-trajectory/1', mode='afir', engine=self.config['engine'],
+            fixedAtoms=data.get('fixedAtoms', []),
             method=self.config['method'] if self.config['engine']=='tblite' else 'g-xTB', atomIds=data['atomIds'],
             symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
             images=[p['positions'] for p in frames], energies=energies, biasEnergies=biases,
@@ -890,7 +916,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.response(200, {'version': VERSION, 'engine': config['engine'],
                     'method': config['method'] if config['engine'] == 'tblite' else 'g-xTB (--gxtb --grad)',
                     'periodic': config['engine'] == 'tblite', 'maxAtoms': 500, 'maxImages': 100,
-                    'sellaVersion':sella_version(), 'vibrations':1, 'maxVibrationAtoms':200, 'pathCheckpoint':1,
+                    'sellaVersion':sella_version(), 'vibrations':1, 'maxVibrationAtoms':200, 'pathCheckpoint':1, 'fixedAtoms':True,
                     'modes': MODES, 'livePreview': 1, 'optimizationTrajectory': 1, 'maxSteps': 10000, 'maxAFIRSteps': 10000, 'jobTimeout': config['jobTimeout'],
                     'engineVersion': importlib.metadata.version('tblite') if config['engine'] == 'tblite' else 'locally configured binary'})
             elif re.fullmatch(r'/api/jobs/[a-f0-9]{32}(?:\?preview=1&after=[0-9]{1,5})?', self.path):

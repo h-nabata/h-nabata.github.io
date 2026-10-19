@@ -27,7 +27,7 @@
     const arrowLength=Number($('vibrationVectorScale').value);if(!Number.isFinite(arrowLength)||arrowLength<0.1||arrowLength>5)throw Error('矢印の最大長は0.1〜5 Åにしてください。');
     $('vibrationVectorValue').textContent=arrowLength.toFixed(1)+' Å';
     state.atoms.forEach((a,i)=>{[a.x,a.y,a.z]=data.positions[i].map((x,j)=>x+phase*displacement[i][j]);});
-    MV.Bonding.refreshInferredBonds(state);state.viewSettings={...app().getState().viewSettings};state.selectedAtomIds.clear();state.selectedBondIds.clear();
+    state.viewSettings={...app().getState().viewSettings};state.selectedAtomIds.clear();state.selectedBondIds.clear();
     const r=app().renderer();r.vibrationVectors={vectors:vectors(data.modes[index],1).map(v=>v.map(x=>x*arrowLength)),color:data.imaginary[index]?'#c62828':'#176cb0'};r.previewOnly=true;active=true;r.renderState(state,true);
   }
   function select(i){
@@ -67,7 +67,7 @@
       delete next.metadata.externalCalculation;delete next.metadata.afirCalculation;
       next.metadata.modeDisplacement={mode:index+1,frequencyCM:data.frequenciesCM[index],imaginary:data.imaginary[index],amplitude:Number($('vibrationAmplitude').value),sign};
       if(current.metadata.trajectory){next.metadata.trajectory=JSON.parse(JSON.stringify(current.metadata.trajectory));next.metadata.frameIndex=current.metadata.frameIndex||0;next.metadata.trajectory[next.metadata.frameIndex]=MV.Periodic.snapshot(next);}
-      next.viewSettings={...current.viewSettings};MV.Bonding.refreshInferredBonds(next);restore(false);app().change('normal mode displacement',()=>next,true);$('dataReset').click();
+      next.viewSettings={...current.viewSettings};restore(false);app().change('normal mode displacement',()=>next,true);$('dataReset').click();
       $('vibrationMessage').textContent='変位した構造を入力に適用しました。「現在の構造をTS最適化」で再探索できます。「戻す」で取り消せます。';
     }catch(e){$('vibrationMessage').textContent=e.message;}
   }

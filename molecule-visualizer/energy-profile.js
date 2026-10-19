@@ -25,7 +25,7 @@
     const state=MV.Model.createState(data.base(i));
     if(positions.length!==state.atoms.length||positions.some(v=>!Array.isArray(v)||v.length!==3||v.some(x=>!Number.isFinite(x)||Math.abs(x)>10000)))return;
     state.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=positions[k];});
-    MV.Bonding.refreshInferredBonds(state);
+    if(data.kind!=='evaluate')MV.Bonding.refreshInferredBonds(state);
     state.viewSettings={...app().getState().viewSettings};state.selectedAtomIds.clear();state.selectedBondIds.clear();
     active=true;app().renderer().previewOnly=true;app().renderer().renderState(state,true);
     $('profilePreview').hidden=false;$('profilePreview').textContent='計算結果のプレビュー · '+(isStep(data)?'ステップ '+i:'構造 '+(i+1))+'（入力座標は保持）';

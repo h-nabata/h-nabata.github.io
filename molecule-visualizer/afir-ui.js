@@ -60,6 +60,7 @@
   }
   function pairHint(){$('afirPairStatus').textContent=config().fragments.length<2?'原子団を2つ以上登録してください。':'A・Bに異なる原子団を選び、「ペアを追加」を押してください。同じ原子を両方に含めることはできません。';}
   function sync(){
+    MV.ConstraintUI?.sync();
     try{syncInternal();}catch(e){message(e.message);for(const id of ['afirRun','afirCheck','afirExport','afirAddPair','afirAddFragment'])$(id).disabled=true;}
   }
   function syncInternal(){
@@ -86,11 +87,12 @@
     MV.EnergyProfile?.restore();app().renderer().renderState(app().getState(),true);
   }
   function download(payload,name,type='application/json'){const text=typeof payload==='string'?payload:JSON.stringify(payload,null,2),url=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-  function exportFiles(){if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();const out=MV.AFIR.exportInput(app().getState(),config());download(out,'afir-input.json');message('原子ID・XYZ・フラグメント・ペア・Python用設定をJSONに保存しました。');}
+  function exportInput(s,c){const out=MV.AFIR.exportInput(s,c);out.fixedAtoms=MV.Constraints.indices(s);out.fixedAtomIds=out.fixedAtoms.map(i=>s.atoms[i].id);return out;}
+  function exportFiles(){if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();MV.ConstraintUI.flush();const out=exportInput(app().getState(),config());download(out,'afir-input.json');message('原子ID・XYZ・フラグメント・ペア・Python用設定をJSONに保存しました。');}
   function check(){saveSettings();const s=app().getState(),b=MV.AFIR.evaluate(s.atoms,config(),s.metadata.cell);message(`人工項のみ評価: ${b.energyEV.toFixed(6)} eV。物理ポテンシャルのエネルギーではありません。座標は変更していません。`);}
   async function run(){
     if(job)return;if(MV.EngineUI?.isBusy()){message('外部エンジンの計算を終了してから実行してください。');return;}let j;
-    try{if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();const s=app().getState();MV.AFIR.validate(s.atoms,config(),s.metadata.cell);
+    try{if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();MV.ConstraintUI?.flush();const s=app().getState();MV.AFIR.validate(s.atoms,config(),s.metadata.cell);
       j={original:MV.Model.cloneState(s),fingerprint:fingerprint(s),config:JSON.parse(JSON.stringify(config())),cancelled:false,livePreview:$('afirLive').checked,previewCursor:0,liveEnergies:[],liveBiases:[]};
       if(j.livePreview&&!MV.EngineUI.getConnection()?.info.livePreview)throw Error('ライブ表示を使うにはbridge.pyを更新・再接続してください。');
       MV.EnergyProfile.reset();job=j;result=null;$('afirResult').hidden=true;sync();
@@ -99,6 +101,7 @@
         message(text);if(!p||!j.livePreview)return;
         try{
           if(p.mode!=='afir'||p.from!==j.previewCursor||!Number.isInteger(p.next)||p.next<=p.from||p.next>j.config.maxSteps+1||p.energies?.length!==p.next-p.from||p.biasEnergies?.length!==p.energies.length||[...p.energies,...p.biasEnergies].some(e=>!Number.isFinite(e))||!Array.isArray(p.positions)||p.positions.length!==j.original.atoms.length||p.positions.some(v=>!Array.isArray(v)||v.length!==3||v.some(x=>!Number.isFinite(x)||Math.abs(x)>10000)))throw Error('進捗データの形式が不正です。');
+          MV.Constraints.checkPositions([p.positions],j.original.atoms.map(a=>[a.x,a.y,a.z]),MV.Constraints.indices(j.original));
           j.liveEnergies.push(...p.energies);j.liveBiases.push(...p.biasEnergies);j.previewCursor=p.next;
           const base=MV.Periodic.snapshot(j.original);
           MV.EnergyProfile.set({title:'AFIR · 計算中（評価済みの途中結果）',kind:'afir',energies:j.liveEnergies,biasEnergies:j.liveBiases,base:()=>base,positions:i=>i===p.next-1?p.positions:null},MV.EnergyProfile.following());
@@ -108,7 +111,7 @@
   }
   function showResult(r){
     const reason={converged:'人工力下で収束',step_limit:'未収束（ステップ上限）',cancelled:'中止（途中までの構造列）',failed:'計算失敗（途中までの構造列）'}[r.reason]||'未検証';
-    $('afirResult').hidden=false;$('afirResultSummary').textContent=`${r.engine} / ${r.method} · ${reason} · ${r.steps}ステップ · 最大有効力 ${r.effectiveFmax.toPrecision(4)} eV/Å`;
+    $('afirResult').hidden=false;$('afirResultSummary').textContent=`${r.engine} / ${r.method} · ${reason} · ${r.steps}ステップ · 最大有効力 ${r.effectiveFmax.toPrecision(4)} eV/Å${r.fixedAtoms?.length?'（可動原子のみ） · 固定 '+r.fixedAtoms.length+'原子':''}`;
     showProfile(r,result,!!job?.livePreview&&MV.EnergyProfile.following());
     message(r.error?`計算失敗: ${r.error}。保存済みの途中経過を確認できます。`:'探索を終了しました。人工力下の構造列を保存・再生できます。');
   }
@@ -121,8 +124,8 @@
   function apply(){
     if(!result||dirty()||fingerprint(app().getState())!==result.fingerprint)throw Error('計算開始後に構造・設定が変わったため適用できません。結果JSONは保存できます。');
     const j=result,r=j.result;MV.AFIRRunner.validateResult(r,j);
-    const base=MV.Periodic.snapshot(j.original);const frames=r.images.map((positions,i)=>{const s=MV.Model.createState(base);s.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=positions[k];});s.metadata.afirCalculation={engine:r.engine,method:r.method,physicalEnergyEV:r.energies[i],biasEnergyEV:r.biasEnergies[i],step:i,validation:'biased-trajectory-not-ts',atomIds:r.atomIds};return MV.Periodic.snapshot(s);});
-    const next=MV.Model.createState(frames[0]);MV.Bonding.refreshInferredBonds(next);next.metadata.trajectory=frames;next.metadata.frameIndex=0;next.viewSettings={...j.original.viewSettings,afirOverlay:visible};j.applied=true;j.trajectory=frames;app().change('AFIR trajectory',()=>next,true);$('dataReset').click();$('afirApply').disabled=true;showProfile(r,j);MV.Studio.play();message(frames.length>1?'構造列を適用し、FRAMESで再生しています。「戻す」で入力へ戻ります。推定結合は表示中の座標から更新します。手動指定の結合は保持します。':'評価済みの構造が1点のためアニメーションはありません。「戻す」で入力へ戻ります。');
+    const base=MV.Periodic.snapshot(j.original);const frames=r.images.map((positions,i)=>{const s=MV.Model.createState(base);s.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=positions[k];});s.metadata.afirCalculation={fixedAtoms:r.fixedAtoms||[],engine:r.engine,method:r.method,physicalEnergyEV:r.energies[i],biasEnergyEV:r.biasEnergies[i],step:i,validation:'biased-trajectory-not-ts',atomIds:r.atomIds};MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);});
+    const next=MV.Model.createState(frames[0]);MV.Bonding.refreshInferredBonds(next);next.metadata.trajectory=frames;next.metadata.frameIndex=0;next.viewSettings={...j.original.viewSettings,afirOverlay:visible};j.applied=true;j.trajectory=frames;app().change('AFIR trajectory',()=>next,true);$('dataReset').click();$('afirApply').disabled=true;showProfile(r,j);MV.Studio.play();message(frames.length>1?'構造列を適用し、FRAMESで再生しています。「戻す」で入力へ戻ります。推定結合は計算結果の各フレームで判定済みです。手動指定の結合は保持します。':'評価済みの構造が1点のためアニメーションはありません。「戻す」で入力へ戻ります。');
   }
   function init(){
     ready=true;app().getState().viewSettings.afirOverlay=false;$('btnAFIR').addEventListener('click',()=>toggle());$('afirClose').addEventListener('click',()=>toggle(false));
@@ -134,7 +137,7 @@
     for(const [id,key] of [['afirCharge','charge'],['afirMultiplicity','multiplicity'],['afirSteps','maxSteps'],['afirFmax','fmax'],['afirMove','maxMove']])$(id).addEventListener('change',()=>safe(()=>edit(c=>{c[key]=readNumber(id);})));
     $('afirRun').addEventListener('click',run);$('afirCancel').addEventListener('click',()=>{if(job){job.cancelled=true;MV.AFIRRunner?.cancel(job).catch(e=>message(e.message));}});
     $('afirProfile').addEventListener('click',()=>{if(result){showProfile(result.result,result);MV.EnergyProfile.reveal();}});
-    $('afirDownload').addEventListener('click',()=>{if(result)download({schema:'molecule-afir-result/1',input:MV.AFIR.exportInput(result.original,result.config),result:result.result},'afir-result.json');});
+    $('afirDownload').addEventListener('click',()=>{if(result)download({schema:'molecule-afir-result/1',input:exportInput(result.original,result.config),result:result.result},'afir-result.json');});
     $('afirXYZ').addEventListener('click',()=>{if(result)exportXYZ(result.result,result);});
     sync();
   }

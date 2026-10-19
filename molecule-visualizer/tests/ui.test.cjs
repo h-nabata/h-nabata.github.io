@@ -1,6 +1,6 @@
 // Browser-independent integration checks; a visual browser pass is still required.
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
-function boot(afir=false,profile=false,modes=false,storage=null){
+function boot(afir=false,profile=false,modes=false,storage=null,constraints=false){
  const saved=new Map();storage??={getItem:key=>saved.get(key)??null,setItem:(key,value)=>saved.set(key,value)};
  const nodes=new Map(),doc={activeElement:null,events:{},addEventListener(t,f){(this.events[t]??=[]).push(f);}};
  class El{
@@ -9,6 +9,7 @@ function boot(afir=false,profile=false,modes=false,storage=null){
   set innerHTML(v){this.children=[];}get innerHTML(){return '';}
   setAttribute(k,v){this.attrs[k]=v;}addEventListener(t,f){(this.events[t]??=[]).push(f);}getBoundingClientRect(){return {width:800,height:500,left:0,top:0};}setPointerCapture(){}focus(){doc.activeElement=this;}showModal(){this.open=true;}close(){this.open=false;}scrollIntoView(){}contains(){return false;}
   getContext(){return new Proxy({createRadialGradient(){return {addColorStop(){}};}},{get:(o,k)=>o[k]||(()=>{})});}
+  querySelectorAll(){return [...nodes.values()].filter(e=>/^constraint/.test(e.id)&&['INPUT','BUTTON','SELECT'].includes(e.tagName));}
   toDataURL(){return 'data:image/png;base64,';}fire(type,extra={}){const e={type,target:this,preventDefault(){this.defaultPrevented=true;},stopPropagation(){},stopImmediatePropagation(){},...extra};for(const f of this.events[type]||[])f(e);return e;}click(){this.fire('click');}
  }
  const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
@@ -22,9 +23,10 @@ function boot(afir=false,profile=false,modes=false,storage=null){
  const timers=new Map();let seq=0;const win={document:doc,devicePixelRatio:1,events:{},addEventListener(t,f){(this.events[t]??=[]).push(f);}};
  const ctx={window:win,document:doc,navigator:{clipboard:{writeText:async()=>{}}},localStorage:storage,setTimeout(f){timers.set(++seq,f);return seq;},clearTimeout(i){timers.delete(i);},Blob,URL,console};
  vm.createContext(ctx);for(const f of ['model','bonding','geometry','io','molfile','periodic','formats','history','renderer3dmol','ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
+ if(constraints)for(const f of ['constraints','constraints-ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
  if(profile){ctx.setInterval=ctx.setTimeout;ctx.clearInterval=ctx.clearTimeout;for(const f of ['studio','trajectory','trajectory-ui','energy-profile'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);}
  if(modes)for(const f of ['vibration-ui','path-refinement'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
- if(afir)for(const f of ['afir','afir-ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);win.MoleculeVisualizer.App.init();if(profile){win.MoleculeVisualizer.Studio.init();win.MoleculeVisualizer.EnergyProfile.init();win.MoleculeVisualizer.TrajectoryUI.init();}if(afir)win.MoleculeVisualizer.AFIRUI.init();if(modes)win.MoleculeVisualizer.VibrationUI.init();return {MV:win.MoleculeVisualizer,nodes,doc,win,timers,storage,canvas:nodes.get('viewer').children[0]};
+ if(afir)for(const f of ['afir','afir-ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);win.MoleculeVisualizer.App.init();if(constraints)win.MoleculeVisualizer.ConstraintUI.init();if(profile){win.MoleculeVisualizer.Studio.init();win.MoleculeVisualizer.EnergyProfile.init();win.MoleculeVisualizer.TrajectoryUI.init();}if(afir)win.MoleculeVisualizer.AFIRUI.init();if(modes)win.MoleculeVisualizer.VibrationUI.init();return {MV:win.MoleculeVisualizer,nodes,doc,win,timers,storage,canvas:nodes.get('viewer').children[0]};
 }
 test('app loads, atom edit/undo, invalid import is non-destructive, export uses latest state',()=>{const {MV,nodes}=boot(),app=MV.App;assert.equal(app.getState().atoms.length,3);assert.equal(nodes.get('statusBadge').classList!==null,true);
  const s=app.getState();s.selectedAtomIds.add(s.atoms[0].id);app.setState(s,true);nodes.get('dataText').value='O 2.5 0 0\nH .9572 0 0\nH -.239987 .926627 0';nodes.get('dataText').fire('input');nodes.get('dataApply').click();assert.equal(app.getState().atoms[0].x,2.5);nodes.get('btnUndo').click();assert.equal(app.getState().atoms[0].x,0);
@@ -334,7 +336,7 @@ test('energy plot focus previews coordinates without changing input, export or u
  assert.equal(MV.IO.stateToXYZText(app.getState()),before);assert.equal(app.renderer().previewOnly,true);
  assert.match(nodes.get('profileValue').textContent,/人工項 = 2.000000/);
  nodes.get('profileRestore').click();assert.equal(app.renderer().state,original);assert.equal(app.renderer().previewOnly,false);
- const frames=images.map(pos=>{const s=MV.Model.createState(base);s.atoms.forEach((a,i)=>[a.x,a.y,a.z]=pos[i]);return MV.Periodic.snapshot(s);});
+ const frames=images.map(pos=>{const s=MV.Model.createState(base);s.atoms.forEach((a,i)=>[a.x,a.y,a.z]=pos[i]);MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);});
  app.change('apply',()=>{const s=MV.Model.createState(frames[0]);s.metadata.trajectory=frames;s.metadata.frameIndex=0;return s;});
  profile.bindTrajectory(frames);MV.Studio.play();
  assert.equal(app.getState().metadata.frameIndex,1);assert.equal(app.renderer().state.atoms[0].x,1);assert.equal(nodes.get('profileRange').value,1);
@@ -398,7 +400,7 @@ test('profile visibility preserves results and hovering never selects a frame or
  nodes.get('profileHide').click();assert.equal(toggle.attrs['aria-expanded'],'false');assert.equal(toggle.disabled,false);
  p.reset();assert.equal(toggle.disabled,true);
 });
-test('preview, live updates and playback rebuild inferred bonds while preserving manual bonds and the input',()=>{
+test('optimization previews infer bonds; stored frames preserve their calculated topology and manual bonds',()=>{
  const {MV,nodes}=boot(false,true),app=MV.App,p=MV.EnergyProfile;
  const original=MV.IO.parseXYZToState('C 0 0 0\nC 3 0 0\nC 0 4 0\nC 1.4 4 0');
  original.bonds[0].source='manual';original.bonds[0].order=2;
@@ -409,8 +411,8 @@ test('preview, live updates and playback rebuild inferred bonds while preserving
  p.set(result);p.select(1);check(2);p.select(2);check(1);
  p.set({...result,focusIndex:1},true);check(2);
  assert.equal(MV.IO.stateToProjectText(app.getState()),saved);nodes.get('profileRestore').click();check(1);
- // Deliberately retain stale input bonds in every stored frame.
- const frames=images.map(pos=>{const s=MV.Model.createState(base);s.atoms.forEach((a,i)=>[a.x,a.y,a.z]=pos[i]);return MV.Periodic.snapshot(s);});
+ // Result application computes each frame once; navigation preserves later manual edits.
+ const frames=images.map(pos=>{const s=MV.Model.createState(base);s.atoms.forEach((a,i)=>[a.x,a.y,a.z]=pos[i]);MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);});
  app.change('trajectory',()=>{const s=MV.Model.createState(base);s.metadata.trajectory=frames;return s;});p.bindTrajectory(frames);
  MV.Studio.play();check(2);MV.Studio.stop();nodes.get('profileRange').value='2';nodes.get('profileRange').fire('input');check(1);
  MV.Studio.frame(1);check(2);nodes.get('btnUndo').click();assert.equal(MV.IO.stateToProjectText(app.getState()),saved);
@@ -551,4 +553,32 @@ test('path insertion retains existing nodes, endpoints and IDs and interpolates 
  for(const args of [[1,1,1],[0,4,1],[0,3,33],[0,2,0]])assert.throws(()=>MV.PathRefinement.refine(frames,...args));
  const swapped=frames.map(f=>JSON.parse(JSON.stringify(f)));swapped[1].atoms[0].x=swapped[0].atoms[1].x;swapped[1].atoms[0].y=0;swapped[1].atoms[1].x=0;swapped[1].atoms[1].y=0;
  assert.throws(()=>MV.PathRefinement.refine(swapped,0,1,1),/衝突/);
+});
+test('manual coordinate editing and frame navigation never infer new bonds; explicit inference remains available',()=>{
+ const {MV,nodes}=boot(false,true),app=MV.App;
+ app.setState(MV.IO.parseXYZToState('C 0 0 0\nC 3 0 0'),true);
+ const box=nodes.get('dataText');box.value='C 0 0 0\nC 1.4 0 0';box.fire('input');nodes.get('dataApply').click();
+ assert.equal(app.getState().bonds.length,0);assert.equal(app.getState().atoms[1].x,1.4);
+ nodes.get('btnReinferBonds').click();assert.equal(app.getState().bonds.length,1);
+ const bonds=JSON.stringify(app.getState().bonds);
+ app.getState().selectedAtomIds=new Set(app.getState().atoms.map(a=>a.id));nodes.get('targetDistance').value='4';nodes.get('btnApplyDistance').click();
+ assert.equal(JSON.stringify(app.getState().bonds),bonds);
+ const frames=[MV.Periodic.snapshot(app.getState()),MV.Periodic.snapshot(app.getState())];app.getState().metadata.trajectory=frames;
+ MV.Studio.frame(1);MV.Studio.frame(0);assert.equal(JSON.stringify(app.getState().bonds),bonds);
+ nodes.get('btnReinferBonds').click();assert.equal(app.getState().bonds.length,0);
+});
+
+test('fixed atom panel stores stable selections, flushes the visible draft and restores through undo',()=>{
+ const {MV,nodes}=boot(false,false,false,null,true),app=MV.App;
+ app.getState().selectedAtomIds=new Set([app.getState().atoms[0].id]);app.setState(app.getState(),true);
+ nodes.get('constraintAddSelected').click();assert.deepEqual(Array.from(MV.Constraints.indices(app.getState())),[0]);
+ nodes.get('constraintAtoms').value='1, 3';nodes.get('constraintAtoms').fire('input');
+ app.getState().selectedAtomIds.clear();app.setState(app.getState(),true);assert.equal(nodes.get('constraintAtoms').value,'1, 3');
+ MV.ConstraintUI.flush();assert.deepEqual(Array.from(MV.Constraints.indices(app.getState())),[0,2]);
+ const project=MV.IO.stateToProjectText(app.getState());assert.match(project,/molecule-fixed-atoms/);
+ nodes.get('btnUndo').click();assert.deepEqual(Array.from(MV.Constraints.indices(app.getState())),[0]);nodes.get('btnRedo').click();assert.deepEqual(Array.from(MV.Constraints.indices(app.getState())),[0,2]);
+ nodes.get('constraintAtoms').value='99';nodes.get('constraintAtoms').fire('input');assert.throws(()=>MV.ConstraintUI.flush(),/原子番号/);assert.deepEqual(Array.from(MV.Constraints.indices(app.getState())),[0,2]);
+ nodes.get('constraintClear').click();assert.deepEqual(Array.from(MV.Constraints.indices(app.getState())),[]);
+ const ids=app.getState().atoms.map(a=>a.id);app.change('fragment',s=>{s.metadata.afir={fragments:[{id:'f',label:'group',atomIds:ids.slice(1)}]};});nodes.get('constraintGroup').value='f';nodes.get('constraintAddGroup').click();assert.deepEqual(Array.from(MV.Constraints.indices(app.getState())),[1,2]);
+ app.getState().selectedAtomIds=new Set([ids[1]]);nodes.get('btnDeleteSel').click();assert.throws(()=>MV.Constraints.indices(app.getState()),/削除済み/);assert.match(nodes.get('constraintSummary').textContent,/削除済み/);
 });
