@@ -186,3 +186,6 @@
 #constraintAtoms{flex:1;min-width:100px}
 #constraintGroup{max-width:180px}
 #constraintStatus{overflow-wrap:anywhere}
+
+/* Selection clipboard stays next to the molecule editing tools. */
+.mv-stage-toolbar{flex-wrap:wrap}.mv-clipboard-actions{display:flex;gap:4px;flex-wrap:wrap}.mv-clipboard-actions .mv-btn{font-size:11px;padding:5px 8px;min-height:30px}.mv-stage-toolbar .mv-history-actions{margin-left:auto}
