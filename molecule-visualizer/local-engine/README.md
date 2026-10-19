@@ -23,14 +23,14 @@ python bridge.py --engine uma --uma-model uma-s-1p2p1 --uma-device cpu --uma-pre
 | 起動引数 | 設定 |
 |---|---|
 | `--uma-model` | `uma-s-1p2p1`（既定）、`uma-s-1p2`、`uma-s-1p1`、`uma-m-1p1` |
-| `--uma-device` | `cpu`（既定）/ `cuda`。CUDAは対応GPU・ドライバー・PyTorchが必要。使用不可なら起動時にエラーとし、CPUへ黙って切り替えません。 |
+| `--uma-device` | `cpu`（既定）/ `cuda:0` / `cuda:1` 等（`cuda` は `cuda:0`）。画面からも選択できます。CUDAは対応GPU・ドライバー・PyTorchが必要。使用不可なら起動時にエラーとし、CPUへ黙って切り替えません。 |
 | `--uma-precision` | `float64`（既定）/ `float32`。TS・微小変位の振動解析ではfloat64を推奨。float32はメモリ・計算時間を抑える選択肢。 |
 | `--threads` | CPUスレッド数（既定1）。PyTorchにも設定します。 |
 | `--job-timeout` | モデル読み込みを含む1ジョブの上限秒数。既定1800。初回取得が長い場合は例：`--job-timeout 7200`。 |
 
 UMAには`--method`（GFN法）や`--binary`（g-xTB実行ファイル）を指定できません。SCF反復・電子温度・暗黙溶媒の設定も流用しません。`--evaluation-timeout`はg-xTB専用で、UMAはジョブ全体の時間上限と中止処理を使います。Sellaは必要な場合に同じ環境へ `python -m pip install "sella>=2.6,<3"` で追加します。
 
-計算実行時にモデルを読み込みます。「接続を確認」の成功はモデル取得・推論の成功を意味しません。1ジョブ内ではモデルを1つだけ保持し、経路の各画像と有限差分評価で共有します。ジョブ終了時にメモリを解放します。一括MINでは各構造が別ジョブなので、その都度モデルを読み込みます。初回のみ重み等の取得が必要で、通常 `~/.cache/fairchem` にキャッシュが残ります。Hugging Faceの認証情報は同サービスのローカル設定に保存されます。計算座標や結果はHugging Faceへ送信しません。中間ファイルは既存の一時ディレクトリ管理と同様に終了時に削除します。
+計算実行時にモデルを読み込みます。「接続を確認」の成功はモデル取得・推論の成功を意味しません。1ジョブ内では各モデルを1つずつ保持し、経路の各画像と有限差分評価で共有します。ジョブ終了時にメモリを解放します。一括MINでは各構造が別ジョブなので、その都度モデルを読み込みます。初回のみ重み等の取得が必要で、通常 `~/.cache/fairchem` にキャッシュが残ります。Hugging Faceの認証情報は同サービスのローカル設定に保存されます。計算座標や結果はHugging Faceへ送信しません。中間ファイルは既存の一時ディレクトリ管理と同様に終了時に削除します。
 
 `FAIRChemCalculator(predictor, task_name="omol")`を使用し、`atoms.info['charge']`へ全電荷、`atoms.info['spin']`へ**2S+1の多重度**を渡します。g-xTBの`--uhf`の値（2S）とは異なります。ASEの出力は既にeV・eV/ÅなのでHartree/Bohr変換を行いません。conservative UMAモデルのみを選択肢とし、`InferenceSettings(tf32=False, compile=False, merge_mole=False, execution_mode='general', base_precision_dtype=...)`を明示します。ジョブ種別によって精度を自動変更せず、MINからCI-NEB・TS・振動解析まで同じ設定を使用します。
 
@@ -39,6 +39,37 @@ UMAには`--method`（GFN法）や`--binary`（g-xTB実行ファイル）を指�
 接続エラー時は利用承認、同じ環境での`hf auth login`、PyTorchの導入、モデルキャッシュを確認してください。上流のHTTP例外に含まれる認証情報やURLはページへ返しません。メモリ不足は中止として扱い、構造が得られていれば既存の途中結果保存を使います。
 
 実装参照：[公式導入手順](https://facebookresearch.github.io/fairchem/install/)、[omolの電荷・多重度](https://facebookresearch.github.io/fairchem/quickstart/)、[推論設定・精度](https://facebookresearch.github.io/fairchem/ase-calculator/)、[モデル一覧](https://huggingface.co/facebook/UMA)。配布版fairchem-core 2.23.0のAPIを確認しました。検証範囲は[AFIR-VALIDATION.md](../AFIR-VALIDATION.md)を参照してください。
+
+## AnySolvの溶媒補正をUMAに追加する
+
+UMA用環境へ `python -m pip install "anysolv[ase,hub]==0.1.0"` で追加し、保存したbridge.pyで起動します。
+
+```bash
+python bridge.py --engine uma --uma-device cuda:0 --anysolv --anysolv-device cuda:1 --allow-origin https://h-nabata.github.io
+```
+
+2枚のGPUがある場合の例です。CPUを使う場合は両方のデバイス指定を `cpu` にします。接続後、「AnySolvで溶媒補正する」をオンにし、溶媒・モデル・各モデルの実行デバイスを選びます。補正は既定オフ。設定はMIN、一括MIN、AFIR、CI-NEB、TS、振動解析で共通です。AFIR欄にも選択中の溶媒を表示します。
+
+- **Compact**（`model_compact`）：軽量モデル。パッケージ同梱で、最初の選択です。
+- **MoE**（`model_moe`）：大規模モデル。配布元 [antonknee/anysolv](https://huggingface.co/antonknee/anysolv) の利用条件を確認し、必要な承認を取得してください。bridgeは承認操作や暗黙のモデル変更を行いません。
+
+```bash
+hf auth login
+hf download antonknee/anysolv model_moe.pt --local-dir ./anysolv-weights
+python bridge.py --engine uma --uma-device cuda:0 --anysolv --anysolv-model model_moe --anysolv-checkpoint /absolute/path/to/anysolv-weights/model_moe.pt --anysolv-device cuda:1 --allow-origin https://h-nabata.github.io
+```
+
+`--anysolv-checkpoint` は指定モデルのローカル絶対パスです。ブラウザから任意のファイルパスは受け付けません。導入済みのモデルだけが選択肢に出ます。溶媒はインストール済みAnySolvの公式溶媒表から選択し、入力ミスを気相として扱いません。対応する溶媒すべてが同等の学習・検証範囲という意味ではありません。
+
+UMAはジョブプロセス、AnySolvは独立した常駐子プロセスで読み込みます。各プロセスでPyTorchの読み込み前に `CUDA_VISIBLE_DEVICES` を設定し、内部では1枚のGPUとして使います。画面の `cuda:N` はbridge起動時に見えているGPUの番号です。起動環境ですでにマスクしている場合は、その番号・UUID対応を維持します。同じGPUも選べますが2モデル分のVRAMが必要です。AnySolvの評価を先に送信し、その間にUMAを評価します。CPU配列に戻したエネルギーと力を加算するので、GPUをまたぐ自動微分は不要です。
+
+物理ポテンシャルは `Ephysical = EUMA + ΔEsolv`、力は `Fphysical = FUMA + ΔFsolv`（`F = −∇E`）。座標・原子順・総電荷・スピン多重度を両モデルで共有します。AFIRはこの物理ポテンシャルに人工項を別途加えます。AnySolv補正だけをNEBの力から省くことはありません。ASEの拘束は加算後の力へ適用されます。
+
+両モデルの精度は `--uma-precision`（既定float64）で統一。AnySolvはreference `default`（general、TF32・compile・MoE merge無効）を使い、TSや有限差分解析でも同じ設定を維持します。これはSMD由来の学習された溶媒補正であり、温度・エントロピー・標準状態補正をすべて含む反応自由エネルギーではありません。溶媒やモデルを変えたエネルギーは区別して扱ってください。
+
+JSONの `energies` は溶媒補正込みです。`energyComponents.uma` と `energyComponents.solvation` に同じフレームの内訳を保存し、MIN/TS履歴にも付けます。結果表のエネルギーにカーソルを置くと内訳を確認できます。`provenance` は溶媒・モデル・選択GPU・精度・AnySolv版・モデルSHA256を含みます。認証情報・モデルのパスは結果へ出しません。補正モデルの失敗時は停止し、完成済みの評価だけを途中結果として残します。中止・タイムアウト時は両モデルのプロセスを終了します。AnySolvの重みはパッケージ内または指定したダウンロード先に残り、各ジョブの中間データは一時フォルダーとともに削除します。
+
+参照：[AnySolv公式コード・導入例](https://github.com/Ant-on-knee/anysolv)、[エネルギー・力API](https://github.com/Ant-on-knee/anysolv/blob/main/predict.py)。実GPU2枚での検証範囲は [AFIR-VALIDATION.md](../AFIR-VALIDATION.md) に記載します。
 
 ## 1. tblite / g-xTBの導入
 

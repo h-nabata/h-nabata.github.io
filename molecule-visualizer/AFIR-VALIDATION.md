@@ -233,3 +233,13 @@ NODE形式の保存名を`<名前>_infile.log`へ変更しました。計算開�
 - ローカルPythonは49件中45件合格・3件skip。既存の子プロセス停止試験1件はこの環境のPID列挙で `psutil.NoSuchProcess`。実g-xTBの2件と実UMAの1件は未指定のためskipであり、合格に含めない。計算エンジン・力・単位の実装は変更していない。
 - 実ブラウザ試験を追加。GitHub Actionsでコピー/貼付ショートカット、貼付後の原子団移動、Undo/Redo、プロジェクト保存、別文書への貼付、座標欄のショートカット、権限拒否時の動作、390px幅を検証する。
 - [GitHub Actions 39211277897](https://github.com/h-nabata/h-nabata.github.io/actions/runs/39211277897)（`9c8a52ccc09bcc2c45938157316f00a1dac66d66`）成功。JavaScript106件、Python46件が合格、3件skip。新規クリップボード試験を含む全8ブラウザスイートが合格した。PCと390px幅のスクリーンショットを確認し、ツールバーの折り返しと横はみ出しがないことを確認。初回の追加ブラウザ試験は権限拒否を模擬するテストコードの括弧不足で開始できなかったため、修正・構文確認後に再実行した。実UMAモデルと実g-xTBの追加検証は行っていない。
+
+
+## 2026-10-19 UMA + AnySolv
+
+- 独立プロセスでのAnySolv補正、選択GPUのマスク対応、エネルギー・力の加算、気相への暗黙の切替禁止を実装。既定は補正オフ。
+- 解析的テスト：合成力とエネルギー有限差分、要求の送信順、MIN（FIRE/L-BFGS/BFGS）・原子固定・AFIR人工項・CI-NEB端点・Sella TS・ASE振動解析への共通適用、成分付き途中結果、未導入モデル・未対応デバイス・未知溶媒の拒否を確認。GPUの番号とUUIDの継承をモックで検証。
+- 実モデル：AnySolv 0.1.0 / 同梱model_compact / PyTorch 2.14.1+cpu / float64 / reference default。公開の水3原子で有限エネルギー・力、δ=0.001 Åの中心差分との一致（許容1e-3 eV/Å）、真空でのエネルギー・力ゼロ（許容1e-7）を確認。補正エネルギー −0.3182020203820144 eV、HのFx=0.12671800893868618 eV/Å、差分との誤差9.115e-9 eV/Å。公式溶媒表179件と同梱モデルSHA256 `f1983178f6987a74870044b9077d9f49bd5138aab532765841dabe0b3bf19b2d` も確認。NativeAnySolvを含む追加Python6件が合格。
+- 全体のローカル試験：JavaScript106件合格。Python55件中50件合格・4件skip・1件は既存のPID列挙環境の `psutil.NoSuchProcess`。実g-xTB2件・実UMA1件・通常実行時のAnySolv実モデル1件はskipで、合格には数えない。AnySolv実モデルは上記の専用環境で別途実行。
+- 未実施：実UMAとAnySolvの同時推論、AnySolv MoE、実CUDA2枚、Windows、各反応の化学精度。モック試験を実モデルの精度保証として扱わない。Linuxでの中止・再計算とブラウザ操作は下記CIで確認。
+- [GitHub Actions 39215945279](https://github.com/h-nabata/h-nabata.github.io/actions/runs/39215945279)（`e6a19c182d643c49ff876de3385d5dba6f334290`）成功。JavaScript106件、Python51件が合格・4件skip。別ジョブの実AnySolv Compactの1件も合格。全9ブラウザスイートが合格し、UMA/AnySolvの独立spawn・別GPUマスク（モック）・MIN/AFIRへの設定伝達・結果内訳保存と構造適用・補正失敗時の評価済み履歴・中止後の気相再計算・再接続時の解除を確認した。初回追加ブラウザ試験はテストの原子番号を0始まりで指定したため中断し、1始まりへ修正して再実行した。終了後の設定欄の有効化も明示した。

@@ -25,13 +25,13 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./energy-profile.js?v=constraints-34"></script>
 <script defer src="./batch.js?v=batch-33"></script>
 <script defer src="./batch-ui.js?v=constraints-34"></script>
-<script defer src="./engine-ui.js?v=uma-35"></script>
+<script defer src="./engine-ui.js?v=anysolv-37"></script>
 <script defer src="./vibration-ui.js?v=constraints-34"></script>
 <script defer src="./path-refinement.js?v=2"></script>
 <script defer src="./afir.js?v=17"></script>
 <script defer src="./afir-search.js?v=16"></script>
-<script defer src="./afir-runner.js?v=uma-35"></script>
-<script defer src="./afir-ui.js?v=constraints-34"></script>
+<script defer src="./afir-runner.js?v=anysolv-37"></script>
+<script defer src="./afir-ui.js?v=anysolv-37"></script>
 <script defer src="./measurement-ui.js?v=constraints-34"></script>
 <script defer src="./panel-layout.js?v=height-32"></script>
 <script defer src="./molecule-visualizer_main.js?v=constraints-34"></script>
@@ -387,7 +387,7 @@ H 1.0 0 0
   <h2>外部エンジン / 経路緩和</h2>
   <p class="mv-small">計算はこのPCで起動したサービス上で実行します。座標はローカルサービスへ送信されます。接続トークンはこの画面のメモリだけに保持します。</p>
   <details class="mv-engine-setup"><summary>初回のセットアップ：tblite / g-xTB / UMAを選ぶ</summary>
-    <p><a href="./local-engine/bridge.py?v=1.6.0" download>bridge.pyをダウンロード</a>し、使いたいエンジンの手順で起動してください。tblite / g-xTBはPython 3.10以上、UMAはPython 3.12の専用環境を推奨します。</p>
+    <p><a href="./local-engine/bridge.py?v=1.7.0" download>bridge.pyをダウンロード</a>し、使いたいエンジンの手順で起動してください。tblite / g-xTBはPython 3.10以上、UMAはPython 3.12の専用環境を推奨します。</p>
     <ul>
       <li><strong>tblite</strong>：GFN2-xTB（既定）、GFN1-xTB、IPEA1-xTBを利用します。このアプリでは非周期系と固定セルの周期系に対応します。</li>
       <li><strong>g-xTB</strong>：公式のg-xTB対応実行ファイルを別途用意します。このアプリでは非周期系に対応します。tbliteのPythonパッケージは不要です。</li>
@@ -441,6 +441,17 @@ python bridge.py --engine uma --uma-model uma-s-1p2p1 --uma-device cpu --uma-pre
       <details class="mv-help"><summary>モデル・精度・初回読み込み</summary><p class="mv-small">モデルは <code>uma-s-1p2p1</code>（既定）、<code>uma-s-1p2</code>、<code>uma-s-1p1</code>、<code>uma-m-1p1</code> から選べます。既定はfloat64・TF32無効。<code>--uma-precision float32</code> はメモリを節約しますが、TS・微小変位の振動解析ではfloat64を推奨します。電荷と多重度はページで指定します。GFN法・SCF設定・実行ファイルの指定は不要です。エネルギーは選択したモデルのomol基準なので、tbliteやg-xTBの値と直接比較しないでください。</p>
       <p class="mv-small">初回の計算で重みをダウンロードします。以後もジョブごとにメモリへ読み込み、一括最適化では各構造で読み込みます。初回取得に時間がかかる場合は <code>--job-timeout 7200</code> などで上限を延長できます。モデルのキャッシュは通常 <code>~/.cache/fairchem</code> に残ります。分子の座標は外部へ送信しません。<a href="https://facebookresearch.github.io/fairchem/install/" target="_blank" rel="noopener">公式導入手順</a></p></details>
     </details>
+    <details><summary>UMAにAnySolvの溶媒補正を追加する</summary>
+      <p>UMAと同じPython環境へ追加します。軽量なCompactモデルは同梱されています。</p>
+      <pre>python -m pip install "anysolv[ase,hub]==0.1.0"
+python bridge.py --engine uma --uma-device cuda:0 --anysolv --anysolv-device cuda:1 --allow-origin https://h-nabata.github.io</pre>
+      <p>GPU番号は利用できるものに変更してください。CPUなら両方を <code>cpu</code> にします。接続後「AnySolvで溶媒補正する」をオンにし、溶媒・モデル・各デバイスを選んで計算します。既定は補正オフです。</p>
+      <p>MoEモデルを使う場合は<a href="https://huggingface.co/antonknee/anysolv" target="_blank" rel="noopener">配布元で利用承認</a>を取得し、端末で認証・ダウンロードします。</p>
+      <pre>hf auth login
+hf download antonknee/anysolv model_moe.pt --local-dir ./anysolv-weights
+python bridge.py --engine uma --uma-device cuda:0 --anysolv --anysolv-model model_moe --anysolv-checkpoint /absolute/path/to/anysolv-weights/model_moe.pt --anysolv-device cuda:1 --allow-origin https://h-nabata.github.io</pre>
+      <p class="mv-small">溶媒補正を含む物理エネルギー・力を使います。AFIR人工項は別に加算します。GPUごとにモデルを保持し、終了・中止時に解放します。精度は両モデル共通で <code>--uma-precision float64</code> が既定です。</p>
+    </details>
     <details><summary>SellaでTS最適化を使う場合（追加パッケージ）</summary>
       <p>bridge.pyを実行する同じPython環境で、次を実行してください。振動解析のみならSellaは不要で、導入済みのASEを使います。</p>
       <pre>python -m pip install --only-binary=:all: "sella&gt;=2.6,&lt;3"</pre>
@@ -454,7 +465,16 @@ python bridge.py --engine uma --uma-model uma-s-1p2p1 --uma-device cpu --uma-pre
     <label>接続トークン<input id="engineToken" type="password" autocomplete="off" spellcheck="false"></label>
   </div><div class="mv-row"><button class="mv-btn" id="engineConnect">接続を確認</button><span id="engineConnected" class="mv-small">未接続</span></div></fieldset>
   <section id="engineUMADetails" hidden><h3>UMAの接続条件</h3><p id="engineUMASummary" class="mv-small"></p><p class="mv-small">分子用omol・非周期系。電荷と多重度は下の計算条件を使用します。接続確認だけではモデルの読み込みは行いません。</p></section>
-  <fieldset id="engineSettings"><legend>計算条件</legend><div class="mv-grid">
+  <fieldset id="engineSettings"><legend>計算条件</legend>
+  <fieldset id="engineModelSettings" hidden><legend>ポテンシャル・溶媒</legend>
+    <div class="mv-grid"><label id="engineUMADeviceLabel">UMAの実行デバイス<select id="engineUMADevice"></select></label>
+      <label class="mv-check"><input id="engineAnySolv" type="checkbox">AnySolvで溶媒補正する</label></div>
+    <div id="engineAnySolvFields" hidden class="mv-grid">
+      <label>溶媒<select id="engineSolvent"></select></label>
+      <label>AnySolvモデル<select id="engineAnySolvModel"></select></label>
+      <label>AnySolvの実行デバイス<select id="engineAnySolvDevice"></select></label>
+    </div><p id="engineSolvationHelp" class="mv-small"></p>
+  </fieldset><div class="mv-grid">
     <label>操作<select id="engineMode"><option value="evaluate">エネルギー・力を評価</option><optgroup label="単一構造の最適化（AFIR法を含む）"><option value="optimize">通常の単一構造最適化（人工力なし）</option><option value="ts">SellaによるTS最適化</option><option value="afir">AFIR法の設定を開く</option></optgroup><option value="batch">複数構造を一括最適化・比較</option><option value="vibrations">振動解析のみ（現在の構造）</option><option value="perpendicular">経路を直交方向のみ緩和</option><option value="cineb">CI-NEB（最高点を登らせる）</option></select></label>
     <label>対象<select id="engineScope"><option value="current">現在の構造</option><option value="all">全フレーム</option></select></label>
     <label>系全体の電荷<input id="engineCharge" type="number" min="-100" max="100" step="1" value="0"></label>

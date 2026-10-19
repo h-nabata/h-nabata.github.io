@@ -15,6 +15,7 @@ def packages(config):
 
 
 b.uma_packages = packages
+b.device_inventory = lambda torch: ([{'id':'cpu', 'label':'CPU'}], {})
 
 if __name__ == '__main__':
     b.mp.freeze_support()
