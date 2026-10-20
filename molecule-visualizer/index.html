@@ -458,7 +458,7 @@ hf download antonknee/anysolv model_moe.pt --local-dir ./anysolv-weights
 python bridge.py --engine uma --uma-device cuda:0 --anysolv --anysolv-model model_moe --anysolv-checkpoint /absolute/path/to/anysolv-weights/model_moe.pt --anysolv-device cuda:1 --allow-origin https://h-nabata.github.io</pre>
       <p class="mv-small">溶媒補正を含む物理エネルギー・力を使います。AFIR人工項は別に加算します。GPUごとにモデルを保持し、終了・中止時に解放します。精度は両モデル共通で <code>--uma-precision float64</code> が既定です。</p>
     </details>
-    <details><summary>SellaでTS最適化を使う場合（追加パッケージ）</summary>
+    <details><summary>SellaでTS最適化・IRCを使う場合（追加パッケージ）</summary>
       <p>bridge.pyを実行する同じPython環境で、次を実行してください。振動解析のみならSellaは不要で、導入済みのASEを使います。</p>
       <pre>python -m pip install --only-binary=:all: "sella&gt;=2.6,&lt;3"</pre>
       <p>Python 3.12・Sella 2.6で確認しています。対応するwheelが見つからない場合はPython 3.12の環境を作成してください。Sellaはbridgeと同じPython環境に追加します。エネルギー・力は接続中のtblite / g-xTB / UMAで計算します。導入後はbridgeを再起動し、再接続してください。</p>
@@ -486,7 +486,7 @@ python bridge.py --engine uma --uma-device cuda:0 --anysolv --anysolv-model mode
     <label>系全体の電荷<input id="engineCharge" type="number" min="-100" max="100" step="1" value="0"></label>
     <label>スピン多重度 (2S+1)<input id="engineMultiplicity" type="number" min="1" max="101" step="1" value="1"></label>
   </div><div class="mv-row"><span class="mv-small" id="engineConstraintSummary"></span><button class="mv-btn" id="engineConstraints">原子固定を設定</button></div>
-  <p id="engineModeHelp" class="mv-small"></p><details class="mv-help"><summary>計算機能・保存と再開の説明</summary><p class="mv-small"><a href="./RESEARCH" target="_blank" rel="noopener">IRC・拘束スキャン・熱化学・履歴管理の使い方</a></p></details>
+  <p id="engineModeHelp" class="mv-small"></p><details class="mv-help"><summary>計算機能・保存と再開の説明</summary><p class="mv-small"><a href="https://h-nabata.github.io/molecule-visualizer/RESEARCH" target="_blank" rel="noopener">IRC・拘束スキャン・熱化学・履歴管理の使い方</a></p></details>
   <section id="batchInput" hidden>
     <label>入力元<select id="batchSource"><option value="text">テキスト / XYZファイル</option><option value="frames">読み込み済みの全フレーム</option></select></label>
     <div id="batchTextInput"><label for="batchText">複数構造の座標 (Å)</label><textarea id="batchText" rows="8" spellcheck="false" placeholder="O 0 0 0
@@ -519,7 +519,7 @@ H -0.3 1.0 0"></textarea>
     <label>方向<select id="ircDirection"><option value="both">両方向</option><option value="forward">正方向</option><option value="reverse">逆方向</option></select></label>
     <label>質量重み付きステップ幅 (Å√amu)<input id="ircStepSize" type="number" min=".005" max=".5" step="0.01" value="0.1"></label>
     <label class="mv-check"><input id="ircRelaxEndpoints" type="checkbox" checked>到達した両端をMINで緩和する</label>
-    </div><p class="mv-small">現在の構造をTS候補として使用します。最大ステップ数は各方向に適用されます。入力の力が収束閾値以下であることが必要です。正逆の符号自体に反応方向の意味はありません。</p></section>
+    </div><p class="mv-small">現在の構造をTS候補として使用します。最大ステップ数は各方向に適用されます。入力の力が収束閾値以下であることが必要です。正逆の符号自体に反応方向の意味はありません。上の最大原子変位は端点MINに適用します。</p></section>
   <section id="engineScanSettings" hidden><h3>緩和スキャン</h3><div id="scanCoordinateRows"></div>
     <button class="mv-btn" id="scanCoordinateAdd" type="button">2本目の座標を追加</button>
     <label class="mv-check"><input id="scanStopOnFailure" type="checkbox" checked>未収束の点が出たら停止する</label>
