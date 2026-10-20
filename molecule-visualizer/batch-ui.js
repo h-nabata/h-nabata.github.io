@@ -86,5 +86,13 @@
     $('batchCSV').addEventListener('click',()=>save('\uFEFF'+MV.Batch.csv(batch.entries),'molecule-batch-energies.csv','text/csv;charset=utf-8'));
     $('batchJSON').addEventListener('click',()=>save(JSON.stringify({schema:'molecule-batch-optimization/1',settings:batch.plan.data,entries:batch.entries},null,2),'molecule-batch-results.json','application/json'));
   }
-  MV.BatchUI={init,prepare,begin,render,finish};
+  function analysisSource(){
+    const rows=available();if(!rows.length)return null;
+    // A batch uses one explicit common configuration. The result conditionId also
+    // hashes input geometry and therefore cannot identify comparable energies.
+    const data={...batch.plan.data};delete data.images;delete data.atomIds;delete data.livePreview;
+    const key=JSON.stringify(data);
+    return {title:'一括最適化の結果',frames:rows.map(({entry,index})=>resultFrame(entry,index)),energies:rows.map(({entry})=>entry.result.energies[0]),conditionKeys:rows.map(()=>key),labels:rows.map(({index})=>`入力 ${index+1}`)};
+  }
+  MV.BatchUI={init,prepare,begin,render,finish,analysisSource};
 })(window);

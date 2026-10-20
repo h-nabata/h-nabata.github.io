@@ -40,6 +40,7 @@
   function set(next,follow=false){
     // A path index identifies the same bead at every step, unlike a history index.
     const keepNode=!!live&&data?.kind==='path'&&next.kind==='path';
+    const selectedNode=keepNode?data.nodeIds?.[index]:null;if(selectedNode&&next.nodeIds?.includes(selectedNode))index=next.nodeIds.indexOf(selectedNode);
     const keepFocus=keepNode&&$('energyProfile').contains(document.activeElement);
     let focusPoint=null,restoringFocus=false;
     restore();data=next;bound=null;details=next.details||details;

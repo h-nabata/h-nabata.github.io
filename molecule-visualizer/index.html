@@ -13,25 +13,31 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./measurements.js?v=16"></script>
 <script defer src="./history.js?v=16"></script>
 <script defer src="./fragment-clipboard.js?v=clipboard-36"></script>
-<script defer src="./constraints.js?v=constraints-34"></script>
+<script defer src="./constraints.js?v=research-38"></script>
 <script defer src="./constraints-ui.js?v=constraints-34"></script>
-<script defer src="./renderer3dmol.js?v=20"></script>
+<script defer src="./renderer3dmol.js?v=research-38"></script>
 <script defer src="./ui.js?v=clipboard-36"></script>
 <script defer src="./studio.js?v=constraints-34"></script>
 <script defer src="./advanced.js?v=displayed-28"></script>
 <script defer src="./generator-ui.js?v=constraints-34"></script>
-<script defer src="./trajectory.js?v=4"></script>
+<script defer src="./trajectory.js?v=research-38"></script>
 <script defer src="./trajectory-ui.js?v=constraints-34"></script>
-<script defer src="./energy-profile.js?v=constraints-34"></script>
+<script defer src="./energy-profile.js?v=research-38"></script>
 <script defer src="./batch.js?v=batch-33"></script>
-<script defer src="./batch-ui.js?v=constraints-34"></script>
-<script defer src="./engine-ui.js?v=anysolv-37"></script>
+<script defer src="./batch-ui.js?v=research-38"></script>
+<script defer src="./research-ui.js?v=research-38"></script>
+<script defer src="./job-history-ui.js?v=research-38"></script>
+<script defer src="./structure-analysis.js?v=research-38"></script>
+<script defer src="./structure-analysis-ui.js?v=research-38"></script>
+<script defer src="./diagnostics-ui.js?v=research-38"></script>
+<link rel="stylesheet" href="./research.css?v=research-38">
+<script defer src="./engine-ui.js?v=research-38"></script>
 <script defer src="./vibration-ui.js?v=constraints-34"></script>
-<script defer src="./path-refinement.js?v=2"></script>
+<script defer src="./path-refinement.js?v=research-38"></script>
 <script defer src="./afir.js?v=17"></script>
 <script defer src="./afir-search.js?v=16"></script>
-<script defer src="./afir-runner.js?v=anysolv-37"></script>
-<script defer src="./afir-ui.js?v=anysolv-37"></script>
+<script defer src="./afir-runner.js?v=research-38"></script>
+<script defer src="./afir-ui.js?v=research-38"></script>
 <script defer src="./measurement-ui.js?v=constraints-34"></script>
 <script defer src="./panel-layout.js?v=height-32"></script>
 <script defer src="./molecule-visualizer_main.js?v=constraints-34"></script>
@@ -439,7 +445,7 @@ hf auth login
 python bridge.py --engine uma --uma-model uma-s-1p2p1 --uma-device cpu --uma-precision float64 --allow-origin https://h-nabata.github.io</pre>
       <p>対応するNVIDIA GPUとPyTorch環境では <code>--uma-device cuda</code> を指定します。Hugging Faceの認証トークンは端末でのみ使用してください。このページには起動後に表示されるbridgeの接続Tokenを入力します。</p>
       <details class="mv-help"><summary>モデル・精度・初回読み込み</summary><p class="mv-small">モデルは <code>uma-s-1p2p1</code>（既定）、<code>uma-s-1p2</code>、<code>uma-s-1p1</code>、<code>uma-m-1p1</code> から選べます。既定はfloat64・TF32無効。<code>--uma-precision float32</code> はメモリを節約しますが、TS・微小変位の振動解析ではfloat64を推奨します。電荷と多重度はページで指定します。GFN法・SCF設定・実行ファイルの指定は不要です。エネルギーは選択したモデルのomol基準なので、tbliteやg-xTBの値と直接比較しないでください。</p>
-      <p class="mv-small">初回の計算で重みをダウンロードします。以後もジョブごとにメモリへ読み込み、一括最適化では各構造で読み込みます。初回取得に時間がかかる場合は <code>--job-timeout 7200</code> などで上限を延長できます。モデルのキャッシュは通常 <code>~/.cache/fairchem</code> に残ります。分子の座標は外部へ送信しません。<a href="https://facebookresearch.github.io/fairchem/install/" target="_blank" rel="noopener">公式導入手順</a></p></details>
+      <p class="mv-small">初回の計算で重みをダウンロードします。同じモデル・デバイスの連続計算では、重みをメモリに保持して再利用します。設定の変更時は読み直します。「計算履歴・キュー」から常駐モデルを解放できます。初回取得に時間がかかる場合は <code>--job-timeout 7200</code> などで上限を延長できます。モデルのキャッシュは通常 <code>~/.cache/fairchem</code> に残ります。分子の座標は外部へ送信しません。<a href="https://facebookresearch.github.io/fairchem/install/" target="_blank" rel="noopener">公式導入手順</a></p></details>
     </details>
     <details><summary>UMAにAnySolvの溶媒補正を追加する</summary>
       <p>UMAと同じPython環境へ追加します。軽量なCompactモデルは同梱されています。</p>
@@ -475,12 +481,12 @@ python bridge.py --engine uma --uma-device cuda:0 --anysolv --anysolv-model mode
       <label>AnySolvの実行デバイス<select id="engineAnySolvDevice"></select></label>
     </div><p id="engineSolvationHelp" class="mv-small"></p>
   </fieldset><div class="mv-grid">
-    <label>操作<select id="engineMode"><option value="evaluate">エネルギー・力を評価</option><optgroup label="単一構造の最適化（AFIR法を含む）"><option value="optimize">通常の単一構造最適化（人工力なし）</option><option value="ts">SellaによるTS最適化</option><option value="afir">AFIR法の設定を開く</option></optgroup><option value="batch">複数構造を一括最適化・比較</option><option value="vibrations">振動解析のみ（現在の構造）</option><option value="perpendicular">経路を直交方向のみ緩和</option><option value="cineb">CI-NEB（最高点を登らせる）</option></select></label>
+    <label>操作<select id="engineMode"><option value="evaluate">エネルギー・力を評価</option><optgroup label="単一構造の最適化（AFIR法を含む）"><option value="optimize">通常の単一構造最適化（人工力なし）</option><option value="ts">SellaによるTS最適化</option><option value="afir">AFIR法の設定を開く</option></optgroup><option value="irc">IRC（TSから両方向へ追跡）</option><option value="scan">拘束座標の緩和スキャン</option><option value="batch">複数構造を一括最適化・比較</option><option value="vibrations">振動解析のみ（現在の構造）</option><option value="perpendicular">経路を直交方向のみ緩和</option><option value="cineb">CI-NEB（最高点を登らせる）</option></select></label>
     <label>対象<select id="engineScope"><option value="current">現在の構造</option><option value="all">全フレーム</option></select></label>
     <label>系全体の電荷<input id="engineCharge" type="number" min="-100" max="100" step="1" value="0"></label>
     <label>スピン多重度 (2S+1)<input id="engineMultiplicity" type="number" min="1" max="101" step="1" value="1"></label>
   </div><div class="mv-row"><span class="mv-small" id="engineConstraintSummary"></span><button class="mv-btn" id="engineConstraints">原子固定を設定</button></div>
-  <p id="engineModeHelp" class="mv-small"></p>
+  <p id="engineModeHelp" class="mv-small"></p><details class="mv-help"><summary>計算機能・保存と再開の説明</summary><p class="mv-small"><a href="./RESEARCH" target="_blank" rel="noopener">IRC・拘束スキャン・熱化学・履歴管理の使い方</a></p></details>
   <section id="batchInput" hidden>
     <label>入力元<select id="batchSource"><option value="text">テキスト / XYZファイル</option><option value="frames">読み込み済みの全フレーム</option></select></label>
     <div id="batchTextInput"><label for="batchText">複数構造の座標 (Å)</label><textarea id="batchText" rows="8" spellcheck="false" placeholder="O 0 0 0
@@ -502,9 +508,37 @@ H -0.3 1.0 0"></textarea>
     <label id="engineSpringLabel">ばね定数 (eV/Å²)<input id="engineSpring" type="number" min="0" max="10" step="0.1" value="1" title="0.001〜10。上下ボタンは0.1刻み。"></label>
     <label id="engineClimbLabel">CIを開始するステップ<input id="engineClimb" type="number" min="0" max="500" step="1" value="5"></label>
   </div>
+  <section id="researchConstraints" hidden>
+    <details id="internalConstraintsDetails"><summary>距離・角度・二面角の拘束</summary>
+      <label class="mv-check"><input id="internalConstraintsEnabled" type="checkbox">内部座標の拘束を有効にする（MIN・AFIR-MIN・スキャン）</label>
+      <div id="internalConstraintRows"></div><button class="mv-btn" id="internalConstraintAdd" type="button">拘束を追加</button>
+      <p class="mv-small">原子番号は1始まり。距離はÅ、角度・二面角は度です。固定した原子と矛盾する拘束は使用できません。</p>
+    </details>
+  </section>
+  <section id="engineIRCSettings" hidden><h3>IRC</h3><div class="mv-grid">
+    <label>方向<select id="ircDirection"><option value="both">両方向</option><option value="forward">正方向</option><option value="reverse">逆方向</option></select></label>
+    <label>質量重み付きステップ幅 (Å√amu)<input id="ircStepSize" type="number" min=".005" max=".5" step="0.01" value="0.1"></label>
+    <label class="mv-check"><input id="ircRelaxEndpoints" type="checkbox" checked>到達した両端をMINで緩和する</label>
+    </div><p class="mv-small">現在の構造をTS候補として使用します。最大ステップ数は各方向に適用されます。入力の力が収束閾値以下であることが必要です。正逆の符号自体に反応方向の意味はありません。</p></section>
+  <section id="engineScanSettings" hidden><h3>緩和スキャン</h3><div id="scanCoordinateRows"></div>
+    <button class="mv-btn" id="scanCoordinateAdd" type="button">2本目の座標を追加</button>
+    <label class="mv-check"><input id="scanStopOnFailure" type="checkbox" checked>未収束の点が出たら停止する</label>
+    <p class="mv-small">1本または2本の内部座標を等間隔で指定し、各点を順に最適化します。最大ステップ数は各点に適用されます。</p></section>
+  <section id="engineAdaptiveSettings" hidden><details><summary>自動ノード追加・経路分割</summary>
+    <label class="mv-check"><input id="adaptiveEnabled" type="checkbox">構造・エネルギーの間隔に応じてノードを追加する</label>
+    <div class="mv-grid"><label>ノード数の上限<input id="adaptiveMaxImages" type="number" min="3" max="100" step="1" value="30"></label><label>追加判定の間隔（ステップ）<input id="adaptiveInterval" type="number" min="1" max="10000" step="1" value="10"></label><label>原子RMS変位の閾値 (Å)<input id="adaptiveMaxSpacing" type="number" min=".01" max="20" step="0.1" value="0.5"></label><label>エネルギー差の閾値 (eV)<input id="adaptiveEnergyGap" type="number" min=".0001" max="100" step="0.1" value="0.2"></label></div>
+    <label class="mv-check"><input id="pathSplitEnabled" type="checkbox" checked>中間の谷で経路を分割する候補を表示する</label>
+    <div class="mv-grid"><label>谷の最小深さ (eV)<input id="pathSplitProminence" type="number" min="0" max="100" step="0.01" value="0.05"></label><label>谷の最小間隔（ノード）<input id="pathSplitSeparation" type="number" min="2" max="99" step="1" value="2"></label><label>平滑化の幅（奇数ノード）<input id="pathSplitSmooth" type="number" min="1" max="21" step="2" value="3"></label></div>
+    <p class="mv-small">原子IDと既存ノードのIDを保持します。分割候補の谷が極小点に収束しているかは、物理力で別途確認します。</p>
+  </details></section>
   <div id="engineVibrationOptions" hidden><label id="engineVibrationCheckLabel" class="mv-check"><input id="engineVibrationCheck" type="checkbox">最適化後に振動解析を行う（未収束時も実行・既定オフ）</label>
     <div class="mv-grid"><label>有限差分の変位幅 (Å)<input id="engineVibrationDelta" type="number" min="0" max="0.1" step="0.001" value="0.001"></label><label>差分点数<select id="engineVibrationNfree"><option value="2">2点（±δ）</option><option value="4">4点（±δ, ±2δ）</option></select></label><label>虚振動を数える閾値 (cm⁻¹)<input id="engineVibrationThreshold" type="number" min="0" max="1000" step="1" value="20"></label></div>
     <details class="mv-help"><summary>詳しい説明</summary><p class="mv-small">ASE Vibrationsによる全原子の有限差分。最大200原子・非周期分子。2点法は約6N、4点法は約12N回の力計算が必要です。表には閾値以下の虚振動も表示します。TS収束の判定と虚振動の本数は別に確認してください。</p></details></div>
+  <section id="engineThermoSettings" hidden><details><summary>熱化学量・自由エネルギー</summary>
+    <label class="mv-check"><input id="thermoEnabled" type="checkbox">振動解析後に熱化学量を計算する</label>
+    <div class="mv-grid"><label>温度 (K)<input id="thermoTemperature" type="number" min="1" max="5000" step="1" value="298.15"></label><label>圧力 (Pa)<input id="thermoPressure" type="number" min=".001" max="1000000000" step="100" value="101325"></label><label>回転対称数<input id="thermoSymmetry" type="number" min="1" max="10000" step="1" value="1"></label><label>構造の種類<select id="thermoState"><option value="minimum">極小構造</option><option value="ts">一次鞍点（TS）</option></select></label><label>標準状態<select id="thermoStandardState"><option value="gas">指定圧力の理想気体</option><option value="1M">1 mol/L</option></select></label><label>低振動数の扱い<select id="thermoLowFrequency"><option value="harmonic">調和振動子</option><option value="floor">エントロピー計算に下限を設定</option></select></label><label>エントロピー用の振動数下限 (cm⁻¹)<input id="thermoCutoff" type="number" min="1" max="1000" step="10" value="100"></label></div>
+    <p class="mv-small">振動解析を同時に実行します。未収束構造や指定した種類に合わない虚振動がある場合は、熱化学量を確定しません。回転対称数は構造に合わせて指定してください。</p>
+  </details></section>
   <details class="mv-help"><summary>詳しい説明</summary><p class="mv-small">最大500原子・100構造。経路は同じ元素順序・固定セルが必要です。周期境界をまたぐ経路は連続したCartesian座標で入力してください。原子固定はMIN・AFIR-MINに対応。可変セルには対応していません。Sellaは非周期系の一次鞍点探索で、初期信頼半径は計算中に自動調整されます。L-BFGSは極小化専用です。</p></details></fieldset>
   <label class="mv-check"><input id="engineLive" type="checkbox" checked>計算中のエネルギー・構造を表示</label><p class="mv-small">経路計算では最新の経路全体を表示します。通常の最適化は計算中に最新の1点、終了後は全ステップを表示します。</p>
   <p id="engineMessage" role="status" aria-live="polite"></p>
@@ -512,6 +546,7 @@ H -0.3 1.0 0"></textarea>
   <section id="engineResult" hidden><h3>計算結果</h3><p id="engineResultSummary" class="mv-small"></p>
     <button class="mv-btn" id="engineProfile">エネルギープロファイルと構造を見る</button>
     <div class="mv-table-scroll"><table><thead><tr><th>構造</th><th>E (eV)</th><th>ΔE (eV)</th><th>有効力 (eV/Å)</th><th>候補・操作</th></tr></thead><tbody id="engineEnergyRows"></tbody></table></div>
+    <div id="researchResult"></div>
     <p id="engineVibrationStatus" class="mv-small"></p><div class="mv-row"><button class="mv-btn" id="engineVibrationShow" hidden>振動数表とモードを表示</button><button class="mv-btn" id="engineRefine" hidden>結果の経路にノードを追加</button></div>
     <details class="mv-help"><summary>詳しい説明</summary><p class="mv-small">収束判定は選択したモードの有効力に基づきます。直交方向の収束だけでは遷移状態は確定しません。グラフから構造をプレビューできます。入力座標の置き換えは「結果を構造へ適用」で行います。</p></details>
     <div class="mv-row"><button class="mv-btn primary" id="engineApply" disabled>結果を構造へ適用</button><button class="mv-btn" id="engineXYZ">構造列を保存・抽出</button><button class="mv-btn" id="engineDownload" disabled>エネルギー・力・履歴をJSON保存</button></div>
@@ -522,9 +557,16 @@ H -0.3 1.0 0"></textarea>
     <div class="mv-table-scroll"><table><thead><tr><th>入力</th><th>名前</th><th>状態</th><th>E (eV)</th><th>ΔE (kJ/mol)</th><th>ステップ</th><th>最大力 (eV/Å)</th><th>操作・詳細</th></tr></thead><tbody id="batchRows"></tbody></table></div>
     <div class="mv-row"><button class="mv-btn primary" id="batchApply">結果をフレームに取り込む</button><button class="mv-btn" id="batchXYZ">最適化後の全構造XYZ</button><button class="mv-btn" id="batchCSV">比較表CSV</button><button class="mv-btn" id="batchJSON">入力・最終結果JSON</button></div>
   </section>
-  <div class="mv-row mv-dialog-actions"><button class="mv-btn primary" id="engineRun" disabled>計算を実行</button><button class="mv-btn" id="engineCancel" disabled>計算を中止</button><button class="mv-btn" id="enginePause" hidden disabled>CI-NEBを一時停止してノード追加</button><button class="mv-btn" id="engineClose" data-close="engineDialog">閉じる</button></div>
+  <div class="mv-row mv-dialog-actions"><button class="mv-btn primary" id="engineRun" disabled>計算を実行</button><button class="mv-btn" id="engineHistory">履歴・キュー</button><button class="mv-btn" id="engineCancel" disabled>計算を中止</button><button class="mv-btn" id="enginePause" hidden disabled>CI-NEBを一時停止してノード追加</button><button class="mv-btn" id="engineClose" data-close="engineDialog">閉じる</button></div>
 </dialog>
 
+<dialog id="jobHistoryDialog" class="mv-engine-dialog" aria-labelledby="jobHistoryTitle"><h2 id="jobHistoryTitle">計算履歴・ジョブキュー</h2>
+  <p class="mv-small">このPCのPythonサーバーに保存された計算です。Tokenは保存しません。再開は保存構造から新しい最適化として実行します。</p>
+  <div class="mv-row"><button class="mv-btn" id="jobHistoryRefresh">一覧を更新</button><label class="mv-check"><input id="jobHistoryArchived" type="checkbox">アーカイブも表示</label><button class="mv-btn" id="jobRuntimeUnload">常駐モデルを解放</button></div>
+  <p id="jobRuntimeSummary" class="mv-small"></p><details><summary>保存先</summary><p id="jobHistoryStorage" class="mv-small"></p></details>
+  <div class="mv-table-scroll"><table><thead><tr><th>作成日時</th><th>計算</th><th>状態</th><th>操作</th></tr></thead><tbody id="jobHistoryRows"></tbody></table></div>
+  <p id="jobHistoryMessage" role="status"></p><div class="mv-row mv-end"><button class="mv-btn" data-close="jobHistoryDialog">閉じる</button></div>
+</dialog>
 <dialog id="refineDialog" class="mv-engine-dialog" aria-labelledby="refineTitle"><h2 id="refineTitle">経路のノードを補間・追加</h2>
   <p id="refineSummary"></p><div class="mv-grid"><label>区間の始点（構造番号）<input id="refineFrom" type="number" min="1" step="1" value="1"></label><label>区間の終点（構造番号）<input id="refineTo" type="number" min="2" step="1" value="2"></label><label>各隣接ペアの間に追加する数<input id="refineEach" type="number" min="1" max="98" step="1" value="1"></label></div>
   <details class="mv-help"><summary>詳しい説明</summary><p class="mv-small">指定区間の各隣接ノード間をCartesian座標で線形補間します。既存ノードと両端点はそのまま残し、合計100ノードまで追加できます。複数の候補付近を増やす場合は区間を分けて繰り返してください。周期系の座標は折り返しません。</p></details>

@@ -218,6 +218,7 @@
       .forEach(pa => this.drawAtom(pa));
 
     this.drawVibrationVectors(center,scale,width,height);
+    this.drawAnalysisOverlay(center,scale,width,height);
 
     const selected=[...this.state.selectedAtomIds].map(id=>atomById.get(id)).filter(Boolean);
     if(MV.Measurements)this.drawMeasurements(center,scale,width,height);
@@ -241,6 +242,27 @@
       const angle=Math.atan2(b.y-a.y,b.x-a.x),head=Math.min(9,Math.hypot(b.x-a.x,b.y-a.y)*.45);
       ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
       ctx.beginPath();ctx.moveTo(b.x,b.y);ctx.lineTo(b.x-head*Math.cos(angle-.5),b.y-head*Math.sin(angle-.5));ctx.lineTo(b.x-head*Math.cos(angle+.5),b.y-head*Math.sin(angle+.5));ctx.closePath();ctx.fill();
+    });ctx.restore();
+  };
+
+  Renderer3DMol.prototype.drawAnalysisOverlay=function(center,scale,width,height){
+    const overlay=this.analysisOverlay,forces=this.forceVectors,ctx=this.ctx;
+    if(overlay&&overlay.base===this.state){
+      const points=overlay.atoms.map(a=>this.project(a,center,scale,width,height)),byId=new Map(points.map(p=>[p.atom.id,p]));
+      ctx.save();ctx.strokeStyle=overlay.color||'#a448a7';ctx.fillStyle=overlay.color||'#a448a7';ctx.globalAlpha=.58;ctx.lineWidth=2;
+      for(const bond of overlay.bonds||[]){const a=byId.get(bond.atom1),b=byId.get(bond.atom2);if(!a?.visible||!b?.visible)continue;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();}
+      for(const p of points){if(!p.visible)continue;ctx.beginPath();ctx.arc(p.x,p.y,Math.max(4,p.radius*.8),0,2*Math.PI);ctx.stroke();}
+      ctx.restore();
+    }
+    this.projectedForceArrows=[];
+    if(!forces||forces.base!==this.state)return;
+    ctx.save();ctx.strokeStyle=forces.color||'#b45420';ctx.fillStyle=forces.color||'#b45420';ctx.lineWidth=2.5;
+    this.state.atoms.forEach((atom,i)=>{
+      const v=forces.vectors[i];if(!v||v.some(x=>!Number.isFinite(x)))return;
+      const a=this.project(atom,center,scale,width,height),b=this.project({x:atom.x+v[0]*forces.scale,y:atom.y+v[1]*forces.scale,z:atom.z+v[2]*forces.scale},center,scale,width,height);
+      if(!a.visible||!b.visible||Math.hypot(b.x-a.x,b.y-a.y)<.5)return;
+      this.projectedForceArrows.push({a,b,index:i});const angle=Math.atan2(b.y-a.y,b.x-a.x),head=Math.min(9,Math.hypot(b.x-a.x,b.y-a.y)*.45);
+      ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.beginPath();ctx.moveTo(b.x,b.y);ctx.lineTo(b.x-head*Math.cos(angle-.5),b.y-head*Math.sin(angle-.5));ctx.lineTo(b.x-head*Math.cos(angle+.5),b.y-head*Math.sin(angle+.5));ctx.closePath();ctx.fill();
     });ctx.restore();
   };
 

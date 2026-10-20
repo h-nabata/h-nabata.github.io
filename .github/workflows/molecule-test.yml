@@ -1,7 +1,7 @@
 name: Molecule editor tests
 on:
   push:
-    branches: [main, molecule-studio-v3]
+    branches: [main, molecule-studio-v3, molecule-research-workflows]
     paths: ['molecule-visualizer/**', '.github/workflows/molecule-test.yml']
   workflow_dispatch:
 permissions:
@@ -59,6 +59,8 @@ jobs:
           node molecule-visualizer/tests/anysolv-browser.cjs || molecule_test_status=1
           node molecule-visualizer/tests/ts-browser.cjs || molecule_test_status=1
           node molecule-visualizer/tests/measurements-browser.cjs || molecule_test_status=1
+          node molecule-visualizer/tests/workflow-browser.cjs || molecule_test_status=1
+          node molecule-visualizer/tests/analysis-browser.cjs || molecule_test_status=1
           exit "$molecule_test_status"
       - uses: actions/upload-artifact@v4
         if: always()

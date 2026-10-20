@@ -91,11 +91,11 @@
   function exportFiles(){if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();MV.ConstraintUI.flush();const out={...exportInput(app().getState(),config()),...MV.EngineUI.modelInput()};download(out,'afir-input.json');message('原子ID・XYZ・フラグメント・ペア・Python用設定をJSONに保存しました。');}
   function check(){saveSettings();const s=app().getState(),b=MV.AFIR.evaluate(s.atoms,config(),s.metadata.cell);message(`人工項のみ評価: ${b.energyEV.toFixed(6)} eV。物理ポテンシャルのエネルギーではありません。座標は変更していません。`);}
   async function run(){
-    if(job)return;if(MV.EngineUI?.isBusy()){message('外部エンジンの計算を終了してから実行してください。');return;}let j;
+    if(job)return;if(MV.EngineUI?.isBusy()&&!MV.EngineUI.getConnection()?.info.queue){message('外部エンジンの計算を終了してから実行してください。');return;}let j;
     try{if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();MV.ConstraintUI?.flush();const s=app().getState();MV.AFIR.validate(s.atoms,config(),s.metadata.cell);
       j={original:MV.Model.cloneState(s),fingerprint:fingerprint(s),config:JSON.parse(JSON.stringify(config())),cancelled:false,livePreview:$('afirLive').checked,previewCursor:0,liveEnergies:[],liveBiases:[]};
       if(j.livePreview&&!MV.EngineUI.getConnection()?.info.livePreview)throw Error('ライブ表示を使うにはbridge.pyを更新・再接続してください。');
-      MV.EnergyProfile.reset();job=j;result=null;$('afirResult').hidden=true;sync();
+      MV.EnergyProfile.reset();MV.DiagnosticsUI?.reset?.({mode:'afir'});job=j;result=null;$('afirResult').hidden=true;sync();
       if(j.livePreview)MV.EnergyProfile.begin(()=>$('afirCancel').click(),()=>toggle(true));
       const r=await MV.AFIRRunner.run(j,(text,p)=>{
         message(text);if(!p||!j.livePreview)return;
@@ -113,6 +113,7 @@
     const reason={converged:'人工力下で収束',step_limit:'未収束（ステップ上限）',cancelled:'中止（途中までの構造列）',failed:'計算失敗（途中までの構造列）'}[r.reason]||'未検証';
     $('afirResult').hidden=false;$('afirResultSummary').textContent=`${r.engine} / ${r.method} · ${reason} · ${r.steps}ステップ · 最大有効力 ${r.effectiveFmax.toPrecision(4)} eV/Å${r.fixedAtoms?.length?'（可動原子のみ） · 固定 '+r.fixedAtoms.length+'原子':''}`;
     showProfile(r,result,!!job?.livePreview&&MV.EnergyProfile.following());
+    MV.DiagnosticsUI?.load(r,result);MV.StructureAnalysisUI?.setSource?.(r,result);MV.JobHistoryUI?.refresh?.();
     message(r.error?`計算失敗: ${r.error}。保存済みの途中経過を確認できます。`:'探索を終了しました。人工力下の構造列を保存・再生できます。');
   }
   function showProfile(r,j,follow=false){
@@ -137,7 +138,7 @@
     for(const [id,key] of [['afirCharge','charge'],['afirMultiplicity','multiplicity'],['afirSteps','maxSteps'],['afirFmax','fmax'],['afirMove','maxMove']])$(id).addEventListener('change',()=>safe(()=>edit(c=>{c[key]=readNumber(id);})));
     $('afirRun').addEventListener('click',run);$('afirCancel').addEventListener('click',()=>{if(job){job.cancelled=true;MV.AFIRRunner?.cancel(job).catch(e=>message(e.message));}});
     $('afirProfile').addEventListener('click',()=>{if(result){showProfile(result.result,result);MV.EnergyProfile.reveal();}});
-    $('afirDownload').addEventListener('click',()=>{if(result)download({schema:'molecule-afir-result/1',input:{...exportInput(result.original,result.config),...result.modelInput},result:result.result},'afir-result.json');});
+    $('afirDownload').addEventListener('click',()=>{if(result)download({schema:'molecule-afir-result/1',input:{...exportInput(result.original,result.config),...result.modelInput,...(result.internalConstraints?.length?{internalConstraints:result.internalConstraints}:{})},result:result.result},'afir-result.json');});
     $('afirXYZ').addEventListener('click',()=>{if(result)exportXYZ(result.result,result);});
     sync();
   }

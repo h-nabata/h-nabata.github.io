@@ -101,6 +101,28 @@ class AdditiveSurface(unittest.TestCase):
             with self.subTest(value=value[0]),self.assertRaises(ValueError):c(0,np.array(WATER['images'][0]))
         self.assertFalse(c.components)
 
+    def test_resumed_scan_preview_retains_checked_components_for_saved_prefix(self):
+        data=b.validate({**WATER,'solvation':SOLVATION},'uma')
+        c=b.SolvatedUMAEngine(data,CONFIG,'unused');p=np.array(data['images'][0]);q=queue.Queue()
+        old_energy,old_force=c(0,p)
+        prefix=copy.deepcopy(c.components[c.key(p)])
+        c.components.clear();c.component_forces.clear();c.component_maxima.clear()
+        def job(data,calculator,directory,progress):
+            nextp=p+.02;energy,force=calculator(0,nextp)
+            result={'images':[p.tolist(),nextp.tolist()],'energies':[old_energy,energy],
+                    'energyComponents':{name:[prefix[name]] for name in ('uma','solvation')}}
+            progress({'structureCheckpoint':copy.deepcopy(result),
+                      'preview':{'images':copy.deepcopy(result['images']),'energies':result['energies'][:]}})
+            return result
+        with patch.object(b,'calculate_job',job):
+            b.execute_with_calculator(data,b.job_config(data,CONFIG),'unused',q,c)
+        progress=q.get_nowait()[1];result=q.get_nowait()[1]
+        self.assertEqual(progress['preview']['energyComponents'],result['energyComponents'])
+        np.testing.assert_allclose(np.sum(list(result['energyComponents'].values()),axis=0),result['energies'])
+        corrupted=copy.deepcopy(result);corrupted['energyComponents']['uma'][0]+=1
+        with self.assertRaisesRegex(ValueError,'成分'):
+            c.annotate(corrupted)
+
 
 class Configuration(unittest.TestCase):
     def test_mask_mapping_restores_original_visible_devices(self):

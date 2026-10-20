@@ -117,6 +117,7 @@ class TSAndVibrations(unittest.TestCase):
         partial=b.Jobs(config).partial_structure(job)
         self.assertEqual(partial['images'],result['images']);self.assertEqual(partial['reason'],'cancelled');self.assertFalse(partial['converged'])
         job['structureCheckpoint']={**result,'reason':'converged','converged':True}
+        job['data']['vibrations']={}  # The subsequent vibration phase was requested.
         partial=b.Jobs(config).partial_structure(job)
         self.assertTrue(partial['converged']);self.assertEqual(partial['vibrations']['status'],'cancelled')
 

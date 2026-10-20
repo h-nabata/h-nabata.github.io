@@ -8,7 +8,7 @@
   const fingerprint=s=>JSON.stringify([s.atoms,s.bonds,s.metadata]);
   const dirty=()=>/未適用|編集中/.test($('xyzEditStatus').textContent);
   const message=text=>{$('engineMessage').textContent=text;};
-  const modeText={evaluate:'エネルギー・力の評価',optimize:'単一構造の最適化',perpendicular:'接線に直交する緩和',neb:'NEB',cineb:'CI-NEB',ts:'Sella TS最適化',vibrations:'振動解析'};
+  const modeText={evaluate:'エネルギー・力の評価',optimize:'単一構造の最適化',perpendicular:'接線に直交する緩和',neb:'NEB',cineb:'CI-NEB',ts:'Sella TS最適化',vibrations:'振動解析',irc:'IRC',scan:'緩和スキャン',afir:'AFIR-MIN'};
   function endpoint(value){
     const url=new URL(value);
     if(!['http:','https:'].includes(url.protocol)||!['127.0.0.1','localhost'].includes(url.hostname)||url.username||url.password||url.search||url.hash||!['','/'].includes(url.pathname))throw Error('接続先は http://127.0.0.1:8766 など、このPCのlocalhost URLにしてください。');
@@ -21,9 +21,9 @@
       const data=await response.json();if(!response.ok)throw Error(data.error||`HTTP ${response.status}`);return data;
     }catch(error){if(error.name==='TypeError'||error.name==='AbortError')throw Error('ローカルサービスに接続できません。起動状態・URL・許可Origin・ブラウザのローカルネットワーク許可を確認してください。接続が遮断される場合は --site-dir で画面もローカル配信できます。');throw error;}finally{clearTimeout(timer);}
   }
-  function busy(value){$('engineModelSettings').disabled=value||!!MV.AFIRUI?.isBusy?.();$('engineSettings').disabled=value;$('engineConnection').disabled=value;$('engineRun').disabled=value||!connection;$('engineCancel').disabled=!value;$('engineClose').disabled=false;$('engineLive').disabled=value;$('enginePause').disabled=!value||!connection?.info.pathCheckpoint;MV.BatchUI?.render();MV.ConstraintUI?.sync();}
+  function busy(value){const editable=!value||!!connection?.info.jobQueue;$('engineModelSettings').disabled=!editable||!!MV.AFIRUI?.isBusy?.();$('engineSettings').disabled=!editable;$('engineConnection').disabled=value;$('engineRun').disabled=!editable||!connection;$('engineRun').textContent=value&&editable?'現在の設定をキューへ追加':'計算を実行';$('engineCancel').disabled=!value;$('engineClose').disabled=false;$('engineLive').disabled=value;$('enginePause').disabled=!value||!connection?.info.pathCheckpoint;MV.BatchUI?.render();MV.ConstraintUI?.sync();}
   function settings(){
-    const mode=$('engineMode').value,path=['perpendicular','neb','cineb'].includes(mode),single=['optimize','ts','vibrations'].includes(mode),batch=mode==='batch';
+    const mode=$('engineMode').value,path=['perpendicular','neb','cineb'].includes(mode),single=['optimize','ts','vibrations','irc','scan'].includes(mode),batch=mode==='batch';
     if(mode!==settingsMode){
       if(settingsMode)modeSettings.set(settingsMode,relaxFields.map(id=>$(id).value));
       const values=modeSettings.get(mode)||(mode==='cineb'?['100','0.05','0.03','1','5']:['150','0.05','0.04','1','5']);
@@ -31,9 +31,10 @@
     }
     if(path)$('engineScope').value='all';if(single)$('engineScope').value='current';$('engineScope').disabled=path||single||batch;$('engineScope').closest('label').hidden=batch;$('batchInput').hidden=!batch;
     $('engineRelaxSettings').hidden=['evaluate','vibrations'].includes(mode);$('engineSpringLabel').hidden=!['neb','cineb'].includes(mode);$('engineClimbLabel').hidden=mode!=='cineb';
-    $('engineOptimizerLabel').hidden=!['optimize','batch'].includes(mode);$('engineTSMethodLabel').hidden=$('engineTrustLabel').hidden=mode!=='ts';$('engineMoveLabel').hidden=mode==='ts';
-    $('engineVibrationOptions').hidden=!single;$('engineVibrationCheckLabel').hidden=mode==='vibrations';$('enginePause').hidden=!['neb','cineb'].includes(mode);
-    $('engineModeHelp').textContent={batch:'複数構造を同じ条件で、1構造ずつ独立に最適化します。人工力や経路のばねは加えません。',evaluate:'指定構造のエネルギーと力を計算します。',optimize:'現在の構造を極小化します。人工力は「AFIR法の設定を開く」で指定してください。',ts:'Sellaで一次鞍点を探索します。経路の結果表からTS候補を選べます。人工力・ばねは加えません。',vibrations:'現在の構造でASEの有限差分振動解析を行います。未収束構造も解析できます。',perpendicular:'端点を固定し、経路の接線に直交する力で緩和します。',neb:'端点を固定して経路を緩和します。一時停止してノードを追加できます。',cineb:'端点固定。CI開始後は最高エネルギーの内部ノードを登らせます。一時停止してノードを追加できます。'}[mode];
+    $('engineOptimizerLabel').hidden=!['optimize','batch','scan'].includes(mode);$('engineTSMethodLabel').hidden=$('engineTrustLabel').hidden=mode!=='ts';$('engineMoveLabel').hidden=mode==='ts';
+    $('engineVibrationOptions').hidden=!['optimize','ts','vibrations'].includes(mode);$('engineVibrationCheckLabel').hidden=mode==='vibrations';$('enginePause').hidden=!['neb','cineb'].includes(mode);
+    MV.ResearchUI?.settings(mode);
+    $('engineModeHelp').textContent={irc:'TS候補から質量重み付きIRCを追跡し、到達した構造を比較します。',scan:'内部座標を固定し、各点で残りの自由度を最適化します。',batch:'複数構造を同じ条件で、1構造ずつ独立に最適化します。人工力や経路のばねは加えません。',evaluate:'指定構造のエネルギーと力を計算します。',optimize:'現在の構造を極小化します。人工力は「AFIR法の設定を開く」で指定してください。',ts:'Sellaで一次鞍点を探索します。経路の結果表からTS候補を選べます。人工力・ばねは加えません。',vibrations:'現在の構造でASEの有限差分振動解析を行います。未収束構造も解析できます。',perpendicular:'端点を固定し、経路の接線に直交する力で緩和します。',neb:'端点を固定して経路を緩和します。一時停止してノードを追加できます。',cineb:'端点固定。CI開始後は最高エネルギーの内部ノードを登らせます。一時停止してノードを追加できます。'}[mode];
   }
   function chooseMode(){
     if($('engineMode').value!=='afir'){settings();return;}
@@ -41,6 +42,7 @@
     $('engineMode').value='optimize';settings();$('engineDialog').close();MV.AFIRUI.toggle(true);
     $('afirPanel').scrollIntoView({block:'nearest',behavior:'smooth'});$('afirName').focus({preventScroll:true});
   }
+  function baseFrame(j,i){return j.frames[i]||j.frames[0];}
   function frames(state,scope){
     if(scope==='current'||!state.metadata.trajectory)return [MV.Periodic.snapshot(state)];
     const all=JSON.parse(JSON.stringify(state.metadata.trajectory));all[state.metadata.frameIndex||0]=MV.Periodic.snapshot(state);return all;
@@ -62,24 +64,25 @@
     const data={symbols,images:all.map(f=>f.atoms.map(a=>[a.x,a.y,a.z])),cell,mode,charge:Number($('engineCharge').value),multiplicity:Number($('engineMultiplicity').value),maxSteps:Number($('engineSteps').value),fmax:Number($('engineFmax').value),spring:Number($('engineSpring').value),maxMove:Number($('engineMove').value),climbAfter:Number($('engineClimb').value)};
     for(const [key,lo,hi,integer] of [['charge',-100,100,true],['multiplicity',1,101,true],['maxSteps',1,10000,true],['fmax',.00001,10,false],['spring',.001,10,false],['maxMove',.001,.2,false],['climbAfter',0,500,true]])if(!Number.isFinite(data[key])||data[key]<lo||data[key]>hi||(integer&&!Number.isInteger(data[key])))throw Error(`${key}は${lo}〜${hi}${integer?'の整数':''}にしてください。`);
     Object.assign(data,modelInput());validateEngineInput(data,connection.info);
-    if(['ts','vibrations'].includes(mode)&&!connection.info.modes.includes(mode))throw Error('TS・振動解析にはbridge.pyを更新・再接続してください。');
+    if(['ts','vibrations','irc','scan'].includes(mode)&&!connection.info.modes.includes(mode))throw Error('TS・振動解析にはbridge.pyを更新・再接続してください。');
     if(mode==='ts'){
       if(!connection.info.sellaVersion)throw Error('接続中のPythonにSellaがありません。python -m pip install "sella>=2.6,<3" を実行し、再接続してください。');
       data.optimizer=$('engineTSMethod').value;data.trustRadius=Number($('engineTrust').value);
       if(!Number.isFinite(data.trustRadius)||data.trustRadius<.001||data.trustRadius>.2)throw Error('初期信頼半径は0.001〜0.2 Åにしてください。');
     }
-    if(mode==='optimize'&&$('engineOptimizer').value!=='fire'){
+    if(['optimize','scan'].includes(mode)&&$('engineOptimizer').value!=='fire'){
       if(!connection.info.modes.includes('ts'))throw Error('L-BFGS・BFGSを使うにはbridge.pyを更新してください。');
       data.optimizer=$('engineOptimizer').value;
     }
-    if(mode==='vibrations'||(!batchFrames&&['ts','optimize'].includes(mode)&&$('engineVibrationCheck').checked)){
+    if(mode==='vibrations'||(!batchFrames&&['ts','optimize'].includes(mode)&&($('engineVibrationCheck').checked||$('thermoEnabled').checked))){
       if(!connection.info.vibrations)throw Error('振動解析を使うにはbridge.pyを更新してください。');
       if(symbols.length>(connection.info.maxVibrationAtoms||200))throw Error('振動解析は最大200原子です。');
       if(all[0].atoms.some(a=>a.mol?.props?.MASS||a.xyzExtras?.mass||a.xyzExtras?.masses))throw Error('この振動解析はASE標準原子質量を使用します。同位体・個別質量を持つ構造には未対応です。');
       data.vibrations={delta:Number($('engineVibrationDelta').value),nfree:Number($('engineVibrationNfree').value),imaginaryThreshold:Number($('engineVibrationThreshold').value)};
       const v=data.vibrations;if(!Number.isFinite(v.delta)||v.delta<.0001||v.delta>.1||![2,4].includes(v.nfree)||!Number.isFinite(v.imaginaryThreshold)||v.imaginaryThreshold<0||v.imaginaryThreshold>1000)throw Error('振動解析の変位幅は0.0001〜0.1 Å、差分点数は2/4、虚振動の閾値は0〜1000 cm⁻¹です。');
     }
-    if((mode==='ts'||data.vibrations)&&cell?.pbc.some(Boolean))throw Error('TS・振動モード表示は非周期分子用です。');
+    MV.ResearchUI?.input(data,state,connection.info,{batch:!!batchFrames});
+    if((['ts','irc'].includes(mode)||data.vibrations)&&cell?.pbc.some(Boolean))throw Error('TS・振動モード表示は非周期分子用です。');
     const fixed=MV.Constraints.forJob(state,data,connection.info);
     if(fixed.length){data.fixedAtoms=fixed;all.forEach(f=>MV.Constraints.attach(f,fixed));}
     if(connection.info.vibrations)data.atomIds=all[0].atoms.map(a=>a.id);
@@ -109,7 +112,7 @@
     const info=connection?.info,on=$('engineAnySolv').checked;
     $('engineAnySolvFields').hidden=!on;
     $('engineSolvationHelp').textContent=!info?.anysolv?.enabled?'AnySolvを追加するにはセットアップ案内を開き、--anysolv で起動してください。':on?
-      'E = UMA + 溶媒補正、力も加算します。MIN・AFIR・CI-NEB・TS・振動解析に共通です。'+($('engineUMADevice').value===$('engineAnySolvDevice').value&&$('engineUMADevice').value!=='cpu'?' 同じGPUを選択中：2モデル分のメモリが必要です。':''):'溶媒補正なしで計算します。';
+      'E = UMA + 溶媒補正、力も加算します。MIN・AFIR・CI-NEB・TS・IRC・スキャン・振動解析に共通です。'+($('engineUMADevice').value===$('engineAnySolvDevice').value&&$('engineUMADevice').value!=='cpu'?' 同じGPUを選択中：2モデル分のメモリが必要です。':''):'溶媒補正なしで計算します。';
     MV.AFIRUI?.sync();
   }
   function validateSolvationResult(r,data){
@@ -140,7 +143,7 @@
     if(job)return;connection=null;connectionDetails();$('engineRun').disabled=true;$('engineConnect').disabled=true;
     try{
       const c={url:endpoint($('engineURL').value),token:$('engineToken').value.trim()};if(!c.token)throw Error('サービス起動時に表示されるTokenを入力してください。');
-      c.info=await request(c,'/api/info');if(!['1.0.0','1.1.0','1.1.1','1.1.2','1.2.0','1.3.0','1.4.0','1.5.0','1.6.0','1.7.0'].includes(c.info.version)||!Array.isArray(c.info.modes))throw Error('サービスのバージョンが一致しません。最新のbridge.pyを使用してください。');connection=c;connectionDetails();
+      c.info=await request(c,'/api/info');if(!['1.0.0','1.1.0','1.1.1','1.1.2','1.2.0','1.3.0','1.4.0','1.5.0','1.6.0','1.7.0','1.8.0','2.0.0'].includes(c.info.version)||!Array.isArray(c.info.modes))throw Error('サービスのバージョンが一致しません。最新のbridge.pyを使用してください。');connection=c;connectionDetails();MV.JobHistoryUI?.connected();
       $('engineConnected').textContent=`接続済み: ${c.info.engine} / ${c.info.method} · ${c.info.engineVersion} · ${c.info.periodic?'固定セル周期系対応':'非周期系'} · Sella ${c.info.sellaVersion||'未導入'}`;message(c.info.uma?'サービスに接続しました。モデルは計算実行時に読み込みます。電荷とスピン多重度を確認してください。':'接続しました。電荷と多重度を確認して計算を実行してください。');
     }catch(error){$('engineConnected').textContent='未接続';message(error.message);}finally{$('engineConnect').disabled=false;busy(false);MV.AFIRUI?.sync();}
   }
@@ -148,13 +151,13 @@
   function validateResult(r,j){
     validateSolvationResult(r,j.data);
     MV.Constraints?.validateResult(r,j.data);
-    if(!r||JSON.stringify(r.symbols)!==JSON.stringify(j.data.symbols)||JSON.stringify(r.cell)!==JSON.stringify(j.data.cell)||r.images?.length!==j.frames.length||r.energies?.length!==j.frames.length||r.units?.energy!=='eV'||r.units?.length!=='angstrom')throw Error('結果の元素・セル・構造数・単位が入力と一致しません。');
-    if(!r.images.every(p=>Array.isArray(p)&&p.length===j.data.symbols.length&&p.every(v=>Array.isArray(v)&&v.length===3&&v.every(x=>Number.isFinite(x)&&Math.abs(x)<=10000)))||!r.energies.every(Number.isFinite)||!Number.isFinite(r.effectiveFmax)||!Array.isArray(r.imageFmax)||r.imageFmax.length!==j.frames.length||!r.imageFmax.every(Number.isFinite))throw Error('計算結果に不正な座標・エネルギー・力が含まれます。');
-    if(['perpendicular','neb','cineb'].includes(j.data.mode))for(const i of [0,j.frames.length-1])if(JSON.stringify(r.images[i])!==JSON.stringify(j.data.images[i]))throw Error('端点座標が変更された結果は適用できません。');
+    if(!r||JSON.stringify(r.symbols)!==JSON.stringify(j.data.symbols)||JSON.stringify(r.cell)!==JSON.stringify(j.data.cell)||!Array.isArray(r.images)||!r.images.length||r.images.length>40001||(!['irc','scan','afir'].includes(j.data.mode)&&!j.data.adaptiveNEB?.enabled&&r.images.length!==j.frames.length)||r.energies?.length!==r.images.length||r.units?.energy!=='eV'||r.units?.length!=='angstrom')throw Error('結果の元素・セル・構造数・単位が入力と一致しません。');
+    if(!r.images.every(p=>Array.isArray(p)&&p.length===j.data.symbols.length&&p.every(v=>Array.isArray(v)&&v.length===3&&v.every(x=>Number.isFinite(x)&&Math.abs(x)<=10000)))||!r.energies.every(Number.isFinite)||!Number.isFinite(r.effectiveFmax)||!Array.isArray(r.imageFmax)||r.imageFmax.length!==r.images.length||!r.imageFmax.every(Number.isFinite))throw Error('計算結果に不正な座標・エネルギー・力が含まれます。');
+    if(['perpendicular','neb','cineb'].includes(j.data.mode))for(const [i,k] of [[0,0],[r.images.length-1,j.data.images.length-1]])if(JSON.stringify(r.images[i])!==JSON.stringify(j.data.images[k]))throw Error('端点座標が変更された結果は適用できません。');
     if(['optimize','ts'].includes(j.data.mode)){
       if(!r.trajectory){if(j.connection?.info.optimizationTrajectory)throw Error('最適化の構造履歴がありません。');return;}
       const t=r.trajectory;if(!Array.isArray(t.energies))throw Error('最適化履歴のエネルギーがありません。');MV.Trajectory.validate({...t,symbols:r.symbols});
-      if(!Number.isInteger(r.steps)||r.steps<0||r.steps>j.data.maxSteps||t.images.length!==r.steps+1||JSON.stringify(t.images[0])!==JSON.stringify(j.data.images[0])||JSON.stringify(t.images.at(-1))!==JSON.stringify(r.images[0])||t.energies.at(-1)!==r.energies[0])throw Error('最適化の履歴・始点・最終構造が一致しません。');
+      if(!Number.isInteger(r.steps)||r.steps<0||r.steps>j.data.maxSteps||t.images.length!==r.steps+1||JSON.stringify(t.images[0])!==JSON.stringify(r.constraintProjection?.positions||j.data.images[0])||JSON.stringify(t.images.at(-1))!==JSON.stringify(r.images[0])||t.energies.at(-1)!==r.energies[0])throw Error('最適化の履歴・始点・最終構造が一致しません。');
     }
   }
   function showResult(r,j){
@@ -174,23 +177,24 @@
       const state=MV.Model.createState(j.frames[0]);state.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=r.images[0][k];});state.metadata.totalCharge=j.data.charge;state.metadata.multiplicity=j.data.multiplicity;
       MV.VibrationUI.set(r.vibrations,state,`${j.original.metadata.title||'構造'} · ${r.engine} / ${r.method} · ${modeText[r.mode]} · ${reason}`);
     }
+    MV.ResearchUI?.showResult(r,j);MV.DiagnosticsUI?.load(r,j);MV.StructureAnalysisUI?.setSource(r,j);MV.JobHistoryUI?.changed();
     showProfile(r,j,!!j.livePreview&&MV.EnergyProfile.following());
     message((r.vibrations&&r.vibrations.status!=='completed'?'振動解析は未完了です。構造の結果は保持しています。':r.reason==='failed'?'計算に失敗しました。'+(r.error||''):r.reason==='cancelled'?'計算を中止しました。':'計算が完了しました。')+' 結果を確認し、構造列の保存・抽出または「結果を構造へ適用」で反映できます。'+(j.data.mode==='optimize'&&!r.trajectory?' 旧bridgeのため最終構造のみです。全ステップの保存にはbridge.pyを更新・再接続して再計算してください。':''));
   }
   function resultSource(r,j){
     const t=r.trajectory||r;
-    return {title:modeText[j.data.mode],name:j.original.metadata.title,kind:j.data.mode,symbols:r.symbols,cell:r.cell,images:t.images,energies:t.energies,
-      charge:j.data.charge,multiplicity:j.data.multiplicity,engine:r.engine,method:r.method,base:i=>j.frames[r.trajectory?0:i],
+    return {title:modeText[j.data.mode],name:j.original.metadata.title,kind:j.data.mode,symbols:r.symbols,cell:r.cell,images:t.images,energies:t.energies,biasEnergies:t.biasEnergies,
+      charge:j.data.charge,multiplicity:j.data.multiplicity,engine:r.engine,method:r.method,base:i=>baseFrame(j,r.trajectory?0:i),
       stepNumbers:j.data.mode==='optimize'&&!r.trajectory?[r.steps]:null,
       notice:j.data.mode==='optimize'&&!r.trajectory?'旧bridgeの結果には最終構造しかありません。全ステップの保存にはbridge.pyを更新・再接続して再計算してください。':''};
   }
   function exportXYZ(r,j){$('engineDialog').close();MV.TrajectoryUI.open(resultSource(r,j));}
   function showProfile(r,j,follow=false){
     const t=r.trajectory||r,history=!!r.trajectory;
-    MV.EnergyProfile.set({title:modeText[j.data.mode]+(j.data.solvation?' · '+j.data.solvation.solvent:'')+' · エネルギープロファイル'+(r.step!=null?' · ステップ '+r.step:''),kind:history?'optimize':j.data.mode==='evaluate'?'evaluate':'path',focusIndex:history?t.images.length-1:Math.floor((r.images.length-1)/2),energies:t.energies,positions:i=>t.images[i],base:i=>j.frames[history?0:i],details:open,exportXYZ:r.step==null?()=>exportXYZ(r,j):null},follow);
+    MV.EnergyProfile.set({title:modeText[j.data.mode]+(j.data.solvation?' · '+j.data.solvation.solvent:'')+' · エネルギープロファイル'+(r.step!=null?' · ステップ '+r.step:''),kind:history?'optimize':j.data.mode==='afir'?'afir':j.data.mode==='evaluate'?'evaluate':'path',focusIndex:(history||j.data.mode==='afir')?t.images.length-1:Math.floor((r.images.length-1)/2),energies:t.energies,biasEnergies:t.biasEnergies,nodeIds:r.nodeIds,positions:i=>t.images[i],base:i=>baseFrame(j,history?0:i),details:open,exportXYZ:r.step==null?()=>exportXYZ(r,j):null},follow);
   }
   async function run(){
-    if(job||!connection)return;
+    if(!connection)return;if(job){try{await enqueueCurrent();}catch(_){}return;}
     if($('engineMode').value==='batch'){await runBatch();return;}
     if(MV.AFIRUI?.isBusy?.()){message('AFIR計算の完了または中止後に実行してください。');return;}
     let j;
@@ -198,28 +202,36 @@
       j={...input(),connection:{...connection},cancelRequested:false,livePreview:$('engineLive').checked};
       if(j.livePreview&&!connection.info.livePreview)throw Error('ライブ表示を使うにはbridge.pyを更新・再接続してください。');
       if(j.livePreview)j.data.livePreview=true;
-      MV.VibrationUI.hide();MV.EnergyProfile.reset();clearResult();job=j;busy(true);message('ローカル計算を開始しています…');
+      MV.VibrationUI.hide();MV.EnergyProfile.reset();MV.DiagnosticsUI?.reset();clearResult();job=j;busy(true);message('ローカル計算を開始しています…');
       if(j.livePreview)MV.EnergyProfile.begin(cancel,open);
       const created=await request(j.connection,'/api/jobs',j.data);if(!/^[a-f0-9]{32}$/.test(created.id))throw Error('不正な計算IDです。');j.id=created.id;if(j.livePreview){$('engineDialog').close();MV.EnergyProfile.reveal();}
       if(j.cancelRequested)await request(j.connection,`/api/jobs/${j.id}/cancel`,{});
-      while(job===j){
-        const live=j.livePreview&&MV.EnergyProfile.following();
-        const state=await request(j.connection,`/api/jobs/${j.id}`+(live?'?preview=1&after=0':''));
-        if(state.status==='completed'||(['cancelled','error'].includes(state.status)&&state.result)){showResult(state.result,j);break;}
-        if(state.status==='error')throw Error(state.error||'計算に失敗しました。');
-        if(state.status==='cancelled'){MV.EnergyProfile.restore();message('計算を中止しました。構造は変更していません。');break;}
-        if(live&&state.preview&&state.preview.step!==j.previewStep){
-          const p=state.preview;
-          if(j.data.fixedAtoms)MV.Constraints.checkPositions(p.images,j.data.images[0],j.data.fixedAtoms);
-          if(Number.isInteger(p.step)&&p.step>=0&&p.step<=j.data.maxSteps&&Array.isArray(p.images)&&p.images.length===j.frames.length&&p.images.every(a=>Array.isArray(a)&&a.length===j.data.symbols.length&&a.every(v=>Array.isArray(v)&&v.length===3&&v.every(x=>Number.isFinite(x)&&Math.abs(x)<=10000)))&&Array.isArray(p.energies)&&p.energies.length===j.frames.length&&p.energies.every(Number.isFinite)){
-            j.previewStep=p.step;showProfile(p,j,true);
-          }
-        }
-        const p=state.progress||{};message(p.phase==='loading_model'?'UMAモデルを読み込み中（初回はダウンロードを含みます）…':p.phase==='vibrations'?`振動解析中: 力の評価 ${p.vibrationDone??0} / ${p.vibrationTotal??'?'}（構造最適化とは別の処理）`+(j.cancelRequested?' · 中止処理中':''):`計算中: ステップ ${p.step??0} / ${j.data.maxSteps} · 構造 ${p.image??0}/${j.frames.length}`+(p.fmax!=null?` · 最大有効力 ${p.fmax.toPrecision(4)} eV/Å`:'')+(j.cancelRequested?' · 中止処理中':''));
-        await new Promise(resolve=>setTimeout(resolve,600));
-      }
+      await watch(j);
     }catch(error){MV.EnergyProfile.restore();message(error.message+(j?.id?' 接続が途切れた場合、計算はローカル側で継続している可能性があります。サービスをCtrl+Cで停止できます。':''));}
     finally{if(job===j){job=null;MV.EnergyProfile.finish();busy(false);if(j.pauseRequested&&result)refineResult();}}
+  }
+  async function watch(j){
+      while(job===j){
+        const live=j.livePreview&&MV.EnergyProfile.following();
+        const state=await request(j.connection,`/api/jobs/${j.id}`+(live?'?preview=1&after='+(j.previewCursor||0):''));
+        if(state.status==='completed'||(['cancelled','error','interrupted'].includes(state.status)&&state.result)){showResult(state.result,j);if(state.storageError)message($('engineMessage').textContent+' '+state.storageError);break;}
+        if(state.status==='error')throw Error(state.error||'計算に失敗しました。');
+        if(['cancelled','interrupted'].includes(state.status)){MV.EnergyProfile.restore();message('計算を中止しました。構造は変更していません。');break;}
+        if(live&&j.data.mode==='afir'&&state.preview?.positions){
+          const p=state.preview;if(Number.isInteger(p.from)&&Number.isInteger(p.next)&&p.from===(j.previewCursor||0)&&Array.isArray(p.energies)&&p.energies.every(Number.isFinite)&&Array.isArray(p.biasEnergies)&&p.biasEnergies.every(Number.isFinite)){
+            j.previewEnergies=(j.previewEnergies||[]).concat(p.energies);j.previewBiases=(j.previewBiases||[]).concat(p.biasEnergies);j.previewCursor=p.next;
+            const images=Array(j.previewEnergies.length).fill(null);images[images.length-1]=p.positions;showProfile({step:p.next-1,images,energies:j.previewEnergies,biasEnergies:j.previewBiases},j,true);
+          }
+        }else if(live&&state.preview&&`${state.progress?.scanNode??''}:${state.preview.step}`!==j.previewStep){
+          const p=state.preview,stepLimit=j.data.maxSteps*(j.data.mode==='irc'?4:j.data.mode==='scan'?400:1);
+          if(j.data.fixedAtoms)MV.Constraints.checkPositions(p.images,j.data.images[0],j.data.fixedAtoms);
+          if(Number.isInteger(p.step)&&p.step>=0&&p.step<=stepLimit&&Array.isArray(p.images)&&(p.images.length===j.frames.length||j.data.adaptiveNEB?.enabled||['scan','irc'].includes(j.data.mode))&&p.images.every(a=>Array.isArray(a)&&a.length===j.data.symbols.length&&a.every(v=>Array.isArray(v)&&v.length===3&&v.every(x=>Number.isFinite(x)&&Math.abs(x)<=10000)))&&Array.isArray(p.energies)&&p.energies.length===p.images.length&&p.energies.every(Number.isFinite)){
+            j.previewStep=`${state.progress?.scanNode??''}:${p.step}`;showProfile(p,j,true);
+          }
+        }
+        const p=state.progress||{};MV.DiagnosticsUI?.update(p,j);message(state.status==='queued'?'実行待ちです。履歴・キューから順番と状態を確認できます。':p.phase==='loading_model'?'UMAモデルを読み込み中（初回はダウンロードを含みます）…':p.phase==='vibrations'?`振動解析中: 力の評価 ${p.vibrationDone??0} / ${p.vibrationTotal??'?'}（構造最適化とは別の処理）`+(j.cancelRequested?' · 中止処理中':''):`計算中: ステップ ${p.step??0} / ${j.data.maxSteps} · 構造 ${p.image??0}/${j.frames.length}`+(p.fmax!=null?` · 最大有効力 ${p.fmax.toPrecision(4)} eV/Å`:'')+(j.cancelRequested?' · 中止処理中':''));
+        await new Promise(resolve=>setTimeout(resolve,600));
+      }
   }
   async function runBatch(){
     if(MV.AFIRUI?.isBusy()){message('AFIR計算の完了または中止後に実行してください。');return;}
@@ -252,7 +264,7 @@
             if(state.status==='completed')throw Error('最適化結果がありません。');
             return {status:state.status==='error'?'failed':'cancelled',error:state.error||''};
           }
-          if(!['running','stopping'].includes(state.status))throw Error('計算状態が不正です。');
+          if(!['queued','running','stopping'].includes(state.status))throw Error('計算状態が不正です。');
           const p=state.preview;
           if(live&&p&&p.step!==previewStep&&Number.isInteger(p.step)&&p.step>=0&&p.step<=single.data.maxSteps&&p.images?.length===1&&p.images[0].length===single.data.symbols.length&&p.images[0].every(v=>Array.isArray(v)&&v.length===3&&v.every(x=>Number.isFinite(x)&&Math.abs(x)<=10000))&&p.energies?.length===1&&p.energies.every(Number.isFinite)){
             if(single.data.fixedAtoms)MV.Constraints.checkPositions(p.images,single.data.images[0],single.data.fixedAtoms);
@@ -273,19 +285,19 @@
   function apply(targetIndex){
     try{
       const j=result;if(!j)return;if(dirty()||fingerprint(app().getState())!==j.fingerprint)throw Error('計算開始後に構造または編集欄が変更されています。結果は適用できません。JSONを保存するか、再計算してください。');validateResult(j.result,j);
-      const r=j.result,updated=j.frames.map((f,k)=>{
+      const r=j.result,updated=r.images.map((positions,k)=>{const f=baseFrame(j,k);
         const s=MV.Model.createState(f);s.atoms.forEach((a,i)=>{[a.x,a.y,a.z]=r.images[k][i];});
-        s.metadata.totalCharge=j.data.charge;s.metadata.multiplicity=j.data.multiplicity;
+        s.metadata.totalCharge=j.data.charge;s.metadata.multiplicity=j.data.multiplicity;if(r.nodeIds)s.metadata.pathNodeId=r.nodeIds[k];
         delete s.metadata.afirCalculation;
         s.metadata.externalCalculation={...(j.data.solvation?{solvation:j.data.solvation,umaDevice:j.data.umaDevice}:{}),fixedAtoms:j.data.fixedAtoms||[],engine:r.engine,method:r.method,energyEV:r.energies[k],mode:r.mode,converged:r.converged,reason:r.reason,steps:r.steps,effectiveFmax:r.imageFmax[k],charge:j.data.charge,multiplicity:j.data.multiplicity};
         if(r.mode!=='evaluate')MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);
       });
       let next;
-      if(j.scope==='current'&&j.original.metadata.trajectory){
+      if(updated.length===1&&j.scope==='current'&&j.original.metadata.trajectory){
         next=MV.Model.createState(updated[0]);next.metadata.trajectory=JSON.parse(JSON.stringify(j.original.metadata.trajectory));next.metadata.frameIndex=j.original.metadata.frameIndex||0;next.metadata.trajectory[next.metadata.frameIndex]=updated[0];
       }else{const index=Number.isInteger(targetIndex)?targetIndex:j.scope==='all'?j.original.metadata.frameIndex||0:0;next=MV.Model.createState(updated[index]||updated[0]);if(updated.length>1){next.metadata.trajectory=updated;next.metadata.frameIndex=index;}}
       if(j.original.metadata.measurements)next.metadata.measurements=JSON.parse(JSON.stringify(j.original.metadata.measurements));
-      next.viewSettings={...j.original.viewSettings};app().change('external engine result',()=>next,true);$('dataReset').click();$('engineApply').disabled=true;if(next.metadata.trajectory&&j.scope==='all')MV.EnergyProfile.bindTrajectory(next.metadata.trajectory);$('engineDialog').close();app().setStatus(`${modeText[r.mode]}の結果を反映しました（${r.reason==='converged'?'収束':r.reason==='evaluated'?'評価済み':r.reason==='cancelled'?'未収束・中止':r.reason==='failed'?'未収束・計算失敗':'未収束・ステップ上限'}）。「戻す」で計算前へ戻れます。`);
+      next.viewSettings={...j.original.viewSettings};app().change('external engine result',()=>next,true);$('dataReset').click();$('engineApply').disabled=true;if(next.metadata.trajectory&&updated.length>1)MV.EnergyProfile.bindTrajectory(next.metadata.trajectory);$('engineDialog').close();app().setStatus(`${modeText[r.mode]}の結果を反映しました（${r.reason==='converged'?'収束':r.reason==='evaluated'?'評価済み':r.reason==='cancelled'?'未収束・中止':r.reason==='failed'?'未収束・計算失敗':'未収束・ステップ上限'}）。「戻す」で計算前へ戻れます。`);
       return true;
     }catch(error){message(error.message);return false;}
   }
@@ -309,16 +321,59 @@
     if(job){message('実行中の計算を終了してください。');$('engineDialog').showModal();return;}
     try{app().useDisplayedStructure();}catch(e){message(e.message);$('engineDialog').showModal();return;}
     clearResult();open();$('engineMode').value=mode;$('engineScope').value='current';settings();
-    message(mode==='ts'?'現在表示中の構造をTS入力にしました。手法・電荷・多重度・振動解析の有無を確認して実行してください。':'現在の構造で振動解析します。未収束構造も対象にできます。');
+    message(mode==='irc'?'現在の構造をIRC入力にしました。TS候補の収束と計算条件を確認してください。':mode==='scan'?'現在の構造をスキャンの出発点にしました。原子番号と座標の範囲を指定してください。':mode==='ts'?'現在表示中の構造をTS入力にしました。手法・電荷・多重度・振動解析の有無を確認して実行してください。':'現在の構造で振動解析します。未収束構造も対象にできます。');
   }
   function refineResult(){
     try{
       const j=result;if(!j)return;if(job)throw Error('計算の終了処理を待ってください。');
       if(dirty()||fingerprint(app().getState())!==j.fingerprint)throw Error('計算後に入力が変更されています。結果JSONを保存するか、再計算してください。');
       validateResult(j.result,j);
-      const frames=j.frames.map((f,k)=>{const s=MV.Model.createState(f);s.atoms.forEach((a,i)=>{[a.x,a.y,a.z]=j.result.images[k][i];});s.metadata.totalCharge=j.data.charge;s.metadata.multiplicity=j.data.multiplicity;delete s.metadata.externalCalculation;delete s.metadata.afirCalculation;MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);});
+      const frames=j.result.images.map((_,k)=>{const f=baseFrame(j,k);const s=MV.Model.createState(f);s.atoms.forEach((a,i)=>{[a.x,a.y,a.z]=j.result.images[k][i];});s.metadata.totalCharge=j.data.charge;s.metadata.multiplicity=j.data.multiplicity;delete s.metadata.externalCalculation;delete s.metadata.afirCalculation;MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);});
       $('engineDialog').close();MV.PathRefinement.open(frames);
     }catch(e){message(e.message);}
+  }
+  function framesFromData(data){
+    return data.images.map(positions=>{const s=MV.Model.createState({atoms:data.symbols.map((element,i)=>({id:data.atomIds?.[i],element,x:positions[i][0],y:positions[i][1],z:positions[i][2]})),metadata:{title:'保存された計算',cell:data.cell,totalCharge:data.charge,multiplicity:data.multiplicity,...(data.afir?{afir:JSON.parse(JSON.stringify(data.afir))}:{})}});MV.Bonding.refreshInferredBonds(s);if(data.fixedAtoms?.length)MV.Constraints.attach(s,data.fixedAtoms);return MV.Periodic.snapshot(s);});
+  }
+  function restoreInput(data){
+    const mode=data.mode==='afir'?'optimize':data.mode;$('engineMode').value=mode;settings();$('engineScope').value=['perpendicular','neb','cineb'].includes(mode)?'all':'current';
+    for(const [key,id] of Object.entries({charge:'engineCharge',multiplicity:'engineMultiplicity',maxSteps:'engineSteps',fmax:'engineFmax',spring:'engineSpring',maxMove:'engineMove',climbAfter:'engineClimb',trustRadius:'engineTrust'}))if(data[key]!=null)$(id).value=data[key];
+    if(data.optimizer)$(['ts'].includes(data.mode)?'engineTSMethod':'engineOptimizer').value=data.optimizer;
+    $('engineVibrationCheck').checked=!!data.vibrations;if(data.vibrations)for(const [key,id] of Object.entries({delta:'engineVibrationDelta',nfree:'engineVibrationNfree',imaginaryThreshold:'engineVibrationThreshold'}))$(id).value=data.vibrations[key];
+    if(data.umaDevice)$('engineUMADevice').value=data.umaDevice;$('engineAnySolv').checked=!!data.solvation;
+    if(data.solvation){$('engineAnySolvModel').value=data.solvation.model;$('engineAnySolvDevice').value=data.solvation.device;$('engineSolvent').value=data.solvation.solvent;}
+    MV.ResearchUI?.restore(data);modelControls();
+  }
+  function contextForSaved(saved){
+    if(!saved?.data||!Array.isArray(saved.data.symbols)||!Array.isArray(saved.data.images))throw Error('保存された入力構造がありません。');
+    const all=framesFromData(saved.data),original=MV.Model.createState(all[0]);if(all.length>1){original.metadata.trajectory=all;original.metadata.frameIndex=0;}
+    return {id:saved.id,data:saved.data,frames:all,original,fingerprint:fingerprint(app().getState()),scope:all.length>1?'all':'current',connection:{...connection},livePreview:false};
+  }
+  function restoreJob(saved,inputOnly=false){
+    if(job)throw Error('実行中の計算の追跡を終了してから、履歴を開いてください。');
+    const j=contextForSaved(saved);MV.EnergyProfile.reset();restoreInput(saved.data);clearResult();
+    if(inputOnly){app().change('restore saved calculation input',()=>j.original,true);$('dataReset').click();message(saved.data.mode==='afir'?'AFIRの保存入力を復元しました。人工力を含む再計算は履歴の「保存構造から再開」を使用してください。':'保存された入力構造と計算条件を復元しました。');}
+    else if(saved.result){showResult(saved.result,j);message('保存済みの結果を開きました。構造への適用・構造列の保存ができます。');}
+    else message('結果はまだ保存されていません。実行中の計算は履歴から追跡できます。');
+    $('jobHistoryDialog').close();$('engineDialog').showModal();return j;
+  }
+  async function enqueueCurrent(){
+    if(!connection?.info.jobQueue)throw Error('接続中のサーバーはキューに対応していません。');
+    try{if($('engineMode').value==='batch')throw Error('実行中の計算がある場合、一括最適化は完了後に開始してください。');const j=input();j.data.livePreview=$('engineLive').checked;const created=await request(connection,'/api/jobs',j.data);message(`キューへ追加しました（${created.id.slice(0,8)}）。現在追跡している計算は継続します。`);MV.JobHistoryUI?.changed();return created;}catch(e){message(e.message);throw e;}
+  }
+  async function watchSaved(saved){
+    if(job)throw Error('別の計算を追跡中です。終了後に履歴から選択してください。');
+    const j=contextForSaved(saved);j.livePreview=$('engineLive').checked;j.cancelRequested=false;
+    restoreInput(saved.data);clearResult();MV.EnergyProfile.reset();job=j;busy(true);MV.DiagnosticsUI?.reset();
+    if(j.livePreview){MV.EnergyProfile.begin(cancel,open);MV.EnergyProfile.reveal();}
+    try{await watch(j);}catch(e){message(e.message);}finally{if(job===j){job=null;busy(false);MV.EnergyProfile.finish();MV.JobHistoryUI?.changed();}}
+  }
+  function prepareSegment(segment){
+    const j=result;if(!j)return;if(job)throw Error('計算の完了後に区間を選んでください。');if(dirty()||fingerprint(app().getState())!==j.fingerprint)throw Error('入力が変更されています。履歴から結果を開き直してください。');
+    const a=segment.start,b=segment.end;if(!Number.isInteger(a)||!Number.isInteger(b)||a<0||b>=j.result.images.length||b<=a)throw Error('分割区間が不正です。');
+    const frames=j.result.images.slice(a,b+1).map((positions,k)=>{const f=MV.Model.createState(baseFrame(j,a+k));f.atoms.forEach((atom,i)=>{[atom.x,atom.y,atom.z]=positions[i];});delete f.metadata.externalCalculation;delete f.metadata.afirCalculation;f.metadata.totalCharge=j.data.charge;f.metadata.multiplicity=j.data.multiplicity;f.metadata.pathNodeId=j.result.nodeIds?.[a+k];MV.Bonding.refreshInferredBonds(f);return MV.Periodic.snapshot(f);});
+    if(frames.length===2){const f=MV.Model.createState(frames[0]);f.atoms.forEach((atom,i)=>{for(const axis of ['x','y','z'])atom[axis]=(frames[0].atoms[i][axis]+frames[1].atoms[i][axis])/2;});delete f.metadata.pathNodeId;frames.splice(1,0,MV.Periodic.snapshot(f));}
+    const next=MV.Model.createState(frames[0]);next.metadata.trajectory=frames;next.metadata.frameIndex=0;app().change('select CI-NEB path segment',()=>next,true);$('dataReset').click();prepareNEB();message(segment.needsEndpointOptimization?'この区間の端点には未収束の谷が含まれます。必要な端点をMINで緩和してからCI-NEBを実行してください。':'分割した区間をCI-NEB入力にしました。計算条件を確認してください。');
   }
   function init(){
     if(location.hostname==='127.0.0.1'||location.hostname==='localhost')$('engineURL').value=location.origin;
@@ -330,7 +385,8 @@
     for(const id of ['engineURL','engineToken'])$(id).addEventListener('input',()=>{connection=null;connectionDetails();$('engineRun').disabled=true;$('engineConnected').textContent='未接続';MV.AFIRUI?.sync();});
     $('engineProfile').addEventListener('click',()=>{if(result){showProfile(result.result,result);$('engineDialog').close();MV.EnergyProfile.reveal();}});
     $('engineXYZ').addEventListener('click',()=>{if(result)exportXYZ(result.result,result);});
+    MV.ResearchUI?.init();MV.JobHistoryUI?.init();MV.DiagnosticsUI?.init();MV.StructureAnalysisUI?.init();
     $('engineDialog').addEventListener('cancel',e=>{if(job){e.preventDefault();cancel();}});settings();
   }
-  MV.EngineUI={init,open,modelInput,modelSummary,validateSolvationResult,syncModelBusy:()=>{$('engineModelSettings').disabled=!!job||!!MV.AFIRUI?.isBusy?.();},prepareBatch,endpoint,frames,validateResult,validateEngineInput,request,prepareNEB,prepareSingle,isBusy:()=>!!job,getConnection:()=>connection?{...connection}:null};
+  MV.EngineUI={init,open,modelInput,modelSummary,validateSolvationResult,syncModelBusy:()=>{$('engineModelSettings').disabled=(!!job||!!MV.AFIRUI?.isBusy?.())&&!connection?.info.jobQueue;},prepareBatch,endpoint,frames,validateResult,validateEngineInput,request,prepareNEB,prepareSingle,settings,input,restoreInput,restoreJob,watchSaved,prepareSegment,enqueueCurrent,baseFrame,isBusy:()=>!!job,getConnection:()=>connection?{...connection}:null};
 })(window);

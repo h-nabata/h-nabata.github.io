@@ -3,11 +3,12 @@
   'use strict';
   function validate(source){
     const {symbols,images,energies,biasEnergies,cell}=source;
-    if(!Array.isArray(symbols)||!symbols.length||symbols.some(s=>typeof s!=='string'||! /^[A-Z][a-z]?$/.test(s))||!Array.isArray(images)||!images.length||images.length>10001)throw Error('構造列の元素・構造数が不正です。');
+    const limit=source.kind==='irc'?40001:10001;
+    if(!Array.isArray(symbols)||!symbols.length||symbols.some(s=>typeof s!=='string'||! /^[A-Z][a-z]?$/.test(s))||!Array.isArray(images)||!images.length||images.length>limit)throw Error('構造列の元素・構造数が不正です。');
     if(images.some(p=>!Array.isArray(p)||p.length!==symbols.length||p.some(v=>!Array.isArray(v)||v.length!==3||v.some(x=>!Number.isFinite(x)||Math.abs(x)>10000))))throw Error('構造列の原子数・座標が不正です。');
     for(const series of [energies,biasEnergies])if(series!=null&&(!Array.isArray(series)||series.length!==images.length||series.some(x=>!Number.isFinite(x))))throw Error('構造列とエネルギーが一致しません。');
     if(biasEnergies&&!energies)throw Error('人工項と併せて物理エネルギーが必要です。');
-    if(source.stepNumbers&&(!Array.isArray(source.stepNumbers)||source.stepNumbers.length!==images.length||source.stepNumbers.some(i=>!Number.isInteger(i)||i<0||i>10000)))throw Error('最適化ステップの番号が不正です。');
+    if(source.stepNumbers&&(!Array.isArray(source.stepNumbers)||source.stepNumbers.length!==images.length||source.stepNumbers.some(i=>!Number.isInteger(i)||i<0||i>=limit)))throw Error('最適化ステップの番号が不正です。');
     if(cell&&(!Array.isArray(cell.vectors)||cell.vectors.length!==3||cell.vectors.some(v=>!Array.isArray(v)||v.length!==3||v.some(x=>!Number.isFinite(x)))||!Array.isArray(cell.pbc)||cell.pbc.length!==3||cell.pbc.some(x=>typeof x!=='boolean')))throw Error('構造列のセルが不正です。');
     return source;
   }

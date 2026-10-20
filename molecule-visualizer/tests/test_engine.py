@@ -224,7 +224,9 @@ class HTTPBoundary(unittest.TestCase):
         self.assertEqual(self.call('OPTIONS','/api/jobs',headers={'Origin':'https://evil.example','Access-Control-Request-Method':'POST'})[0],403)
         self.assertEqual(self.call('POST','/api/jobs',WATER,{'Content-Type':'text/plain'})[0],415)
         self.assertEqual(self.call('POST','/api/jobs',{**WATER,'binary':'/bin/sh'})[0],400)
-        self.assertEqual(self.call('GET','/api/jobs')[0],404)
+        status,_,history=self.call('GET','/api/jobs')
+        self.assertEqual(status,200);self.assertEqual(history['jobs'],[])
+        self.assertEqual(self.call('GET','/api/jobs',headers={'Authorization':''})[0],401)
         self.assertEqual(self.call('POST','/api/jobs',WATER,{'Content-Length':str(b.MAX_BODY+1)})[0],413)
 
     @unittest.skipUnless(importlib.util.find_spec('tblite'),'tblite required')
@@ -257,7 +259,10 @@ class HTTPBoundary(unittest.TestCase):
                         if children:break
                         time.sleep(.03)
                     self.assertTrue(children)
-                    with self.assertRaises(RuntimeError):jobs.start(b.validate(WATER,'gxtb'))
+                    queued=jobs.start(b.validate(WATER,'gxtb'))
+                    self.assertEqual(queued['status'],'queued')
+                    jobs.cancel(queued['id'])
+                    self.assertEqual(jobs.get(queued['id'])['status'],'cancelled')
                     if timeout==60:jobs.cancel(job['id'])
                     jobs.job['thread'].join(timeout=8)
                     self.assertFalse(jobs.job['thread'].is_alive())

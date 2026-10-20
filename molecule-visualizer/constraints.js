@@ -26,7 +26,7 @@
   }
   function forJob(state,data,info){
     const fixed=indices(state);if(!fixed.length)return [];
-    if(!['optimize','afir'].includes(data.mode)||data.vibrations)throw Error('原子固定はMIN・AFIR-MIN専用です。TS・経路計算・振動解析の前に固定をオフにしてください。');
+    if(!['optimize','afir','scan'].includes(data.mode)||data.vibrations)throw Error('原子固定はMIN・AFIR-MIN・緩和スキャン専用です。TS・IRC・経路計算・振動解析の前に固定をオフにしてください。');
     if(info&&!info.fixedAtoms)throw Error('原子固定を使うには、最新のbridge.pyに差し替えて再起動・再接続してください。');
     if(JSON.stringify(state.atoms.map(a=>a.element))!==JSON.stringify(data.symbols))throw Error('原子固定を一括計算へ適用するには、現在の構造と入力全構造の元素・File-orderを一致させてください。');
     return fixed;
