@@ -11,7 +11,7 @@
       if(JSON.stringify(frame.atoms.map(a=>a.element))!==JSON.stringify(symbols)||JSON.stringify(frame.metadata.cell||null)!==cell)throw Error('全ノードの原子順序・セルを一致させてください。');
       if(frame.atoms.some(a=>![a.x,a.y,a.z].every(Number.isFinite)))throw Error('不正な座標です。');
     }
-    const out=[];
+    const out=[],nodeIds=new Set(frames.map(f=>f.metadata.pathNodeId));let insertionId=0;const identified=nodeIds.size===frames.length&&frames.every(f=>typeof f.metadata.pathNodeId==='string'&&f.metadata.pathNodeId);
     frames.forEach((frame,i)=>{
       out.push(MV.Periodic.snapshot(MV.Model.createState(frame)));
       if(i<from||i>=to)return;
@@ -19,7 +19,8 @@
       for(let k=1;k<=each;k++){
         const t=k/(each+1),s=MV.Model.createState(frame);
         s.atoms.forEach((a,j)=>{for(const axis of ['x','y','z'])a[axis]+=(next.atoms[j][axis]-a[axis])*t;});
-        delete s.metadata.externalCalculation;delete s.metadata.afirCalculation;
+        delete s.metadata.externalCalculation;delete s.metadata.afirCalculation;delete s.metadata.pathNodeId;
+        if(identified){let id;do{id='manual-node-'+(++insertionId);}while(nodeIds.has(id));nodeIds.add(id);s.metadata.pathNodeId=id;}
         s.metadata.pathInsertion={between:[i+1,i+2],fraction:t};
         for(let a=0;a<s.atoms.length;a++)for(let b=a+1;b<s.atoms.length;b++){
           let delta=['x','y','z'].map(axis=>s.atoms[a][axis]-s.atoms[b][axis]);
@@ -30,19 +31,20 @@
       }
     });return out;
   }
-  let source=null,guard=null;
+  let source=null,guard=null,pathMode='cineb';
   function count(){
     const from=Number($('refineFrom').value),to=Number($('refineTo').value),each=Number($('refineEach').value),n=source?.length||0;
     const valid=[from,to,each].every(Number.isInteger)&&from>=1&&to<=n&&from<to&&each>=1&&n+(to-from)*each<=100;
     $('refineMessage').textContent=valid?`${n} → ${n+(to-from)*each}ノード（${(to-from)*each}ノード追加）`:'区間と追加数を確認してください。合計100ノードまでです。';
     $('refineApply').disabled=$('refineNEB').disabled=!valid;
   }
-  function open(frames=null){
+  function open(frames=null,mode='cineb'){
+    if(!['cineb','lup'].includes(mode))throw Error('未対応の経路計算です。');pathMode=mode;
     if(MV.EngineUI.isBusy()||MV.AFIRUI?.isBusy?.())throw Error('実行中の計算を一時停止または終了してください。');
     if(/未適用|編集中/.test($('xyzEditStatus').textContent))throw Error('座標欄の未適用の編集を先に解決してください。');
     source=frames||MV.EngineUI.frames(MV.App.getState(),'all');
-    if(source.length<3)throw Error('先に3ノード以上の経路を読み込むか、CI-NEB結果を取得してください。');
-    guard=fingerprint(MV.App.getState());
+    if(source.length<3)throw Error('先に3ノード以上の経路を読み込むか、経路計算の結果を取得してください。');
+    guard=fingerprint(MV.App.getState());$('refineNEB').textContent=`補間して${pathMode==='lup'?'LUP系':'CI-NEB'}再開の設定へ`;
     $('refineSummary').textContent=`対象：${source.length}ノード · ${source[0].atoms.length}原子`;
     $('refineFrom').value=1;$('refineTo').value=source.length;$('refineEach').value=1;
     $('refineFrom').max=source.length-1;$('refineTo').max=source.length;count();$('refineDialog').showModal();
@@ -54,7 +56,7 @@
       const out=refine(source,Number($('refineFrom').value)-1,Number($('refineTo').value)-1,Number($('refineEach').value));
       const next=MV.Model.createState(out[0]);next.metadata.trajectory=out;next.metadata.frameIndex=0;next.viewSettings={...MV.App.getState().viewSettings};
       MV.Studio.stop();MV.EnergyProfile.reset();MV.App.change('insert path nodes',()=>next,true);$('dataReset').click();$('refineDialog').close();
-      if(toNEB)MV.EngineUI.prepareNEB();
+      if(toNEB)MV.EngineUI.prepareNEB(pathMode);
       MV.App.setStatus(`${out.length}ノードへ補間しました。既存ノードと端点は保持しています。「戻す」で元の経路に戻せます。`);
     }catch(e){$('refineMessage').textContent=e.message;}
   }

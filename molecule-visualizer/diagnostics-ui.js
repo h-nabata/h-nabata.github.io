@@ -29,7 +29,7 @@
     const energySeries=[['energy','物理'],['uma','UMA'],['solvation','溶媒補正'],['bias','AFIR人工項'],['total','物理＋人工項']].map(([key,name])=>{const baseline=energyRows.find(r=>Number.isFinite(r[key]))?.[key];return {name,values:energyRows.map(r=>Number.isFinite(r[key])?r[key]-baseline:null)};});
     lineChart('diagnosticsEnergy',energySeries,'各成分の始点との差 ΔE (eV)',$('diagnosticsEnergyAxis').value==='structures'?'結果の構造番号 →':'記録された計算ステップ →');
     const value=v=>Number.isFinite(v)?v.toPrecision(5):'—';
-    $('diagnosticsSummary').textContent=latest?`記録 ${rows.length}件 · ステップ ${latest.step} · 最大有効力 ${value(latest.fmax)} eV/Å · RMS有効力 ${value(latest.rmsForce)} eV/Å · ΔE ${value(latest.energyChangeEV)} eV · 最大原子変位 ${value(latest.maxDisplacement)} Å`:'計算の評価を待っています。';
+    $('diagnosticsSummary').textContent=latest?`記録 ${rows.length}件 · ステップ ${latest.step} · 最大有効力 ${value(latest.fmax)} eV/Å · RMS有効力 ${value(latest.rmsForce)} eV/Å · ΔE ${value(latest.energyChangeEV)} eV · 最大原子変位 ${value(latest.maxDisplacement)} Å`+(Number.isFinite(latest.redistributionResidual)?` · 再分布残差 ${value(latest.redistributionResidual)} Å`:'')+(Number.isFinite(latest.redistributionMove)?` · 再分布変位 ${value(latest.redistributionMove)} Å`:'')+(Number.isFinite(latest.cacheHits)?` · 評価の再利用 ${latest.cacheHits}件`:''):'計算の評価を待っています。';
     $('diagnosticsNote').textContent='取得できた成分だけを表示します。経路計算のステップ別エネルギーは、そのステップで物理エネルギーが最大のノードです。力の最大値同士は加算できません。赤い破線は最大有効力の収束閾値です。';
   }
   function reset(meta={}){restore();rows=[];result=null;context=meta;jobKey=meta.id||meta.jobId||null;if(initialized){$('diagnosticsVectors').hidden=true;$('diagnosticsEnergyAxis').value='steps';$('diagnosticsToggle').disabled=false;render();}}
@@ -78,12 +78,12 @@
   const finite=value=>Number.isFinite(value)?value:null;
   function normalize(p,mode){
     if(!p||!Number.isFinite(p.step)&&!Number.isFinite(p.fmax)&&!Number.isFinite(p.energyEV))return null;
-    const d=p.diagnostics||{},energies=p.energies,band=['cineb','neb','perpendicular'].includes(mode),index=band&&energies?.length?energies.indexOf(Math.max(...energies)):0;
+    const d=p.diagnostics||{},energies=p.energies,band=['cineb','neb','perpendicular','lup'].includes(mode),index=band&&energies?.length?energies.indexOf(Math.max(...energies)):0;
     const energy=finite(p.energyEV)??finite(energies?.[index]),component=(p.energyComponents||{}),value=k=>finite(Array.isArray(component[k])?component[k][index]:component[k]);
     const bias=finite(p.biasEnergyEV),step=finite(p.step)??0;
     const rawComponents=p.componentFmax||d.componentFmax||{},components=Object.fromEntries(Object.entries(rawComponents).filter(([,v])=>Number.isFinite(v)));
     for(const [key,alias] of [['artificial','artificialMax'],['spring','springMax'],['perpendicular','perpendicularMax'],['climbingCorrection','climbingMax']])if(components[key]===undefined&&Number.isFinite(d[alias]))components[key]=d[alias];
-    return {key:`${p.phase||''}:${p.direction||''}:${p.node??''}:${step}`,step,phase:p.phase||'',direction:p.direction||'',fmax:finite(p.fmax)??finite(d.effectiveFmax)??finite(d.effectiveMax),rmsForce:finite(p.rmsForce)??finite(d.rmsForce)??finite(d.effectiveRMS),physicalFmax:finite(p.physicalFmax)??finite(d.physicalFmax)??finite(d.physicalMax),energy,uma:value('uma'),solvation:value('solvation'),bias,total:energy!==null&&bias!==null?energy+bias:null,components,energyChangeEV:finite(p.energyChangeEV)??finite(d.energyChangeEV),maxDisplacement:finite(p.maxDisplacement)??finite(d.maxDisplacement)};
+    return {key:`${p.phase||''}:${p.direction||''}:${p.node??''}:${step}`,step,phase:p.phase||'',direction:p.direction||'',fmax:finite(p.fmax)??finite(d.effectiveFmax)??finite(d.effectiveMax),rmsForce:finite(p.rmsForce)??finite(d.rmsForce)??finite(d.effectiveRMS),physicalFmax:finite(p.physicalFmax)??finite(d.physicalFmax)??finite(d.physicalMax),energy,uma:value('uma'),solvation:value('solvation'),bias,total:energy!==null&&bias!==null?energy+bias:null,components,energyChangeEV:finite(p.energyChangeEV)??finite(d.energyChangeEV),maxDisplacement:finite(p.maxDisplacement)??finite(d.maxDisplacement),redistributionResidual:finite(p.redistributionResidual)??finite(d.redistributionResidual),redistributionMove:finite(p.redistributionMove)??finite(d.redistributionMove),cacheHits:finite(p.cacheHits)??finite(d.cacheHits)};
   }
   function energyRows(r){return (r.energies||[]).map((energy,i)=>({energy:finite(energy),uma:finite(r.energyComponents?.uma?.[i]),solvation:finite(r.energyComponents?.solvation?.[i]),bias:finite(r.biasEnergies?.[i]),total:finite(r.biasedEnergies?.[i])}));}
   function fromResult(r){

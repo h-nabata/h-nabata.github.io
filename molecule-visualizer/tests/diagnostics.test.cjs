@@ -18,3 +18,7 @@ test('separate IRC directions and scan nodes do not share history keys',()=>{
 test('perpendicular force is not mislabeled as the removed tangent force',()=>{
  const p=D.normalize({step:1,diagnostics:{perpendicularMax:.2,componentFmax:{tangentRemoval:.7}}},'cineb');assert.equal(p.components.perpendicular,.2);assert.equal(p.components.tangentRemoval,.7);
 });
+test('LUP energy follows the highest node and redistribution remains a displacement metric',()=>{
+ const p=D.normalize({step:9,energies:[-8,-4,-7],energyComponents:{uma:[-6,-2,-5],solvation:[-2,-2,-2]},diagnostics:{redistributionResidual:.003,redistributionMove:.001,cacheHits:12}},'lup');
+ assert.equal(p.energy,-4);assert.equal(p.uma+p.solvation,p.energy);assert.equal(p.redistributionResidual,.003);assert.equal(p.redistributionMove,.001);assert.equal(p.cacheHits,12);assert.deepEqual(p.components,{});assert.equal(D.normalize({step:1},'lup').redistributionResidual,null);
+});

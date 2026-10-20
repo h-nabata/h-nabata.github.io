@@ -3,7 +3,7 @@
   'use strict';
   const MV=global.MoleculeVisualizer,$=id=>document.getElementById(id);
   const statuses={queued:'待機中',running:'実行中',stopping:'終了処理中',completed:'完了',cancelled:'中止',error:'失敗',interrupted:'中断（サーバー停止）'};
-  const modes={evaluate:'エネルギー評価',optimize:'MIN',afir:'AFIR-MIN',cineb:'CI-NEB',neb:'NEB',perpendicular:'経路の直交緩和',ts:'TS',irc:'IRC',scan:'緩和スキャン',vibrations:'振動解析'};
+  const modes={evaluate:'エネルギー評価',optimize:'MIN',afir:'AFIR-MIN',cineb:'CI-NEB',lup:'LUP系（CI-String）',neb:'NEB',perpendicular:'経路の直交緩和',ts:'TS',irc:'IRC',scan:'緩和スキャン',vibrations:'振動解析'};
   let refreshing=false,timer=null;
   function message(text){$('jobHistoryMessage').textContent=text;}
   function el(tag,text,cls){const e=document.createElement(tag);if(text!=null)e.textContent=text;if(cls)e.className=cls;return e;}

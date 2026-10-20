@@ -32,12 +32,12 @@ from ase.data import atomic_numbers, covalent_radii
 from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 
-VERSION = '1.8.0'
+VERSION = '1.9.0'
 UMA_MODELS = ('uma-s-1p2p1', 'uma-s-1p2', 'uma-s-1p1', 'uma-m-1p1')
 ANYSOLV_MODELS = ('model_compact', 'model_moe')
 MAX_BODY = 8 * 1024 * 1024
-MODES = ('evaluate', 'optimize', 'perpendicular', 'neb', 'cineb', 'afir', 'ts', 'vibrations', 'irc', 'scan')
-PATH_MODES = ('perpendicular', 'neb', 'cineb')
+MODES = ('evaluate', 'optimize', 'perpendicular', 'neb', 'cineb', 'lup', 'afir', 'ts', 'vibrations', 'irc', 'scan')
+PATH_MODES = ('perpendicular', 'neb', 'cineb', 'lup')
 
 
 def number(value, name, lo, hi, integer=False):
@@ -52,7 +52,7 @@ def validate(data, engine):
     allowed = {'symbols', 'images', 'cell', 'charge', 'multiplicity', 'mode',
                'maxSteps', 'fmax', 'spring', 'maxMove', 'climbAfter', 'atomIds', 'afir', 'livePreview',
                'optimizer', 'trustRadius', 'vibrations', 'fixedAtoms', 'umaDevice', 'solvation',
-               'irc', 'thermochemistry', 'internalConstraints', 'scan', 'adaptiveNEB', 'pathSplit', 'nodeIds'}
+               'irc', 'thermochemistry', 'internalConstraints', 'scan', 'adaptiveNEB', 'pathSplit', 'nodeIds', 'lup'}
     if not isinstance(data, dict) or set(data) - allowed:
         raise ValueError('未定義の入力項目があります。コマンド・パス指定は受け付けません。')
     if type(data.get('livePreview', False)) is not bool:
@@ -98,11 +98,11 @@ def validate(data, engine):
                 raise ValueError('0.1 Å未満で重なった原子があります。初期経路の衝突を解消してください。')
     result = dict(symbols=symbols, images=images.tolist(), cell=cell, charge=charge,
                   multiplicity=multiplicity, mode=mode, livePreview=data.get('livePreview', False))
-    step_default, step_limit = (10000 if mode == 'afir' else 150), 10000
+    step_default, step_limit = (10000 if mode == 'afir' else 100 if mode == 'lup' else 150), 10000
     for key, default, low, high, integer in [('maxSteps', step_default, 1, step_limit, True), ('fmax', .05, .00001, 10, False),
-            ('spring', .1, .001, 10, False), ('maxMove', .04, .001, .2, False), ('climbAfter', 10, 0, 500, True)]:
+            ('spring', .1, .001, 10, False), ('maxMove', .03 if mode == 'lup' else .04, .001, .2, False), ('climbAfter', 5 if mode == 'lup' else 10, 0, 500, True)]:
         result[key] = number(data.get(key, default), key, low, high, integer)
-    if mode == 'cineb' and result['climbAfter'] >= result['maxSteps']:
+    if mode in ('cineb', 'lup') and result['climbAfter'] >= result['maxSteps']:
         raise ValueError('CI開始ステップは最大ステップ数より小さくしてください。')
     if mode in PATH_MODES and any(np.linalg.norm(images[i+1]-images[i]) < 1e-10 for i in range(len(images)-1)):
         raise ValueError('隣接構造が同一です。重複フレームを除いてください。')
@@ -115,8 +115,8 @@ def validate(data, engine):
         if not isinstance(ids, list) or len(ids) != len(symbols) or any(not isinstance(i, str) or not i or len(i)>200 for i in ids) or len(set(ids)) != len(ids):
             raise ValueError('全原子の一意なIDが必要です。')
         result['atomIds'] = ids[:]
-    optimizer = data.get('optimizer', 'sella-prfo' if mode == 'ts' else 'fire')
-    choices = ('sella-prfo', 'sella-rfo') if mode == 'ts' else ('fire', 'lbfgs', 'bfgs') if mode in ('optimize', 'scan') else ('fire',)
+    optimizer = data.get('optimizer', 'sella-prfo' if mode == 'ts' else 'lbfgs' if mode == 'lup' else 'fire')
+    choices = ('sella-prfo', 'sella-rfo') if mode == 'ts' else ('fire', 'lbfgs', 'bfgs') if mode in ('optimize', 'scan') else ('fire', 'lbfgs') if mode == 'lup' else ('fire',)
     if optimizer not in choices:
         raise ValueError('この操作では指定した最適化手法を使用できません。TSにはSella PRFO/RFOを指定してください。')
     result['optimizer'] = optimizer
@@ -163,6 +163,7 @@ def validate(data, engine):
         result['internalConstraints'] = validate_internal_constraints(data, result)
     if mode == 'scan' or 'scan' in data:
         result['scan'] = validate_scan_settings(data, result)
+    validate_lup(data, result)
     validate_adaptive_neb(data, result)
     validate_irc_settings(data, result)
     validate_thermochemistry_settings(data, result)
@@ -300,6 +301,21 @@ def afir_relax(data, calculate, progress=lambda p:None):
     return result
 
 
+def validate_lup(data, normalized):
+    """Spring-free CI-String variant; not the proprietary GRRM LUP algorithm."""
+    if normalized['mode'] != 'lup':
+        if 'lup' in data:
+            raise ValueError('lup設定はLUP系（CI-String）専用です。')
+        return
+    settings = data.get('lup', {})
+    if not isinstance(settings, dict) or set(settings)-{'redistributeEvery', 'redistributionTolerance'}:
+        raise ValueError('LUP系の再分布設定が不正です。')
+    normalized['lup'] = {
+        'redistributeEvery': number(settings.get('redistributeEvery', 5), '弧長再分布の間隔', 1, 100, True),
+        'redistributionTolerance': number(settings.get('redistributionTolerance', .001), '再分布残差の収束閾値', .00001, .1),
+    }
+
+
 def validate_adaptive_neb(data, normalized):
     """Validate adaptive band settings; IDs survive insertion and continuation."""
     count = len(normalized['images'])
@@ -312,10 +328,10 @@ def validate_adaptive_neb(data, normalized):
         normalized['nodeIds'] = ids[:]
     if 'adaptiveNEB' in data:
         settings = data['adaptiveNEB']
-        if (normalized['mode'] != 'cineb' or not isinstance(settings, dict)
+        if (normalized['mode'] not in ('cineb', 'lup') or not isinstance(settings, dict)
                 or set(settings) - {'enabled', 'maxImages', 'interval', 'maxSpacing', 'energyGap'}
                 or type(settings.get('enabled', True)) is not bool):
-            raise ValueError('自動ノード追加はCI-NEB専用です。設定を確認してください。')
+            raise ValueError('自動ノード追加はCI-NEB・LUP系専用です。設定を確認してください。')
         normalized['adaptiveNEB'] = {
             'enabled': settings.get('enabled', True),
             'maxImages': number(settings.get('maxImages', max(30, count)), '最大ノード数', count, 100, True),
@@ -512,6 +528,89 @@ def force_max(forces):
     return float(np.max(np.linalg.norm(forces, axis=-1)))
 
 
+def lup_redistribute(images, climbing=None):
+    """Piecewise-linear equal-arclength redistribution, preserving CI and ends.
+
+    Cartesian 3N arc length uses unwrapped coordinates. No mass weighting,
+    alignment or periodic wrapping is introduced. Redistribution is a coordinate
+    operation, never a fictitious force or an energy contribution.
+    """
+    images = np.asarray(images, dtype=float)
+    answer = images.copy()
+    anchors = [0, len(images)-1] if climbing is None else [0, climbing, len(images)-1]
+    for start, end in zip(anchors, anchors[1:]):
+        if end-start <= 1:
+            continue
+        segment = images[start:end+1].reshape(end-start+1, -1)
+        arc = np.r_[0., np.cumsum(np.linalg.norm(np.diff(segment, axis=0), axis=1))]
+        if arc[-1] < 1e-10:
+            raise ValueError('LUP系の経路区間が縮退しました。異なる端点・TS候補で経路を作り直してください。')
+        keep = np.r_[True, np.diff(arc)>1e-12]
+        target = np.linspace(0., arc[-1], end-start+1)
+        output = np.stack([np.interp(target, arc[keep], coordinate[keep]) for coordinate in segment.T], axis=1)
+        answer[start:end+1] = output.reshape(end-start+1, *images.shape[1:])
+    answer[anchors] = images[anchors]
+    return answer
+
+
+def lup_safe_geometry(images, cell=None):
+    if not np.isfinite(images).all() or np.max(np.abs(images)) > 1e4:
+        return False
+    if any(np.linalg.norm(images[i+1]-images[i]) < 1e-10 for i in range(len(images)-1)):
+        return False
+    for image in images:
+        for atom in range(len(image)-1):
+            vectors = image[atom+1:]-image[atom]
+            distances = find_mic(vectors, cell['vectors'], cell['pbc'])[1] if cell and any(cell['pbc']) else np.linalg.norm(vectors, axis=1)
+            if len(distances) and np.min(distances) < .1:
+                return False
+    return True
+
+
+def lup_lbfgs_direction(images, effective, tangents, climbing, states):
+    """Image-local positive-curvature L-BFGS on the transverse subspaces.
+
+    The CI reflected force is used only at the climbing image. Secants are
+    projected onto the current tangent plane at other nodes. A changed CI,
+    insertion or redistribution must clear states before the next call. This is
+    a bounded quasi-Newton root search, not an energy-monotone minimization.
+    """
+    directions = np.zeros_like(images)
+    for i in range(1, len(images)-1):
+        position, force = images[i].ravel(), effective[i].ravel()
+        state = states.setdefault(i, {'pairs': []})
+        tau = tangents[i].ravel()
+        project = (lambda vector: vector) if i == climbing else (lambda vector: vector-np.dot(vector, tau)*tau)
+        if 'position' in state:
+            s = project(position-state['position'])
+            y = project(state['force']-force)
+            sy, scale = float(np.dot(s, y)), float(np.linalg.norm(s)*np.linalg.norm(y))
+            if sy > max(1e-12, 1e-8*scale):
+                state['pairs'].append((s, y, 1./sy))
+                state['pairs'] = state['pairs'][-6:]
+            else:
+                state['pairs'].clear()
+        q, alphas = -force.copy(), []
+        for s, y, rho in reversed(state['pairs']):
+            coefficient = rho*np.dot(s, q)
+            alphas.append(coefficient)
+            q -= coefficient*y
+        scale = .05
+        if state['pairs']:
+            s, y, _ = state['pairs'][-1]
+            scale = float(np.clip(np.dot(s, y)/max(np.dot(y, y), 1e-300), 1e-4, 1.))
+        z = scale*q
+        for (s, y, rho), coefficient in zip(state['pairs'], reversed(alphas)):
+            z += s*(coefficient-rho*np.dot(y, z))
+        direction = project(-z)
+        if not np.isfinite(direction).all() or (np.linalg.norm(force)>0 and np.dot(direction, force) <= 0):
+            state['pairs'].clear()
+            direction = .05*force
+        directions[i] = direction.reshape(images.shape[1:])
+        state['position'], state['force'] = position.copy(), force.copy()
+    return directions
+
+
 def relax(data, calculate, progress=lambda _: None):
     """Bounded FIRE with optional adaptive CI-NEB and evaluated-band checkpoints.
 
@@ -524,19 +623,29 @@ def relax(data, calculate, progress=lambda _: None):
     energies, physical = np.zeros(len(images)), np.zeros_like(images)
     velocity = np.zeros_like(images)
     mode, max_steps = data['mode'], data['maxSteps']
+    lup = {'redistributeEvery':5, 'redistributionTolerance':.001, **data.get('lup', {})}
+    optimizer_method = data.get('optimizer', 'lbfgs' if mode == 'lup' else 'fire')
+    lup_states, lup_cache = {}, {}
+    lup_redistributions, cache_hits, redistribution_move = 0, 0, 0.
     dt, alpha, positive = .05, .1, 0
     previous_climbing = None
     history, max_parallel_step = [], 0.0
     trajectory = {'images': [], 'energies': []} if mode == 'optimize' else None
     node_ids = list(data.get('nodeIds', [f'node-{i}' for i in range(len(images))]))
     adaptive = data.get('adaptiveNEB', {})
-    adaptive_on = mode == 'cineb' and adaptive.get('enabled', False)
+    adaptive_on = mode in ('cineb', 'lup') and adaptive.get('enabled', False)
     insertion_events, blocked_intervals = [], []
     next_id, evaluations = 0, 0
     previous_positions, previous_energies = {}, {}
     for step in range((0 if mode == 'evaluate' else max_steps) + 1):
         for i in range(len(images)):
             if step and mode != 'optimize' and i in (0, len(images)-1):
+                if mode == 'lup':
+                    cache_hits += 1
+                continue
+            if mode == 'lup' and node_ids[i] in lup_cache and np.array_equal(images[i], lup_cache[node_ids[i]][0]):
+                _, energies[i], physical[i] = lup_cache[node_ids[i]]
+                cache_hits += 1
                 continue
             progress({'step': step, 'image': i+1, 'images': len(images), 'evaluations': evaluations})
             energy, force = calculate(i, images[i])
@@ -545,7 +654,9 @@ def relax(data, calculate, progress=lambda _: None):
                 raise ValueError('エンジンから有限なエネルギー・力を取得できませんでした。')
             energies[i], physical[i] = energy, force
             evaluations += 1
-        climbing = int(np.argmax(energies[1:-1]))+1 if mode == 'cineb' and step >= data['climbAfter'] else None
+            if mode == 'lup':
+                lup_cache[node_ids[i]] = (images[i].copy(), float(energy), force.copy())
+        climbing = int(np.argmax(energies[1:-1]))+1 if mode in ('cineb', 'lup') and step >= data['climbAfter'] else None
         effective, tangents = band_forces(images, energies, physical, mode, data['spring'], climbing)
         if mode == 'evaluate':
             effective = physical.copy()
@@ -599,6 +710,8 @@ def relax(data, calculate, progress=lambda _: None):
                         new_energies.append(float(energy))
                         new_forces.append(force)
                         new_ids.append(identifier)
+                        if mode == 'lup':
+                            lup_cache[identifier] = (midpoint.copy(), float(energy), force.copy())
                         insertion_events.append({'step': step, 'nodeId': identifier,
                                                  'left': node_ids[i], 'right': node_ids[i+1]})
                 images, energies, physical = np.array(new_images), np.array(new_energies), np.array(new_forces)
@@ -606,6 +719,7 @@ def relax(data, calculate, progress=lambda _: None):
                 anchors = images.copy()
                 velocity = np.zeros_like(images)
                 dt, alpha, positive, previous_climbing = .05, .1, 0, None
+                lup_states.clear()
                 climbing = int(np.argmax(energies[1:-1]))+1 if step >= data['climbAfter'] else None
                 effective, tangents = band_forces(images, energies, physical, mode, data['spring'], climbing)
         components, diagnostics = band_force_components(images, energies, physical, mode, data['spring'], climbing, fixed)
@@ -619,12 +733,18 @@ def relax(data, calculate, progress=lambda _: None):
         previous_positions = {identifier: images[i].copy() for i, identifier in enumerate(node_ids)}
         previous_energies = {identifier: float(energies[i]) for i, identifier in enumerate(node_ids)}
         maximum = force_max(effective)
+        redistribution_residual = force_max(lup_redistribute(images, climbing)-images) if mode == 'lup' else 0.
+        if mode == 'lup':
+            diagnostics.update(redistributionResidual=redistribution_residual,
+                redistributionMove=redistribution_move, redistributions=lup_redistributions, cacheHits=cache_hits)
         remaining = adaptive_intervals(images, energies, adaptive) if adaptive_on else []
         # An unresolved interval requests a further insertion before convergence,
         # unless the node cap is reached or every interval is geometrically blocked.
         refinable = adaptive_on and len(images) < adaptive['maxImages'] and any(
             safe_band_midpoint(images[i], images[i+1], data.get('cell')) is not None for i in remaining)
-        converged = mode != 'evaluate' and maximum <= data['fmax'] and (mode != 'cineb' or climbing is not None) and not refinable
+        converged = (mode != 'evaluate' and maximum <= data['fmax']
+                     and (mode not in ('cineb', 'lup') or climbing is not None) and not refinable
+                     and (mode != 'lup' or redistribution_residual <= lup['redistributionTolerance']))
         summary = {'step': step, 'fmax': maximum, 'energies': energies.tolist(), 'climbingImage': climbing,
                    'evaluations': evaluations, 'diagnostics': diagnostics, 'nodeIds': node_ids[:]}
         history.append(summary)
@@ -636,6 +756,10 @@ def relax(data, calculate, progress=lambda _: None):
                                              'blockedIntervals': copy.deepcopy(blocked_intervals)}}
             if data.get('pathSplit', {}).get('enabled'):
                 band_extra['pathSegments'] = path_segments(energies, physical, node_ids, data['pathSplit'], data['fmax'])
+            if mode == 'lup':
+                band_extra.update(pathMethod='lup-ci-string', optimizer=optimizer_method, lup=lup.copy(),
+                    lupStatus={'redistributions':lup_redistributions, 'cacheHits':cache_hits,
+                               'redistributionResidual':redistribution_residual})
         final_step = mode == 'evaluate' or converged or step == max_steps
         checkpoint = {}
         if trajectory is not None:
@@ -667,6 +791,61 @@ def relax(data, calculate, progress=lambda _: None):
             velocity[:] = 0
             dt, alpha, positive = .05, .1, 0
             previous_climbing = climbing
+            lup_states.clear()
+        if mode == 'lup':
+            if optimizer_method == 'lbfgs':
+                displacement = lup_lbfgs_direction(images, effective, tangents, climbing, lup_states)
+            else:
+                # Transport momentum only in the allowed transverse subspace.
+                for i in range(1, len(images)-1):
+                    if i != climbing:
+                        velocity[i] = perpendicular(velocity[i], tangents[i])
+                power = float(np.sum(velocity*effective))
+                if power > 0:
+                    positive += 1
+                    if positive > 5:
+                        dt, alpha = min(dt*1.1, .5), alpha*.99
+                else:
+                    velocity[:] = 0
+                    dt, alpha, positive = max(dt*.5, 1e-5), .1, 0
+                vnorm, fnorm = np.linalg.norm(velocity), np.linalg.norm(effective)
+                if fnorm > 0:
+                    velocity = (1-alpha)*velocity+alpha*vnorm/fnorm*effective
+                velocity += dt*effective
+                displacement = dt*velocity
+                for i in range(1, len(images)-1):
+                    if i != climbing:
+                        displacement[i] = perpendicular(displacement[i], tangents[i])
+            displacement[[0, -1]] = 0
+            for i in range(1, len(images)-1):
+                displacement[i] *= min(1., data['maxMove']/max(force_max(displacement[i]), 1e-15))
+            proposed = images+displacement
+            redistribute = (step+1) % lup['redistributeEvery'] == 0 or maximum <= data['fmax']
+            redistributed = lup_redistribute(proposed, climbing) if redistribute else proposed
+            reparam = redistributed-proposed
+            combined = redistributed-images
+            factor = min(1., data['maxMove']/max(force_max(combined), 1e-15))
+            candidate = None
+            for fraction in (1., .5, .25, .125, .0625, .03125, .015625):
+                trial = images+factor*fraction*combined
+                trial[[0, -1]] = images[[0, -1]]
+                if lup_safe_geometry(trial, data.get('cell')):
+                    candidate = trial
+                    factor *= fraction
+                    break
+            if candidate is None:
+                raise ValueError('LUP系の更新で原子衝突・経路の縮退を検出しました。最後の評価済み経路を保持しています。')
+            redistribution_move = force_max(factor*reparam)
+            if redistribution_move > 1e-12:
+                lup_redistributions += 1
+                lup_states.clear()
+                velocity[:] = 0
+                dt, alpha, positive = max(dt, .1), .1, 0
+            elif factor < 1.:
+                # Bound/geometry damping invalidates momentum but not valid secants.
+                velocity *= factor
+            images = candidate
+            continue
         active = range(len(images)) if mode == 'optimize' else range(1, len(images)-1)
         if mode == 'perpendicular':
             for i in active:
@@ -2618,6 +2797,7 @@ class Handler(BaseHTTPRequestHandler):
                     'sellaVersion':sella_version(), 'vibrations':1, 'maxVibrationAtoms':200, 'pathCheckpoint':1, 'fixedAtoms':True,
                     'irc':bool(sella_version()), 'thermochemistry':True, 'internalConstraints':True, 'scan':True,
                     'adaptiveNEB':True, 'pathSplit':True, 'history':True, 'queue':True, 'residentModels':True,
+                    'lup':True, 'pathOptimizers':{'cineb':['fire'], 'lup':['fire','lbfgs']},
                     'persistentHistory':bool(self.server.jobs.history_dir), 'jobQueue':True, 'modelResidency':True,
                     'modes': MODES, 'livePreview': 1, 'optimizationTrajectory': 1, 'maxSteps': 10000, 'maxAFIRSteps': 10000, 'jobTimeout': config['jobTimeout'],
                     'engineVersion': package_version('fairchem-core' if config['engine']=='uma' else 'tblite') if config['engine']!='gxtb' else 'locally configured binary'})
