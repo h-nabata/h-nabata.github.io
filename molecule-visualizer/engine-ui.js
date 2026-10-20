@@ -196,7 +196,7 @@
   async function run(){
     if(!connection)return;if(job){try{await enqueueCurrent();}catch(_){}return;}
     if($('engineMode').value==='batch'){await runBatch();return;}
-    if(MV.AFIRUI?.isBusy?.()){message('AFIR計算の完了または中止後に実行してください。');return;}
+    if(MV.AFIRUI?.isBusy?.()){if(connection.info.jobQueue||connection.info.queue){try{await enqueueCurrent();}catch(_){}}else message('AFIR計算の完了または中止後に実行してください。');return;}
     let j;
     try{
       j={...input(),connection:{...connection},cancelRequested:false,livePreview:$('engineLive').checked};
@@ -350,7 +350,7 @@
     return {id:saved.id,data:saved.data,frames:all,original,fingerprint:fingerprint(app().getState()),scope:all.length>1?'all':'current',connection:{...connection},livePreview:false};
   }
   function restoreJob(saved,inputOnly=false){
-    if(job)throw Error('実行中の計算の追跡を終了してから、履歴を開いてください。');
+    if(job||MV.AFIRUI?.isBusy?.())throw Error('実行中の計算の追跡を終了してから、履歴を開いてください。');
     const j=contextForSaved(saved);MV.EnergyProfile.reset();restoreInput(saved.data);clearResult();
     if(inputOnly){app().change('restore saved calculation input',()=>j.original,true);$('dataReset').click();message(saved.data.mode==='afir'?'AFIRの保存入力を復元しました。人工力を含む再計算は履歴の「保存構造から再開」を使用してください。':'保存された入力構造と計算条件を復元しました。');}
     else if(saved.result){showResult(saved.result,j);message('保存済みの結果を開きました。構造への適用・構造列の保存ができます。');}
@@ -358,11 +358,11 @@
     $('jobHistoryDialog').close();$('engineDialog').showModal();return j;
   }
   async function enqueueCurrent(){
-    if(!connection?.info.jobQueue)throw Error('接続中のサーバーはキューに対応していません。');
+    if(!connection?.info.jobQueue&&!connection?.info.queue)throw Error('接続中のサーバーはキューに対応していません。');
     try{if($('engineMode').value==='batch')throw Error('実行中の計算がある場合、一括最適化は完了後に開始してください。');const j=input();j.data.livePreview=$('engineLive').checked;const created=await request(connection,'/api/jobs',j.data);message(`キューへ追加しました（${created.id.slice(0,8)}）。現在追跡している計算は継続します。`);MV.JobHistoryUI?.changed();return created;}catch(e){message(e.message);throw e;}
   }
   async function watchSaved(saved){
-    if(job)throw Error('別の計算を追跡中です。終了後に履歴から選択してください。');
+    if(job||MV.AFIRUI?.isBusy?.())throw Error('別の計算を追跡中です。終了後に履歴から選択してください。');
     const j=contextForSaved(saved);j.livePreview=$('engineLive').checked;j.cancelRequested=false;
     restoreInput(saved.data);clearResult();MV.EnergyProfile.reset();job=j;busy(true);MV.DiagnosticsUI?.reset();
     if(j.livePreview){MV.EnergyProfile.begin(cancel,open);MV.EnergyProfile.reveal();}
@@ -388,5 +388,5 @@
     MV.ResearchUI?.init();MV.JobHistoryUI?.init();MV.DiagnosticsUI?.init();MV.StructureAnalysisUI?.init();
     $('engineDialog').addEventListener('cancel',e=>{if(job){e.preventDefault();cancel();}});settings();
   }
-  MV.EngineUI={init,open,modelInput,modelSummary,validateSolvationResult,syncModelBusy:()=>{$('engineModelSettings').disabled=(!!job||!!MV.AFIRUI?.isBusy?.())&&!connection?.info.jobQueue;},prepareBatch,endpoint,frames,validateResult,validateEngineInput,request,prepareNEB,prepareSingle,settings,input,restoreInput,restoreJob,watchSaved,prepareSegment,enqueueCurrent,baseFrame,isBusy:()=>!!job,getConnection:()=>connection?{...connection}:null};
+  MV.EngineUI={init,open,modelInput,modelSummary,validateSolvationResult,syncModelBusy:()=>{const afirBusy=!!MV.AFIRUI?.isBusy?.(),queued=connection?.info.jobQueue||connection?.info.queue;$('engineModelSettings').disabled=(!!job||afirBusy)&&!queued;if(!job){$('engineRun').textContent=afirBusy&&queued?'現在の設定をキューへ追加':'計算を実行';$('engineRun').disabled=!connection||(afirBusy&&!queued);}},prepareBatch,endpoint,frames,validateResult,validateEngineInput,request,prepareNEB,prepareSingle,settings,input,restoreInput,restoreJob,watchSaved,prepareSegment,enqueueCurrent,baseFrame,isBusy:()=>!!job,getConnection:()=>connection?{...connection}:null};
 })(window);

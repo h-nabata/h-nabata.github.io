@@ -78,6 +78,7 @@
     $('afirExport').disabled=!valid||!!job;$('afirCheck').disabled=!valid||!!job;$('afirAddPair').disabled=c.fragments.length<2||!!job;
     $('afirRun').disabled=!valid||!!job||!MV.AFIRRunner?.available();$('afirCancel').disabled=!job;
     const connection=MV.EngineUI?.getConnection?.();$('afirConnectionStatus').textContent=connection?`${connection.info.engine} / ${connection.info.method} · ${MV.EngineUI.modelSummary()}`+(MV.AFIRRunner?.available()?' · AFIR対応':' · AFIRにはサービスの更新が必要です'):'未接続（設定・人工項の確認・入力保存は利用できます）';
+    $('afirRun').textContent=!job&&MV.EngineUI?.isBusy()&&(connection?.info.jobQueue||connection?.info.queue)?'AFIR計算をキューへ追加':'AFIR探索を開始';
     MV.EngineUI?.syncModelBusy?.();$('afirLive').disabled=!!job;$('afirSettings').disabled=!!job;$('afirFragmentSettings').disabled=!!job;
     if(result)$('afirApply').disabled=!!job||!!result.applied||fingerprint(s)!==result.fingerprint||dirty();
   }
@@ -91,10 +92,19 @@
   function exportFiles(){if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();MV.ConstraintUI.flush();const out={...exportInput(app().getState(),config()),...MV.EngineUI.modelInput()};download(out,'afir-input.json');message('原子ID・XYZ・フラグメント・ペア・Python用設定をJSONに保存しました。');}
   function check(){saveSettings();const s=app().getState(),b=MV.AFIR.evaluate(s.atoms,config(),s.metadata.cell);message(`人工項のみ評価: ${b.energyEV.toFixed(6)} eV。物理ポテンシャルのエネルギーではありません。座標は変更していません。`);}
   async function run(){
-    if(job)return;if(MV.EngineUI?.isBusy()&&!MV.EngineUI.getConnection()?.info.queue){message('外部エンジンの計算を終了してから実行してください。');return;}let j;
+    if(job)return;const foregroundElsewhere=!!MV.EngineUI?.isBusy(),connection=MV.EngineUI?.getConnection();if(foregroundElsewhere&&!connection?.info.jobQueue&&!connection?.info.queue){message('外部エンジンの計算を終了してから実行してください。');return;}let j;
     try{if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();MV.ConstraintUI?.flush();const s=app().getState();MV.AFIR.validate(s.atoms,config(),s.metadata.cell);
       j={original:MV.Model.cloneState(s),fingerprint:fingerprint(s),config:JSON.parse(JSON.stringify(config())),cancelled:false,livePreview:$('afirLive').checked,previewCursor:0,liveEnergies:[],liveBiases:[]};
       if(j.livePreview&&!MV.EngineUI.getConnection()?.info.livePreview)throw Error('ライブ表示を使うにはbridge.pyを更新・再接続してください。');
+      if(foregroundElsewhere){
+        if(!MV.AFIRRunner.available())throw Error('AFIRに対応したローカルサービスへ接続してください。');
+        j.modelInput=MV.EngineUI.modelInput();j.internalConstraints=MV.ResearchUI?.constraintsInput(j.original,'afir')||[];
+        const data=MV.AFIRRunner.input(j);MV.EngineUI.validateEngineInput(data,connection.info);MV.Constraints?.forJob(j.original,data,connection.info);
+        if(j.config.maxSteps>(connection.info.maxAFIRSteps??500))throw Error('指定したAFIRステップ数に対応したサーバーへ接続してください。');
+        data.livePreview=j.livePreview;const created=await MV.EngineUI.request(connection,'/api/jobs',data);
+        if(!/^[a-f0-9]{32}$/.test(created.id))throw Error('計算IDが不正です。');
+        message(`AFIR計算をキューへ追加しました（${created.id.slice(0,8)}）。現在の計算の進捗表示は継続します。結果は「計算履歴・キュー」から開けます。`);MV.JobHistoryUI?.changed();return;
+      }
       MV.EnergyProfile.reset();MV.DiagnosticsUI?.reset?.({mode:'afir'});job=j;result=null;$('afirResult').hidden=true;sync();
       if(j.livePreview)MV.EnergyProfile.begin(()=>$('afirCancel').click(),()=>toggle(true));
       const r=await MV.AFIRRunner.run(j,(text,p)=>{
@@ -107,7 +117,7 @@
           MV.EnergyProfile.set({title:'AFIR · 計算中（評価済みの途中結果）',kind:'afir',energies:j.liveEnergies,biasEnergies:j.liveBiases,base:()=>base,positions:i=>i===p.next-1?p.positions:null},MV.EnergyProfile.following());
         }catch(e){j.livePreview=false;MV.EnergyProfile.restore();message(e.message+' ライブ表示を停止しました。計算は継続しています。');}
       });if(r){MV.AFIRRunner.validateResult(r,j);result={...j,result:r};showResult(r);}else {MV.EnergyProfile.restore();message('計算を中止しました。入力構造は保持しています。');}
-    }catch(e){MV.EnergyProfile.restore();message(e.message);}finally{job=null;MV.EnergyProfile.finish();sync();}
+    }catch(e){if(job===j)MV.EnergyProfile.restore();message(e.message);}finally{if(job===j){job=null;MV.EnergyProfile.finish();}sync();}
   }
   function showResult(r){
     const reason={converged:'人工力下で収束',step_limit:'未収束（ステップ上限）',cancelled:'中止（途中までの構造列）',failed:'計算失敗（途中までの構造列）'}[r.reason]||'未検証';
