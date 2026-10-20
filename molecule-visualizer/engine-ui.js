@@ -3,7 +3,7 @@
   'use strict';
   const MV=global.MoleculeVisualizer,$=id=>document.getElementById(id),app=()=>MV.App;
   let connection=null,job=null,result=null;
-  let settingsMode=null;
+  let settingsMode=null,restoredInputFingerprint=null;
   const modeSettings=new Map(),relaxFields=['engineSteps','engineFmax','engineMove','engineSpring','engineClimb'];
   const fingerprint=s=>JSON.stringify([s.atoms,s.bonds,s.metadata]);
   const dirty=()=>/未適用|編集中/.test($('xyzEditStatus').textContent);
@@ -305,7 +305,9 @@
   function open(){
     if(!job&&!MV.AFIRUI?.isBusy?.())app().freezeDisplayedStructure();
     if(result&&result.fingerprint!==fingerprint(app().getState()))clearResult();
-    if(!job&&!result&&$('engineMode').value!=='batch'){const s=app().getDisplayedState();$('engineCharge').value=s.metadata.totalCharge??s.atoms.reduce((sum,a)=>sum+(Number(a.charge)||0),0);$('engineMultiplicity').value=s.metadata.multiplicity??1;$('engineScope').value=s.metadata.trajectory?'all':'current';$('engineMode').value=s.metadata.trajectory?.length>=3?'cineb':'evaluate';settings();}
+    // Reopening saved input must retain its conditions until the structure changes.
+    if(restoredInputFingerprint!==fingerprint(app().getState()))restoredInputFingerprint=null;
+    if(!job&&!result&&!restoredInputFingerprint&&$('engineMode').value!=='batch'){const s=app().getDisplayedState();$('engineCharge').value=s.metadata.totalCharge??s.atoms.reduce((sum,a)=>sum+(Number(a.charge)||0),0);$('engineMultiplicity').value=s.metadata.multiplicity??1;$('engineScope').value=s.metadata.trajectory?'all':'current';$('engineMode').value=s.metadata.trajectory?.length>=3?'cineb':'evaluate';settings();}
     $('engineDialog').showModal();
   }
   function prepareBatch(){
@@ -351,8 +353,8 @@
   }
   function restoreJob(saved,inputOnly=false){
     if(job||MV.AFIRUI?.isBusy?.())throw Error('実行中の計算の追跡を終了してから、履歴を開いてください。');
-    const j=contextForSaved(saved);MV.EnergyProfile.reset();restoreInput(saved.data);clearResult();
-    if(inputOnly){app().change('restore saved calculation input',()=>j.original,true);$('dataReset').click();message(saved.data.mode==='afir'?'AFIRの保存入力を復元しました。人工力を含む再計算は履歴の「保存構造から再開」を使用してください。':'保存された入力構造と計算条件を復元しました。');}
+    const j=contextForSaved(saved);MV.EnergyProfile.reset();restoreInput(saved.data);clearResult();restoredInputFingerprint=null;
+    if(inputOnly){app().change('restore saved calculation input',()=>j.original,true);$('dataReset').click();restoredInputFingerprint=fingerprint(app().getState());message(saved.data.mode==='afir'?'AFIRの保存入力を復元しました。人工力を含む再計算は履歴の「保存構造から再開」を使用してください。':'保存された入力構造と計算条件を復元しました。');}
     else if(saved.result){showResult(saved.result,j);message('保存済みの結果を開きました。構造への適用・構造列の保存ができます。');}
     else message('結果はまだ保存されていません。実行中の計算は履歴から追跡できます。');
     $('jobHistoryDialog').close();$('engineDialog').showModal();return j;

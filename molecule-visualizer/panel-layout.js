@@ -4,11 +4,23 @@
   function initViewerHeight(){
     const shell=document.querySelector('.mv-viewer-shell'),handle=document.getElementById('viewerResizeHandle');
     const storageKey='molecule-studio-viewer-height-v1',min=160,max=1600;
+    const stage=shell.closest('.mv-stage'),workspace=stage.closest('.mv-workspace'),frames=stage.querySelector('.mv-trajectory');
     let drag=null;
     function sync(){
       const height=Math.round(shell.getBoundingClientRect().height);
       handle.setAttribute('aria-valuenow',height);
       handle.setAttribute('aria-valuetext',height+'ピクセル');
+    }
+    function fitAutomaticHeight(){
+      // Measure the actual wrapped toolbars rather than assuming a fixed number
+      // of rows. Document-flow coordinates keep scrolling from resizing canvas.
+      if(global.innerWidth<=800){shell.style.removeProperty('--mv-auto-viewer-limit');return;}
+      const fullscreen=document.fullscreenElement;
+      const flowTop=workspace.getBoundingClientRect().top+(fullscreen?fullscreen.scrollTop:(global.scrollY||0))-(fullscreen?fullscreen.getBoundingClientRect().top:0);
+      const leading=shell.getBoundingClientRect().top-stage.getBoundingClientRect().top;
+      const available=Math.floor(global.innerHeight-flowTop-leading-frames.getBoundingClientRect().height-12);
+      const limit=Math.max(min,Math.min(max,available))+'px';
+      if(shell.style.getPropertyValue('--mv-auto-viewer-limit')!==limit)shell.style.setProperty('--mv-auto-viewer-limit',limit);
     }
     function setHeight(value,persist=true){
       if(!Number.isFinite(value))return;
@@ -22,6 +34,7 @@
       shell.classList.remove('mv-custom-height');
       shell.style.removeProperty('height');
       try{global.localStorage.removeItem(storageKey);}catch(error){/* Storage may be disabled. */}
+      fitAutomaticHeight();
       sync();
     }
     try{
@@ -56,7 +69,14 @@
       if(e.key==='Enter')reset();
       else setHeight(e.key==='Home'?min:e.key==='End'?max:shell.getBoundingClientRect().height+(e.key==='ArrowUp'?-1:1)*(e.shiftKey?80:20));
     });
-    if(global.ResizeObserver)new global.ResizeObserver(sync).observe(shell);
+    if(global.ResizeObserver){
+      new global.ResizeObserver(sync).observe(shell);
+      const layoutObserver=new global.ResizeObserver(fitAutomaticHeight);
+      document.querySelectorAll('.mv-page-buffer, .mv-app-header, .mv-document, .mv-stage-heading, .mv-stage-toolbar, .mv-calculation-controls, .mv-display-controls, .mv-trajectory').forEach(element=>layoutObserver.observe(element));
+    }
+    global.addEventListener('resize',fitAutomaticHeight);
+    document.addEventListener('fullscreenchange',fitAutomaticHeight);
+    fitAutomaticHeight();
     sync();
   }
   function init(){
