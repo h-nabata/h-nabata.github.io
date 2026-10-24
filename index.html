@@ -1,66 +1,127 @@
 ---
 layout: default
 title: Nabata's personal page
+extra_head: |
+  <style>
+    .home-hero.top-wrapper { padding: 30px 16px; background-position: center; background-image: linear-gradient(90deg, rgba(20,40,44,.82), rgba(20,40,44,.55)), url('/top.png'); }
+    .home-hero h1 { margin: 0 0 6px; font-size: clamp(1.6rem, 5vw, 2.2rem); letter-spacing: .04em; opacity: 1; }
+    .home-hero p { margin: 0; opacity: 1; }
+    .home-content { max-width: 1000px; padding: 20px 16px 28px; color: #243438; line-height: 1.75; font-family: Arial, "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif; }
+    .home-content a { color: #146b76; text-decoration: underline; text-underline-offset: .18em; }
+    .home-content a:hover { color: #104b54; }
+    .home-content .home-intro { margin: 0 0 12px; font-size: .9rem; color: #53666b; }
+    .home-content .home-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .home-content .home-controls[hidden] { display: none; }
+    .home-controls button { font: inherit; font-size: .85rem; color: #234c54; background: #fff; border: 1px solid #b9cace; border-radius: 5px; padding: 5px 12px; cursor: pointer; }
+    .home-content .home-section { border: 1px solid #d5e1e3; border-radius: 8px; margin: 8px 0; background: #fff; overflow: hidden; scroll-margin-top: 80px; }
+    .home-content summary { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; list-style: none; background: #f3f7f7; }
+    .home-content summary::-webkit-details-marker { display: none; }
+    .home-content summary::after { content: ""; flex: 0 0 8px; height: 8px; border-right: 2px solid #467079; border-bottom: 2px solid #467079; transform: rotate(45deg); margin: 0 3px 4px auto; }
+    .home-content details[open] > summary::after { transform: rotate(225deg); margin-bottom: -4px; }
+    .home-content summary:hover { background: #e7f0f1; }
+    .home-content :is(summary, button, a):focus-visible { outline: 3px solid #257d8b; outline-offset: -3px; }
+    .home-content summary h2, .home-content summary h3 { margin: 0; line-height: 1.5; font-size: 1rem; }
+    .home-content .section-body { padding: 4px 18px 12px; overflow-wrap: anywhere; }
+    .home-content .section-body p { margin: 10px 0; }
+    .home-content .section-body ul, .home-content .section-body ol { padding-left: 1.5em; margin: 10px 0; }
+    .home-content li { margin: 6px 0; }
+    .home-content ol > li { margin-bottom: 14px; }
+    .home-content .home-subsection { margin: 8px 0; border: 1px solid #e0e8e9; border-radius: 6px; overflow: hidden; scroll-margin-top: 80px; }
+    .home-content .home-subsection summary { padding: 10px 12px; background: #f8fafa; }
+    .home-content .home-subsection h3 { font-size: .95rem; }
+    .home-content .home-note { color: #52656a; font-size: .9rem; }
+    .home-content .home-links { margin-top: 22px; }
+    .home-content .home-links h2 { font-size: 1.15rem; margin: 0 0 10px; padding-bottom: 6px; border-bottom: 2px solid #d5e1e3; }
+    .home-content .home-links ul { padding-left: 1.4em; margin: 0; }
+    .home-footer { text-align: center; border-top: 1px solid #e0e8e9; padding: 14px 0; }
+    .home-footer img { width: 40px; }
+    .home-footer p { color: #596c71; margin: 6px 0; }
+    @media (max-width: 540px) {
+      .home-content { padding: 14px 12px 22px; }
+      .home-content summary { padding: 11px 12px; }
+      .home-content .section-body { padding: 2px 12px 10px; }
+    }
+    @media print {
+      .header, .home-controls, .home-intro { display: none !important; }
+      body { padding-top: 0; }
+      .home-hero.top-wrapper { background: none; color: #000; padding: 12px; }
+      .home-content { max-width: none; }
+      .home-content summary::after { display: none; }
+    }
+  </style>
 ---
-<div class="top-wrapper">
+<div class="top-wrapper home-hero">
     <div class="container">
-      <h1>TOP</h1>
-      <p>Hitoshi Nabata<br>personal webpage</p>
+      <h1>Hitoshi Nabata</h1>
+      <p>Personal webpage · 理論・計算化学</p>
     </div>
   </div>
-  <div class="container" style="padding: 15px">
-    <p>（旧サイトは→<strong><a href="https://sites.google.com/view/nabatas-page/">こちら</a></strong>）</p>
-    <section class="site-update" aria-label="サイト更新のお知らせ">
-      <h2>サイト更新のお知らせ</h2>
+  <main id="home-content" class="container home-content">
+    <p class="home-intro">見出しをクリックすると内容を開閉できます。<a href="https://sites.google.com/view/nabatas-page/">旧サイト</a></p>
+    <div class="home-controls" hidden><button type="button" data-expand="true">すべて開く</button><button type="button" data-expand="false">すべて閉じる</button></div>
+    
+      <details class="home-section" id="updates"><summary><h2>サイト更新のお知らせ</h2></summary><div class="section-body">
+      <p>（2026/10/24）トップページの各項目を開閉式に変更し、文章と表記を整理しました。</p>
       <p>（2026/10/02）<a href="/qiita/">Qiita記事ミラー・バックアップ</a>を公開しました。記事を分野別に整理し、本文・画像・原文Markdownを保存しています。</p>
-      <p>
-        （2026/01/20）サイト内部構成を整理し、共通ヘッダーおよび一部共通リソースの管理方式を更新しました。
-        Jekyll のレイアウト／include 機能を用いることで、ページ構成の一貫性と保守性を向上させています。
-      </p>
-      <p>表示内容や URL に変更はありません。</p>
-    </section>
-    <h2>【所属】- Affiliation</h2>
-      <p>2018年1月 - 2024年3月　北海道大学 理論化学研究室（前田研究室）<br />Hokkaido University, Graduate School of Chemical Sciences and Engineering, Theoretical Chemistry lab (Satoshi Maeda group).</p>
-      <p>2024年4月 - 現在　　　 日系化学メーカー</p>
-    <h2>【所属学会】- Memberships</h2>
+      <p>（2026/01/20）共通ヘッダーなどの管理方法を見直し、サイト内のページ構成を統一しました。</p>
+
+    </div></details>
+<details class="home-section" id="affiliation"><summary><h2>所属 - Affiliation</h2></summary><div class="section-body">
+      <p>2018年1月 - 2024年3月　北海道大学 理論化学研究室（前田研究室）<br />Theoretical Chemistry Laboratory (Satoshi Maeda Group), Hokkaido University.</p>
+      <p>2024年4月 - 現在　日系化学メーカー</p>
+    </div></details>
+<details class="home-section" id="memberships"><summary><h2>所属学会 - Memberships</h2></summary><div class="section-body">
       <ul>
-        <li>日本化学会 （Chemical Society of Japan；CSJ）</li>
-        <li>分子科学会 （Japan Society for Molecular Science；JSMS）</li>
-        <li>理論化学会 （Japan Society of Theoretical Chemistry；JSTC）</li>
+        <li>日本化学会 （The Chemical Society of Japan; CSJ）</li>
+        <li>分子科学会 （Japan Society for Molecular Science; JSMS）</li>
+        <li>理論化学会 （Japan Society of Theoretical Chemistry; JSTC）</li>
       </ul>
-    <h2>【学歴】- Education</h2>
+    </div></details>
+<details class="home-section" id="education"><summary><h2>学歴 - Education</h2></summary><div class="section-body">
       <ul>
-        <li>2021年4月 - 2024年3月 北海道大学大学院 総合化学院　博士後期課程（博士課程）</li>
+        <li>2021年4月 - 2024年3月 北海道大学大学院 総合化学院　博士後期課程</li>
         <li>2019年4月 - 2021年3月 北海道大学大学院 総合化学院　博士前期課程（修士課程）</li>
         <li>2015年4月 - 2019年3月 北海道大学 理学部化学科　学士課程</li>
       </ul>
-    <h2>【研究分野】- Research Areas / Interests</h2>
-      <p>量子化学計算に基づく化学反応の理論研究（化学反応経路探索・反応経路ネットワーク解析）<br />▷ 反応経路自動探索プログラム「GRRM」を用いた反応経路探索, 化学反応機構の理論解析, 反応経路ネットワークの可視化<br />▷ 均一系 (気相反応, 電気化学反応, 光化学反応), 不均一系 (結晶構造探索, 表面反応) ともに解析経験あり<br />▷ 特に, エネルギー関連 (CO<sub>2</sub>資源化, 窒素固定, 水素キャリア, etc.), 触媒反応全般, ...などの分野に興味があります<br />▷ GRRMを利用する研究者･企業の方への技術指導･共同研究も担当し、GRRMチュートリアル2023に講師として参加。<br />※GRRMプログラムの詳細については私個人ではなく北海道大学理論化学研究室の連絡先 riron[##at**]sci.hokudai.ac.jp （[##at**]を@に変えて下さい）にお問い合わせ願います</p>
-    <h2>【業績】- Works</h2>
-      <h3>学術論文 - Papers 3件</h3>
+    </div></details>
+<details class="home-section" id="research"><summary><h2>研究分野 - Research Areas / Interests</h2></summary><div class="section-body">
+      <p>量子化学計算に基づく化学反応の理論研究に取り組んできました。主な研究内容は、化学反応経路の探索と反応経路ネットワークの解析です。</p>
+      <ul>
+        <li>反応経路自動探索プログラム「GRRM」を用いた反応経路探索、反応機構の理論解析、反応経路ネットワークの可視化。</li>
+        <li>気相反応、電気化学反応、光化学反応、結晶構造探索、表面反応の解析経験があります。</li>
+        <li>CO<sub>2</sub>資源化、窒素固定、水素キャリアなどのエネルギー関連分野と、触媒反応全般に関心があります。</li>
+        <li>GRRMを利用する研究者・企業への技術指導や共同研究を担当し、GRRMチュートリアル2023に講師として参加しました。</li>
+      </ul>
+      <p class="home-note">GRRMプログラムの詳細については、北海道大学理論化学研究室（riron[##at**]sci.hokudai.ac.jp）へお問い合わせください。[##at**]を@に置き換えてください。</p>
+    </div></details>
+<details class="home-section" id="works"><summary><h2>業績 - Publications &amp; Presentations</h2></summary><div class="section-body">
+      <details class="home-subsection" id="papers"><summary><h3>学術論文・プレプリント - Papers &amp; Preprints（3件）</h3></summary><div class="section-body">
         <ol>
-        <li>Systematic and unbiased pathway exploration by artificial force application to a generic neural network potential<br />T. Ichino*, H. Nabata*, K. Matsumoto ,T. Hasegawa, S. Maeda (*equally contributed author)<br />Preprint Available from ChemRxiv. <a href="https://doi.org/10.26434/chemrxiv-2024-9h20v">https://doi.org/10.26434/chemrxiv-2024-9h20v</a></li>
-        <li>Systematic search for thermal decomposition pathways of formic acid on anatase TiO<sub>2</sub> (101) surface<br />H. Nabata, S. Maeda<br />ChemCatChem, 2023, e202300752. <a href="https://doi.org/10.1002/cctc.202300752">https://doi.org/10.1002/cctc.202300752</a><br />Preprint Available from ChemRxiv. <a href="https://doi.org/10.26434/chemrxiv-2023-3kk16">https://doi.org/10.26434/chemrxiv-2023-3kk16</a></li>
+        <li>Systematic and unbiased pathway exploration by artificial force application to a generic neural network potential<br />T. Ichino†, H. Nabata†, K. Matsumoto, T. Hasegawa, S. Maeda（†共同第一著者 / These authors contributed equally.）<br />ChemRxiv, 2024（プレプリント・未査読）. <a href="https://doi.org/10.26434/chemrxiv-2024-9h20v">https://doi.org/10.26434/chemrxiv-2024-9h20v</a></li>
+        <li>Systematic search for thermal decomposition pathways of formic acid on anatase TiO<sub>2</sub> (101) surface<br />H. Nabata, S. Maeda<br />ChemCatChem, 2023, 15, e202300752. <a href="https://doi.org/10.1002/cctc.202300752">https://doi.org/10.1002/cctc.202300752</a><br />Preprint available on ChemRxiv. <a href="https://doi.org/10.26434/chemrxiv-2023-3kk16">https://doi.org/10.26434/chemrxiv-2023-3kk16</a></li>
         <li>Computational Searches for Crystal Structures of Dioxides of Group 14 Elements (CO<sub>2</sub>, SiO<sub>2</sub>, GeO<sub>2</sub>) under Ultrahigh Pressure<br />H. Nabata, M. Takagi, K. Saita, S. Maeda<br />RSC Adv., 2020, 10, 22156-22163. <a href="https://doi.org/10.1039/D0RA03359F">https://doi.org/10.1039/D0RA03359F</a></li>
         </ol>
-      <h3>総説 - Reviews 2件</h3>
+      </div></details>
+<details class="home-subsection" id="reviews"><summary><h3>総説・解説 - Reviews &amp; Articles（2件）</h3></summary><div class="section-body">
         <ol>
         <li>"Development of the GRRM program for solid and surface reaction analysis"（GRRMプログラムの固体・表面反応解析への展開）<br />H. Nabata, S. Maeda<br />日本表面真空学会誌「表面と真空（Vacuum and Surface Science）」2023年6月号. <a href="https://doi.org/10.1380/vss.66.354">https://doi.org/10.1380/vss.66.354</a></li>
-        <li>ソフトウェア紹介「GRRMによる反応経路探索」<br />名畑 壱志<br />分子シミュレーション学会誌「アンサンブル」Vol. 25, No. 1, January 2023（通巻101号）, p67-75. <a href="https://doi.org/10.11436/mssj.25.67">https://doi.org/10.11436/mssj.25.67</a></li>
+        <li>ソフトウェア紹介「GRRMによる反応経路探索」<br />名畑 壱志<br />分子シミュレーション学会誌「アンサンブル」Vol. 25, No. 1, January 2023（通巻101号）, pp. 67–75. <a href="https://doi.org/10.11436/mssj.25.67">https://doi.org/10.11436/mssj.25.67</a></li>
         </ol>
-      <h3>国際学会発表 - International Presentations</h3>
+      </div></details>
+<details class="home-subsection" id="international"><summary><h3>国際学会発表 - International Presentations</h3></summary><div class="section-body">
       <p>【ポスター発表】8件</p>
         <ol>
         <li>"Systematic Reaction Path Search on an Oxide Surface: A Case Study on Complete Oxidation of Methane on the PdO (101) Surface", 34 <br />H. Nabata<br />The 6th ICReDD International Symposium, Sapporo, Japan, 2023/09/13 - 2023/09/14</li>
         <li>"Systematic reaction path search for thermal formic acid decomposition on the anatase TiO<sub>2</sub> (101) surface", 5Po-72 <br />H. Nabata, S. Maeda<br />The 5th conference of Theory and Applications of Computational Chemistry (TACC2023), Sapporo, Japan, 2023/09/04 - 2023/09/09</li>
         <li>"Systematic search for oxidation pathways of methane on the PdO (101) surface", 1P15<br />H. Nabata, S. Maeda<br />38th Symposium on Chemical Kinetics and Dynamics (第38回化学反応討論会), Fukuoka, Japan, 2023/06/07 - 2023/06/09</li>
-        <li>"Systematic reaction path search on a oxide surface: a case study on thermal decomposition of formic acid on the anatase TiO<sub>2</sub> (101) surface"<br />H. Nabata, S. Maeda<br />9th French-Japanese Workshop on Computational Methods in Chemistry, Strasbourg, France, 2023/04/24 - 2023/04/25</li>
+        <li>"Systematic reaction path search on an oxide surface: a case study on thermal decomposition of formic acid on the anatase TiO<sub>2</sub> (101) surface"<br />H. Nabata, S. Maeda<br />9th French-Japanese Workshop on Computational Methods in Chemistry, Strasbourg, France, 2023/04/24 - 2023/04/25</li>
         <li>"Systematic search for decomposition pathways of formic acid on the TiO<sub>2</sub> (101) surface", 1P10<br />H. Nabata, S. Maeda<br />37th Symposium on Chemical Kinetics and Dynamics (第37回化学反応討論会), online, Sendai, Japan, 2022/06/01 - 2022/06/03</li>
         <li>"Systematic search for reaction pathways on oxide surface: A case study on the water gas shift reaction on TiO<sub>2</sub> (101) surface", 24<br />H. Nabata, S. Maeda<br />4th ICReDD International Symposium, online, 2022/03/12 - 2022/03/13</li>
         <li>"Systematic search for crystal structures under ultrahigh pressure: A case study on dioxides of group 14 elements (CO<sub>2</sub>, SiO<sub>2</sub>, GeO<sub>2</sub>)", 10<br />H. Nabata, M. Takagi, K. Saita, S. Maeda<br />2nd ICReDD INTERNATIONAL SYMPOSIUM, FMI Hall, Hokkaido University, Sapporo, Japan, 2019/11/28</li>
         <li>"Systematic Search for Crystal Structures of Dioxides of Group 14 Elements (CO<sub>2</sub>, SiO<sub>2</sub>, GeO<sub>2</sub>) Under Ultrahigh Pressure", P099<br />H. Nabata, M. Takagi, K. Saita, S. Maeda<br />The Asia-Pacific Association of Theoretical and Computational Chemists 2019, Sydney, Australia, 2019/10/01</li>
         </ol>
-      <h3>国内学会発表 - Domestic Presentations</h3>
+      </div></details>
+<details class="home-subsection" id="domestic"><summary><h3>国内学会発表 - Domestic Presentations</h3></summary><div class="section-body">
       <p>【口頭発表】3件</p>
         <ol>
         <li>「GRRMプログラムによる表面反応解析：酸化物表面反応への展開」<br />名畑 壱志<br />IQCE講演会2023, 東京大学 山上会館, 東京, 2023/11/23</li>
@@ -76,28 +137,31 @@ title: Nabata's personal page
         <li>「アナターゼTiO<sub>2</sub>（101）面上におけるギ酸分解反応の理論的研究」, P01<br />名畑 壱志, 前田 理<br />化学反応経路探索のニューフロンティア2022, 横浜, 2022/09/18</li>
         <li>「TiO<sub>2</sub>表面上におけるギ酸分解反応経路の探索」, 1P31<br />名畑 壱志, 前田 理<br />第24回理論化学討論会, 金沢, オンライン, 2022/05/20</li>
         <li>「TiO<sub>2</sub>表面上における水性ガスシフト反応経路の系統的探索」, P14<br />名畑 壱志, 前田 理<br />化学反応経路探索のニューフロンティア2021, オンライン, 2021/09/22</li>
-        <li>「超高圧下における14族二酸化物(CO<sub>2</sub>, SiO<sub>2</sub>, GeO<sub>2</sub>)の 結晶構造の系統的探索」, P13<br />名畑 壱志, 高木 牧人, 斉田 謙一郎, 前田 理<br />化学反応経路探索のニューフロンティア2020, オンライン, 2020/09/13</li>
+        <li>「超高圧下における14族二酸化物(CO<sub>2</sub>, SiO<sub>2</sub>, GeO<sub>2</sub>)の結晶構造の系統的探索」, P13<br />名畑 壱志, 高木 牧人, 斉田 謙一郎, 前田 理<br />化学反応経路探索のニューフロンティア2020, オンライン, 2020/09/13</li>
         <li>「光励起されたRe(I)錯体の超高速緩和経路の配位子依存性」, 2P085<br />名畑 壱志, 斉田 謙一郎, 前田 理<br />第13回分子科学討論会2019名古屋, 名古屋大学東山キャンパス, 愛知, 2019/09/18</li>
         <li>「光励起されたRe(I)錯体の超高速緩和経路の探索：異なる配位子による比較」, P24<br />名畑 壱志, 斉田 謙一郎, 前田 理<br />化学反応経路探索のニューフロンティア2019, 名古屋大学野依記念学術交流館, 愛知, 2019/09/16</li>
         <li>「Re(I)錯体を用いた CO<sub>2</sub>還元反応機構に関する理論的研究」, P34<br />名畑 壱志, 斉田 謙一郎, 石谷 治, 前田 理<br />第22回理論化学討論会, 北海道大学 学術交流会館, 北海道, 2019/05/28</li>
         </ol>
-      <h3>受賞 - Awards 1件</h3>
+      </div></details>
+<details class="home-subsection" id="awards"><summary><h3>受賞 - Awards（1件）</h3></summary><div class="section-body">
         <ol>
           <li>“Best Poster Prize” in the 37th Symposium on Chemical Kinetics and Dynamics, 06/2022</li>
         </ol>
-    <!-- <h2>【奨学金･競争的資金】- Fellowships / Grants</h2>
+    <!-- <h2>【奨学金･競争的資金】 - Fellowships / Grants</h2>
       <ul>
         <li>2021年4月 - 2024年3月<br />量子化学探索研究所(IQCE), 人材育成奨学助成 IQCE特別研究員 採用</li>
         <li>2021年4月 - 2024年3月<br />北海道大学アンビシャス博士人材フェローシップ(情報・AI) 採用</li>
         <li>2019年4月 - 2021年3月<br />日本学生支援機構, 特に優れた業績による大学院第一種奨学金 全額返済免除</li>
       </ul> -->
-    <h2>【連絡先】- Contact</h2>
+    </div></details>
+</div></details>
+<details class="home-section" id="contact"><summary><h2>連絡先 - Contact</h2></summary><div class="section-body">
       <ul>
-        <li>Eメール：<br />nabata.tcl[##at**]gmail.com　（[##at**]を@に変えて下さい）<br />（以前使用していた大学管理のGoogle WorkspaceのGmailアドレスは閉鎖されました）</li>
-        <li><s>研究室TEL：<br />+81-011-706-4665</s></li>
-        <li><s>研究室住所：<br />〒060-0810 北海道 札幌市 北区 北10条 西8丁目 北海道大学大学院 理学研究院化学部門 (理学部) 7号館303号室<br />Hokkaido University, Faculty of Science, Department of Chemistry, 7th building, Room 7-303, Nishi 8, Kita 10, Kita-ku, Sapporo, 060-0810, Japan.</s></li>
+        <li>Eメール：<br />nabata.tcl[##at**]gmail.com　（[##at**]を@に置き換えてください）<br /><span class="home-note">以前の大学メールアドレスは使用できません。</span></li>
+        
       </ul>
-    <h2>【リンク】- Links</h2>
+    </div></details>
+<section class="home-links" id="links" aria-labelledby="links-title"><h2 id="links-title">リンク - Links</h2>
       <ul>
         <li><a href="https://www.hokudai.ac.jp/">北海道大学</a></li>
         <li><a href="https://wwwchem.sci.hokudai.ac.jp/~theochem/index.html">北海道大学 理論化学研究室（前田研究室；2017年11月～）</a></li>
@@ -107,37 +171,57 @@ title: Nabata's personal page
         <li><a href="https://iqce.jp/">量子化学探索研究所 IQCE</a></li>
         <li><a href="https://ccportal.ims.ac.jp/frontpage">自然科学研究機構 岡崎共通研究施設（分子研）計算科学研究センター</a></li>
         <li><a href="https://qiita.com/h-nabata">Qiita（個人アカウントのページ）</a></li>
-        <li><a href="https://twitter.com/haittaobsahni">Twitter（個人アカウント）</a></li>
+        <li><a href="https://twitter.com/haittaobsahni">X（旧Twitter・個人アカウント）</a></li>
         <li><a href="https://github.com/h-nabata/utility">自作ユーティリティ(Public) - GitHub</a></li>
-        <li><a href="https://github.com/h-nabata/PES/blob/main/practice/Optimizetion_on_PES.md">Optimizetion on Potential Energy Surface - Pythonの練習用課題をNotebook形式でまとめたもの；B3向けのポテンシャルエネルギー曲面（PES）の教材</a></li>
+        <li><a href="https://github.com/h-nabata/PES/blob/main/practice/Optimizetion_on_PES.md">Optimization on Potential Energy Surface — Pythonの練習課題（Notebook形式）。学部3年生向けのポテンシャルエネルギー曲面（PES）の教材</a></li>
         <li><a href="https://www.youtube.com/@user-nh6wz2bj5e/featured">湯どうふ(化学の勉強) - 計算化学分野に特化した学習系YouTubeチャンネル</a></li>
       </ul>
-    </div>
+    </section>
+  </main>
   
-<!--     数式サンプル
-  <p>Here is an inline math example: \( E = mc^2 \)</p>
-  <p>And here is a display math example:</p>
-  <div>
-      \[ \int_0^\infty e^{-x^2} dx = \frac{\sqrt{\pi}}{2} \]
-  </div> -->
-  
-<!-- コードブロックサンプル
-  <div class="main-container">
-    <div class="code-container">
-        <div class="code-title">Python Code Example</div>
-        <pre><code class="python">
-def say_hello():
-    print('Hello, world!')
 
-if __name__ == "__main__":
-    say_hello()
-        </code></pre>
-    </div>
-</div> -->
   
-  <footer>
+
+  
+  <footer class="home-footer">
     <div class="container">
-      <img src="/img/favicon_candle.png">
-      <p style="text-align:center"><time datetime="2025-11-23">トップページ本文更新: 2025/11/23</time><br /><time datetime="2026-10-02">サイト構成更新: 2026/10/02</time></p>
+      <img src="/img/favicon_candle.png" alt="" width="40" height="40">
+      <p style="text-align:center"><time datetime="2026-10-24">トップページ更新：2026/10/24</time></p>
     </div>
   </footer>
+
+<script>
+(() => {
+  const root = document.getElementById('home-content');
+  const sections = Array.from(root.querySelectorAll('details'));
+  const controls = root.querySelector('.home-controls');
+  controls.hidden = false;
+  controls.addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-expand]');
+    if (button) sections.forEach(section => { section.open = button.dataset.expand === 'true'; });
+  });
+  function revealHash() {
+    let id;
+    try { id = decodeURIComponent(location.hash.slice(1)); } catch { return; }
+    const target = document.getElementById(id);
+    if (!target || !root.contains(target)) return;
+    let ancestor = target;
+    while (ancestor && ancestor !== root) {
+      if (ancestor.tagName === 'DETAILS') ancestor.open = true;
+      ancestor = ancestor.parentElement;
+    }
+    target.scrollIntoView({ block: 'start' });
+  }
+  window.addEventListener('hashchange', revealHash);
+  revealHash();
+  let beforePrint;
+  window.addEventListener('beforeprint', () => {
+    if (!beforePrint) beforePrint = sections.map(section => section.open);
+    sections.forEach(section => { section.open = true; });
+  });
+  window.addEventListener('afterprint', () => {
+    if (beforePrint) sections.forEach((section, i) => { section.open = beforePrint[i]; });
+    beforePrint = undefined;
+  });
+})();
+</script>
