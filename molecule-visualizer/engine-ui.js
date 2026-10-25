@@ -15,6 +15,16 @@
     if(!['http:','https:'].includes(url.protocol)||!['127.0.0.1','localhost'].includes(url.hostname)||url.username||url.password||url.search||url.hash||!['','/'].includes(url.pathname))throw Error('接続先は http://127.0.0.1:8766 など、このPCのlocalhost URLにしてください。');
     return url.origin;
   }
+  async function pollJob(j,live){
+    const compact=j.connection.info?.compactPolling===1;
+    if(!live)delete j.previewVersion;
+    let query=live?'preview=1&after='+(j.previewCursor||0):'';
+    if(compact&&live&&Number.isInteger(j.previewVersion))query+='&since='+j.previewVersion;
+    if(compact)query+=(query?'&':'')+'compact=1';
+    const state=await MV.EngineUI.request(j.connection,'/api/jobs/'+j.id+(query?'?'+query:''));
+    if(live&&state.preview&&Number.isInteger(state.previewVersion))j.previewVersion=state.previewVersion;
+    return state;
+  }
   async function request(c,path,body){
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
     try{
@@ -215,7 +225,7 @@
   async function watch(j){
       while(job===j){
         const live=j.livePreview&&MV.EnergyProfile.following();
-        const state=await request(j.connection,`/api/jobs/${j.id}`+(live?'?preview=1&after='+(j.previewCursor||0):''));
+        const state=await pollJob(j,live);
         if(state.status==='completed'||(['cancelled','error','interrupted'].includes(state.status)&&state.result)){showResult(state.result,j);if(state.storageError)message($('engineMessage').textContent+' '+state.storageError);break;}
         if(state.status==='error')throw Error(state.error||'計算に失敗しました。');
         if(['cancelled','interrupted'].includes(state.status)){MV.EnergyProfile.restore();message('計算を中止しました。構造は変更していません。');break;}
@@ -254,7 +264,7 @@
         if(j.cancelRequested)await request(j.connection,`/api/jobs/${j.id}/cancel`,{});
         let previewStep=-1;
         while(true){
-          const live=j.livePreview&&MV.EnergyProfile.following(),state=await request(j.connection,`/api/jobs/${j.id}`+(live?'?preview=1&after=0':''));
+          const live=j.livePreview&&MV.EnergyProfile.following(),state=await pollJob(j,live);
           if(['completed','cancelled','error'].includes(state.status)){
             j.id=null;MV.EnergyProfile.finish();
             if(state.result){
@@ -393,5 +403,5 @@
     MV.ResearchUI?.init();MV.JobHistoryUI?.init();MV.DiagnosticsUI?.init();MV.StructureAnalysisUI?.init();
     $('engineDialog').addEventListener('cancel',e=>{if(job){e.preventDefault();cancel();}});settings();
   }
-  MV.EngineUI={init,open,modelInput,modelSummary,validateSolvationResult,syncModelBusy:()=>{const afirBusy=!!MV.AFIRUI?.isBusy?.(),queued=connection?.info.jobQueue||connection?.info.queue;$('engineModelSettings').disabled=(!!job||afirBusy)&&!queued;if(!job){$('engineRun').textContent=afirBusy&&queued?'現在の設定をキューへ追加':'計算を実行';$('engineRun').disabled=!connection||(afirBusy&&!queued);}},prepareBatch,endpoint,frames,validateResult,validateEngineInput,request,prepareNEB,prepareSingle,settings,input,restoreInput,restoreJob,watchSaved,prepareSegment,enqueueCurrent,baseFrame,isBusy:()=>!!job,getConnection:()=>connection?{...connection}:null};
+  MV.EngineUI={init,open,modelInput,modelSummary,validateSolvationResult,syncModelBusy:()=>{const afirBusy=!!MV.AFIRUI?.isBusy?.(),queued=connection?.info.jobQueue||connection?.info.queue;$('engineModelSettings').disabled=(!!job||afirBusy)&&!queued;if(!job){$('engineRun').textContent=afirBusy&&queued?'現在の設定をキューへ追加':'計算を実行';$('engineRun').disabled=!connection||(afirBusy&&!queued);}},prepareBatch,endpoint,pollJob,frames,validateResult,validateEngineInput,request,prepareNEB,prepareSingle,settings,input,restoreInput,restoreJob,watchSaved,prepareSegment,enqueueCurrent,baseFrame,isBusy:()=>!!job,getConnection:()=>connection?{...connection}:null};
 })(window);

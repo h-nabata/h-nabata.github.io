@@ -38,7 +38,7 @@
       if(j.cancelled)await cancel(j);
       while(true){
         const live=j.livePreview&&MV.EnergyProfile?.following();
-        const state=await MV.EngineUI.request(j.connection,`/api/jobs/${j.id}`+(live?`?preview=1&after=${j.previewCursor||0}`:''));
+        const state=MV.EngineUI.pollJob?await MV.EngineUI.pollJob(j,live):await MV.EngineUI.request(j.connection,`/api/jobs/${j.id}`+(live?`?preview=1&after=${j.previewCursor||0}`:''));
         if(state.status==='completed'||state.status==='cancelled'||state.status==='error'){
           if(state.result){validateResult(state.result,j);return state.result;}
           if(state.status==='error')throw Error(state.error||'計算エンジンが失敗しました。');return null;

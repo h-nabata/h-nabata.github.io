@@ -33,17 +33,40 @@
     for(let i=0;i<n;i++)for(let j=i+1;j<n;j++)if(!excluded.has(key(i,j)))pairs.push([i,j,.75*(vdw[atoms[i].element]+vdw[atoms[j].element]),2]);
     const cell=state.metadata?.cell;
     const delta=(x,i,j)=>{const d=[x[3*i]-x[3*j],x[3*i+1]-x[3*j+1],x[3*i+2]-x[3*j+2]];return cell?minimumImage(d,cell).vector:d;};
+    const skin=.5;let neighbors=pairs,neighborOrigin=null;
+    function nearby(x){
+      if(options.neighborList===false||pairs.length<128)return pairs;
+      let rebuild=!neighborOrigin;
+      if(!rebuild)for(let k=0;k<x.length;k+=3){
+        if((x[k]-neighborOrigin[k])**2+(x[k+1]-neighborOrigin[k+1])**2+(x[k+2]-neighborOrigin[k+2])**2>(skin/2)**2){rebuild=true;break;}
+      }
+      if(rebuild){
+        neighborOrigin=Array.from(x);
+        neighbors=pairs.filter(([i,j,target])=>{
+          const d=delta(x,i,j),limit=target+skin;
+          return d[0]*d[0]+d[1]*d[1]+d[2]*d[2]<=limit*limit;
+        });
+      }
+      return neighbors;
+    }
     function evaluate(x,gradient){
       const g=gradient?new Float64Array(n*3):null;let energy=0;
       function pair(i,j,target,k,repulsion){
-        let d=delta(x,i,j),r=Math.hypot(...d);if(repulsion&&r>=target)return;
-        // Deterministic direction also separates exactly coincident atoms.
-        if(r<1e-10){d=[Math.sin((i+1)*17+j),Math.cos((j+1)*13+i),Math.sin((i+j+1)*7)];const norm=Math.hypot(...d);d=d.map(v=>v/norm);r=0;}
-        else d=d.map(v=>v/r);
+        const u=3*i,v=3*j;
+        let dx=x[u]-x[v],dy=x[u+1]-x[v+1],dz=x[u+2]-x[v+2];
+        if(cell)[dx,dy,dz]=minimumImage([dx,dy,dz],cell).vector;
+        // Reject outside the finite soft core before allocating/normalizing.
+        if(repulsion&&(Math.abs(dx)>=target||Math.abs(dy)>=target||Math.abs(dz)>=target))return;
+        let r=Math.hypot(dx,dy,dz);if(repulsion&&r>=target)return;
+        if(r<1e-10){
+          dx=Math.sin((i+1)*17+j);dy=Math.cos((j+1)*13+i);dz=Math.sin((i+j+1)*7);
+          const norm=Math.hypot(dx,dy,dz);dx/=norm;dy/=norm;dz/=norm;r=0;
+        }else {dx/=r;dy/=r;dz/=r;}
         const error=r-target;energy+=.5*k*error*error;
-        if(g)for(let kdim=0;kdim<3;kdim++){const force=k*error*d[kdim];g[3*i+kdim]+=force;g[3*j+kdim]-=force;}
+        if(g){const f=k*error;g[u]+=f*dx;g[u+1]+=f*dy;g[u+2]+=f*dz;g[v]-=f*dx;g[v+1]-=f*dy;g[v+2]-=f*dz;}
       }
-      for(const p of springs)pair(...p,false);for(const p of pairs)pair(...p,true);
+      for(const p of springs)pair(p[0],p[1],p[2],p[3],false);
+      for(const p of nearby(x))pair(p[0],p[1],p[2],p[3],true);
       return {energy,g};
     }
     let x=atoms.flatMap(a=>[a.x,a.y,a.z]),current=evaluate(x,true),initial=current.energy,steps=0;
@@ -52,8 +75,8 @@
       const max=Math.max(...current.g.map(Math.abs));if(max<1e-4)break;
       let step=Math.min(.025,.08/max),accepted=false;
       for(let trial=0;trial<12;trial++){
-        const next=x.map((v,i)=>v-step*current.g[i]),e=evaluate(next,false).energy;
-        if(Number.isFinite(e)&&e<current.energy-1e-10){x=next;current=evaluate(x,true);accepted=true;break;}step*=.5;
+        const next=x.map((v,i)=>v-step*current.g[i]),evaluated=evaluate(next,true),e=evaluated.energy;
+        if(Number.isFinite(e)&&e<current.energy-1e-10){x=next;current=evaluated;accepted=true;break;}step*=.5;
       }
       if(!accepted)break;
     }

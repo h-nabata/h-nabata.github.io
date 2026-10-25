@@ -27,7 +27,7 @@
     const s=app().getState();if(!s.atoms.length||s.atoms.length>500){app().setStatus('構造緩和は1〜500原子に対応しています。');return;}
     const j=start('結合距離・角度・近接反発を調整しています…');if(!j)return;
     try{
-      j.worker=new Worker('./relax-worker.js?v=12');
+      j.worker=new Worker('./relax-worker.js?v=performance-41');
       j.worker.onmessage=e=>{
         if(job!==j)return;
         if(e.data.error){finish(j);app().setStatus(e.data.error);return;}

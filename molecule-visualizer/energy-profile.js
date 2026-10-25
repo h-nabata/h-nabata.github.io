@@ -5,9 +5,9 @@
   let data=null,index=0,active=false,bound=null,marker=null,range=null,live=null,details=null,visible=true;
   const isStep=s=>['afir','optimize'].includes(s.kind);
   function element(tag,attrs,text){const e=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));if(text)e.textContent=text;return e;}
-  function restore(draw=true){
+  function restore(draw=true,deferred=false){
     if(!active)return;active=false;app().renderer().previewOnly=false;$('profilePreview').hidden=true;
-    if(draw)app().renderer().renderState(app().getState(),true);
+    if(draw)app().renderer().renderState(app().getState(),true,deferred);
   }
   function select(i,preview=true){
     if(!data||!Number.isInteger(i)||i<0||i>=data.energies.length)return;
@@ -43,7 +43,7 @@
     const selectedNode=keepNode?data.nodeIds?.[index]:null;if(selectedNode&&next.nodeIds?.includes(selectedNode))index=next.nodeIds.indexOf(selectedNode);
     const keepFocus=keepNode&&$('energyProfile').contains(document.activeElement);
     let focusPoint=null,restoringFocus=false;
-    restore();data=next;bound=null;details=next.details||details;
+    restore(true,true);data=next;bound=null;details=next.details||details;
     const series=[next.energies];if(next.biasEnergies)series.push(next.energies.map((e,i)=>e+next.biasEnergies[i]));
     if(!series[0]?.length||series.some(a=>a.length!==series[0].length||a.some(e=>!Number.isFinite(e))))throw Error('エネルギープロファイルが不正です。');
     const relative=series.map(a=>a.map(e=>e-(next.referenceEnergy??a[0])));let lo=0,hi=0;for(const values of relative)for(const v of values){lo=Math.min(lo,v);hi=Math.max(hi,v);}
@@ -74,10 +74,11 @@
   function chooseFrame(i){if(!live||data?.kind!=='path')pauseFollow();select(i);}
   function pauseFollow(){$('profileFollow').checked=false;}
   function panel(show){
+    const changed=$('profilePanel').hidden===show;
     $('profilePanel').hidden=!show;
     const toggle=$('profileToggle');toggle.disabled=!data&&!live;toggle.textContent=show?'グラフを隠す':'グラフを表示';toggle.setAttribute('aria-expanded',String(show));
     toggle.title=toggle.disabled?'計算結果が得られると表示できます。':'エネルギープロファイルの表示を切り替えます。';
-    app().renderer().resize();app().renderer().draw();
+    if(changed){app().renderer().resize();app().renderer().requestDraw();}
   }
   function hide(){visible=false;pauseFollow();restore();panel(false);}
   function begin(cancel,showDetails){

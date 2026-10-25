@@ -49,30 +49,43 @@
   }
 
   function inferBonds(atoms, cell) {
-    const bonds = [];
-    for (let i = 0; i < atoms.length; i++) {
-      for (let j = i + 1; j < atoms.length; j++) {
-        const a = atoms[i];
-        const b = atoms[j];
-        const r1 = COVALENT_RADII[a.element];
-        const r2 = COVALENT_RADII[b.element];
-        if (!r1 || !r2) continue;
-
-        const d = cell ? MV.Periodic.minimumImage([b.x-a.x,b.y-a.y,b.z-a.z],cell).distance : distance(a, b);
-        if (d < MIN_BOND_DISTANCE) continue;
-
-        const metalPair = isMetal(a.element) || isMetal(b.element);
-        const scale = metalPair ? METAL_DISTANCE_SCALE : BOND_DISTANCE_SCALE;
-        if (d <= scale * (r1 + r2)) {
-          bonds.push(Model.createBond({
-            atom1: a.id,
-            atom2: b.id,
-            order: 1,
-            type: metalPair ? "coordination_candidate" : "covalent",
-            source: "inferred"
-          }));
+    const bonds=[],radii=atoms.map(a=>COVALENT_RADII[a.element]||0),metal=atoms.map(a=>isMetal(a.element));
+    const mic=cell?MV.Periodic.prepareMinimumImage(cell):null;
+    const cutoff=2*Math.max(0,...radii)*BOND_DISTANCE_SCALE*(1+1e-12);
+    let buckets=null,locations=null,counts=null;
+    // Fractional bounds |df_k| <= cutoff*|reciprocal_k| are conservative even
+    // for skew cells. Wrapped bucket indices cover crossings of periodic faces.
+    if(atoms.length>=96&&cutoff>0){
+      buckets=new Map();
+      const widths=mic?mic.reciprocalNorms.map(n=>n*cutoff):[cutoff,cutoff,cutoff];
+      counts=widths.map((w,k)=>cell?.pbc[k]?Math.max(1,Math.floor(1/w)):0);
+      locations=atoms.map(a=>(mic?mic.fractional([a.x,a.y,a.z]):[a.x,a.y,a.z]).map((x,k)=>
+        counts[k]?((Math.floor(x*counts[k])%counts[k])+counts[k])%counts[k]:Math.floor(x/widths[k])));
+      locations.forEach((p,i)=>{if(!radii[i])return;const key=p.join(',');if(!buckets.has(key))buckets.set(key,[]);buckets.get(key).push(i);});
+    }
+    for(let i=0;i<atoms.length;i++){
+      if(!radii[i])continue;
+      let candidates;
+      if(buckets){
+        candidates=[];const seen=new Set(),p=locations[i];
+        for(let x=-1;x<=1;x++)for(let y=-1;y<=1;y++)for(let z=-1;z<=1;z++){
+          const q=[p[0]+x,p[1]+y,p[2]+z].map((v,k)=>counts[k]?((v%counts[k])+counts[k])%counts[k]:v),key=q.join(',');
+          if(seen.has(key))continue;seen.add(key);
+          for(const j of buckets.get(key)||[])if(j>i)candidates.push(j);
         }
-      }
+        // Stable original pair order preserves inferred-bond identity allocation.
+        candidates.sort((a,b)=>a-b);
+      }else candidates=null;
+      const consider=j=>{
+        if(!radii[j])return;
+        const a=atoms[i],b=atoms[j],dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z;
+        const metalPair=metal[i]||metal[j],limit=(metalPair?METAL_DISTANCE_SCALE:BOND_DISTANCE_SCALE)*(radii[i]+radii[j]);
+        const d=mic?mic([dx,dy,dz]).distance:Math.sqrt(dx*dx+dy*dy+dz*dz);
+        if(d<MIN_BOND_DISTANCE||d>limit)return;
+        bonds.push(Model.createBond({atom1:a.id,atom2:b.id,order:1,type:metalPair?'coordination_candidate':'covalent',source:'inferred'}));
+      };
+      if(candidates)for(const j of candidates)consider(j);
+      else for(let j=i+1;j<atoms.length;j++)consider(j);
     }
     return bonds;
   }

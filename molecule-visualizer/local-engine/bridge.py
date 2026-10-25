@@ -7,6 +7,7 @@ are accepted over HTTP. Run --help; installation and numerical details: README.m
 from __future__ import annotations
 
 import argparse
+from collections import OrderedDict
 import copy
 import importlib.metadata
 import json
@@ -24,15 +25,16 @@ import tempfile
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlsplit, unquote
+from urllib.parse import urlsplit, unquote, parse_qsl
 
 import numpy as np
 import psutil
 from ase.data import atomic_numbers, covalent_radii
 from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
+from scipy.spatial import cKDTree
 
-VERSION = '1.9.0'
+VERSION = '1.10.0'
 UMA_MODELS = ('uma-s-1p2p1', 'uma-s-1p2', 'uma-s-1p1', 'uma-m-1p1')
 ANYSOLV_MODELS = ('model_compact', 'model_moe')
 MAX_BODY = 8 * 1024 * 1024
@@ -217,21 +219,51 @@ def validate_afir(data, normalized):
     return copy.deepcopy(c), ids[:]
 
 
-def afir_bias(positions, symbols, ids, config):
-    groups = {f['id']:[ids.index(i) for i in f['atomIds']] for f in config['fragments']}
+def prepare_afir(symbols, ids, config):
+    """Compile immutable fragment topology once; all coordinate dependence stays live."""
+    indices = {identifier:i for i, identifier in enumerate(ids)}
+    groups = {f['id']:[indices[i] for i in f['atomIds']] for f in config['fragments']}
     radii = np.array([covalent_radii[atomic_numbers[s]] for s in symbols])
-    total, forces = 0., np.zeros_like(positions)
+    terms = []
     for pair in config['pairs']:
         a, b = np.meshgrid(groups[pair['a']], groups[pair['b']], indexing='ij')
         a, b = a.ravel(), b.ravel()
+        coefficient = alpha_from_gamma(pair['gamma'])*(1 if pair['mode']=='attract' else -1)
+        terms.append((a, b, radii[a]+radii[b], coefficient))
+    return terms
+
+
+def has_atomic_collision(positions, cell=None, threshold=.1):
+    """Exact final distance check; a tree only rejects impossible gas-phase pairs."""
+    if len(positions) < 2:
+        return False
+    if cell and any(cell['pbc']):
+        for i in range(len(positions)-1):
+            distances = find_mic(positions[i+1:]-positions[i], cell['vectors'], cell['pbc'])[1]
+            if np.any(distances < threshold):
+                return True
+        return False
+    if len(positions) < 64:
+        a, b = np.triu_indices(len(positions), 1)
+    else:
+        pairs = cKDTree(positions).query_pairs(threshold*(1+1e-12), output_type='ndarray')
+        if not len(pairs):
+            return False
+        a, b = pairs.T
+    return bool(np.any(np.linalg.norm(positions[a]-positions[b], axis=1) < threshold))
+
+
+def afir_bias(positions, symbols, ids, config, prepared=None):
+    terms = prepare_afir(symbols, ids, config) if prepared is None else prepared
+    total, forces = 0., np.zeros_like(positions)
+    for a, b, radius_sum, coefficient in terms:
         vectors = positions[a]-positions[b]
         distances = np.linalg.norm(vectors, axis=1)
         if np.min(distances)<.1:
             raise ValueError('AFIRの原子団に0.1 Å未満の衝突があります。')
-        logw = 6*np.log((radii[a]+radii[b])/distances)
+        logw = 6*np.log(radius_sum/distances)
         weights = np.exp(logw-logw.max()); weights /= weights.sum()
         distance = float(weights@distances)
-        coefficient = alpha_from_gamma(pair['gamma'])*(1 if pair['mode']=='attract' else -1)
         total += coefficient*distance
         force = -(coefficient*weights*(-5+6*distance/distances)/distances)[:,None]*vectors
         np.add.at(forces, a, force); np.add.at(forces, b, -force)
@@ -248,15 +280,15 @@ def afir_relax(data, calculate, progress=lambda p:None):
         images=[], energies=[], biasEnergies=[], biasedEnergies=[], forces=[], imageFmax=[], physicalFmax=[], history=[],
         validation='biased-trajectory-not-ts', converged=False, reason='step_limit',
         units={'length':'angstrom','energy':'eV','force':'eV/angstrom'})
+    bias_terms = prepare_afir(data['symbols'], data['atomIds'], data['afir'])
     for step in range(data['maxSteps']+1):
-        distances = np.linalg.norm(positions[:,None,:]-positions[None,:,:], axis=-1)
-        if np.any(distances[np.triu_indices(len(positions),1)]<.1):
+        if has_atomic_collision(positions):
             raise ValueError('AFIR探索中に0.1 Å未満の原子衝突を検出しました。')
         energy, force = calculate(0, positions)
         force = np.asarray(force, dtype=float)
         if not math.isfinite(energy) or force.shape!=positions.shape or not np.isfinite(force).all():
             raise ValueError('物理計算から有限のエネルギー・力を取得できません。')
-        bias, artificial = afir_bias(positions, data['symbols'], data['atomIds'], data['afir'])
+        bias, artificial = afir_bias(positions, data['symbols'], data['atomIds'], data['afir'], bias_terms)
         effective = force+artificial
         effective[fixed] = 0
         constraint_correction = effective - force - artificial
@@ -432,17 +464,14 @@ def adaptive_intervals(images, energies, settings):
 def safe_band_midpoint(left, right, cell=None):
     """Linear interpolation never silently introduces a <0.1 Å atom collision."""
     point = (left+right)*.5
-    for atom in range(len(point)-1):
-        vectors = point[atom+1:]-point[atom]
-        distances = find_mic(vectors, cell['vectors'], cell['pbc'])[1] if cell and any(cell['pbc']) else np.linalg.norm(vectors, axis=1)
-        if len(distances) and np.min(distances) < .1:
-            return None
+    if has_atomic_collision(point, cell):
+        return None
     if np.linalg.norm(point-left) < 1e-10 or np.linalg.norm(right-point) < 1e-10:
         return None
     return point
 
 
-def band_force_components(images, energies, physical, mode, spring, climbing, fixed=()):
+def band_force_components(images, energies, physical, mode, spring, climbing, fixed=(), tangents=None):
     """An additive decomposition of the actual optimizer force, in eV/Å."""
     removal, springs, correction, constraints = (np.zeros_like(physical) for _ in range(4))
     perpendicular_force = physical.copy()
@@ -450,7 +479,7 @@ def band_force_components(images, energies, physical, mode, spring, climbing, fi
         constraints[[0, -1]] = -physical[[0, -1]]
         perpendicular_force[[0, -1]] = 0
         for i in range(1, len(images)-1):
-            tau = tangent(images, energies, i)
+            tau = tangent(images, energies, i) if tangents is None else tangents[i]
             projected = np.sum(physical[i]*tau)*tau
             perpendicular_force[i] -= projected
             if i == climbing:
@@ -559,11 +588,8 @@ def lup_safe_geometry(images, cell=None):
     if any(np.linalg.norm(images[i+1]-images[i]) < 1e-10 for i in range(len(images)-1)):
         return False
     for image in images:
-        for atom in range(len(image)-1):
-            vectors = image[atom+1:]-image[atom]
-            distances = find_mic(vectors, cell['vectors'], cell['pbc'])[1] if cell and any(cell['pbc']) else np.linalg.norm(vectors, axis=1)
-            if len(distances) and np.min(distances) < .1:
-                return False
+        if has_atomic_collision(image, cell):
+            return False
     return True
 
 
@@ -683,7 +709,7 @@ def relax(data, calculate, progress=lambda _: None):
             if additions:
                 # Preserve the fully evaluated original band even when a newly
                 # inserted midpoint fails or the user cancels during its SCF.
-                _, insertion_diagnostics = band_force_components(images, energies, physical, mode, data['spring'], climbing, fixed)
+                _, insertion_diagnostics = band_force_components(images, energies, physical, mode, data['spring'], climbing, fixed, tangents)
                 progress({'bandCheckpoint': {'images': images.tolist(), 'energies': energies.tolist(),
                     'forces': physical.tolist(), 'effectiveFmax': force_max(effective),
                     'imageFmax': [force_max(f) for f in effective], 'steps': step,
@@ -722,7 +748,7 @@ def relax(data, calculate, progress=lambda _: None):
                 lup_states.clear()
                 climbing = int(np.argmax(energies[1:-1]))+1 if step >= data['climbAfter'] else None
                 effective, tangents = band_forces(images, energies, physical, mode, data['spring'], climbing)
-        components, diagnostics = band_force_components(images, energies, physical, mode, data['spring'], climbing, fixed)
+        components, diagnostics = band_force_components(images, energies, physical, mode, data['spring'], climbing, fixed, tangents)
         # Keep decomposition numerically identical to the force used by FIRE.
         if not np.allclose(components['effective'], effective, atol=1e-12, rtol=1e-12):
             raise ValueError('有効力と力成分の整合性を検証できませんでした。')
@@ -1107,12 +1133,13 @@ def constrained_minimize(data, calculate, directory=None, progress=lambda p: Non
     """ASE MIN/AFIR-MIN on an explicitly projected holonomic manifold."""
     from ase.optimize import FIRE, LBFGS, BFGS
     afir = data['mode']=='afir'
+    bias_terms = prepare_afir(data['symbols'], data['atomIds'], data['afir']) if afir else None
     last = {}
 
     def evaluate(index, positions):
         energy, force = calculate(index, positions)
         force = np.asarray(force,dtype=float)
-        bias, artificial = afir_bias(positions,data['symbols'],data['atomIds'],data['afir']) if afir else (0.,np.zeros_like(force))
+        bias, artificial = afir_bias(positions,data['symbols'],data['atomIds'],data['afir'],bias_terms) if afir else (0.,np.zeros_like(force))
         last.update(positions=positions.copy(),energy=float(energy),force=force.copy(),bias=float(bias),artificial=artificial)
         return energy+bias, force+artificial
 
@@ -2085,9 +2112,45 @@ def calculation_identity(data, config):
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 
+class ExactEvaluationCache:
+    """Job-local, bounded, exact-coordinate reuse; no tolerance/rounded geometries."""
+    def __init__(self, calculate, capacity=128):
+        self.calculate, self.capacity = calculate, capacity
+        self.values = OrderedDict()
+        self.calls = self.hits = 0
+        self.seconds = 0.
+
+    def __call__(self, index, positions):
+        array = np.asarray(positions, dtype=np.float64)
+        key = (index, array.shape, array.tobytes())
+        if key in self.values:
+            self.hits += 1
+            energy, force = self.values.pop(key)
+            self.values[key] = (energy, force)
+            return energy, force.copy()
+        started = time.perf_counter()
+        energy, force = self.calculate(index, positions)
+        self.seconds += time.perf_counter()-started
+        self.calls += 1
+        force = np.asarray(force, dtype=float)
+        if math.isfinite(energy) and force.shape == array.shape and np.isfinite(force).all():
+            self.values[key] = (float(energy), force.copy())
+            while len(self.values) > self.capacity:
+                self.values.popitem(last=False)
+        return energy, force.copy()
+
+
 def execute_with_calculator(data, config, directory, messages, calculator):
     component_history = {}
+    last_notification, last_phase = 0., None
     def progress(p):
+        nonlocal last_notification, last_phase
+        now = time.monotonic()
+        phase = p.get('phase')
+        if (not any(k in p for k in ('checkpoint', 'bandCheckpoint', 'structureCheckpoint', 'preview'))
+                and now-last_notification < .1 and phase == last_phase):
+            return
+        last_notification, last_phase = now, phase
         if isinstance(calculator, SolvatedUMAEngine):
             for key in ('checkpoint', 'bandCheckpoint', 'structureCheckpoint', 'preview'):
                 if key in p:
@@ -2104,7 +2167,10 @@ def execute_with_calculator(data, config, directory, messages, calculator):
                 key = (p.get('step'), tuple(p.get('energies', [p.get('energyEV')])))
                 component_history[key] = {name:copy.deepcopy(p[name]) for name in ('energyComponents','componentFmax') if name in p}
         messages.put(('progress', p))
-    result = calculate_job(data, calculator, directory, progress)
+    cached = ExactEvaluationCache(calculator)
+    result = calculate_job(data, cached, directory, progress)
+    result['performance'] = {'engineCalls':cached.calls, 'exactCacheHits':cached.hits,
+                             'engineSeconds':cached.seconds}
     if isinstance(calculator, SolvatedUMAEngine):
         calculator.annotate(result)
         for row in result.get('history', []):
@@ -2309,13 +2375,17 @@ class Jobs:
         now = time.monotonic()
         if not force and now-job.get('_lastPersist', 0) < 1:
             return
-        saved = {'schema':'molecule-job-history/1', **{k:job[k] for k in self.SAVED_KEYS if k in job}}
+        keys = self.SAVED_KEYS
+        if job['status'] in self.TERMINAL and job.get('result'):
+            # Terminal results already contain the complete retained trajectory.
+            keys = tuple(k for k in keys if k not in ('checkpoints', 'bandCheckpoint', 'structureCheckpoint', 'diagnosticsHistory'))
+        saved = {'schema':'molecule-job-history/1', **{k:job[k] for k in keys if k in job}}
         # Internal scan restart data may contain a large result; its original record
         # is already saved separately and is not an executable object.
         saved['updatedAt'] = time.time()*1000
         try:
             encoded = json.dumps(saved, sort_keys=True, ensure_ascii=False, allow_nan=False)
-            saved['recordSHA256'] = hashlib.sha256(encoded.encode()).hexdigest()
+            digest = hashlib.sha256(encoded.encode()).hexdigest()
             target = self.history_dir/(job['id']+'.json')
             temporary = target.with_suffix('.tmp')
             with open(temporary, 'w', encoding='utf-8') as stream:
@@ -2323,7 +2393,8 @@ class Jobs:
                     os.chmod(temporary, 0o600)
                 except OSError:
                     pass
-                json.dump(saved, stream, ensure_ascii=False, allow_nan=False, separators=(',', ':'))
+                # Reuse the canonical JSON used for the checksum (v1-reader compatible).
+                stream.write(encoded[:-1]+', "recordSHA256": "'+digest+'"}')
                 stream.flush()
                 os.fsync(stream.fileno())
             os.replace(temporary, target)
@@ -2440,10 +2511,10 @@ class Jobs:
         thread.start()
 
     @staticmethod
-    def public(job):
+    def public(job, compact=False):
         keys = ('id', 'status', 'progress', 'result', 'error', 'data', 'createdAt', 'updatedAt',
                 'parentId', 'resumeKind', 'archived', 'storageError')
-        result = copy.deepcopy({k:v for k,v in job.items() if k in keys})
+        result = copy.deepcopy({k:v for k,v in job.items() if k in keys and (k != 'data' or not compact)})
         if job.get('_active') and job['status'] in Jobs.TERMINAL:
             result['status'] = 'running'
         return result
@@ -2526,6 +2597,7 @@ class Jobs:
                         preview = value.pop('preview', None)
                         if preview is not None:
                             job['preview'] = preview
+                            job['previewVersion'] = job.get('previewVersion', 0)+1
                         job['progress'].update(value)
                         if self.resident and value.get('phase') == 'calculating':
                             self.resident['ready'] = True
@@ -2625,10 +2697,10 @@ class Jobs:
             conditionId=hashlib.sha256(json.dumps({'data':data, 'identity':job.get('configFingerprint') or calculation_identity(data, self.config)}, sort_keys=True).encode()).hexdigest(),
             units={'length':'angstrom','energy':'eV','force':'eV/angstrom'})
 
-    def get(self, identifier, preview=False, after=0):
+    def get(self, identifier, preview=False, after=0, since=None, compact=False):
         with self.lock:
             job = self._find(identifier)
-            result = self.public(job)
+            result = self.public(job, compact)
             if preview:
                 if job['data']['mode'] == 'afir':
                     frames = job['checkpoints']
@@ -2638,8 +2710,9 @@ class Jobs:
                         result['preview'] = {'mode':'afir', 'from':after, 'next':end,
                             'energies':[p['energy'] for p in part], 'biasEnergies':[p['bias'] for p in part],
                             'positions':part[-1]['positions']}
-                elif job.get('preview') is not None:
+                elif job.get('preview') is not None and (since is None or since != job.get('previewVersion', 0)):
                     result['preview'] = copy.deepcopy(job['preview'])
+                    result['previewVersion'] = job.get('previewVersion', 0)
             return result
 
     def cancel(self, identifier):
@@ -2726,7 +2799,7 @@ class Handler(BaseHTTPRequestHandler):
         self.connection.settimeout(10)
 
     def response(self, status, payload, mime='application/json; charset=utf-8'):
-        body = json.dumps(payload, ensure_ascii=False, allow_nan=False).encode() if isinstance(payload, dict) else payload
+        body = json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(',', ':')).encode() if isinstance(payload, dict) else payload
         self.send_response(status)
         self.send_header('Content-Type', mime)
         self.send_header('Content-Length', str(len(body)))
@@ -2799,17 +2872,19 @@ class Handler(BaseHTTPRequestHandler):
                     'adaptiveNEB':True, 'pathSplit':True, 'history':True, 'queue':True, 'residentModels':True,
                     'lup':True, 'pathOptimizers':{'cineb':['fire'], 'lup':['fire','lbfgs']},
                     'persistentHistory':bool(self.server.jobs.history_dir), 'jobQueue':True, 'modelResidency':True,
-                    'modes': MODES, 'livePreview': 1, 'optimizationTrajectory': 1, 'maxSteps': 10000, 'maxAFIRSteps': 10000, 'jobTimeout': config['jobTimeout'],
+                    'modes': MODES, 'compactPolling':1, 'livePreview': 1, 'optimizationTrajectory': 1, 'maxSteps': 10000, 'maxAFIRSteps': 10000, 'jobTimeout': config['jobTimeout'],
                     'engineVersion': package_version('fairchem-core' if config['engine']=='uma' else 'tblite') if config['engine']!='gxtb' else 'locally configured binary'})
             elif self.path == '/api/jobs':
                 self.response(200, self.server.jobs.listing())
             elif self.path == '/api/runtime':
                 self.response(200, self.server.jobs.runtime())
-            elif re.fullmatch(r'/api/jobs/[a-f0-9]{32}(?:\?preview=1&after=[0-9]{1,5})?', self.path):
+            elif re.fullmatch(r'/api/jobs/[a-f0-9]{32}(?:\?(?:preview=1&after=[0-9]{1,5}(?:&since=[0-9]{1,9})?(?:&compact=1)?|compact=1))?', self.path):
                 try:
                     parts = self.path.rsplit('/', 1)[1].split('?', 1)
-                    after = int(parts[1].rsplit('=', 1)[1]) if len(parts) == 2 else 0
-                    self.response(200, self.server.jobs.get(parts[0], len(parts) == 2, after))
+                    options = dict(parse_qsl(parts[1])) if len(parts) == 2 else {}
+                    self.response(200, self.server.jobs.get(parts[0], options.get('preview') == '1',
+                        int(options.get('after', 0)), int(options['since']) if 'since' in options else None,
+                        options.get('compact') == '1'))
                 except KeyError as error:
                     self.response(404, {'error': str(error)})
             else:

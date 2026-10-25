@@ -26,7 +26,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.click('#btnCopySelection');await page.waitForFunction(()=>document.getElementById('statusBadge').textContent.includes('コピーしました'));assert.equal(await page.evaluate(()=>document.activeElement.tagName),'CANVAS');
   await page.keyboard.press('Control+v');await count(4);
   // Textarea shortcuts remain text operations and do not add atoms.
-  await page.locator('#dataText').focus();await page.keyboard.press('Control+a');await page.keyboard.press('Control+c');assert.match(await page.evaluate(()=>navigator.clipboard.readText()),/^4\n/);
+  await page.locator('#dataText').focus();await page.keyboard.press('Control+a');await page.keyboard.press('Control+c');assert.match(await page.evaluate(()=>navigator.clipboard.readText()),/^4\r?\n/);
   await page.evaluate(()=>navigator.clipboard.writeText('He 0 0 0'));await page.keyboard.press('Control+v');assert.equal((await state()).atoms.length,4);assert.equal(await page.locator('#dataText').inputValue(),'He 0 0 0');
   await page.click('#btnPasteSelection');assert.match(await page.locator('#statusBadge').textContent(),/未適用/);assert.equal((await state()).atoms.length,4);await page.click('#dataReset');
   // Browser denial uses the exact page copy and announces the fallback.

@@ -15,16 +15,31 @@
   function reciprocal(c){const v=c.vectors,d=dot(v[0],cross(v[1],v[2]));return [cross(v[1],v[2]),cross(v[2],v[0]),cross(v[0],v[1])].map(r=>r.map(x=>x/d));}
   function fractional(p,c){return reciprocal(c).map(r=>dot(r,p));}
   function cartesian(p,c){return [0,1,2].map(j=>p.reduce((s,x,i)=>s+x*c.vectors[i][j],0));}
-  function minimumImage(delta,c){
-    const f=fractional(delta,c), initial=f.map((x,i)=>c.pbc[i]?Math.round(x):0);
-    let vector=cartesian(f.map((x,i)=>x-initial[i]),c),best=dot(vector,vector),shift=initial.map(x=>-x);
-    const bounds=reciprocal(c).map((r,i)=>{const radius=Math.hypot(...r)*Math.sqrt(best)+1e-9;return c.pbc[i]?[Math.ceil(f[i]-radius),Math.floor(f[i]+radius)]:[0,0];});
-    if(bounds.reduce((s,b)=>s*(b[1]-b[0]+1),1)>20000)throw Error('セルの傾斜が極端なため最小像探索の上限を超えました。セルを簡約してください。');
-    for(let a=bounds[0][0];a<=bounds[0][1];a++)for(let b=bounds[1][0];b<=bounds[1][1];b++)for(let d=bounds[2][0];d<=bounds[2][1];d++){
-      const n=[a,b,d],v=cartesian(f.map((x,i)=>x-n[i]),c),dist=dot(v,v);if(dist<best-1e-12){best=dist;vector=v;shift=n.map(x=>-x);}
-    }
-    return {vector,distance:Math.sqrt(best),shift};
+  // A prepared kernel owns a cell snapshot: mutations cannot invalidate its inverse.
+  // The bounded lattice search is retained for skew and partially periodic cells.
+  function prepareMinimumImage(c){
+    const v=c.vectors.map(r=>r.slice()),pbc=c.pbc.slice(),rec=reciprocal({vectors:v});
+    const norms=rec.map(r=>Math.hypot(...r));
+    const orthogonal=dot(v[0],v[1])===0&&dot(v[0],v[2])===0&&dot(v[1],v[2])===0;
+    const fractional=p=>rec.map(r=>dot(r,p));
+    const cart=(x,y,z)=>[x*v[0][0]+y*v[1][0]+z*v[2][0],x*v[0][1]+y*v[1][1]+z*v[2][1],x*v[0][2]+y*v[1][2]+z*v[2][2]];
+    const solve=delta=>{
+      const f=fractional(delta),initial=f.map((x,i)=>pbc[i]?Math.round(x):0);
+      let vector=cart(f[0]-initial[0],f[1]-initial[1],f[2]-initial[2]),best=dot(vector,vector),shift=initial.map(x=>-x);
+      if(orthogonal)return {vector,distance:Math.sqrt(best),shift};
+      const radius=Math.sqrt(best),bounds=norms.map((n,i)=>pbc[i]?[Math.ceil(f[i]-n*radius-1e-9),Math.floor(f[i]+n*radius+1e-9)]:[0,0]);
+      if(bounds.reduce((s,b)=>s*(b[1]-b[0]+1),1)>20000)throw Error('セルの傾斜が極端なため最小像探索の上限を超えました。セルを簡約してください。');
+      for(let a=bounds[0][0];a<=bounds[0][1];a++)for(let b=bounds[1][0];b<=bounds[1][1];b++)for(let d=bounds[2][0];d<=bounds[2][1];d++){
+        const x=f[0]-a,y=f[1]-b,z=f[2]-d;
+        const vx=x*v[0][0]+y*v[1][0]+z*v[2][0],vy=x*v[0][1]+y*v[1][1]+z*v[2][1],vz=x*v[0][2]+y*v[1][2]+z*v[2][2];
+        const dist=vx*vx+vy*vy+vz*vz;
+        if(dist<best-1e-12){best=dist;vector=[vx,vy,vz];shift=[-a,-b,-d];}
+      }
+      return {vector,distance:Math.sqrt(best),shift};
+    };
+    solve.fractional=fractional;solve.reciprocalNorms=norms;return solve;
   }
+  function minimumImage(delta,c){return prepareMinimumImage(c)(delta);}
   function wrap(s){const c=s.metadata.cell;if(!c)throw Error('周期セルがありません。');s.atoms.forEach(a=>{const f=fractional(xyz(a),c).map((x,i)=>c.pbc[i]?x-Math.floor(x):x);[a.x,a.y,a.z]=cartesian(f,c);});}
   function supercell(s,n){
     if(!s.metadata.cell)throw Error('周期セルがありません。');if(n.length!==3||n.some(x=>!Number.isInteger(x)||x<1||x>8)||s.atoms.length*n.reduce((a,b)=>a*b,1)>2000)throw Error('反復数は各1〜8、合計2000原子までです。');
@@ -112,5 +127,5 @@
   IO.parseAuto=t=>String(t).trim().startsWith('{')?IO.parseProject(t):/V[23]000/.test(t)?oldAuto(t):/^\s*[+-]?(?:\d+\.?\d*|\.\d+)\s*$/.test(String(t).split('\n')[1]||'')&&!/^\d+\s*$/.test(String(t).split('\n')[0])?parsePOSCAR(t):parseXYZ(t);
   IO.stateToMolText=(s,version)=>{if(s.metadata.cell)throw Error('MOLは周期セルを保持できません。拡張XYZ・POSCAR・プロジェクトで保存してください。');return oldMol(s,version);};
   IO.stateToSDFText=s=>IO.stateToMolText(s)+(s.metadata.sdfProperties?String(s.metadata.sdfProperties)+'\n\n':'')+'$$$$\n';
-  MV.Periodic={cell,fractional,cartesian,minimumImage,wrap,supercell,parsePOSCAR,toPOSCAR,snapshot,xyz,editorText,lowerTriangular};
+  MV.Periodic={cell,fractional,cartesian,minimumImage,prepareMinimumImage,wrap,supercell,parsePOSCAR,toPOSCAR,snapshot,xyz,editorText,lowerTriangular};
 })(window);

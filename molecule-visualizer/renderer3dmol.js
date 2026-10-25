@@ -40,6 +40,7 @@
     this.keyboardActive = false;
     this.pointerInside = false;
     this.cameraCenter = null; this.cameraSpan = null;
+    this.drawRequest = null;
   }
 
   Renderer3DMol.prototype.ensureViewer = function () {
@@ -55,7 +56,7 @@
     this.container.appendChild(this.canvas);
     this.ctx = this.canvas.getContext("2d");
     this.installCanvasEvents();
-    if (global.ResizeObserver) new ResizeObserver(() => { this.resize(); this.draw(); }).observe(this.container);
+    if (global.ResizeObserver) new ResizeObserver(() => { this.resize(); this.requestDraw(); }).observe(this.container);
     this.resize();
   };
 
@@ -65,21 +66,30 @@
 
   Renderer3DMol.prototype.resize = function () {
     if (!this.canvas || !this.container) return;
-    const rect = this.container.getBoundingClientRect();
-    const dpr = global.devicePixelRatio || 1;
-    this.canvas.width = Math.max(1, Math.floor(rect.width * dpr));
-    this.canvas.height = Math.max(1, Math.floor(rect.height * dpr));
-    this.canvas.style.width = `${rect.width}px`;
-    this.canvas.style.height = `${rect.height}px`;
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const rect=this.container.getBoundingClientRect(),dpr=global.devicePixelRatio||1;
+    const w=Math.max(1,Math.floor(rect.width*dpr)),h=Math.max(1,Math.floor(rect.height*dpr));
+    // Setting either backing dimension clears the bitmap and every context state.
+    if(this.canvas.width!==w||this.canvas.height!==h||this.pixelRatio!==dpr){
+      this.canvas.width=w;this.canvas.height=h;this.pixelRatio=dpr;
+      this.ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    const width=rect.width+'px',height=rect.height+'px';
+    if(this.canvas.style.width!==width)this.canvas.style.width=width;
+    if(this.canvas.style.height!==height)this.canvas.style.height=height;
   };
 
-  Renderer3DMol.prototype.renderState = function (state, preserveCamera) {
+  Renderer3DMol.prototype.requestDraw = function () {
+    if(!global.requestAnimationFrame){this.draw();return;}
+    if(this.drawRequest!==null)return;
+    this.drawRequest=global.requestAnimationFrame(()=>{this.drawRequest=null;this.draw();});
+  };
+
+  Renderer3DMol.prototype.renderState = function (state, preserveCamera, deferred=false) {
     this.ensureViewer();
     this.state = state;
-    if (!preserveCamera || !this.cameraCenter) this.fit();
+    if (!preserveCamera || !this.cameraCenter) this.fit(false);
     this.resize();
-    this.draw();
+    if(deferred)this.requestDraw();else this.draw();
     this.onStateRendered?.();
   };
 
@@ -170,10 +180,10 @@
   };
 
   Renderer3DMol.prototype.draw = function () {
+    if(this.drawRequest!==null){global.cancelAnimationFrame?.(this.drawRequest);this.drawRequest=null;}
     if (!this.ctx || !this.state) return;
     const width = this.canvas.clientWidth;
     const height = this.canvas.clientHeight;
-    this.ctx.clearRect(0, 0, width, height);
     this.ctx.fillStyle = "#f9fbfc";
     this.ctx.fillRect(0, 0, width, height);
 
@@ -194,11 +204,11 @@
     this.projectedAtoms = atoms.map((atom,index) => Object.assign(this.project(atom, center, scale, width, height), {index:index+1})).filter(p=>p.visible);
     const atomById = new Map(this.projectedAtoms.map(pa => [pa.atom.id, pa]));
 
+    const cell=this.state.metadata.cell,mic=cell?MV.Periodic.prepareMinimumImage(cell):null;
     this.projectedBonds = (this.state.bonds || []).flatMap(bond => {
       const a=atomById.get(bond.atom1),b=atomById.get(bond.atom2);if(!a||!b)return [];
-      const cell=this.state.metadata.cell;
       if(!cell)return [{bond,a,b}];
-      const image=MV.Periodic.minimumImage([b.atom.x-a.atom.x,b.atom.y-a.atom.y,b.atom.z-a.atom.z],cell);
+      const image=mic([b.atom.x-a.atom.x,b.atom.y-a.atom.y,b.atom.z-a.atom.z]);
       if(!image.shift.some(Boolean))return [{bond,a,b}];
       const offset=MV.Periodic.cartesian(image.shift,cell);
       const translate=(atom,sign)=>this.project({x:atom.x+sign*offset[0],y:atom.y+sign*offset[1],z:atom.z+sign*offset[2]},center,scale,width,height);
@@ -212,6 +222,11 @@
       .sort((m, n) => ((m.a.z + m.b.z) / 2) - ((n.a.z + n.b.z) / 2))
       .forEach(item => this.drawBond(item));
 
+    this.afirMemberships=new Map();
+    const fragments=this.state.metadata.afir?.fragments;
+    if(this.state.viewSettings.afirOverlay&&Array.isArray(fragments))for(const [i,fragment] of fragments.entries()){
+      for(const id of Array.isArray(fragment?.atomIds)?fragment.atomIds:[]){if(!this.afirMemberships.has(id))this.afirMemberships.set(id,[]);this.afirMemberships.get(id).push(i);}
+    }
     this.projectedAtoms
       .slice()
       .sort((a, b) => a.z - b.z)
@@ -383,8 +398,7 @@
     this.ctx.stroke();
 
     if(this.state.viewSettings.afirOverlay && MV.AFIR){
-      const definitions=this.state.metadata.afir?.fragments;
-      const memberships=(Array.isArray(definitions)?definitions:[]).map((f,i)=>Array.isArray(f?.atomIds)&&f.atomIds.includes(pa.atom.id)?i:-1).filter(i=>i>=0);
+      const memberships=this.afirMemberships?.get(pa.atom.id)||[];
       memberships.forEach((i,k)=>{this.ctx.beginPath();this.ctx.arc(pa.x,pa.y,pa.radius+4+3*k,0,2*Math.PI);this.ctx.lineWidth=2;this.ctx.strokeStyle=MV.AFIR.palette[i%MV.AFIR.palette.length];this.ctx.stroke();});
     }
     if (this.state.viewSettings && (this.state.viewSettings.showIndexLabels || this.state.viewSettings.afirOverlay)) {
@@ -397,9 +411,9 @@
   };
 
   Renderer3DMol.prototype.resetCamera=function(){this.setViewAngles(-.45,.65);this.fit();};
-  Renderer3DMol.prototype.fit = function () {
+  Renderer3DMol.prototype.fit = function (draw=true) {
     this.cameraCenter = this.state?.metadata.cell ? (()=>{const v=MV.Periodic.cartesian([.5,.5,.5],this.state.metadata.cell);return {x:v[0],y:v[1],z:v[2]};})() : this.center(); this.cameraSpan = this.estimateSpan(this.cameraCenter);
-    this.zoom = 1; this.panX = 0; this.panY = 0; this.draw();
+    this.zoom = 1; this.panX = 0; this.panY = 0; if(draw)this.draw();
   };
   Renderer3DMol.prototype.atomRadius = function(element,scale) {
     const style=this.state?.viewSettings?.style || "stickball";
@@ -415,6 +429,7 @@
     this.canvas.addEventListener("keydown",e=>self.onKeyDown?.(e));
     const pinch=()=>{const [a,b]=[...touches.values()];return {x:(a.x+b.x)/2,y:(a.y+b.y)/2,d:Math.hypot(a.x-b.x,a.y-b.y)};};
     this.canvas.addEventListener("pointerdown",function(e){
+      if(self.drawRequest!==null)self.draw();
       self.focusCanvas();const p=self.eventPoint(e);touches.set(e.pointerId,p);self.canvas.setPointerCapture(e.pointerId);
       if(touches.size===2){if(self.pointer?.historyStarted) self.onDragEnd?.(e);self.pointer=null;self.selectionBox=null;gesture=pinch();return;}
       if(touches.size>2)return;
@@ -427,7 +442,7 @@
     });
     this.canvas.addEventListener("pointermove",function(e){
       if(!touches.has(e.pointerId))return;const p=self.eventPoint(e);touches.set(e.pointerId,p);
-      if(gesture&&touches.size===2){const next=pinch();self.zoom=Math.max(.1,Math.min(12,self.zoom*next.d/Math.max(1,gesture.d)));self.panX+=next.x-gesture.x;self.panY+=next.y-gesture.y;gesture=next;self.draw();return;}
+      if(gesture&&touches.size===2){const next=pinch();self.zoom=Math.max(.1,Math.min(12,self.zoom*next.d/Math.max(1,gesture.d)));self.panX+=next.x-gesture.x;self.panY+=next.y-gesture.y;gesture=next;self.requestDraw();return;}
       const ptr=self.pointer;if(!ptr||ptr.id!==e.pointerId)return;
       if(!ptr.moved&&Math.hypot(e.clientX-ptr.x,e.clientY-ptr.y)<5)return;
       ptr.moved=true;const dx=e.clientX-ptr.lastX,dy=e.clientY-ptr.lastY;ptr.lastX=e.clientX;ptr.lastY=e.clientY;
@@ -442,7 +457,7 @@
         self.onAtomsDrag?.(ptr.atomId,self.screenDeltaToWorld(dx,dy,e.shiftKey),e);
       }else if(ptr.action==="roll"){self.rollCamera(dx*.008);}
       else if(ptr.action==="rotate") {self.rotateTrackball(p.x-dx,p.y-dy,p.x,p.y);}
-      self.draw();
+      self.requestDraw();
     });
     const finish=function(e){
       touches.delete(e.pointerId);if(gesture){if(touches.size<2)gesture=null;self.pointer=null;return;}
@@ -456,12 +471,12 @@
         }
       }
       else if(!self.previewOnly&&!ptr.moved&&["rotate","move","roll"].includes(ptr.action)&&e.type!=="pointercancel") {if(ptr.atomId)self.onAtomClick?.(ptr.atomId,e,self);else if(ptr.bondId)self.onBondClick?.(ptr.bondId,e,self);else self.onBlankClick?.(e);}
-      self.draw();
+      self.requestDraw();
     };
     this.canvas.addEventListener("pointerup",finish);this.canvas.addEventListener("pointercancel",finish);this.canvas.addEventListener("lostpointercapture",finish);
-    this.canvas.addEventListener("wheel",e=>{e.preventDefault();self.zoom=Math.max(.1,Math.min(12,self.zoom*Math.exp(-e.deltaY*.001)));self.draw();},{passive:false});
+    this.canvas.addEventListener("wheel",e=>{e.preventDefault();self.zoom=Math.max(.1,Math.min(12,self.zoom*Math.exp(-e.deltaY*.001)));self.requestDraw();},{passive:false});
     this.canvas.addEventListener("contextmenu",e=>e.preventDefault());
-    global.addEventListener("resize",()=>{self.resize();self.draw();});
+    global.addEventListener("resize",()=>{self.resize();self.requestDraw();});
   };
 
   Renderer3DMol.prototype.viewVectorToWorld = function(v){
@@ -522,9 +537,13 @@
   };
 
   Renderer3DMol.prototype.pickAtom = function (x, y) {
-    const sorted=this.projectedAtoms.slice().sort((a,b)=>b.z-a.z);
-    const hit=sorted.find(pa=>Math.hypot(x-pa.x,y-pa.y)<=Math.max(10,pa.radius+3));
-    return hit ? hit.atom : null;
+    if(this.drawRequest!==null)this.draw();
+    let hit=null;
+    for(const pa of this.projectedAtoms){
+      const dx=x-pa.x,dy=y-pa.y,r=Math.max(10,pa.radius+3);
+      if(dx*dx+dy*dy<=r*r&&(!hit||pa.z>hit.z))hit=pa;
+    }
+    return hit?hit.atom:null;
   };
 
   Renderer3DMol.prototype.pickBond = function (x, y) {
