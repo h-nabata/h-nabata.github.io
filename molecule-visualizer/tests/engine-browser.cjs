@@ -185,7 +185,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   // Replay a completed real calculation's first two checkpoints as an in-flight
   // response, making the live UI check deterministic even on very fast CPUs.
   let delivered=false;
-  await page.route(/\/api\/jobs\/[a-f0-9]{32}\?preview=1&after=\d+$/,async route=>{
+  await page.route(/\/api\/jobs\/[a-f0-9]{32}\?preview=1&after=\d+(?:&since=\d+)?(?:&compact=1)?$/,async route=>{
     const response=await route.fetch(),body=await response.json();
     if(!delivered&&body.status==='completed'){
       delivered=true;const r=body.result;
@@ -198,7 +198,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await assertCoordinates();assert.equal(await page.locator('#dataText').evaluate(e=>e.readOnly),true);
   await page.waitForSelector('#afirResult:not([hidden])');
   await assertCoordinates();assert.ok(delivered);assert.ok(previewRequests.length>=2);
-  await page.unroute(/\/api\/jobs\/[a-f0-9]{32}\?preview=1&after=\d+$/);
+  await page.unroute(/\/api\/jobs\/[a-f0-9]{32}\?preview=1&after=\d+(?:&since=\d+)?(?:&compact=1)?$/);
   await page.click('#afirApply');assert.match(await page.locator('#framePlay').textContent(),/停止/);
   assert.ok(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.frameIndex)>0,'apply-and-play advances immediately');
   await page.locator('#frameRange').focus();await page.locator('#frameRange').press('Home');
