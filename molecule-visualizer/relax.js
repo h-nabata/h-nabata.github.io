@@ -43,7 +43,7 @@
       if(rebuild){
         neighborOrigin=Array.from(x);
         neighbors=pairs.filter(([i,j,target])=>{
-          const d=delta(x,i,j),limit=target+skin;
+          const d=delta(x,i,j),limit=target+skin+1e-12;
           return d[0]*d[0]+d[1]*d[1]+d[2]*d[2]<=limit*limit;
         });
       }

@@ -322,4 +322,9 @@ JavaScriptはNode 24.19.0、Pythonは3.12.15／NumPy 2.5.4。結合の原子対�
 - node molecule-visualizer/tests/benchmark_performance.cjs /path/to/baseline-directory
 - python molecule-visualizer/tests/benchmark_performance.py /path/to/baseline/bridge.py
 
-GPUネイティブUMA／AnySolv、実g-xTBの速度比較は未実施。局所処理の倍率を計算全体の倍率として解釈しない。ローカルではtblite未導入のため、そのネイティブ試験は別途CIで確認する。実行状況は以下に追記する。
+GPUネイティブUMA／AnySolv、実g-xTBの速度比較は未実施。局所処理の倍率を計算全体の倍率として解釈しない。ローカルではtblite未導入のため、tbliteを含む数値試験はCIで実施した。
+
+
+検証状況: JavaScript 128件合格。追加のPython性能回帰試験5件合格。Chromeでperformance-browser、clipboard-browser、measurements-browser、analysis-browser、workflow-browserの各統合試験が合格した。CIではtblite・Sellaを含む数値／ローカルサービス試験とAnySolvの公開compactモデルによる検証が合格した。全ブラウザ統合試験の結果は[GitHub Actions](https://github.com/h-nabata/h-nabata.github.io/actions/workflows/molecule-test.yml)でコミットごとに確認できる。skipは合格件数に含めない。
+
+描画はChromeのrequestAnimationFrame間で1000原子・999結合を更新し、ウォームアップ後50フレームの中央値を測定した。非周期系のCPU描画時間は3.70→3.40 ms、斜方セルは5.10→4.40 msだった。FPSやGPU全体の時間を表す値ではない。80回の連続描画要求が1フレームに集約され、座標と選択判定が保たれることもブラウザ試験で確認した。

@@ -81,7 +81,7 @@
         const a=atoms[i],b=atoms[j],dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z;
         const metalPair=metal[i]||metal[j],limit=(metalPair?METAL_DISTANCE_SCALE:BOND_DISTANCE_SCALE)*(radii[i]+radii[j]);
         const d=mic?mic([dx,dy,dz]).distance:Math.sqrt(dx*dx+dy*dy+dz*dz);
-        if(d<MIN_BOND_DISTANCE||d>limit)return;
+        if(!(d>=MIN_BOND_DISTANCE&&d<=limit))return;
         bonds.push(Model.createBond({atom1:a.id,atom2:b.id,order:1,type:metalPair?'coordination_candidate':'covalent',source:'inferred'}));
       };
       if(candidates)for(const j of candidates)consider(j);

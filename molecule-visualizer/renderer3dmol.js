@@ -225,7 +225,7 @@
     this.afirMemberships=new Map();
     const fragments=this.state.metadata.afir?.fragments;
     if(this.state.viewSettings.afirOverlay&&Array.isArray(fragments))for(const [i,fragment] of fragments.entries()){
-      for(const id of Array.isArray(fragment?.atomIds)?fragment.atomIds:[]){if(!this.afirMemberships.has(id))this.afirMemberships.set(id,[]);this.afirMemberships.get(id).push(i);}
+      for(const id of new Set(Array.isArray(fragment?.atomIds)?fragment.atomIds:[])){if(!this.afirMemberships.has(id))this.afirMemberships.set(id,[]);this.afirMemberships.get(id).push(i);}
     }
     this.projectedAtoms
       .slice()
