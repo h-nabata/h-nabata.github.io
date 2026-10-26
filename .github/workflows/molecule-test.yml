@@ -50,6 +50,7 @@ jobs:
           mkdir -p test-artifacts
           python molecule-visualizer/scripts/preview.py > /tmp/preview.log 2>&1 &
           molecule_test_status=0
+          node molecule-visualizer/tests/import-browser.cjs || molecule_test_status=1
           node molecule-visualizer/tests/performance-browser.cjs || molecule_test_status=1
           node molecule-visualizer/tests/browser.cjs || molecule_test_status=1
           node molecule-visualizer/tests/engine-browser.cjs || molecule_test_status=1

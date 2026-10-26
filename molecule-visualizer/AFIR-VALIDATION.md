@@ -328,3 +328,10 @@ GPUネイティブUMA／AnySolv、実g-xTBの速度比較は未実施。局所�
 検証状況: JavaScript 128件合格。追加のPython性能回帰試験5件合格。Chromeでperformance-browser、clipboard-browser、measurements-browser、analysis-browser、workflow-browserの各統合試験が合格した。CIではtblite・Sellaを含む数値／ローカルサービス試験とAnySolvの公開compactモデルによる検証が合格した。全ブラウザ統合試験の結果は[GitHub Actions](https://github.com/h-nabata/h-nabata.github.io/actions/workflows/molecule-test.yml)でコミットごとに確認できる。skipは合格件数に含めない。
 
 描画はChromeのrequestAnimationFrame間で1000原子・999結合を更新し、ウォームアップ後50フレームの中央値を測定した。非周期系のCPU描画時間は3.70→3.40 ms、非直交セルは5.10→4.40 msだった。FPSやGPU全体の時間を表す値ではない。80回の連続描画要求が1フレームに集約され、座標と選択判定が保たれることもブラウザ試験で確認した。
+
+## 2026-10-26: 構造ファイル入力の拡張
+
+- 合成データによる入力試験31件が合格。GRRMの複数構造・共有Frozen Atoms・Options除外、GaussianとのCOM判別、各形式のÅ/Bohr/nm/分率座標、セル、文字コード、原子順ID、破損入力を検証。
+- Chromeでimport-browser.cjsが合格。ドラッグ＆ドロップ、複数ファイル、フレーム移動、実キャンバスの原子選択、固定原子条件を含むジョブ送信、結果適用、実ファイル保存と再読み込み、失敗時の状態保持、Undo、ORCA参照XYZ、編集欄GRO、非同期読み込みと編集の競合を確認。計算結果はこのUI試験では合成のlocalhost応答を使用し、数値精度の検証とは区別する。
+- WindowsのPython回帰試験は書き込み可能な一時領域で119件を実行。native tblite未導入のため2試験内の6サブケースがエラー、10件skip。これを合格とは扱わない。Pythonコードの変更はなく、依存関係を備えたCIでの再検証結果を追記する。
+- 実研究ファイルや全ソフトウェアの全バージョンの検証は未実施。対応する座標構文と未対応範囲はIMPORT-FORMATS.mdを参照。

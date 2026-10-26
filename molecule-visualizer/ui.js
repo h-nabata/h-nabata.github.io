@@ -190,8 +190,8 @@
     render(preserveCamera);
   }
 
-  function loadText(text) {
-    const nextState=IO.parseAuto(text);
+  function loadText(text) { loadImportedState(IO.parseAuto(text)); }
+  function loadImportedState(nextState) {
     pushHistory("load");nextState.viewSettings=Object.assign({},state.viewSettings,nextState.viewSettings);
     setState(nextState,false);setStatus(`${state.atoms.length} 原子 / ${state.metadata.trajectory?.length||1}構造を読み込みました。`+(state.metadata.importWarnings||[]).join(" "));
     byId("importError").textContent="";byId("importDialog").close();
@@ -1027,7 +1027,13 @@
     bind('toolBox','click',()=>setMode('box'));
     bind('btnOpen','click',()=>byId('fileInput').click());
     bind('btnDataFile','click',()=>byId('dataFile').click());
-    bind('dataFile','change',async e=>{try{const f=e.target.files[0];if(!f)return;if(f.size>10*1024*1024)throw Error('ファイルは10MB以下にしてください。');byId('dataText').value=await f.text();xyzDirty=true;byId('inputFormat').value='auto';syncXYZEditor();setStatus('ファイルを編集欄に読み込みました。「構造へ適用」で読み取ります。');}finally{e.target.value='';}});
+    let importRequest=0,draftRequest=0;
+    bind('dataFile','change',async e=>{try{
+      const f=e.target.files[0];if(!f)return;const request=++draftRequest,before=byId('dataText').value,base=state;
+      const record=await MV.Formats.readText(f),format=MV.Formats.detect(record.text,f.name);
+      if(request!==draftRequest||state!==base||byId('dataText').value!==before)throw Error('読み込み中に編集が変わったため、ファイルの適用を中止しました。');
+      byId('dataText').value=record.text;xyzDirty=true;byId('inputFormat').value=format;syncXYZEditor();setStatus('ファイルを編集欄に読み込みました。「構造へ適用」で読み取ります。');
+    }finally{e.target.value='';}});
     bind('btnPaste','click',()=>{byId('importError').textContent='';byId('importDialog').showModal();byId('xyz_input').focus();});
     bind('btnHelp','click',()=>byId('helpDialog').showModal());
     bind('btnExport','click',()=>{byId('exportText').value=IO.stateToXYZText(freezeDisplayedStructure());byId('exportMessage').textContent='';byId('exportDialog').showModal();});
@@ -1036,12 +1042,17 @@
     bind('btnSaveProject','click',()=>{downloadText(IO.stateToProjectText(getDisplayedState()),safeFilename()+'.json');setStatus('プロジェクトを保存しました。');});
     bind('btnNew','click',()=>{pushHistory('new');state=Model.createState();setMode('select');render(false);setStatus('新規構造です。原子追加またはサンプルから始めてください。');});
     bind('structureTitle','change',()=>{pushHistory('rename');state.metadata.title=byId('structureTitle').value.trim()||'無題の構造';saveLocal();syncUI();});
-    const readFile=async file=>{if(!file)return;if(file.size>10*1024*1024)throw Error('ファイルは10MB以下にしてください。');const text=await file.text();loadText(text);if(!state.metadata.title||state.metadata.title==='無題の構造')state.metadata.title=file.name.replace(/\.[^.]+$/,'');saveLocal();syncUI();};
-    bind('fileInput','change',async e=>{try{await readFile(e.target.files[0]);}finally{e.target.value='';}});
+    const readFiles=async files=>{
+      if(!files?.length)return;const request=++importRequest,before=IO.stateToProjectText(state),draft=byId('dataText').value;
+      setStatus('構造ファイルを読み込んでいます…');const next=await MV.Formats.readFiles(files);
+      if(request!==importRequest||IO.stateToProjectText(state)!==before||byId('dataText').value!==draft)throw Error('読み込み中に構造・編集が変わったため、適用を中止しました。再度ファイルを開いてください。');
+      loadImportedState(next);
+    };
+    bind('fileInput','change',async e=>{try{await readFiles(e.target.files);}finally{e.target.value='';}});
     const app=document.querySelector('.mv-app');
     app.addEventListener('dragover',e=>{if([...e.dataTransfer.types].includes('Files')){e.preventDefault();app.classList.add('drag-over');}});
     app.addEventListener('dragleave',e=>{if(!app.contains(e.relatedTarget))app.classList.remove('drag-over');});
-    app.addEventListener('drop',async e=>{e.preventDefault();app.classList.remove('drag-over');try{if(e.dataTransfer.files.length!==1)throw Error('ファイルは1つずつ開いてください。');await readFile(e.dataTransfer.files[0]);}catch(error){report(error);}});
+    app.addEventListener('drop',async e=>{e.preventDefault();app.classList.remove('drag-over');try{await readFiles(e.dataTransfer.files);}catch(error){report(error);}});
     document.querySelectorAll('[data-example]').forEach(el=>el.addEventListener('click',()=>{pushHistory('sample');setState(exampleState(el.dataset.example),false);setStatus('サンプルを読み込みました。以前の構造は「戻す」で復元できます。');}));
     const tabs=[...document.querySelectorAll('[data-tab]')];
     function activate(tab){tabs.forEach(t=>{const active=t===tab;t.setAttribute('aria-selected',String(active));t.tabIndex=active?0:-1;byId('pane-'+t.dataset.tab).hidden=!active;});}

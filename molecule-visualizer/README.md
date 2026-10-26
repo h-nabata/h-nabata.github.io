@@ -166,3 +166,7 @@ Regression tests include analytic geometry for all six types, rigid-motion invar
 ## 複数フラグメントAFIR
 
 「AFIR / 原子団に人工力」から、描画上で複数の原子団とペアを指定して探索できます。設定と表示はブラウザ内で行い、探索時のエネルギー・力だけを、このPCのg-xTBまたはtbliteへ依頼します。外部サーバーには分子データを送りません。[操作・数式・データ形式](./AFIR.md)と[検証記録](./AFIR-VALIDATION.md)を参照してください。ローカルサービスは1.1.0へ更新してください。
+
+## 構造ファイルの入力
+
+GRRM .comの単独・複数構造、共有Frozen Atomsに対応。複数ファイルをまとめてドロップできます。追加した量子化学・MD・周期系形式と制限は[IMPORT-FORMATS.md](IMPORT-FORMATS.md)を参照してください。
