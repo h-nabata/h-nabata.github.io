@@ -335,3 +335,6 @@ GPUネイティブUMA／AnySolv、実g-xTBの速度比較は未実施。局所�
 - Chromeでimport-browser.cjsが合格。ドラッグ＆ドロップ、複数ファイル、フレーム移動、実キャンバスの原子選択、固定原子条件を含むジョブ送信、結果適用、実ファイル保存と再読み込み、失敗時の状態保持、Undo、ORCA参照XYZ、編集欄GRO、非同期読み込みと編集の競合を確認。計算結果はこのUI試験では合成のlocalhost応答を使用し、数値精度の検証とは区別する。
 - WindowsのPython回帰試験は書き込み可能な一時領域で119件を実行。native tblite未導入のため2試験内の6サブケースがエラー、10件skip。これを合格とは扱わない。Pythonコードの変更はなく、依存関係を備えたCIでの再検証結果を追記する。
 - 実研究ファイルや全ソフトウェアの全バージョンの検証は未実施。対応する座標構文と未対応範囲はIMPORT-FORMATS.mdを参照。
+
+- 最終実装 `39fab908a5d363e0d2a534f98114e10603f53bb4` の[CI（40282428760）](https://github.com/h-nabata/h-nabata.github.io/actions/runs/40282428760)が成功。JavaScript 159件合格（skip 0）、Python 119件中115件合格・4件skip。native tbliteを用いる固定MIN/AFIR・制約最適化/scanを含め成功し、ローカル未導入によるエラーを解消して検証できた。別ジョブのnative AnySolv有限差分試験1件も合格。
+- 同CIのブラウザ試験13スイートがすべて合格。追加したimport-browserと既存の描画性能、編集、実tblite、batch、固定原子、clipboard、UMA/AnySolv契約、実Sella TS/振動、計測、LUP/IRC等の操作、構造比較を通過。UMA実モデル・native g-xTB試験は今回未実施で、skipを合格へ算入しない。
