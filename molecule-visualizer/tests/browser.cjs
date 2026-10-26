@@ -235,6 +235,21 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  await keys.press('Control+e');assert.deepEqual(await selected(),['A','B','F']);
  await keys.press('Control+w');assert.deepEqual(await selected(),['A','B','C','D','F']);
  await keys.press('Control+r');assert.deepEqual(await selected(),['X']);await keys.press('Control+a');assert.equal((await selected()).length,6);
+ // B removes all internal edges; Shift+B adds missing edges without replacing boundaries.
+ await page.evaluate(()=>{const m=MoleculeVisualizer,s=m.App.getState();s.selectedAtomIds=new Set(['A','B','C']);s.bonds[0].order=2;m.App.setState(s,true);});
+ const bondBefore=await page.evaluate(()=>MoleculeVisualizer.IO.stateToProjectText(MoleculeVisualizer.App.getState()));
+ await keys.press('b');assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.getState().bonds.map(b=>[b.atom1,b.atom2])),[['B','D'],['A','F']]);assert.deepEqual(await selected(),['A','B','C']);
+ await keys.press('b');await keys.press('Control+z');assert.equal(await page.evaluate(()=>MoleculeVisualizer.IO.stateToProjectText(MoleculeVisualizer.App.getState())),bondBefore);
+ await page.click('#tab-bonds');await page.selectOption('#bondOrder','3');await page.selectOption('#bondType','coordination_candidate');await keys.press('Shift+b');
+ assert.equal(await page.evaluate(()=>MoleculeVisualizer.Model.findBondBetween(MoleculeVisualizer.App.getState(),'A','B').order),2);
+ assert.deepEqual(await page.evaluate(()=>{const b=MoleculeVisualizer.Model.findBondBetween(MoleculeVisualizer.App.getState(),'A','C');return [b.order,b.type];}),[3,'coordination_candidate']);
+ await keys.press('Shift+b');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().bonds.length),5);
+ const bondSaved=await page.evaluate(()=>MoleculeVisualizer.IO.stateToProjectText(MoleculeVisualizer.App.getState()));
+ await page.click('#btnExport');const bondDownload=page.waitForEvent('download');await page.click('#btnSaveProject');const savedDownload=await bondDownload;
+ assert.equal(fs.readFileSync(await savedDownload.path(),'utf8'),bondSaved);await page.locator('#exportDialog [data-close]').click();
+ await keys.press('Control+z');assert.equal(await page.evaluate(()=>MoleculeVisualizer.IO.stateToProjectText(MoleculeVisualizer.App.getState())),bondBefore);
+ await keys.press('Control+Shift+z');assert.equal(await page.evaluate(()=>MoleculeVisualizer.IO.stateToProjectText(MoleculeVisualizer.App.getState())),bondSaved);await keys.press('Control+z');
+
  await page.evaluate(()=>{const a=MoleculeVisualizer.App,s=a.getState();s.selectedAtomIds=new Set(['A','B']);a.setState(s,true);});
  const shortcutBefore=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms));
  await keys.press(']');assert.ok(Math.abs(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[2].z)-Math.sin(5*Math.PI/180))<1e-10);

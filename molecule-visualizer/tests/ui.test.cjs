@@ -171,11 +171,41 @@ test('Shift-left rolls at a fixed view direction; perspective and world-origin a
  assert.ok(r.perspectiveFactor(1)>r.perspectiveFactor(-1));const factor=r.perspectiveFactor(1);s.viewSettings.fov=10;r.draw();assert.ok(r.perspectiveFactor(1)<factor);
  assert.ok(r.projectedAtoms.every(p=>[p.x,p.y,p.radius].every(Number.isFinite)));assert.equal(JSON.stringify(s.atoms),coords);
 });
-test('B toggles exactly the selected pair, survives inference, ignores repeat, and supports undo',()=>{
+test('B deletes the selected pair; Shift+B creates it, preserves suppression and supports undo',()=>{
  const {MV,canvas,nodes}=boot(),app=MV.App,s=app.getState();s.selectedAtomIds=new Set(s.atoms.slice(0,2).map(a=>a.id));app.setState(s,true);canvas.focus();
  const count=s.bonds.length;canvas.fire('keydown',{key:'b'});assert.equal(app.getState().bonds.length,count-1);
  MV.Bonding.refreshInferredBonds(app.getState());assert.equal(app.getState().bonds.length,count-1);canvas.fire('keydown',{key:'b',repeat:true});assert.equal(app.getState().bonds.length,count-1);
- canvas.fire('keydown',{key:'b'});assert.equal(app.getState().bonds.length,count);nodes.get('btnUndo').click();assert.equal(app.getState().bonds.length,count-1);nodes.get('btnUndo').click();assert.equal(app.getState().bonds.length,count);
+ canvas.fire('keydown',{key:'b'});assert.equal(app.getState().bonds.length,count-1);
+ canvas.fire('keydown',{key:'B',shiftKey:true});assert.equal(app.getState().bonds.length,count);
+ canvas.fire('keydown',{key:'B',shiftKey:true});assert.equal(app.getState().bonds.length,count);
+ nodes.get('btnUndo').click();assert.equal(app.getState().bonds.length,count-1);nodes.get('btnUndo').click();assert.equal(app.getState().bonds.length,count);
+});
+test('bulk bond keys preserve boundary bonds, coordinates, selection and existing bond properties',()=>{
+ const {MV,canvas,nodes,doc}=boot(),app=MV.App,s=shortcutMolecule(MV.Model);s.selectedAtomIds=new Set(['A','B','C']);s.bonds[0].order=2;app.setState(s,true);canvas.focus();
+ const atoms=JSON.stringify(s.atoms),original=MV.IO.stateToProjectText(s),firstBond=JSON.stringify(s.bonds[0]);
+ nodes.get('bondOrder').value='3';nodes.get('bondType').value='coordination_candidate';
+ canvas.fire('keydown',{key:'B',shiftKey:true});assert.equal(app.getState().bonds.length,5);assert.equal(JSON.stringify(app.getState().bonds[0]),firstBond);
+ const ac=MV.Model.findBondBetween(app.getState(),'A','C');assert.equal(ac.order,3);assert.equal(ac.type,'coordination_candidate');
+ canvas.fire('keydown',{key:'b'});assert.deepEqual(Array.from(app.getState().bonds,b=>[b.atom1,b.atom2]),[['B','D'],['A','F']]);assert.equal(JSON.stringify(app.getState().atoms),atoms);assert.deepEqual(Array.from(app.getState().selectedAtomIds),['A','B','C']);
+ const cut=MV.IO.stateToProjectText(app.getState());canvas.fire('keydown',{key:'b'});nodes.get('btnUndo').click();assert.equal(app.getState().bonds.length,5);nodes.get('btnUndo').click();assert.equal(MV.IO.stateToProjectText(app.getState()),original);
+ nodes.get('btnRedo').click();nodes.get('btnRedo').click();assert.equal(MV.IO.stateToProjectText(app.getState()),cut);
+ canvas.focus();canvas.fire('keydown',{key:'B',shiftKey:true,repeat:true});assert.equal(MV.IO.stateToProjectText(app.getState()),cut);
+ canvas.fire('keydown',{key:'B',shiftKey:true});assert.equal(app.getState().bonds.length,5);assert.equal(app.getState().metadata.suppressedBondKeys.length,0);
+ assert.equal(MV.IO.parseProject(MV.IO.stateToProjectText(app.getState())).bonds.length,5);
+ const saved=MV.IO.stateToProjectText(app.getState());
+ for(const modifiers of [{ctrlKey:true},{metaKey:true},{altKey:true},{isComposing:true}]){canvas.fire('keydown',{key:'b',...modifiers});assert.equal(MV.IO.stateToProjectText(app.getState()),saved);}
+ doc.activeElement=nodes.get('dataText');canvas.fire('blur');nodes.get('dataText').fire('keydown',{key:'b'});assert.equal(MV.IO.stateToProjectText(app.getState()),saved);
+ canvas.focus();nodes.get('helpDialog').showModal();canvas.fire('keydown',{key:'b'});assert.equal(MV.IO.stateToProjectText(app.getState()),saved);nodes.get('helpDialog').close();
+ nodes.get('dataText').value='C bad 0 0';nodes.get('dataText').fire('input');canvas.fire('keydown',{key:'b'});assert.equal(MV.IO.stateToProjectText(app.getState()),saved);assert.match(nodes.get('statusBadge').textContent,/編集中/);
+ nodes.get('dataReset').click();const large=MV.Model.createState({atoms:Array.from({length:143},(_,i)=>({id:'n'+i,element:'C',x:i,y:0,z:0}))});MV.Model.selectAllAtoms(large);app.setState(large,true);canvas.focus();
+ const before=MV.IO.stateToProjectText(large);canvas.fire('keydown',{key:'B',shiftKey:true});assert.equal(MV.IO.stateToProjectText(app.getState()),before);assert.match(nodes.get('statusBadge').textContent,/10000/);
+});
+test('bulk bond edit adopts displayed geometry and undoes the entire operation once',()=>{
+ const {MV,nodes,canvas}=boot(false,true),app=MV.App,s=app.getState();s.selectedAtomIds=new Set(s.atoms.map(a=>a.id));app.setState(s,true);
+ const before=MV.IO.stateToProjectText(s),base=MV.Periodic.snapshot(s);
+ MV.EnergyProfile.set({title:'bond preview',kind:'path',energies:[0,1],base:()=>base,positions:i=>base.atoms.map(a=>[a.x+2*i,a.y,a.z])});MV.EnergyProfile.select(1);canvas.focus();
+ canvas.fire('keydown',{key:'b'});assert.equal(app.getState().atoms[0].x,2);assert.equal(app.getState().bonds.length,0);assert.equal(app.renderer().previewOnly,false);
+ nodes.get('btnUndo').click();assert.equal(MV.IO.stateToProjectText(app.getState()),before);
 });
 function shortcutMolecule(M){
  return M.createState({atoms:[{id:'A',element:'C',x:0,y:0,z:0},{id:'B',element:'C',x:1.5,y:0,z:0},{id:'C',element:'H',x:1.5,y:1,z:0},{id:'D',element:'H',x:1.5,y:0,z:1},{id:'F',element:'H',x:-1,y:0,z:0},{id:'X',element:'He',x:8,y:0,z:0}],bonds:[['A','B'],['B','C'],['B','D'],['A','F']].map(([atom1,atom2])=>({atom1,atom2,order:1})),selectedAtomIds:['A','B']});

@@ -8,7 +8,7 @@
 - XYZ / 拡張XYZ / 連続XYZ / POSCAR / MOL・SDF V2000 / V3000 / プロジェクトJSONを開く、貼り付ける、ドロップする。
 - ヘッダー表示はチェックボックスで切替可能。XYZ入力はヘッダーを自動判別し、CR/LF/CRLF・Unicode改行、全角/半角スペース・タブを正規化します。原子パネルの大きなXYZテキスト欄で全原子の座標を編集し、「構造へ適用」で反映。同じ原子数・元素順なら形式電荷と手動結合を保持します。入力中の内容は自動更新で上書きされず、「現在の構造を再表示」で破棄して同期できます。「保存 / 書き出し」で現在のXYZ、全フレームXYZ、POSCAR、SDF、プロジェクトを保存。
 - クリックで選択、原子上の右クリックで選択へ追加（選択済みの原子は右クリックで解除）、Shift/Ctrl/⌘で追加選択、ダブルクリックで連結分子を選択。左ドラッグで表示回転、右ドラッグで囲んだ原子を現在の選択へ追加、Alt＋左で選択原子群の平行移動、Alt＋右で重心まわりの回転（未選択時は開始位置の原子・結合の連結部分）、中ボタンドラッグでパン、ホイールでズーム。
-- Mで原子移動、Vで選択、Bで結合。X/Y/Zで移動方向を拘束（同じキーで解除）。矢印でX/Y方向、PageUp/DownでZ方向に0.01 Å移動、Shift併用で0.1 Å。
+- Mで原子移動、Vで選択、Bで選択原子同士の結合を一括削除、Shift+Bで未接続ペアへ結合を生成。X/Y/Zで移動方向を拘束（同じキーで解除）。矢印でX/Y方向、PageUp/DownでZ方向に0.01 Å移動、Shift併用で0.1 Å。
 - Rで全体表示、Eで隣接選択、Wで分子選択、Deleteで削除、Ctrl/⌘ Zで戻す。キーは描画領域にフォーカスがあるときに使用。
 - 「測定・移動」で距離・角度・二面角、原子団の平行移動・重心まわりの剛体回転。画面にも測定値を表示。
 - 軌跡はフレーム移動・再生・フレームごとの編集・全フレーム書き出しに対応。編集は自動保存されるが、プロジェクトファイルの保存も推奨。
@@ -104,7 +104,7 @@ V2000質量差の基準質量数: Open Babel 3.1.1 `src/elements.cpp` の最頻�
 
 - Shift + left drag (horizontal movement) rolls the camera continuously about its viewing direction. Camera target/position, world coordinates and cell vectors stay fixed; Alt group gestures take precedence. Use Z to constrain atom movement.
 - Projection selector offers the existing orthographic mode and perspective with 10–90° vertical FOV. Target-plane scale is preserved while FOV changes camera distance/perspective strength; wheel remains zoom. XYZ axes now start at the actual Cartesian origin, share atom/cell projection and scale, and can move offscreen when the origin is outside the view. Labels X/Y/Z differ from lattice a/b/c. Axes are a visible overlay, not depth-occluded geometry.
-- B with exactly two selected atoms toggles their bond; holding B does not repeat. Otherwise B enters bond mode. Deletion suppression and undo are preserved.
+- With two or more selected atoms, B deletes every bond whose endpoints are both selected. Shift+B adds every missing pair using the bond order/type controls, regardless of distance. Existing bonds and all boundary bonds retain their properties. Both operations preserve atom selection and coordinates, ignore key repeats, and form one undo step. Deleted pairs stay suppressed during automatic bond inference; explicit creation clears suppression for those pairs. A creation exceeding 10,000 new bonds is rejected before editing. B with zero or one selected atom still enters bond mode. Text input, modifiers other than Shift, open dialogs, pending coordinate edits, and active calculations do not trigger a bond edit.
 - Ten complex samples include indene, fluorene, norbornene, adamantane, cubane, anthracene, biphenyl, caffeine, aspirin and 18-crown-6. SMILES are converted with explicit H and UFF by the pinned Open Babel worker on first use, validated against C/H composition and cached for this page session. Loading is cancellable and undoable; concurrent structural edits prevent late results from replacing newer work.
 
 ### Lightweight relaxation

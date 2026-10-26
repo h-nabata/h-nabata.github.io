@@ -338,3 +338,10 @@ GPUネイティブUMA／AnySolv、実g-xTBの速度比較は未実施。局所�
 
 - 最終実装 `39fab908a5d363e0d2a534f98114e10603f53bb4` の[CI（40282428760）](https://github.com/h-nabata/h-nabata.github.io/actions/runs/40282428760)が成功。JavaScript 159件合格（skip 0）、Python 119件中115件合格・4件skip。native tbliteを用いる固定MIN/AFIR・制約最適化/scanを含め成功し、ローカル未導入によるエラーを解消して検証できた。別ジョブのnative AnySolv有限差分試験1件も合格。
 - 同CIのブラウザ試験13スイートがすべて合格。追加したimport-browserと既存の描画性能、編集、実tblite、batch、固定原子、clipboard、UMA/AnySolv契約、実Sella TS/振動、計測、LUP/IRC等の操作、構造比較を通過。UMA実モデル・native g-xTB試験は今回未実施で、skipを合格へ算入しない。
+
+## 2026-10-26: 選択原子間の結合ショートカット
+
+- Bは選択原子同士を結ぶ全結合の削除、Shift+Bは未接続の選択原子ペアへの明示的な結合生成。距離推定ではなく、結合次数・種類の入力値を使用する。境界結合・既存結合の属性・原子座標・原子選択を保持する。
+- ローカルJavaScript試験161件が合格。Undo/Redo、再推定時の削除抑制、明示生成時の抑制解除、重複・キー反復の除外、入力中やダイアログ表示時の保護、表示プレビューの1回Undo、大量生成の原子的な拒否を確認。
+- ローカルPythonは119件を実行。native tblite未導入により2試験内6サブケースがエラー、10件skip。Pythonコードは変更していない。依存関係の揃ったCIの結果とは区別する。
+- Chromeの実クリックによる3原子選択からB/Shift+B、境界結合・既存の二重/三重結合の保持、重複なし、Undo/Redo、実ダウンロードと再読み込みを確認。ローカルの全体browser.cjsは既存Ketcher初期化待ちでタイムアウトしたため、全体試験の合格には数えずCIで検証する。

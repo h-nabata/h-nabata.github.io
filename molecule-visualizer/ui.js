@@ -704,6 +704,48 @@
     setStatus("結合を更新しました。");
   }
 
+  function editSelectedAtomBonds(create) {
+    if(xyzDirty)throw Error('座標欄の編集中の内容を適用するか、「現在の構造を再表示」で戻してから操作してください。');
+    if(MV.EngineUI?.isBusy()||MV.AFIRUI?.isBusy())throw Error('計算の完了または中止後に結合を編集してください。');
+    const base=getDisplayedState(),valid=new Set(base.atoms.map(a=>a.id));
+    const ids=[...state.selectedAtomIds].filter(id=>valid.has(id)),selected=new Set(ids);
+    if(ids.length<2){setStatus('結合を編集する原子を2個以上選択してください。');return;}
+    const targets=base.bonds.filter(b=>selected.has(b.atom1)&&selected.has(b.atom2));
+    let additions=[],keys=new Set(),order,type;
+    if(create){
+      order=Number(byId('bondOrder').value);type=byId('bondType').value;
+      if(![1,2,3,4].includes(order)||!['covalent','coordination_candidate','hydrogen'].includes(type))throw Error('結合次数・種類を確認してください。');
+      const existing=new Set(targets.map(b=>Model.normalizeBondKey(b.atom1,b.atom2)));
+      for(let i=0;i<ids.length;i++)for(let j=i+1;j<ids.length;j++){
+        const key=Model.normalizeBondKey(ids[i],ids[j]);if(existing.has(key))continue;
+        if(additions.length===10000)throw Error('一度に生成できる結合は10000本までです。選択原子を減らしてください。');
+        additions.push([ids[i],ids[j]]);keys.add(key);
+      }
+    }else keys=new Set(targets.map(b=>Model.normalizeBondKey(b.atom1,b.atom2)));
+    const count=create?additions.length:targets.length;
+    if(!count){setStatus(create?'選択原子同士はすべて接続済みです。':'選択原子同士をつなぐ結合はありません。');return;}
+    freezeDisplayedStructure();
+    pushHistory(create?'create selected atom bonds':'delete selected atom bonds');
+    // Adopting a displayed result and editing its bonds form one undo operation.
+    if(renderer.previewOnly){
+      state=Model.cloneState(base);state.selectedAtomIds=new Set(ids);
+      delete state.metadata.trajectory;delete state.metadata.frameIndex;
+      delete state.metadata.externalCalculation;delete state.metadata.afirCalculation;
+    }
+    if(create){
+      state.bonds.push(...additions.map(([atom1,atom2])=>Model.createBond({atom1,atom2,order,type,source:'manual'})));
+      state.metadata.suppressedBondKeys=(state.metadata.suppressedBondKeys||[]).filter(key=>!keys.has(key));
+    }else{
+      const removed=new Set(targets.map(b=>b.id));
+      state.bonds=state.bonds.filter(b=>!removed.has(b.id));
+      state.selectedBondIds=new Set([...state.selectedBondIds].filter(id=>!removed.has(id)));
+      state.metadata.suppressedBondKeys=[...new Set([...(state.metadata.suppressedBondKeys||[]),...keys])];
+    }
+    state.metadata.manualBondIds=state.bonds.filter(b=>b.source!=='inferred').map(b=>b.id);
+    render(true);
+    setStatus('選択'+ids.length+'原子の間の結合を'+count+'本'+(create?'生成':'削除')+'しました。「戻す」で取り消せます。');
+  }
+
   function deleteSelectedBonds() {
     if (state.selectedBondIds.size === 0) return;
     pushHistory("deleteBond");
@@ -911,12 +953,8 @@
     if (key === "v" || key === "s") { consumeShortcut(e); setMode("select"); return; }
     if (key === "b") {
       consumeShortcut(e);if(e.repeat)return;
-      const ids=[...state.selectedAtomIds];
-      if(ids.length===2){
-        const bond=Model.findBondBetween(state,ids[0],ids[1]);
-        if(bond){pushHistory('toggle bond');Model.setSelectedBonds(state,[bond.id]);Model.removeSelectedBonds(state);render(true);setStatus('選択2原子の結合を切断しました。');}
-        else addBondFromSelection();
-      }else setMode("bond");
+      if(state.selectedAtomIds.size>=2||e.shiftKey)editSelectedAtomBonds(Boolean(e.shiftKey));
+      else setMode("bond");
       return;
     }
     if (key === "m") { consumeShortcut(e); setMode("move"); return; }
