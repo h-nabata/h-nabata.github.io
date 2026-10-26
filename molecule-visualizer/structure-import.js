@@ -378,11 +378,11 @@
     if(/^\s*\d+\s*$/.test(initial[0])&&/^\s*(?:[A-Z][a-z]?|D|T)\s+/.test(initial[2]||''))return 'xyz';
     const legacy=oldDetect(text);
     if(['json','sdf','mol','mol2','cif','pdb'].includes(legacy))return ext==='pdbqt'?'pdbqt':legacy;
+    if(hints[ext])return hints[ext];
     if(/^\s*#/.test(text.trimStart())||/^\s*%[^\n]*\n[\s\S]*^\s*#/m.test(text)){
       const l=text.split('\n'),i=l.findIndex(x=>/^\s*#/.test(x));let j=i+1;while(j<l.length&&!l[j].trim())j++;
       return cm(l[j]||'')?'grrm':'gaussian';
     }
-    if(hints[ext])return hints[ext];
     if(/^(?:poscar|contcar)(?:[._-].*)?$/.test(name))return 'poscar';
     if(/^xdatcar(?:[._-].*)?$/.test(name))return 'xdatcar';
     if(/^coord$/.test(name))return 'turbomole';
@@ -429,7 +429,7 @@
       try{parsed.push({record:r,result:parse(r.text,'auto',{filename:r.name,files,used})});}
       catch(error){throw Error(r.name+': '+error.message);}
     }
-    if(parsed.length>1&&parsed.some(p=>p.result.metadata.sourceFormat==='json'||p.record.name.toLowerCase().endsWith('.json')))throw Error('プロジェクトJSONは単独で開いてください。');
+    if(parsed.length>1&&parsed.some(p=>p.record.text.trimStart().startsWith('{')))throw Error('プロジェクトJSONは単独で開いてください。');
     const active=parsed.filter(p=>!used.has(p.record.key));
     if(active.length===1)return active[0].result;
     for(const {record,result} of active)for(const frame of result.metadata.trajectory||[result]){

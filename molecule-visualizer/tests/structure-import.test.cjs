@@ -94,7 +94,7 @@ test('PDBQT AutoDock types and partial charge',()=>{
 test('DFTB GEN fractional, Cartesian and unsupported nonzero origins',()=>{
  const t='1 F\nH\n1 1 .25 .5 .75\n0 0 0\n4 0 0\n0 6 0\n0 0 8\n';
  const s=parse(t);assert.deepEqual(plain([s.atoms[0].x,s.atoms[0].y,s.atoms[0].z]),[1,3,6]);
- close(parse('1 C\nH\n1 1 0 0 .74').atoms[0].z,.74);assert.throws(()=>parse(t.replace('0 0 0','1 0 0')),/原点/);
+ close(parse('# GEN comment\n1 C # cluster\nH\n1 1 0 0 .74','auto','atoms.gen').atoms[0].z,.74);assert.throws(()=>parse(t.replace('0 0 0','1 0 0')),/原点/);
 });
 test('XDATCAR VASP5 multiple fractional frames and malformed last frame',()=>{
  const head=fixture.poscar.split('\n').slice(0,7).join('\n')+'\n';
@@ -140,6 +140,7 @@ test('Read multiple files in supplied order, normalize IDs and use reference XYZ
  for(const input of [[file('job.inp','* xyzfile 0 1 h2.xyz'),file('h2.xyz',fixture.xyz)],[file('h2.xyz',fixture.xyz),file('job.inp','* xyzfile 0 1 h2.xyz')]]){
   const o=await F.readFiles(input);assert.equal(frames(o).length,1);assert.equal(o.metadata.sourceFormat,'orca');assert.equal(o.atoms.length,2);
  }
+ await assert.rejects(F.readFiles([file('project.txt',IO.stateToProjectText(parse(fixture.xyz))),file('a.xyz',fixture.xyz)]),/単独/);
  const same=await F.readFiles([file('a.xyz',fixture.xyz),file('b.xyz',fixture.xyz)]);assert.equal(frames(same)[1].atoms[0].id,same.atoms[0].id);
  await assert.rejects(F.readFiles([file('a.xyz',fixture.xyz),file('bad.com','# OPT/x\n0 1\nH bad 0 0')]),/bad.com/);
  await assert.rejects(F.readFiles([file('a.xyz',fixture.xyz),file('a.xyz',fixture.xyz)]),/同名/);
