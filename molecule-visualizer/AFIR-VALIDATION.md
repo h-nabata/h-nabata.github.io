@@ -345,3 +345,5 @@ GPUネイティブUMA／AnySolv、実g-xTBの速度比較は未実施。局所�
 - ローカルJavaScript試験161件が合格。Undo/Redo、再推定時の削除抑制、明示生成時の抑制解除、重複・キー反復の除外、入力中やダイアログ表示時の保護、表示プレビューの1回Undo、大量生成の原子的な拒否を確認。
 - ローカルPythonは119件を実行。native tblite未導入により2試験内6サブケースがエラー、10件skip。Pythonコードは変更していない。依存関係の揃ったCIの結果とは区別する。
 - Chromeの実クリックによる3原子選択からB/Shift+B、境界結合・既存の二重/三重結合の保持、重複なし、Undo/Redo、実ダウンロードと再読み込みを確認。ローカルの全体browser.cjsは既存Ketcher初期化待ちでタイムアウトしたため、全体試験の合格には数えずCIで検証する。
+
+- [CI 40288366693](https://github.com/h-nabata/h-nabata.github.io/actions/runs/40288366693)が成功（実装コミット528afdfbcd1ebecc860ab3e66f04ad721b1562eb）。JavaScript 161件合格、Python 119件中115件合格・4件skip、ブラウザ13スイート合格、別ジョブのnative AnySolv試験も合格。Ketcherを含む全体browser.cjsでも、追加したB/Shift+Bの操作と実ファイル保存が成功。今回、計算条件・Pythonコードの変更はない。
