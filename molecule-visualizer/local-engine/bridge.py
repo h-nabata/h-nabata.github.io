@@ -1187,7 +1187,7 @@ def internal_coordinate_constraint(data):
 
         def adjust_forces(self, atoms, forces):
             values = forces.ravel()[free]
-            # J F = 0 in the allowed Cartesian subspace, independent of masses.
+            # Euclidean Cartesian projection; masses enter through the COM Jacobian.
             if linear_inverse is not None:
                 projected = values-linear_inverse@(linear[:,free]@values)
             else:
