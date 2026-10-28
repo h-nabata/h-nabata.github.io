@@ -162,7 +162,7 @@
     MV.Studio?.sync();
     MV.MeasurementUI?.sync();
     MV.AFIRUI?.sync();
-    MV.ConstraintUI?.sync();
+    MV.ConstraintUI?.sync();MV.GroupConstraintUI?.sync();
   }
 
   function setState(nextState, preserveCamera, navigation=false) {
@@ -183,7 +183,7 @@
     MV.Studio?.sync();
     MV.MeasurementUI?.sync();
     MV.AFIRUI?.sync();
-    MV.ConstraintUI?.sync();
+    MV.ConstraintUI?.sync();MV.GroupConstraintUI?.sync();
   }
 
   function renderAfterEdit(preserveCamera) {

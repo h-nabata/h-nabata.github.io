@@ -34,7 +34,7 @@ from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 from scipy.spatial import cKDTree
 
-VERSION = '1.10.0'
+VERSION = '1.11.0'
 UMA_MODELS = ('uma-s-1p2p1', 'uma-s-1p2', 'uma-s-1p1', 'uma-m-1p1')
 ANYSOLV_MODELS = ('model_compact', 'model_moe')
 MAX_BODY = 8 * 1024 * 1024
@@ -54,7 +54,7 @@ def validate(data, engine):
     allowed = {'symbols', 'images', 'cell', 'charge', 'multiplicity', 'mode',
                'maxSteps', 'fmax', 'spring', 'maxMove', 'climbAfter', 'atomIds', 'afir', 'livePreview',
                'optimizer', 'trustRadius', 'vibrations', 'fixedAtoms', 'umaDevice', 'solvation',
-               'irc', 'thermochemistry', 'internalConstraints', 'scan', 'adaptiveNEB', 'pathSplit', 'nodeIds', 'lup'}
+               'irc', 'thermochemistry', 'internalConstraints', 'groupConstraints', 'scan', 'adaptiveNEB', 'pathSplit', 'nodeIds', 'lup'}
     if not isinstance(data, dict) or set(data) - allowed:
         raise ValueError('未定義の入力項目があります。コマンド・パス指定は受け付けません。')
     if type(data.get('livePreview', False)) is not bool:
@@ -163,6 +163,8 @@ def validate(data, engine):
         result['solvation'] = {**s, 'device':device_name(s['device'])}
     if 'internalConstraints' in data:
         result['internalConstraints'] = validate_internal_constraints(data, result)
+    if 'groupConstraints' in data:
+        result['groupConstraints'] = validate_group_constraints(data['groupConstraints'], result)
     if mode == 'scan' or 'scan' in data:
         result['scan'] = validate_scan_settings(data, result)
     validate_lup(data, result)
@@ -933,12 +935,73 @@ def ase_atoms(data, calculate):
     atoms = Atoms(data['symbols'], positions=data['images'][0],
                   cell=None if cell is None else cell['vectors'], pbc=False if cell is None else cell['pbc'])
     atoms.calc = LocalCalculator()
-    if data.get('internalConstraints'):
+    if data.get('internalConstraints') or data.get('groupConstraints'):
         atoms.set_constraint(internal_coordinate_constraint(data))
     elif data.get('fixedAtoms'):
         from ase.constraints import FixAtoms
         atoms.set_constraint(FixAtoms(indices=data['fixedAtoms']))
     return atoms
+
+
+def group_centers(positions, config):
+    masses = np.asarray(config['masses'], dtype=float)
+    p = np.asarray(positions, dtype=float)
+    return np.array([np.average(p[g], axis=0, weights=masses[g]) for g in config['groups']])
+
+
+def group_coordinates(centers, config):
+    c = np.asarray(centers, dtype=float)
+    return (c[1:]-c[0] if config['mode']=='relative' and len(c)>1 else c).ravel()
+
+
+def group_coordinate_matrix(config):
+    masses = np.asarray(config['masses'], dtype=float)
+    weights = np.zeros((len(config['groups']), len(masses)))
+    for row, group in zip(weights, config['groups']):
+        row[group] = masses[group]/sum(masses[group])
+    if config['mode']=='relative' and len(weights)>1:
+        weights = weights[1:]-weights[0]
+    return np.kron(weights, np.eye(3))
+
+
+def validate_group_constraints(config, data):
+    required = {'mode', 'groups', 'masses'}
+    if not isinstance(config, dict) or not required <= set(config) or set(config)-required-{'referenceCenters'}:
+        raise ValueError('原子団の重心拘束にはmode・groups・massesが必要です。')
+    if data['mode'] not in ('optimize','afir','scan') or data.get('vibrations') is not None:
+        raise ValueError('原子団の重心拘束はMIN・AFIR-MIN・緩和スキャン専用です。')
+    if data.get('cell') and any(data['cell']['pbc']):
+        raise ValueError('原子団の重心拘束は非周期系専用です。周期境界をまたぐ重心は扱いません。')
+    if config['mode'] not in ('relative','absolute'):
+        raise ValueError('重心拘束はrelativeまたはabsoluteを指定してください。')
+    groups, masses, count = config['groups'], config['masses'], len(data['symbols'])
+    if not isinstance(groups, list) or not 1<=len(groups)<=100:
+        raise ValueError('重心拘束には1〜100個の原子団が必要です。')
+    used = set()
+    for group in groups:
+        if not isinstance(group, list) or not group or any(type(i) is not int or not 0<=i<count for i in group):
+            raise ValueError('原子団には0始まりの有効な原子番号を指定してください。')
+        if len(set(group))!=len(group) or used.intersection(group):
+            raise ValueError('重心拘束の原子団は重複しないように指定してください。')
+        used.update(group)
+    if not isinstance(masses, list) or len(masses)!=count:
+        raise ValueError('重心の計算に使う全原子の質量が必要です。')
+    masses = [number(m, '原子質量 (u)', .1, 400) for m in masses]
+    result = dict(mode=config['mode'], groups=copy.deepcopy(groups), masses=masses)
+    centers = group_centers(data['images'][0], result)
+    reference = config.get('referenceCenters', centers.tolist())
+    if (not isinstance(reference, list) or len(reference)!=len(groups) or
+        any(not isinstance(row,list) or len(row)!=3 or any(type(v) not in (int,float) or not math.isfinite(v) or abs(v)>1e4 for v in row) for row in reference)):
+        raise ValueError('重心拘束の参照座標が不正です。')
+    if np.max(np.abs(group_coordinates(centers,result)-group_coordinates(reference,result)))>1e-6:
+        raise ValueError('入力構造と保存された重心拘束の参照座標が一致しません。')
+    result['referenceCenters'] = copy.deepcopy(reference)
+    return result
+
+
+def group_constraint_error(positions, config):
+    return float(np.max(np.abs(group_coordinates(group_centers(positions,config),config)-
+                               group_coordinates(config['referenceCenters'],config))))
 
 
 def internal_coordinate_key(coordinate):
@@ -1047,27 +1110,34 @@ def internal_coordinate_residual(values, coordinates):
 
 
 def internal_coordinate_constraint(data):
-    """Joint holonomic projection: fixed Cartesian atoms and internal coordinates.
+    """Joint projection: fixed atoms, internal coordinates and group centers.
 
     Uses ASE analytical derivatives. A single SVD projection avoids the order
     dependence of sequential FixAtoms/FixInternals and does not remove physical
     rigid-body forces. The latter is essential for fixed atoms and linear systems.
     """
     from ase.constraints import FixConstraint
-    coordinates = copy.deepcopy(data['internalConstraints'])
+    coordinates = copy.deepcopy(data.get('internalConstraints', []))
     fixed = data.get('fixedAtoms', [])
     anchors = np.array(data['images'][0], dtype=float)
     cell = data.get('cell')
     free = np.ones(anchors.shape, dtype=bool); free[fixed] = False
     free = free.ravel()
+    group = data.get('groupConstraints')
+    linear = group_coordinate_matrix(group) if group else np.empty((0, anchors.size))
+    targets = group_coordinates(group.get('referenceCenters',group_centers(anchors,group)),group) if group else np.empty(0)
+    # COM derivatives are constant: factorize once for COM-only optimizations.
+    linear_inverse = np.linalg.pinv(linear[:,free], rcond=1e-10) if group and not coordinates else None
 
     class InternalConstraint(FixConstraint):
+        def jacobian(self, positions):
+            return np.vstack((internal_coordinate_jacobian(positions, coordinates, cell), linear))[:,free]
+
         def get_removed_dof(self, atoms):
-            jacobian = internal_coordinate_jacobian(atoms.positions, coordinates, cell)[:,free]
-            return len(fixed)*3+int(np.linalg.matrix_rank(jacobian))
+            return len(fixed)*3+int(np.linalg.matrix_rank(self.jacobian(atoms.positions)))
 
         def residual(self, positions):
-            return internal_coordinate_residual(internal_coordinate_values(positions, coordinates, cell), coordinates)
+            return np.concatenate((internal_coordinate_residual(internal_coordinate_values(positions, coordinates, cell), coordinates), linear@np.asarray(positions).ravel()-targets))
 
         def project(self, positions):
             candidate = np.array(positions, dtype=float, copy=True)
@@ -1076,12 +1146,12 @@ def internal_coordinate_constraint(data):
                 residual = self.residual(candidate)
                 if np.max(np.abs(residual)) <= 1e-8:
                     return candidate
-                jacobian = internal_coordinate_jacobian(candidate, coordinates, cell)[:,free]
+                jacobian = self.jacobian(candidate)
                 norms = np.linalg.norm(jacobian,axis=1)
                 if np.any((norms<1e-12)&(np.abs(residual)>1e-8)):
-                    raise ValueError('固定原子と内部座標の目標値が両立しません。拘束対象を確認してください。')
+                    raise ValueError('固定原子・内部座標・原子団の重心拘束が両立しません。拘束対象を確認してください。')
                 scales = np.maximum(norms, 1e-12)
-                correction, _, _, _ = np.linalg.lstsq(jacobian/scales[:,None], -residual/scales, rcond=1e-10)
+                correction = -linear_inverse@residual if linear_inverse is not None else np.linalg.lstsq(jacobian/scales[:,None], -residual/scales, rcond=1e-10)[0]
                 displacement = np.zeros(candidate.size); displacement[free] = correction
                 displacement = displacement.reshape(candidate.shape)
                 maximum = force_max(displacement)
@@ -1099,7 +1169,7 @@ def internal_coordinate_constraint(data):
                         candidate = proposed; accepted = True; break
                 if not accepted:
                     break
-            raise ValueError('内部座標の拘束を満たす構造を生成できません。矛盾した拘束・直線角・大きすぎる目標変化を確認してください。')
+            raise ValueError('内部座標・原子団の重心拘束を満たす構造を生成できません。矛盾した拘束・直線角・大きすぎる目標変化を確認してください。')
 
         def adjust_positions(self, atoms, newpositions):
             displacement = newpositions-atoms.positions
@@ -1116,13 +1186,16 @@ def internal_coordinate_constraint(data):
             raise ValueError('拘束を保ったまま指定した最大原子変位で更新できません。') from last_error
 
         def adjust_forces(self, atoms, forces):
-            jacobian = internal_coordinate_jacobian(atoms.positions, coordinates, cell)[:,free]
-            scales = np.maximum(np.linalg.norm(jacobian,axis=1),1e-12)
-            jacobian = jacobian/scales[:,None]
             values = forces.ravel()[free]
             # J F = 0 in the allowed Cartesian subspace, independent of masses.
-            multipliers = np.linalg.lstsq(jacobian.T, values, rcond=1e-10)[0]
-            projected = values-jacobian.T@multipliers
+            if linear_inverse is not None:
+                projected = values-linear_inverse@(linear[:,free]@values)
+            else:
+                jacobian = self.jacobian(atoms.positions)
+                scales = np.maximum(np.linalg.norm(jacobian,axis=1),1e-12)
+                jacobian = jacobian/scales[:,None]
+                multipliers = np.linalg.lstsq(jacobian.T, values, rcond=1e-10)[0]
+                projected = values-jacobian.T@multipliers
             forces[:] = 0
             forces.ravel()[free] = projected
 
@@ -1145,8 +1218,11 @@ def constrained_minimize(data, calculate, directory=None, progress=lambda p: Non
 
     atoms = ase_atoms(data,evaluate)
     initial = atoms.positions.copy()
-    if data.get('internalConstraints'):
+    if data.get('internalConstraints') or data.get('groupConstraints'):
         atoms.positions[:] = atoms.constraints[0].project(initial)
+        if atoms.constraints[0].get_removed_dof(atoms)>=3*len(atoms):
+            raise ValueError('拘束が全自由度を固定しています。緩和できる自由度を残してください。')
+    group = data.get('groupConstraints')
     projection = {'inputPositions':initial.tolist(),'positions':atoms.positions.tolist(),
                   'maxDisplacement':force_max(atoms.positions-initial)}
     optimizer = {'fire':FIRE,'lbfgs':LBFGS,'bfgs':BFGS}[data.get('optimizer','fire')](atoms,maxstep=data['maxMove'],logfile=None)
@@ -1161,6 +1237,9 @@ def constrained_minimize(data, calculate, directory=None, progress=lambda p: Non
         values = internal_coordinate_values(atoms.positions,data.get('internalConstraints',[]),data.get('cell')).tolist()
         if data.get('internalConstraints') and np.max(np.abs(internal_coordinate_residual(values,data['internalConstraints'])))>1e-6:
             raise ValueError('最適化中に内部座標の拘束誤差を検出しました。')
+        group_error = group_constraint_error(positions,group) if group else 0.
+        if group_error>1e-7:
+            raise ValueError('最適化中に原子団の重心拘束の誤差を検出しました。')
         trajectory['images'].append(positions);trajectory['energies'].append(energy)
         if afir:
             forces.append(physical.tolist())
@@ -1176,10 +1255,14 @@ def constrained_minimize(data, calculate, directory=None, progress=lambda p: Non
                    'physicalFmax':force_max(physical),'energies':[energy],'energyEV':energy,
                    'biasEnergyEV':bias,'evaluations':atoms.calc.evaluations,'constraintValues':values,
                    'componentFmax':{key:force_max(component) for key,component in components.items()}}
+        if group:
+            summary.update(groupConstraintError=group_error, groupCenters=group_centers(positions,group).tolist())
         history.append(summary)
         saved = {'positions':positions,'energy':energy,'force':physical.tolist(),'fmax':maximum,
                  'physicalFmax':force_max(physical),'bias':bias,'internalConstraints':data.get('internalConstraints',[]),
                  'constraintProjection':projection,'componentFmax':summary['componentFmax']}
+        if group:
+            saved['groupConstraints'] = copy.deepcopy(group)
         progress({**summary,'phase':'optimization','checkpoint':saved,
                   **({'preview':{'step':step,'images':[positions],'energies':[energy]}} if data.get('livePreview') else {})})
 
@@ -1194,6 +1277,8 @@ def constrained_minimize(data, calculate, directory=None, progress=lambda p: Non
         constraintProjection=projection,validation='constrained-minimum-candidate',
         forceComponents=force_components,forceComponentImageIndices=[0],
         units={'length':'angstrom','energy':'eV','force':'eV/angstrom','angle':'degree'})
+    if group:
+        result.update(groupConstraints=copy.deepcopy(group),groupConstraintError=group_constraint_error(result['images'][0],group))
     if afir:
         result.update(schema='molecule-afir-trajectory/1',atomIds=data['atomIds'],images=trajectory['images'],energies=trajectory['energies'],
             forces=forces,imageFmax=maxima,physicalFmax=physical_maxima,biasEnergies=biases,
@@ -1214,6 +1299,8 @@ def relaxed_scan(data, calculate, directory, progress=lambda p: None):
         forceComponents={key:[] for key in ('physical','artificial','effective','constraintCorrection')},
         scan={**copy.deepcopy(config),'nodes':[],'totalNodes':len(grid),'order':'serpentine'},
         units={'length':'angstrom','energy':'eV','force':'eV/angstrom','angle':'degree'},validation='constrained-minima-not-ts')
+    if data.get('groupConstraints'):
+        result['groupConstraints'] = copy.deepcopy(data['groupConstraints'])
     seed = copy.deepcopy(data['images'][0])
     resume = data.get('_scanResume')
     if resume:
@@ -1368,7 +1455,7 @@ def calculate_job(data, calculate, directory, progress=lambda p: None):
         result = irc_calculation(data, calculate, directory, progress)
     elif data['mode']=='scan':
         result = relaxed_scan(data, calculate, directory, progress)
-    elif data.get('internalConstraints') and data['mode'] in ('optimize', 'afir'):
+    elif (data.get('internalConstraints') or data.get('groupConstraints')) and data['mode'] in ('optimize', 'afir'):
         result = constrained_minimize(data, calculate, directory, progress)
     elif data['mode']=='afir':
         result = afir_relax(data, calculate, progress)
@@ -2664,7 +2751,7 @@ class Jobs:
         last = frames[-1]
         return dict(mode=data['mode'], optimizer=data.get('optimizer','fire'), **self._record_identity(job),
             fixedAtoms=data.get('fixedAtoms', []),
-            **{k:copy.deepcopy(last[k]) for k in ('internalConstraints','constraintProjection') if k in last},
+            **{k:copy.deepcopy(last[k]) for k in ('internalConstraints','groupConstraints','constraintProjection') if k in last},
             **({'atomIds':data['atomIds']} if 'atomIds' in data else {}),
             symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
             images=[last['positions']], energies=[last['energy']], forces=[last['force']],
@@ -2683,7 +2770,7 @@ class Jobs:
         energies, biases = [p['energy'] for p in frames], [p['bias'] for p in frames]
         return dict(schema='molecule-afir-trajectory/1', mode='afir', **self._record_identity(job),
             fixedAtoms=data.get('fixedAtoms', []),
-            **{k:copy.deepcopy(frames[-1][k]) for k in ('internalConstraints','constraintProjection') if k in frames[-1]},
+            **{k:copy.deepcopy(frames[-1][k]) for k in ('internalConstraints','groupConstraints','constraintProjection') if k in frames[-1]},
             atomIds=data['atomIds'],
             symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
             images=[p['positions'] for p in frames], energies=energies, biasEnergies=biases,
@@ -2868,7 +2955,7 @@ class Handler(BaseHTTPRequestHandler):
                                    'device':config.get('anysolvDevice'), 'precision':config['umaPrecision']},
                         'maxMultiplicity':100, 'maxAtomicNumber':83} if config['engine']=='uma' else {}),
                     'sellaVersion':sella_version(), 'vibrations':1, 'maxVibrationAtoms':200, 'pathCheckpoint':1, 'fixedAtoms':True,
-                    'irc':bool(sella_version()), 'thermochemistry':True, 'internalConstraints':True, 'scan':True,
+                    'irc':bool(sella_version()), 'thermochemistry':True, 'internalConstraints':True, 'groupConstraints':True, 'scan':True,
                     'adaptiveNEB':True, 'pathSplit':True, 'history':True, 'queue':True, 'residentModels':True,
                     'lup':True, 'pathOptimizers':{'cineb':['fire'], 'lup':['fire','lbfgs']},
                     'persistentHistory':bool(self.server.jobs.history_dir), 'jobQueue':True, 'modelResidency':True,

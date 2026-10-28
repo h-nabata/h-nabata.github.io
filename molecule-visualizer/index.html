@@ -5,7 +5,7 @@ title: 分子構造エディタ | Molecule Studio
 <link rel="stylesheet" href="./molecule-visualizer_style.css?v=research-39">
 <script defer src="./model.js?v=16"></script>
 <script defer src="./bonding.js?v=performance-41"></script>
-<script defer src="./geometry.js?v=19"></script>
+<script defer src="./geometry.js?v=group-centers-44"></script>
 <script defer src="./io.js?v=16"></script>
 <script defer src="./molfile.js?v=16"></script>
 <script defer src="./periodic.js?v=performance-41"></script>
@@ -16,10 +16,12 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./fragment-clipboard.js?v=clipboard-36"></script>
 <script defer src="./constraints.js?v=research-38"></script>
 <script defer src="./constraints-ui.js?v=constraints-34"></script>
+<script defer src="./group-constraints.js?v=group-centers-44"></script>
+<script defer src="./group-constraints-ui.js?v=group-centers-44"></script>
 <script defer src="./renderer3dmol.js?v=performance-41"></script>
-<script defer src="./ui.js?v=bond-keys-43"></script>
+<script defer src="./ui.js?v=group-centers-44"></script>
 <script defer src="./studio.js?v=constraints-34"></script>
-<script defer src="./advanced.js?v=performance-41"></script>
+<script defer src="./advanced.js?v=group-centers-44"></script>
 <script defer src="./generator-ui.js?v=performance-41"></script>
 <script defer src="./trajectory.js?v=research-38"></script>
 <script defer src="./trajectory-ui.js?v=constraints-34"></script>
@@ -32,16 +34,16 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./structure-analysis-ui.js?v=research-38"></script>
 <script defer src="./diagnostics-ui.js?v=lup-40"></script>
 <link rel="stylesheet" href="./research.css?v=research-38">
-<script defer src="./engine-ui.js?v=performance-41"></script>
+<script defer src="./engine-ui.js?v=group-centers-44"></script>
 <script defer src="./vibration-ui.js?v=constraints-34"></script>
 <script defer src="./path-refinement.js?v=lup-40"></script>
 <script defer src="./afir.js?v=17"></script>
 <script defer src="./afir-search.js?v=16"></script>
-<script defer src="./afir-runner.js?v=performance-41"></script>
-<script defer src="./afir-ui.js?v=research-38"></script>
+<script defer src="./afir-runner.js?v=group-centers-44"></script>
+<script defer src="./afir-ui.js?v=group-centers-44"></script>
 <script defer src="./measurement-ui.js?v=constraints-34"></script>
 <script defer src="./panel-layout.js?v=research-39"></script>
-<script defer src="./molecule-visualizer_main.js?v=constraints-34"></script>
+<script defer src="./molecule-visualizer_main.js?v=group-centers-44"></script>
 
 <div class="mv-page-buffer" aria-hidden="true"></div>
 <main class="mv-app">
@@ -55,7 +57,7 @@ title: 分子構造エディタ | Molecule Studio
     <section class="mv-stage" aria-label="分子の表示と操作">
       <div class="mv-stage-heading"><div><h2>分子ビュー</h2><span class="mv-unit-badge">3D</span></div><div class="mv-row"><div class="mv-viewer-size" role="group" aria-label="分子描画エリアの高さ"><span>高さ</span><button type="button" class="mv-btn" id="viewerShorter" data-viewer-size="-80" aria-label="描画エリアを低くする">−</button><button type="button" class="mv-btn" id="viewerTaller" data-viewer-size="80" aria-label="描画エリアを高くする">＋</button><button type="button" class="mv-btn" id="viewerResetHeight" data-viewer-size="reset" title="画面サイズに合わせた高さに戻す">自動</button></div><button class="mv-btn" id="btnPNG">画像を保存</button><button class="mv-btn" id="btnFullScreen">全画面</button></div></div>
       <div class="mv-stage-toolbar"><div class="mv-toolbar" role="toolbar" aria-label="操作モード"><button class="mv-tool active" id="toolSelect" title="クリックで選択、ドラッグで回転 (V)">選択</button><button class="mv-tool" id="toolMove" title="選択原子をドラッグして移動 (M)">原子移動</button><button class="mv-tool" id="toolBond" title="原子を2つ順にクリックして結合（B: 選択内を削除、Shift+B: 選択内に生成）">結合</button><button class="mv-tool" id="toolBox" title="ドラッグした範囲の原子を現在の選択へ追加">範囲選択</button></div><div class="mv-clipboard-actions" role="group" aria-label="選択原子団のコピーと貼り付け"><button class="mv-btn" id="btnCopySelection" title="選択した原子と内部の結合をコピー (Ctrl / ⌘ C)" disabled>原子団をコピー</button><button class="mv-btn" id="btnPasteSelection" title="原子団を追加し、選択して移動 (Ctrl / ⌘ V)">原子団を貼付</button></div><div class="mv-history-actions"><button class="mv-btn" id="btnUndo" title="元に戻す (Ctrl / ⌘ Z)">↶ 戻す</button><button class="mv-btn" id="btnRedo" title="やり直す (Ctrl / ⌘ Shift Z)">↷ やり直す</button></div></div>
-      <div class="mv-calculation-controls" id="calculationControls"><div class="mv-command-group"><span class="mv-command-label">構造作成</span><div><button class="mv-btn primary" id="btnRelax" title="現在の結合を保ち、距離・角度・近接反発を軽量に緩和。最大500原子、セル固定。">構造を整える</button><button class="mv-btn" aria-label="ランダム配座・配向" id="btnRandomStructures">配座・配向</button><button class="mv-btn" aria-label="反応経路の初期構造" id="btnReactionPath">初期経路</button><button class="mv-btn" aria-label="経路のノードを補間・追加" id="btnRefinePath">ノード追加</button></div></div><div class="mv-command-group"><span class="mv-command-label">計算</span><div><button class="mv-btn primary" aria-label="外部エンジン / 経路緩和" id="btnExternalEngine">計算エンジン / 経路緩和</button><button class="mv-btn" aria-label="AFIR / 原子団に人工力" id="btnAFIR" aria-pressed="false">AFIR</button><button class="mv-btn" id="btnConstraints" aria-pressed="false" aria-controls="constraintPanel">原子固定</button><button class="mv-btn" id="btnBatchOptimize">一括最適化</button><button class="mv-btn" aria-label="現在の構造をTS最適化" id="btnTS">TS最適化</button><button class="mv-btn" id="btnIRC">IRC</button><button class="mv-btn" id="btnScan">緩和スキャン</button><button class="mv-btn" id="btnJobHistory">計算履歴・キュー</button><button class="mv-btn" aria-label="現在の構造の振動解析" id="btnVibrations">振動解析</button><button class="mv-btn" id="cancelAdvanced" disabled>処理を中止</button></div></div></div>
+      <div class="mv-calculation-controls" id="calculationControls"><div class="mv-command-group"><span class="mv-command-label">構造作成</span><div><button class="mv-btn primary" id="btnRelax" title="現在の結合を保ち、距離・角度・近接反発を軽量に緩和。最大500原子、セル固定。">構造を整える</button><button class="mv-btn" aria-label="ランダム配座・配向" id="btnRandomStructures">配座・配向</button><button class="mv-btn" aria-label="反応経路の初期構造" id="btnReactionPath">初期経路</button><button class="mv-btn" aria-label="経路のノードを補間・追加" id="btnRefinePath">ノード追加</button></div></div><div class="mv-command-group"><span class="mv-command-label">計算</span><div><button class="mv-btn primary" aria-label="外部エンジン / 経路緩和" id="btnExternalEngine">計算エンジン / 経路緩和</button><button class="mv-btn" aria-label="AFIR / 原子団に人工力" id="btnAFIR" aria-pressed="false">AFIR</button><button class="mv-btn" id="btnConstraints" aria-pressed="false" aria-controls="constraintPanel">原子固定</button><button class="mv-btn" id="btnGroupConstraints" aria-pressed="false" aria-controls="groupConstraintPanel">原子団の重心</button><button class="mv-btn" id="btnBatchOptimize">一括最適化</button><button class="mv-btn" aria-label="現在の構造をTS最適化" id="btnTS">TS最適化</button><button class="mv-btn" id="btnIRC">IRC</button><button class="mv-btn" id="btnScan">緩和スキャン</button><button class="mv-btn" id="btnJobHistory">計算履歴・キュー</button><button class="mv-btn" aria-label="現在の構造の振動解析" id="btnVibrations">振動解析</button><button class="mv-btn" id="cancelAdvanced" disabled>処理を中止</button></div></div></div>
       <div class="mv-view-controls mv-display-controls"><div class="mv-control-cluster" role="group" aria-label="分子の表示"><label for="styleSelect">表示</label><select id="styleSelect"><option value="stickball">球と棒</option><option value="stick">棒</option><option value="wire">ワイヤー</option><option value="vdw">空間充填（概略）</option></select><button class="mv-btn" aria-label="原子番号" id="btnToggleIndex" aria-pressed="false">原子番号</button><button class="mv-btn" aria-label="XYZ座標軸" id="btnToggleAxes" aria-pressed="false" title="世界座標の原点からX・Y・Z軸を表示（Å）">座標軸</button></div><div class="mv-control-cluster" role="group" aria-label="視点"><button class="mv-btn" id="btnViewXY">XY</button><button class="mv-btn" id="btnViewXZ">XZ</button><button class="mv-btn" id="btnViewYZ">YZ</button><button class="mv-btn" aria-label="全体を表示" id="btnFit">全体表示</button><button class="mv-btn" aria-label="カメラをリセット" id="btnResetCamera">視点リセット</button><span class="mv-zoom-pair"><button class="mv-btn" id="btnZoomOut" aria-label="縮小">−</button><button class="mv-btn" id="btnZoomIn" aria-label="拡大">＋</button></span></div></div>
       <div class="mv-viewer-shell"><div id="viewer"></div><p id="profilePreview" class="mv-profile-preview" hidden></p><div class="mv-viewer-bottom"><span id="modeBadge">選択モード</span><span id="gestureHint">左ドラッグ：表示回転 · 右：範囲選択 · Alt＋左/右：原子団移動/回転</span></div><div id="viewerResizeHandle" class="mv-viewer-resize" role="separator" tabindex="0" aria-orientation="horizontal" aria-label="描画エリアの高さを変更" aria-controls="viewer" aria-valuemin="160" aria-valuemax="1600" title="上下にドラッグして高さを変更。上下キーでも調整できます。Enterで自動に戻します。"><span aria-hidden="true">↕ ドラッグで高さを変更</span></div></div>
       <div class="mv-trajectory"><span class="mv-eyebrow">構造列</span><button class="mv-btn" id="framePrev" aria-label="前のフレーム">‹</button><button class="mv-btn" id="framePlay">▶ 再生</button><input id="frameRange" type="range" min="0" max="0" value="0" aria-label="フレーム"><button class="mv-btn" id="frameNext" aria-label="次のフレーム">›</button><output id="frameLabel">1 / 1</output></div>
@@ -108,6 +110,20 @@ title: 分子構造エディタ | Molecule Studio
           <p class="mv-small" id="constraintStatus" role="status"></p>
           <details class="mv-help"><summary>適用範囲</summary><p class="mv-small">収束判定には可動原子の有効力を使います。一括最適化では、現在の構造と同じ元素・原子順序の各入力に同じ番号を適用し、それぞれの初期位置に固定します。MIN・AFIR-MIN・緩和スキャンでは距離・結合角・二面角の拘束と併用できます。内部座標の拘束は「計算エンジン / 経路緩和」で通常の単一構造最適化を選び、「距離・角度・二面角の拘束」から設定します。TS・IRC・経路計算・振動解析との併用は対象外です。原子固定条件はプロジェクトと結果JSONに保存されます。</p></details>
         </details>
+        <details id="groupConstraintPanel" class="mv-panel mv-constraints"><summary>原子団の重心拘束 <span id="groupConstraintSummary">オフ</span></summary>
+          <div id="groupConstraintFields">
+            <p class="mv-small">描画上で原子を複数選択し、1原子団として登録します。団ごとの重心を原子質量で計算し、内部の変形・回転を許して緩和します。</p>
+            <label class="mv-check"><input id="groupConstraintEnabled" type="checkbox">重心拘束を有効にする</label>
+            <label>固定する位置<select id="groupConstraintMode"><option value="relative">原子団間の相対位置（全体の並進は自由）</option><option value="absolute">各原子団の重心を計算開始位置に固定</option></select></label>
+            <p class="mv-small">相対位置は重心間のX・Y・Z差を保ちます。対象が1原子団の場合は、その重心を開始位置に固定します。</p>
+            <div class="mv-row"><button class="mv-btn" id="groupConstraintAddSelected">選択を1原子団として追加</button></div>
+            <div class="mv-row"><label for="groupConstraintAFIR">AFIR原子団</label><select id="groupConstraintAFIR"></select><button class="mv-btn" id="groupConstraintAddAFIR">重心拘束へ追加</button></div>
+            <div id="groupConstraintRows"></div>
+            <div class="mv-row"><button class="mv-btn" id="groupConstraintClear">重心拘束をすべて解除</button><button class="mv-btn primary" id="groupConstraintOptimize">この拘束で最適化を設定</button></div>
+          </div>
+          <p id="groupConstraintStatus" class="mv-small" role="status"></p>
+          <details class="mv-help"><summary>適用範囲・質量</summary><p class="mv-small">非周期系のMIN・AFIR-MIN・緩和スキャンに対応。原子固定・内部座標拘束と併用できます。TS・IRC・経路計算・振動解析・「構造を整える」には適用できません。有効な原子団間の原子重複は不可。通常は元素の標準原子量、明示されたmass/massesまたはMASSがあればその値（u）を使い、使用した質量を結果JSONへ保存します。MASSが同位体の質量数の場合はその数値を質量の近似値として使用します。登録内容はプロジェクトに保存され、AFIR原子団を追加した後の変更には連動しません。</p></details>
+        </details>
         <section id="afirPanel" class="mv-afir-panel mv-scroll-panel" aria-label="複数フラグメントAFIR" hidden>
         <div class="mv-scroll-panel-header"><div class="mv-afir-heading"><div><p class="mv-eyebrow">REACTION EXPLORER</p><h2>AFIR / 原子団に人工力</h2></div><button class="mv-btn" id="afirClose" aria-label="AFIRパネルを閉じる">閉じる</button></div><div class="mv-panel-size" role="group" aria-label="AFIRパネルの高さ"><span>高さ</span><button type="button" class="mv-btn" id="afirShorter" data-panel-size="-80" aria-label="AFIRパネルを低くする">低く</button><button type="button" class="mv-btn" id="afirTaller" data-panel-size="80" aria-label="AFIRパネルを高くする">高く</button><button type="button" class="mv-btn" id="afirResetHeight" data-panel-size="reset" aria-label="AFIRパネルの高さを戻す">戻す</button></div><p class="mv-panel-size-hint">右下をドラッグして高さを変更。</p></div>
         <div class="mv-scroll-panel-body">
@@ -125,7 +141,7 @@ title: 分子構造エディタ | Molecule Studio
           <p class="mv-afir-note">γは衝突エネルギーの尺度です。Arの基準値からαに換算します。γ = 0でそのペアの人工力を解除します。</p>
           <div id="afirPairs" class="mv-afir-list"></div>
         </fieldset>
-        <div class="mv-row"><span class="mv-small" id="afirConstraintSummary"></span><button class="mv-btn" id="afirConstraints">原子固定を設定</button></div>
+        <div class="mv-row"><span class="mv-small" id="afirConstraintSummary"></span><button class="mv-btn" id="afirConstraints">原子固定を設定</button></div><div class="mv-row"><span class="mv-small" id="afirGroupConstraintSummary"></span><button class="mv-btn" id="afirGroupConstraints">原子団の重心拘束を設定</button></div>
           <fieldset id="afirSettings"><legend>3. 探索条件</legend>
           <div class="mv-afir-pair"><label>全電荷<input id="afirCharge" type="number" min="-100" max="100" step="1" value="0"></label><label>スピン多重度<input id="afirMultiplicity" type="number" min="1" max="101" step="1" value="1"></label></div>
           <!-- A zero step base keeps native spinner increments on the decimal grid. JS/Python enforce the positive lower limits. -->
@@ -394,7 +410,7 @@ H 1.0 0 0
   <h2>外部エンジン / 経路緩和</h2>
   <p class="mv-small">計算はこのPCで起動したサービス上で実行します。座標はローカルサービスへ送信されます。接続トークンはこの画面のメモリだけに保持します。</p>
   <details class="mv-engine-setup"><summary>初回のセットアップ：tblite / g-xTB / UMAを選ぶ</summary>
-    <p><a href="./local-engine/bridge.py?v=1.10.0" download>bridge.pyをダウンロード</a>し、使いたいエンジンの手順で起動してください。tblite / g-xTBはPython 3.10以上、UMAはPython 3.12の専用環境を推奨します。</p>
+    <p><a href="./local-engine/bridge.py?v=1.11.0" download>bridge.pyをダウンロード</a>し、使いたいエンジンの手順で起動してください。tblite / g-xTBはPython 3.10以上、UMAはPython 3.12の専用環境を推奨します。</p>
     <ul>
       <li><strong>tblite</strong>：GFN2-xTB（既定）、GFN1-xTB、IPEA1-xTBを利用します。このアプリでは非周期系と固定セルの周期系に対応します。</li>
       <li><strong>g-xTB</strong>：公式のg-xTB対応実行ファイルを別途用意します。このアプリでは非周期系に対応します。tbliteのPythonパッケージは不要です。</li>
@@ -487,6 +503,7 @@ python bridge.py --engine uma --uma-device cuda:0 --anysolv --anysolv-model mode
     <label>系全体の電荷<input id="engineCharge" type="number" min="-100" max="100" step="1" value="0"></label>
     <label>スピン多重度 (2S+1)<input id="engineMultiplicity" type="number" min="1" max="101" step="1" value="1"></label>
   </div><div class="mv-row"><span class="mv-small" id="engineConstraintSummary"></span><button class="mv-btn" id="engineConstraints">原子固定を設定</button></div>
+  <div class="mv-row"><span class="mv-small" id="engineGroupConstraintSummary"></span><button class="mv-btn" id="engineGroupConstraints">原子団の重心拘束を設定</button></div>
   <p id="engineModeHelp" class="mv-small"></p><details class="mv-help"><summary>計算機能・保存と再開の説明</summary><p class="mv-small"><a href="https://h-nabata.github.io/molecule-visualizer/RESEARCH" target="_blank" rel="noopener">IRC・拘束スキャン・熱化学・履歴管理の使い方</a></p></details>
   <section id="batchInput" hidden>
     <label>入力元<select id="batchSource"><option value="text">テキスト / XYZファイル</option><option value="frames">読み込み済みの全フレーム</option></select></label>

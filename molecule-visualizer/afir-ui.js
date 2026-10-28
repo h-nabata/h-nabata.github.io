@@ -60,7 +60,7 @@
   }
   function pairHint(){$('afirPairStatus').textContent=config().fragments.length<2?'原子団を2つ以上登録してください。':'A・Bに異なる原子団を選び、「ペアを追加」を押してください。同じ原子を両方に含めることはできません。';}
   function sync(){
-    MV.ConstraintUI?.sync();
+    MV.ConstraintUI?.sync();MV.GroupConstraintUI?.sync();
     try{syncInternal();}catch(e){message(e.message);for(const id of ['afirRun','afirCheck','afirExport','afirAddPair','afirAddFragment'])$(id).disabled=true;}
   }
   function syncInternal(){
@@ -88,7 +88,7 @@
     MV.EnergyProfile?.restore();app().renderer().renderState(app().getState(),true);
   }
   function download(payload,name,type='application/json'){const text=typeof payload==='string'?payload:JSON.stringify(payload,null,2),url=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-  function exportInput(s,c){const out=MV.AFIR.exportInput(s,c);out.fixedAtoms=MV.Constraints.indices(s);out.fixedAtomIds=out.fixedAtoms.map(i=>s.atoms[i].id);return out;}
+  function exportInput(s,c){const out=MV.AFIR.exportInput(s,c);out.fixedAtoms=MV.Constraints.indices(s);out.fixedAtomIds=out.fixedAtoms.map(i=>s.atoms[i].id);const group=MV.GroupConstraints?.forJob(s,{mode:'afir',symbols:s.atoms.map(a=>a.element),images:[s.atoms.map(a=>[a.x,a.y,a.z])],cell:s.metadata.cell},null,MV.Geometry.atomicMass);if(group)out.groupConstraints=group;return out;}
   function exportFiles(){if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();MV.ConstraintUI.flush();const out={...exportInput(app().getState(),config()),...MV.EngineUI.modelInput()};download(out,'afir-input.json');message('原子ID・XYZ・フラグメント・ペア・Python用設定をJSONに保存しました。');}
   function check(){saveSettings();const s=app().getState(),b=MV.AFIR.evaluate(s.atoms,config(),s.metadata.cell);message(`人工項のみ評価: ${b.energyEV.toFixed(6)} eV。物理ポテンシャルのエネルギーではありません。座標は変更していません。`);}
   async function run(){
@@ -99,6 +99,7 @@
       if(foregroundElsewhere){
         if(!MV.AFIRRunner.available())throw Error('AFIRに対応したローカルサービスへ接続してください。');
         j.modelInput=MV.EngineUI.modelInput();j.internalConstraints=MV.ResearchUI?.constraintsInput(j.original,'afir')||[];
+        j.groupConstraints=MV.GroupConstraints?.forJob(j.original,MV.AFIRRunner.input(j),connection.info,MV.Geometry.atomicMass);
         const data=MV.AFIRRunner.input(j);MV.EngineUI.validateEngineInput(data,connection.info);MV.Constraints?.forJob(j.original,data,connection.info);
         if(j.config.maxSteps>(connection.info.maxAFIRSteps??500))throw Error('指定したAFIRステップ数に対応したサーバーへ接続してください。');
         data.livePreview=j.livePreview;const created=await MV.EngineUI.request(connection,'/api/jobs',data);
@@ -112,6 +113,7 @@
         try{
           if(p.mode!=='afir'||p.from!==j.previewCursor||!Number.isInteger(p.next)||p.next<=p.from||p.next>j.config.maxSteps+1||p.energies?.length!==p.next-p.from||p.biasEnergies?.length!==p.energies.length||[...p.energies,...p.biasEnergies].some(e=>!Number.isFinite(e))||!Array.isArray(p.positions)||p.positions.length!==j.original.atoms.length||p.positions.some(v=>!Array.isArray(v)||v.length!==3||v.some(x=>!Number.isFinite(x)||Math.abs(x)>10000)))throw Error('進捗データの形式が不正です。');
           MV.Constraints.checkPositions([p.positions],j.original.atoms.map(a=>[a.x,a.y,a.z]),MV.Constraints.indices(j.original));
+          MV.GroupConstraints?.checkPositions([p.positions],MV.AFIRRunner.input(j));
           j.liveEnergies.push(...p.energies);j.liveBiases.push(...p.biasEnergies);j.previewCursor=p.next;
           const base=MV.Periodic.snapshot(j.original);
           MV.EnergyProfile.set({title:'AFIR · 計算中（評価済みの途中結果）',kind:'afir',energies:j.liveEnergies,biasEnergies:j.liveBiases,base:()=>base,positions:i=>i===p.next-1?p.positions:null},MV.EnergyProfile.following());
@@ -148,7 +150,7 @@
     for(const [id,key] of [['afirCharge','charge'],['afirMultiplicity','multiplicity'],['afirSteps','maxSteps'],['afirFmax','fmax'],['afirMove','maxMove']])$(id).addEventListener('change',()=>safe(()=>edit(c=>{c[key]=readNumber(id);})));
     $('afirRun').addEventListener('click',run);$('afirCancel').addEventListener('click',()=>{if(job){job.cancelled=true;MV.AFIRRunner?.cancel(job).catch(e=>message(e.message));}});
     $('afirProfile').addEventListener('click',()=>{if(result){showProfile(result.result,result);MV.EnergyProfile.reveal();}});
-    $('afirDownload').addEventListener('click',()=>{if(result)download({schema:'molecule-afir-result/1',input:{...exportInput(result.original,result.config),...result.modelInput,...(result.internalConstraints?.length?{internalConstraints:result.internalConstraints}:{})},result:result.result},'afir-result.json');});
+    $('afirDownload').addEventListener('click',()=>{if(result)download({schema:'molecule-afir-result/1',input:{...exportInput(result.original,result.config),...result.modelInput,...(result.groupConstraints?{groupConstraints:result.groupConstraints}:{}),...(result.internalConstraints?.length?{internalConstraints:result.internalConstraints}:{})},result:result.result},'afir-result.json');});
     $('afirXYZ').addEventListener('click',()=>{if(result)exportXYZ(result.result,result);});
     sync();
   }

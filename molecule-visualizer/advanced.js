@@ -25,6 +25,7 @@
   function relax(){
     try{app().useDisplayedStructure();}catch(e){app().setStatus(e.message,true);return;}
     const s=app().getState();if(!s.atoms.length||s.atoms.length>500){app().setStatus('構造緩和は1〜500原子に対応しています。');return;}
+    if(s.metadata.groupConstraints?.enabled){app().setStatus('重心拘束付きの緩和は「原子団の重心」から「この拘束で最適化を設定」を使用してください。');return;}
     const j=start('結合距離・角度・近接反発を調整しています…');if(!j)return;
     try{
       j.worker=new Worker('./relax-worker.js?v=performance-41');
