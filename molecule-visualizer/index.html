@@ -106,7 +106,7 @@ title: 分子構造エディタ | Molecule Studio
             <div class="mv-row"><button class="mv-btn" id="constraintSelect">固定原子を選択</button><button class="mv-btn" id="constraintClear">すべて解除</button></div>
           </div>
           <p class="mv-small" id="constraintStatus" role="status"></p>
-          <details class="mv-help"><summary>適用範囲</summary><p class="mv-small">収束判定には可動原子の有効力を使います。一括最適化では、現在の構造と同じ元素・原子順序の各入力に同じ番号を適用し、それぞれの初期位置に固定します。距離・角度拘束、TS・CI-NEB・振動解析との併用は対象外です。固定条件はプロジェクトと結果JSONに保存されます。</p></details>
+          <details class="mv-help"><summary>適用範囲</summary><p class="mv-small">収束判定には可動原子の有効力を使います。一括最適化では、現在の構造と同じ元素・原子順序の各入力に同じ番号を適用し、それぞれの初期位置に固定します。MIN・AFIR-MIN・緩和スキャンでは距離・結合角・二面角の拘束と併用できます。内部座標の拘束は「計算エンジン / 経路緩和」で通常の単一構造最適化を選び、「距離・角度・二面角の拘束」から設定します。TS・IRC・経路計算・振動解析との併用は対象外です。原子固定条件はプロジェクトと結果JSONに保存されます。</p></details>
         </details>
         <section id="afirPanel" class="mv-afir-panel mv-scroll-panel" aria-label="複数フラグメントAFIR" hidden>
         <div class="mv-scroll-panel-header"><div class="mv-afir-heading"><div><p class="mv-eyebrow">REACTION EXPLORER</p><h2>AFIR / 原子団に人工力</h2></div><button class="mv-btn" id="afirClose" aria-label="AFIRパネルを閉じる">閉じる</button></div><div class="mv-panel-size" role="group" aria-label="AFIRパネルの高さ"><span>高さ</span><button type="button" class="mv-btn" id="afirShorter" data-panel-size="-80" aria-label="AFIRパネルを低くする">低く</button><button type="button" class="mv-btn" id="afirTaller" data-panel-size="80" aria-label="AFIRパネルを高くする">高く</button><button type="button" class="mv-btn" id="afirResetHeight" data-panel-size="reset" aria-label="AFIRパネルの高さを戻す">戻す</button></div><p class="mv-panel-size-hint">右下をドラッグして高さを変更。</p></div>
@@ -518,7 +518,7 @@ H -0.3 1.0 0"></textarea>
     <details id="internalConstraintsDetails"><summary>距離・角度・二面角の拘束</summary>
       <label class="mv-check"><input id="internalConstraintsEnabled" type="checkbox">内部座標の拘束を有効にする（MIN・AFIR-MIN・スキャン）</label>
       <div id="internalConstraintRows"></div><button class="mv-btn" id="internalConstraintAdd" type="button">拘束を追加</button>
-      <p class="mv-small">原子番号は1始まり。距離はÅ、角度・二面角は度です。固定した原子と矛盾する拘束は使用できません。</p>
+      <p class="mv-small">原子番号は1始まりのFile-orderです。結合角 A–B–C は中央のB、二面角 A–B–C–D はB–C軸を基準に、3個または4個の番号を順に指定します。距離はÅ、結合角は1〜179度、二面角は−360〜360度です。最適化中も指定値を保ち、他の自由度を緩和します。「測定・移動」の角度変更だけでは固定されません。固定原子と矛盾する拘束や直線配置は使用できません。</p>
     </details>
   </section>
   <section id="engineIRCSettings" hidden><h3>IRC</h3><div class="mv-grid">
@@ -529,7 +529,7 @@ H -0.3 1.0 0"></textarea>
   <section id="engineScanSettings" hidden><h3>緩和スキャン</h3><div id="scanCoordinateRows"></div>
     <button class="mv-btn" id="scanCoordinateAdd" type="button">2本目の座標を追加</button>
     <label class="mv-check"><input id="scanStopOnFailure" type="checkbox" checked>未収束の点が出たら停止する</label>
-    <p class="mv-small">1本または2本の内部座標を等間隔で指定し、各点を順に最適化します。最大ステップ数は各点に適用されます。</p></section>
+    <p class="mv-small">距離・結合角・二面角から1本または2本を選び、開始値・終了値・両端を含む点数を指定します。各点では指定座標を固定し、残りの自由度を最適化します。1軸2〜100点、合計400点まで。二面角で180度をまたぐ例は170→190度（190度と−170度は同じ配座）です。最大ステップ数は各点に適用されます。同じ座標を上の拘束欄にも重複して指定しないでください。</p></section>
   <section id="engineAdaptiveSettings" hidden><details><summary>自動ノード追加・経路分割</summary>
     <label class="mv-check"><input id="adaptiveEnabled" type="checkbox">構造・エネルギーの間隔に応じてノードを追加する</label>
     <div class="mv-grid"><label>ノード数の上限<input id="adaptiveMaxImages" type="number" min="3" max="100" step="1" value="30"></label><label>追加判定の間隔（ステップ）<input id="adaptiveInterval" type="number" min="1" max="10000" step="1" value="10"></label><label>原子RMS変位の閾値 (Å)<input id="adaptiveMaxSpacing" type="number" min=".01" max="20" step="0.1" value="0.5"></label><label>エネルギー差の閾値 (eV)<input id="adaptiveEnergyGap" type="number" min=".0001" max="100" step="0.1" value="0.2"></label></div>

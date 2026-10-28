@@ -13,6 +13,25 @@ def data_for(positions, constraints, optimizer='fire'):
             'maxMove':.03,'optimizer':optimizer,'internalConstraints':constraints}
 
 
+def angular_fixture():
+    # Fix a right-handed reference frame. The fourth atom has a harmonic
+    # Cartesian target, so the constrained minimum has an independent closed
+    # form: project its target vector onto the ray set by angle and dihedral.
+    initial = [[0.,1.,0.],[0.,0.,0.],[1.,0.,0.],[1.3,-.9,.3]]
+    target = np.array([[0.,1.,0.],[0.,0.,0.],[1.,0.,0.],[1.1,-1.,.2]])
+    def calculate(i, positions):
+        return float(.5*np.sum((positions-target)**2)), target-positions
+    def expected(angle, dihedral):
+        a, d = np.deg2rad([angle, dihedral])
+        ray = np.array([-np.cos(a), np.sin(a)*np.cos(d), np.sin(a)*np.sin(d)])
+        vector = target[3]-target[2]
+        radius = float(vector@ray)
+        assert radius > .1
+        position = target[2]+radius*ray
+        return position, float(.5*np.sum((position-target[3])**2))
+    return initial, calculate, expected
+
+
 class InternalConstraints(unittest.TestCase):
     def test_validation_and_scan_bounds(self):
         normalized={'mode':'optimize','symbols':['H']*4}
@@ -104,6 +123,25 @@ class InternalConstraints(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'両立'):
             b.internal_coordinate_constraint(data).project(np.array(initial))
 
+    def test_angular_minima_all_optimizers_keep_targets_in_every_frame(self):
+        initial, calculate, expected = angular_fixture()
+        coordinates = [{'type':'angle','atoms':[1,2,3],'value':105.},
+                       {'type':'dihedral','atoms':[0,1,2,3],'value':-170.}]
+        for optimizer in ('fire','lbfgs','bfgs'):
+            with self.subTest(optimizer=optimizer):
+                data = data_for(initial, coordinates, optimizer)
+                data['fixedAtoms'] = [0,1,2]
+                result = b.constrained_minimize(data, calculate)
+                self.assertTrue(result['converged'])
+                self.assertGreater(result['steps'], 0)
+                for positions in result['trajectory']['images']:
+                    np.testing.assert_array_equal(positions[:3], initial[:3])
+                    actual = b.internal_coordinate_values(positions, coordinates)
+                    np.testing.assert_allclose(b.internal_coordinate_residual(actual, coordinates), 0, atol=1e-8)
+                position, energy = expected(105., -170.)
+                np.testing.assert_allclose(result['images'][0][3], position, atol=2e-6)
+                self.assertAlmostEqual(result['energies'][0], energy, places=10)
+
     def test_singular_linear_angle_fails_before_potential_evaluation(self):
         data=data_for([[-1.,0.,0.],[0.,0.,0.],[1.,0.,0.]],
                       [{'type':'angle','atoms':[0,1,2],'value':90.}])
@@ -149,6 +187,36 @@ class InternalConstraints(unittest.TestCase):
 
 
 class RelaxedScans(unittest.TestCase):
+    def test_angle_dihedral_1d_2d_scans_match_analytic_minima(self):
+        initial, calculate, expected = angular_fixture()
+        angle = {'type':'angle','atoms':[1,2,3],'start':90.,'stop':110.,'points':3}
+        dihedral = {'type':'dihedral','atoms':[0,1,2,3],'start':170.,'stop':190.,'points':3}
+        cases = [([angle], [{'type':'dihedral','atoms':[0,1,2,3],'value':175.}]),
+                 ([dihedral], [{'type':'angle','atoms':[1,2,3],'value':100.}]),
+                 ([angle, dihedral], [])]
+        for axes, fixed in cases:
+            with self.subTest(types=[c['type'] for c in axes]):
+                data = data_for(initial, fixed, 'lbfgs')
+                data.update(mode='scan', fixedAtoms=[0,1,2],
+                            scan={'coordinates':axes,'stopOnFailure':True})
+                result = b.relaxed_scan(data, calculate, None)
+                self.assertTrue(result['converged'])
+                self.assertEqual(len(result['images']), 3**len(axes))
+                for node, positions, energy in zip(result['scan']['nodes'], result['images'], result['energies']):
+                    self.assertTrue(node['converged'])
+                    constraints = fixed + [dict(type=c['type'], atoms=c['atoms'], value=v)
+                                           for c,v in zip(axes,node['targets'])]
+                    values = b.internal_coordinate_values(positions, constraints)
+                    np.testing.assert_allclose(b.internal_coordinate_residual(values, constraints), 0, atol=1e-8)
+                    np.testing.assert_array_equal(positions[:3], initial[:3])
+                    targets = {c['type']:c['value'] for c in constraints}
+                    position, reference_energy = expected(targets['angle'], targets['dihedral'])
+                    np.testing.assert_allclose(positions[3], position, atol=2e-6)
+                    self.assertAlmostEqual(energy, reference_energy, places=10)
+                if len(axes)==2:
+                    self.assertEqual([n['targets'][1] for n in result['scan']['nodes']],
+                                     [170.,180.,190.,190.,180.,170.,170.,180.,190.])
+
     def scan(self,dimensions=1):
         initial=[[0.,0.,0.],[1.,.2,0.],[-.2,1.,0.]]
         data=data_for(initial,[],optimizer='lbfgs');data.update(mode='scan',fixedAtoms=[0])

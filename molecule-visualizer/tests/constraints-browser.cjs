@@ -49,7 +49,50 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.fill('#dataText','C 0 0 0\nC 1.4 0 0');await page.click('#dataApply');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().bonds.length),0);
   await page.click('[data-workspace-jump=editing]');await page.click('#tab-bonds');await page.click('#btnReinferBonds');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().bonds.length),1);
   await page.click('#toolMove');const p=await page.evaluate(()=>{const a=MoleculeVisualizer.App.renderer().projectedAtoms.find(a=>a.index===2),r=document.querySelector('canvas').getBoundingClientRect();return {x:a.x+r.x,y:a.y+r.y};});await page.mouse.move(p.x,p.y);await page.mouse.down();await page.mouse.move(p.x+150,p.y+80,{steps:5});await page.mouse.up();assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().bonds.length),1);
-  await page.setViewportSize({width:390,height:844});await page.click('#btnConstraints');await page.locator('#constraintPanel').scrollIntoViewIfNeeded();const dimensions=await page.locator('#constraintPanel').evaluate(e=>[e.clientWidth,e.scrollWidth]);assert.ok(dimensions[1]<=dimensions[0]+2);await page.screenshot({path:'test-artifacts/fixed-atoms-mobile.png',fullPage:true});
-  assert.deepEqual(errors,[]);console.log('Fixed MIN / AFIR-MIN: real tblite, selections, unblurred input, batch anchors, exports, apply, old bridge rejection and manual bond preservation passed');
+  // Real tblite angular constraints and a dihedral scan across 180 degrees.
+  // Three fixed H atoms define the frame; the fourth retains a radial freedom.
+  await page.unroute('**/api/info');
+  await page.evaluate(()=>{const M=MoleculeVisualizer;M.App.change('angular fixture',()=>M.IO.parseXYZToState('H 0 1 0\nH 0 0 0\nH 1 0 0\nH 1.3 -.9 .3'),true);});
+  await page.click('#toolSelect');await select(3);
+  assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().selectedAtomIds.size),1);
+  if(!await page.locator('#constraintAtoms').isVisible())await page.click('#btnConstraints');
+  await page.fill('#constraintAtoms','1-3');await page.check('#constraintEnabled');await page.click('#constraintApply');
+  await page.click('#btnExternalEngine');await page.click('#engineConnect');
+  await page.waitForFunction(()=>!document.getElementById('engineConnect').disabled);
+  await page.selectOption('#engineMode','optimize');await page.selectOption('#engineOptimizer','lbfgs');
+  await page.fill('#engineSteps','3');await page.fill('#engineFmax','0.00001');
+  await page.locator('#internalConstraintsDetails summary').click();await page.check('#internalConstraintsEnabled');
+  const addCoordinate=async(type,atoms,value)=>{
+    await page.click('#internalConstraintAdd');const row=page.locator('#internalConstraintRows .research-coordinate').last();
+    await row.locator('[data-field="type"]').selectOption(type);await row.locator('[data-field="atoms"]').fill(atoms);await row.locator('[data-field="value"]').fill(value);return row;
+  };
+  await addCoordinate('angle','2,3,4','105');const dihedral=await addCoordinate('dihedral','1,2,3,4','-170');
+  await dihedral.locator('[data-field="value"]').focus();await page.evaluate(()=>document.getElementById('engineRun').click());
+  const done=()=>page.waitForFunction(()=>!MoleculeVisualizer.EngineUI.isBusy()&&!document.getElementById('engineResult').hidden,{},{timeout:60000});
+  await done();const angular=JSON.parse(await download('#engineDownload'));
+  assert.deepEqual(angular.input.fixedAtoms,[0,1,2]);
+  assert.deepEqual(angular.input.internalConstraints,[{type:'angle',atoms:[1,2,3],value:105},{type:'dihedral',atoms:[0,1,2,3],value:-170}]);
+  const checkAngles=(positions,angle,dihedral)=>{
+    assert.deepEqual(positions.slice(0,3),[[0,1,0],[0,0,0],[1,0,0]]);
+    const [x,y,z]=positions[3].map((v,k)=>v-positions[2][k]);
+    const actualAngle=Math.acos(-x/Math.hypot(x,y,z))*180/Math.PI,actualDihedral=Math.atan2(z,y)*180/Math.PI;
+    assert.ok(Math.abs(actualAngle-angle)<1e-7);
+    assert.ok(Math.abs(((actualDihedral-dihedral+540)%360)-180)<1e-7);
+  };
+  angular.result.trajectory.images.forEach(p=>checkAngles(p,105,-170));assert.ok(angular.result.energies.every(Number.isFinite));
+  await page.click('#engineApply');const applied=await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms.map(a=>[a.x,a.y,a.z]));checkAngles(applied,105,-170);
+  await page.click('#btnScan');await dihedral.getByRole('button',{name:'削除',exact:true}).click();
+  const axis=page.locator('#scanCoordinateRows .research-coordinate').first();
+  await axis.locator('[data-field="type"]').selectOption('dihedral');await axis.locator('[data-field="atoms"]').fill('1,2,3,4');
+  await axis.locator('[data-field="start"]').fill('170');await axis.locator('[data-field="stop"]').fill('190');await axis.locator('[data-field="points"]').fill('3');
+  await page.uncheck('#scanStopOnFailure');await axis.locator('[data-field="stop"]').focus();await page.evaluate(()=>document.getElementById('engineRun').click());
+  await done();const scanned=JSON.parse(await download('#engineDownload'));
+  assert.deepEqual(scanned.input.scan.coordinates,[{type:'dihedral',atoms:[0,1,2,3],start:170,stop:190,points:3}]);
+  assert.equal(scanned.result.images.length,3);assert.deepEqual(scanned.result.scan.nodes.map(n=>n.targets[0]),[170,180,190]);
+  scanned.result.images.forEach((p,i)=>checkAngles(p,105,170+10*i));
+  assert.match(await download('#researchResult button'),/190/);
+  await page.click('#engineApply');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.trajectory.length),3);
+  await page.setViewportSize({width:390,height:844});if(!await page.locator('#constraintAtoms').isVisible())await page.click('#btnConstraints');await page.locator('#constraintPanel').scrollIntoViewIfNeeded();const dimensions=await page.locator('#constraintPanel').evaluate(e=>[e.clientWidth,e.scrollWidth]);assert.ok(dimensions[1]<=dimensions[0]+2);await page.screenshot({path:'test-artifacts/fixed-atoms-mobile.png',fullPage:true});
+  assert.deepEqual(errors,[]);console.log('Fixed MIN / AFIR-MIN and angular scan: real tblite, selections, unblurred input, batch anchors, angular targets, exports, apply, old bridge rejection and manual bond preservation passed');
  }finally{if(browser)await browser.close();engine.kill('SIGINT');await new Promise(resolve=>{if(engine.exitCode!==null)return resolve();engine.on('exit',resolve);setTimeout(()=>{engine.kill('SIGKILL');resolve();},5000).unref();});}
 })().catch(e=>{console.error(e);process.exitCode=1;});
