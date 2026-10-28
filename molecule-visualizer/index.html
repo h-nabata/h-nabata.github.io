@@ -529,7 +529,7 @@ H -0.3 1.0 0"></textarea>
   <section id="engineScanSettings" hidden><h3>緩和スキャン</h3><div id="scanCoordinateRows"></div>
     <button class="mv-btn" id="scanCoordinateAdd" type="button">2本目の座標を追加</button>
     <label class="mv-check"><input id="scanStopOnFailure" type="checkbox" checked>未収束の点が出たら停止する</label>
-    <p class="mv-small">距離・結合角・二面角から1本または2本を選び、開始値・終了値・両端を含む点数を指定します。各点では指定座標を固定し、残りの自由度を最適化します。1軸2〜100点、合計400点まで。二面角で180度をまたぐ例は170→190度（190度と−170度は同じ配座）です。最大ステップ数は各点に適用されます。同じ座標を上の拘束欄にも重複して指定しないでください。</p></section>
+    <p class="mv-small">距離・結合角・二面角から1本または2本を選び、開始値・終了値・両端を含む点数を指定します。各点では指定座標を固定し、残りの自由度を最適化します。1軸2〜100点、合計400点まで。二面角で180度をまたぐ例は170→190度（190度と−170度は同じ二面角）です。最大ステップ数は各点に適用されます。同じ座標を上の拘束欄にも重複して指定しないでください。</p></section>
   <section id="engineAdaptiveSettings" hidden><details><summary>自動ノード追加・経路分割</summary>
     <label class="mv-check"><input id="adaptiveEnabled" type="checkbox">構造・エネルギーの間隔に応じてノードを追加する</label>
     <div class="mv-grid"><label>ノード数の上限<input id="adaptiveMaxImages" type="number" min="3" max="100" step="1" value="30"></label><label>追加判定の間隔（ステップ）<input id="adaptiveInterval" type="number" min="1" max="10000" step="1" value="10"></label><label>原子RMS変位の閾値 (Å)<input id="adaptiveMaxSpacing" type="number" min=".01" max="20" step="0.1" value="0.5"></label><label>エネルギー差の閾値 (eV)<input id="adaptiveEnergyGap" type="number" min=".0001" max="100" step="0.1" value="0.2"></label></div>

@@ -355,3 +355,4 @@ GPUネイティブUMA／AnySolv、実g-xTBの速度比較は未実施。局所�
 - Chromiumから実tblite（GFN2-xTB）へ接続するconstraints-browser.cjsが合格。4原子の公開可能な合成構造で、3原子のCartesian固定、105度の結合角固定、−170度の二面角固定、170／180／190度の二面角スキャンを実行。未フォーカス解除の入力がジョブへ渡ること、各履歴の角度誤差1e-7度以内、原子選択、結果適用、JSON／CSVの実ダウンロードを確認した。この試験は各点3ステップの拘束維持確認であり、全点のエネルギー収束を主張しない。
 - workflow-browser.cjs（2次元スキャン等の画面・通信契約）とJavaScript 161件が合格。Pythonの拘束／スキャン試験16件は全件合格。全Python試験は121件中116件合格・4件skip・1件エラー。エラーは既存のプロセス終了試験で隔離実行環境のPIDをpsutilが参照できないもの（NoSuchProcess）であり、合格には数えない。通常のCI環境で全件を再確認する。
 - ローカル環境はPython 3.12.14、ASE 3.29.0、NumPy 2.5.4、tblite 0.7.0、Sella 2.6.0。実UMA・AnySolv・g-xTBによる今回追加の角度検証は未実施。
+- [CI 40642258653](https://github.com/h-nabata/h-nabata.github.io/actions/runs/40642258653)が成功（検証コミットc64b0b9654a42035b7ccfb870bd587a9bd937a9a）。JavaScript 161件合格、Python 121件中117件合格・4件skip、ブラウザ13スイート合格。ローカルの隔離PIDに起因したプロセス終了試験もCIでは成功した。別ジョブのnative AnySolv有限差分試験1件も合格（追加の角度検証とは別）。公開ページでも「緩和スキャン」と結合角拘束の設定画面が開くことを確認した。
