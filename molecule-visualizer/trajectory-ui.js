@@ -93,6 +93,7 @@
         s.metadata.trajectoryExtraction={sourceKind:original.kind,sourceFrame:i,sourceCount:original.images.length,method,...(original.kind==='afir'?settings:{})};
         if(original.kind==='afir')s.metadata.afirCalculation={engine:original.engine,method:original.method,physicalEnergyEV:original.energies[i],biasEnergyEV:original.biasEnergies?.[i],step:original.stepNumbers?.[i]??i,validation:'biased-trajectory-not-ts',atomIds:s.atoms.map(a=>a.id)};
         else if(original.energies)s.metadata.externalCalculation={engine:original.engine,method:original.method,energyEV:original.energies[i],mode:original.kind,charge:original.charge,multiplicity:original.multiplicity};
+        MV.ModelF?.attach(s,original,original,i);
         MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);
       });
       const atomIds=JSON.stringify(frames[0].atoms.map(a=>a.id));if(frames.some(f=>JSON.stringify(f.atoms.map(a=>a.id))!==atomIds))throw Error('構造列の原子IDが一致しません。');

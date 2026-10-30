@@ -38,7 +38,8 @@ from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 from scipy.spatial import cKDTree
 
-VERSION = '1.13.0'
+VERSION = '1.14.0'
+KJ_MOL_PER_EV = 96.48533212331002
 UMA_MODELS = ('uma-s-1p2p1', 'uma-s-1p2', 'uma-s-1p1', 'uma-m-1p1')
 ANYSOLV_MODELS = ('model_compact', 'model_moe')
 MAX_BODY = 8 * 1024 * 1024
@@ -58,7 +59,7 @@ def validate(data, engine):
     allowed = {'symbols', 'images', 'cell', 'charge', 'multiplicity', 'mode',
                'maxSteps', 'fmax', 'spring', 'maxMove', 'climbAfter', 'atomIds', 'afir', 'livePreview',
                'optimizer', 'trustRadius', 'vibrations', 'fixedAtoms', 'umaDevice', 'solvation',
-               'irc', 'thermochemistry', 'internalConstraints', 'groupConstraints', 'scan', 'adaptiveNEB', 'pathSplit', 'nodeIds', 'lup', 'fixedComponents', 'rigidGroups', 'cellOptimization', 'stagedOptimization'}
+               'irc', 'thermochemistry', 'internalConstraints', 'groupConstraints', 'scan', 'adaptiveNEB', 'pathSplit', 'nodeIds', 'lup', 'fixedComponents', 'rigidGroups', 'cellOptimization', 'stagedOptimization', 'modelF'}
     if not isinstance(data, dict) or set(data) - allowed:
         raise ValueError('未定義の入力項目があります。コマンド・パス指定は受け付けません。')
     if type(data.get('livePreview', False)) is not bool:
@@ -173,7 +174,177 @@ def validate(data, engine):
     validate_adaptive_neb(data, result)
     validate_irc_settings(data, result)
     validate_thermochemistry_settings(data, result)
+    if 'modelF' in data:
+        result['modelF'] = validate_model_f(data['modelF'], result, engine)
     return result
+
+
+def validate_model_f(settings, data, engine):
+    if not isinstance(settings, dict) or set(settings)-{'model','surface','alphaKJMol','multiplicities'}:
+        raise ValueError('ModelFの設定が不正です。')
+    if settings.get('model','amf')!='amf' or settings.get('surface','lower') not in ('lower','upper'):
+        raise ValueError('ModelFはAMFのlower／upperを指定してください。')
+    multiplicities=settings.get('multiplicities')
+    if not isinstance(multiplicities,list) or len(multiplicities)!=2:
+        raise ValueError('ModelFには2状態のスピン多重度が必要です。')
+    electrons=sum(atomic_numbers[s] for s in data['symbols'])-data['charge']
+    for m in multiplicities:
+        number(m,'ModelFのスピン多重度',1,100 if engine=='uma' else 101,True)
+        if electrons<m-1 or (electrons-m+1)%2:
+            raise ValueError('ModelFの各状態で電子数とスピン多重度を一致させてください。')
+    if multiplicities[0]!=data['multiplicity'] or multiplicities[0]==multiplicities[1]:
+        raise ValueError('ModelFの状態1は計算条件の多重度と一致させ、状態2には異なる多重度を指定してください。')
+    if 'thermochemistry' in data:
+        raise ValueError('ModelF合成面では電子縮重度が一意でないため熱化学量は計算できません。振動解析のみを指定してください。')
+    return {'model':'amf','surface':settings.get('surface','lower'),
+            'alphaKJMol':number(settings.get('alphaKJMol',30),'ModelF α (kJ/mol)',0,10000),
+            'multiplicities':[int(m) for m in multiplicities]}
+
+
+def model_f_components(energy1, energy2, settings):
+    """AMF eigenvalues and exact dE/dEi, including the gap-dependent coupling.
+
+    U=alpha/2 exp(-(Delta/alpha)^2); dR/dDelta=Delta/R*(1-2 exp(-2t^2)).
+    The latter is NOT the constant-coupling eigenvector population. No matrix
+    diagonalization or numerical force differences are needed here.
+    """
+    e1,e2=float(energy1),float(energy2)
+    if not math.isfinite(e1) or not math.isfinite(e2):raise ValueError('ModelFの状態エネルギーが非有限値です。')
+    delta=e1-e2;alpha=settings['alphaKJMol']/KJ_MOL_PER_EV
+    if alpha>0 and abs(delta)<27*alpha:
+        t=delta/alpha;decay=math.exp(-t*t);u=.5*alpha*decay
+        radius=math.hypot(delta,2*u)
+        derivative=delta/radius*(1-2*decay*decay)
+        shift=2*u*(u/(radius+abs(delta)))
+    else:
+        u=shift=0.;derivative=math.copysign(1.,delta) if delta else 0.
+    sign=-1 if settings['surface']=='lower' else 1
+    weight1=.5*(1+sign*derivative)
+    return dict(state1EV=e1,state2EV=e2,gapEV=delta,couplingEV=u,
+                lowerEV=min(e1,e2)-shift,upperEV=max(e1,e2)+shift,
+                weight1=weight1,weight2=1-weight1)
+
+
+class ModelFEngine:
+    """Two isolated electronic states, one conservative model potential.
+
+    CPU calculators have separate SCC caches. UMA shares immutable weights and
+    keeps separate ASE atoms. AnySolv shares its resident process, switching the
+    input spin explicitly before each state. UMA state evaluations are serial.
+    """
+    def __init__(self, data, config, directory):
+        self.primary=None
+        first,second=self.state_inputs(data)
+        try:
+            self.primary=make_calculator(first,config,directory)
+            self.secondary=(self.primary.fork_state(second,config,directory) if hasattr(self.primary,'fork_state')
+                            else make_calculator(second,config,directory))
+            self._start(data)
+        except BaseException:
+            self.close();raise
+
+    @staticmethod
+    def state_inputs(data):
+        base={k:v for k,v in data.items() if k!='modelF'}
+        return tuple({**base,'multiplicity':m} for m in data['modelF']['multiplicities'])
+
+    def _start(self,data):
+        self.data=data;self.settings=copy.deepcopy(data['modelF']);self.records={}
+        self.state_calls=[0,0];self.lock=threading.RLock()
+        resume=data.get('_scanResume')
+        if resume:
+            if resume.get('modelF')!=self.settings:raise ValueError('保存したModelF条件が一致しません。')
+            for i,p in enumerate(resume['images']):
+                row={k:v[i] for k,v in resume.get('surfaceComponents',{}).items()}
+                self.check_row(row,resume['energies'][i])
+                self.records[self.key(p,energy=resume['energies'][i])]=row
+
+    def reset(self,data,config,directory):
+        first,second=self.state_inputs(data)
+        self.primary.reset(first,config,directory)
+        self.secondary=self.primary.fork_state(second,config,directory)
+        self._start(data)
+
+    def key(self,positions,lattice=None,energy=None):
+        if lattice is None and self.data.get('cell'):lattice=self.data['cell']['vectors']
+        raw=np.asarray(positions,dtype=np.float64).tobytes()
+        if lattice is not None:raw+=np.asarray(lattice,dtype=np.float64).tobytes()
+        # A repeated geometry can have slightly different SCC results on a
+        # different lane/restart. Keep the pair belonging to each reported value.
+        if energy is not None:raw+=np.float64(energy).tobytes()
+        return hashlib.sha256(raw).digest()
+
+    def _evaluate(self,index,positions,lattice=None):
+        answers=[];components=[]
+        for state,calculator in enumerate((self.primary,self.secondary)):
+            try:
+                answer=calculator(index,positions) if lattice is None else calculator.with_cell(index,positions,lattice)
+                energy=float(answer[0]);force=np.asarray(answer[1],float)
+                if not math.isfinite(energy) or force.shape!=np.shape(positions) or not np.isfinite(force).all():raise ValueError('エネルギー・力が不正です。')
+                if lattice is not None and (np.shape(answer[2])!=(3,3) or not np.isfinite(answer[2]).all()):raise ValueError('応力が不正です。')
+                answers.append((energy,force,*answer[2:]))
+                components.append(copy.copy(calculator.components.get(calculator.key(positions),{})) if isinstance(calculator,SolvatedUMAEngine) else {})
+                with self.lock:self.state_calls[state]+=1
+            except Exception as error:
+                raise ValueError(f'ModelF 状態{state+1}（多重度{self.settings["multiplicities"][state]}）の評価に失敗しました。{error}') from error
+        row=model_f_components(answers[0][0],answers[1][0],self.settings)
+        if self.settings['alphaKJMol']==0 and abs(row['gapEV'])<=1e-12 and (not np.allclose(answers[0][1],answers[1][1],atol=1e-10,rtol=0) or (lattice is not None and not np.allclose(answers[0][2],answers[1][2],atol=1e-10,rtol=0))):
+            raise ValueError('ModelF α=0の交差点では力が一意に定まりません。αを正の値にして再計算してください。')
+        for state,component in enumerate(components):
+            for name,value in component.items():row[f'state{state+1}{name.title()}EV']=value
+        weight1,weight2=row['weight1'],row['weight2']
+        answer=(row[self.settings['surface']+'EV'],weight1*answers[0][1]+weight2*answers[1][1])
+        if lattice is not None:answer+= (weight1*np.asarray(answers[0][2])+weight2*np.asarray(answers[1][2]),)
+        with self.lock:self.records[self.key(positions,lattice,answer[0])]=row
+        return answer
+
+    def __call__(self,index,positions):return self._evaluate(index,positions)
+    def with_cell(self,index,positions,lattice):return self._evaluate(index,positions,lattice)
+
+    def check_row(self,row,energy):
+        try:
+            expected=model_f_components(row['state1EV'],row['state2EV'],self.settings)
+            if any(not math.isfinite(row[k]) or abs(row[k]-v)>1e-7 for k,v in expected.items()):raise ValueError('components')
+            if not math.isfinite(energy) or abs(energy-expected[self.settings['surface']+'EV'])>1e-7:raise ValueError('surface')
+            if self.data.get('solvation'):
+                for state in (1,2):
+                    gas,solvent=row[f'state{state}UmaEV'],row[f'state{state}SolvationEV']
+                    if not math.isfinite(gas) or not math.isfinite(solvent) or abs(row[f'state{state}EV']-gas-solvent)>1e-7:raise ValueError('solvation')
+        except (KeyError,TypeError,ValueError) as error:raise ValueError('ModelFの保存エネルギー成分が一致しません。') from error
+
+    def annotate(self,result):
+        result['modelF']=copy.deepcopy(self.settings)
+        if 'positions' in result:
+            lattice=result.get('cell',self.data.get('cell'))
+            row=self.records[self.key(result['positions'],lattice['vectors'] if lattice else None,result['energy'])]
+            self.check_row(row,result['energy']);result['surfaceComponents']=copy.copy(row)
+        elif 'images' in result:
+            rows=[]
+            for i,p in enumerate(result['images']):
+                lattice=result.get('cells',[None]*len(result['images']))[i] or result.get('cell') or self.data.get('cell')
+                row=self.records.get(self.key(p,lattice['vectors'] if isinstance(lattice,dict) else lattice,result['energies'][i]))
+                if row is None:raise ValueError('ModelFの両状態を評価済みの構造だけを保存できます。')
+                self.check_row(row,result['energies'][i]);rows.append(row)
+            result['surfaceComponents']={key:[row[key] for row in rows] for key in (rows[0] if rows else ())}
+        if 'trajectory' in result:self.annotate(result['trajectory'])
+
+    def prepare_vibrations(self,positions):
+        for state,calculator in enumerate((self.primary,self.secondary)):
+            if hasattr(calculator,'prepare_vibrations'):
+                calculator.prepare_vibrations(positions);self.state_calls[state]+=1
+
+    def finish_vibrations(self):
+        for calculator in (self.primary,self.secondary):
+            if hasattr(calculator,'finish_vibrations'):calculator.finish_vibrations()
+
+    def close(self):
+        if self.primary is not None and hasattr(self.primary,'close'):self.primary.close()
+
+
+def make_calculator(data,config,directory):
+    if data.get('modelF'):return ModelFEngine(data,config,directory)
+    cls=SolvatedUMAEngine if config.get('solvation') else {'tblite':TBLiteEngine,'gxtb':GXTBEngine,'uma':UMAEngine}[config['engine']]
+    return cls(data,config,directory)
 
 
 def validate_advanced_optimization(raw, data, engine):
@@ -1234,6 +1405,11 @@ def ase_atoms(data, calculate):
     class LocalCalculator(Calculator):
         implemented_properties = ['energy', 'forces']
         evaluations = 0
+
+        def check_state(self,atoms,tol=1e-15):
+            # Sella can make sub-tolerance position changes. ModelF components
+            # are paired to the exact returned geometry, including checkpoints.
+            return super().check_state(atoms,tol=0 if data.get('modelF') else tol)
 
         def calculate(self, atoms=None, properties=('energy', 'forces'), system_changes=all_changes):
             super().calculate(atoms, properties, system_changes)
@@ -2565,6 +2741,9 @@ class SolvatedUMAEngine:
     """
     def __init__(self, data, config, directory):
         self.process = self.pipe = None
+        self.data,self.config,self.directory=data,config,directory
+        self.shared_state={'active':(data['charge'],data['multiplicity'])}
+        self.owns_process=True
         self.components = {}
         self.timeout = config['jobTimeout']  # Includes first checkpoint load.
         context = mp.get_context('spawn')
@@ -2595,16 +2774,30 @@ class SolvatedUMAEngine:
     def reset(self, data, config, directory):
         self.pipe.send({'command':'configure', 'data':data, 'config':config, 'directory':directory})
         self._receive('ready')
+        self.data,self.config,self.directory=data,config,directory
+        self.shared_state['active']=(data['charge'],data['multiplicity'])
         self.uma.reset(data, config, directory)
         self.components.clear()
         for name in ('component_forces', 'component_maxima'):
             getattr(self, name, {}).clear()
+
+    def fork_state(self,data,config,directory):
+        other=copy.copy(self)
+        other.data,other.config,other.directory=data,config,directory
+        other.uma=self.uma.fork_state(data,config,directory)
+        other.components={};other.component_forces={};other.component_maxima={}
+        other.owns_process=False
+        return other
 
     @staticmethod
     def key(positions):
         return hashlib.sha256(np.asarray(positions, dtype=np.float64).tobytes()).digest()
 
     def __call__(self, index, positions):
+        state=(self.data['charge'],self.data['multiplicity'])
+        if self.shared_state['active']!=state:
+            self.pipe.send({'command':'configure','data':self.data,'config':self.config,'directory':self.directory})
+            self._receive('ready');self.shared_state['active']=state
         self.pipe.send((index, np.asarray(positions, dtype=float)))
         gas, force = self.uma(index, positions)
         delta, correction = self._receive('result')
@@ -2656,6 +2849,7 @@ class SolvatedUMAEngine:
             self.annotate(result['trajectory'])
 
     def close(self):
+        if not getattr(self,'owns_process',True):return
         if self.pipe:
             try:
                 self.pipe.send(None)
@@ -2722,6 +2916,11 @@ class UMAEngine:
         """Keep the predictor, discard all geometry/charge-dependent ASE state."""
         self.data, self.atoms = data, {}
 
+    def fork_state(self,data,config,directory):
+        other=copy.copy(self)
+        other.reset(data,config,directory)
+        return other
+
     def __call__(self, index, positions):
         try:
             if index not in self.atoms:
@@ -2784,6 +2983,7 @@ def residency_key(data, config):
     c = job_config(data, config)
     s = c.get('solvation')
     identity = {'engine':c['engine'], 'model':c.get('umaModel'), 'device':c.get('umaDevice'),
+                'modelF':bool(data.get('modelF')),
                 'precision':c.get('umaPrecision'), 'threads':c['threads'],
                 'cudaMasks':c.get('cudaMasks', {}),
                 'solvation':None if not s else {'model':s['model'], 'device':s['device'],
@@ -2795,6 +2995,7 @@ def calculation_identity(data, config):
     """Reproducibility identity without executable paths, tokens or hub credentials."""
     c = job_config(data, config)
     value = {'provenance':provenance(c), 'method':engine_method(c),
+             'modelF':data.get('modelF'),
              'tbliteVersion':package_version('tblite') if c['engine']=='tblite' else None}
     return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
@@ -2892,6 +3093,13 @@ def execute_with_calculator(data, config, directory, messages, calculator):
                 and now-last_notification < .1 and phase == last_phase):
             return
         last_notification, last_phase = now, phase
+        if isinstance(calculator,ModelFEngine):
+            for key in ('checkpoint','bandCheckpoint','structureCheckpoint','preview'):
+                if key in p:calculator.annotate(p[key])
+            source=p.get('checkpoint') or p.get('bandCheckpoint') or p.get('structureCheckpoint') or p.get('preview') or {}
+            if 'surfaceComponents' in source:
+                p['modelF']=copy.deepcopy(calculator.settings)
+                p['surfaceComponents']={k:v if isinstance(v,list) else [v] for k,v in source['surfaceComponents'].items()}
         if isinstance(calculator, SolvatedUMAEngine):
             for key in ('checkpoint', 'bandCheckpoint', 'structureCheckpoint', 'preview'):
                 if key in p:
@@ -2924,6 +3132,10 @@ def execute_with_calculator(data, config, directory, messages, calculator):
     except (ImportError,OSError):pass
     result['performance'] = {'engineCalls':cached.calls, 'exactCacheHits':cached.hits,
                              'engineSeconds':cached.seconds, **metrics}
+    if isinstance(calculator,ModelFEngine):
+        calculator.annotate(result)
+        result['performance'].update(modelFEvaluations=cached.calls,stateEngineCalls=calculator.state_calls[:],engineCalls=sum(calculator.state_calls))
+        result['surfaceInterpretation']='amf-model-surface-not-state-transition-dynamics'
     if isinstance(calculator, SolvatedUMAEngine):
         calculator.annotate(result)
         for row in result.get('history', []):
@@ -2940,7 +3152,7 @@ def execute_with_calculator(data, config, directory, messages, calculator):
     if 'atomIds' in data:
         result['atomIds'] = data['atomIds']
     result['conditionId'] = hashlib.sha256(json.dumps({'data':data, 'identity':calculation_identity(data, config)}, sort_keys=True).encode()).hexdigest()
-    result['provenance'] = provenance(config)
+    result['provenance'] = provenance(config,data)
     messages.put(('result', result))
 
 
@@ -2957,15 +3169,14 @@ def worker(data, config, directory, messages):
         if config['engine'] == 'uma':
             messages.put(('progress', {'phase':'loading_model'}))
             config['umaRuntimeDevice'] = isolate_device(config, 'umaDevice')
-        cls = SolvatedUMAEngine if config.get('solvation') else {'tblite':TBLiteEngine, 'gxtb':GXTBEngine, 'uma':UMAEngine}[config['engine']]
-        calculator = cls(data, config, directory)
+        calculator = make_calculator(data,config,directory)
         if config['engine'] == 'uma':
             messages.put(('progress', {'phase':'calculating'}))
         execute_with_calculator(data, config, directory, messages, calculator)
     except Exception as error:
         messages.put(('error', str(error)[:2500]))
     finally:
-        if isinstance(calculator, SolvatedUMAEngine):
+        if isinstance(calculator, (SolvatedUMAEngine,ModelFEngine)):
             calculator.close()
 
 
@@ -2995,8 +3206,7 @@ def resident_worker(config, requests, messages):
                 if calculator is None:
                     output.put(('progress', {'phase':'loading_model', 'modelReused':False}))
                     local['umaRuntimeDevice'] = isolate_device(local, 'umaDevice')
-                    cls = SolvatedUMAEngine if local.get('solvation') else UMAEngine
-                    calculator = cls(data, local, directory)
+                    calculator = make_calculator(data,local,directory)
                 else:
                     calculator.reset(data, local, directory)
                     output.put(('progress', {'phase':'calculating', 'modelReused':True}))
@@ -3007,7 +3217,7 @@ def resident_worker(config, requests, messages):
                 # A failed CUDA/autograd/child state cannot serve another job.
                 break
     finally:
-        if isinstance(calculator, SolvatedUMAEngine):
+        if isinstance(calculator, (SolvatedUMAEngine,ModelFEngine)):
             calculator.close()
 
 
@@ -3016,6 +3226,7 @@ def provenance(config, data=None):
         config = job_config(data, config)
     s = config.get('solvation')
     return {'bridgeVersion':VERSION, 'engine':config['engine'], 'binarySHA256':config.get('binarySHA256'),
+        **({'modelF':copy.deepcopy(data['modelF'])} if data and data.get('modelF') else {}),
         'threads':config['threads'], 'workers':config.get('workers',1), 'solvent':s['solvent'] if s else 'gas', 'aseVersion':importlib.metadata.version('ase'),
         'numpyVersion':np.__version__, 'sellaVersion':sella_version(),
         **({'uma':{'model':config['umaModel'], 'task':'omol', 'device':config['umaDevice'],
@@ -3049,9 +3260,12 @@ def stop_process(process):
 
 
 def checkpoint_components(frames):
-    if not all('energyComponents' in p for p in frames):
-        return {}
-    return {'energyComponents':{key:[p['energyComponents'][key] for p in frames] for key in ('uma', 'solvation')}}
+    answer={}
+    if frames and all('energyComponents' in p for p in frames):
+        answer['energyComponents']={key:[p['energyComponents'][key] for p in frames] for key in ('uma','solvation')}
+    if frames and all('surfaceComponents' in p for p in frames):
+        answer.update(modelF=copy.deepcopy(frames[0]['modelF']),surfaceComponents={key:[p['surfaceComponents'][key] for p in frames] for key in frames[0]['surfaceComponents']})
+    return answer
 
 
 def default_history_directory():
@@ -3561,6 +3775,7 @@ class Jobs:
                         part = frames[after:end]
                         result['preview'] = {'mode':'afir', 'from':after, 'next':end,
                             'energies':[p['energy'] for p in part], 'biasEnergies':[p['bias'] for p in part],
+                            **checkpoint_components(part),
                             'positions':part[-1]['positions']}
                 elif job.get('preview') is not None and (since is None or since != job.get('previewVersion', 0)):
                     result['preview'] = copy.deepcopy(job['preview'])
@@ -3729,6 +3944,7 @@ class Handler(BaseHTTPRequestHandler):
                     'sellaVersion':sella_version(), 'vibrations':1, 'maxVibrationAtoms':200, 'pathCheckpoint':1, 'fixedAtoms':True,
                     'irc':bool(sella_version()), 'thermochemistry':True, 'internalConstraints':True, 'groupConstraints':True, 'scan':True, 'resourceOptimization':1, 'evaluationWorkers':config.get('workers',1), 'advancedOptimization':True, 'optimizerRestart':True, 'cellOptimization':config['engine']=='tblite',
                     'adaptiveNEB':True, 'pathSplit':True, 'history':True, 'queue':True, 'residentModels':True,
+                    'modelF':{'version':1,'models':['amf'],'surfaces':['lower','upper'],'defaultAlphaKJMol':30,'sameCharge':True,'stateSelection':'multiplicity'},
                     'lup':True, 'pathOptimizers':{'cineb':['fire'], 'lup':['fire','lbfgs']},
                     'persistentHistory':bool(self.server.jobs.history_dir), 'jobQueue':True, 'modelResidency':True,
                     'modes': MODES, 'compactPolling':1, 'livePreview': 1, 'optimizationTrajectory': 1, 'maxSteps': 10000, 'maxAFIRSteps': 10000, 'jobTimeout': config['jobTimeout'],

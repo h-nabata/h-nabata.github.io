@@ -20,6 +20,7 @@
     delete s.metadata.afirCalculation;delete s.metadata.trajectoryExtraction;
     s.metadata.totalCharge=batch.plan.data.charge;s.metadata.multiplicity=batch.plan.data.multiplicity;
     s.metadata.externalCalculation={fixedAtoms:batch.plan.data.fixedAtoms||[],engine:r.engine,method:r.method,mode:'optimize',energyEV:r.energies[0],converged:r.converged,reason:r.reason,steps:r.steps,effectiveFmax:r.effectiveFmax,charge:batch.plan.data.charge,multiplicity:batch.plan.data.multiplicity,batchInput:index+1};
+    MV.ModelF?.attach(s,batch.plan.data,r,0);
     MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);
   }
   function available(){return batch?.entries.map((e,i)=>({entry:e,index:i})).filter(({entry:e})=>MV.Batch.completed(e))||[];}

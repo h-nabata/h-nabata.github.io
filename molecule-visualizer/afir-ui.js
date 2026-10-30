@@ -89,7 +89,7 @@
   }
   function download(payload,name,type='application/json'){const text=typeof payload==='string'?payload:JSON.stringify(payload,null,2),url=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
   function exportInput(s,c){const out=MV.AFIR.exportInput(s,c);out.fixedAtoms=MV.Constraints.indices(s);out.fixedAtomIds=out.fixedAtoms.map(i=>s.atoms[i].id);const group=MV.GroupConstraints?.forJob(s,{mode:'afir',symbols:s.atoms.map(a=>a.element),images:[s.atoms.map(a=>[a.x,a.y,a.z])],cell:s.metadata.cell},null,MV.Geometry.atomicMass);if(group)out.groupConstraints=group;return out;}
-  function exportFiles(){if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();MV.ConstraintUI.flush();const out={...exportInput(app().getState(),config()),...MV.EngineUI.modelInput()};download(out,'afir-input.json');message('原子ID・XYZ・フラグメント・ペア・Python用設定をJSONに保存しました。');}
+  function exportFiles(){if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();MV.ConstraintUI.flush();const out={...exportInput(app().getState(),config()),...MV.EngineUI.modelInput(config().multiplicity)};download(out,'afir-input.json');message('原子ID・XYZ・フラグメント・ペア・Python用設定をJSONに保存しました。');}
   function check(){saveSettings();const s=app().getState(),b=MV.AFIR.evaluate(s.atoms,config(),s.metadata.cell);message(`人工項のみ評価: ${b.energyEV.toFixed(6)} eV。物理ポテンシャルのエネルギーではありません。座標は変更していません。`);}
   async function run(){
     if(job)return;const foregroundElsewhere=!!MV.EngineUI?.isBusy(),connection=MV.EngineUI?.getConnection();if(foregroundElsewhere&&!connection?.info.jobQueue&&!connection?.info.queue){message('外部エンジンの計算を終了してから実行してください。');return;}let j;
@@ -98,7 +98,7 @@
       if(j.livePreview&&!MV.EngineUI.getConnection()?.info.livePreview)throw Error('ライブ表示を使うにはbridge.pyを更新・再接続してください。');
       if(foregroundElsewhere){
         if(!MV.AFIRRunner.available())throw Error('AFIRに対応したローカルサービスへ接続してください。');
-        j.modelInput=MV.EngineUI.modelInput();j.internalConstraints=MV.ResearchUI?.constraintsInput(j.original,'afir')||[];
+        j.modelInput=MV.EngineUI.modelInput(j.config.multiplicity);j.internalConstraints=MV.ResearchUI?.constraintsInput(j.original,'afir')||[];
         j.groupConstraints=MV.GroupConstraints?.forJob(j.original,MV.AFIRRunner.input(j),connection.info,MV.Geometry.atomicMass);
         const data=MV.AFIRRunner.input(j);MV.EngineUI.validateEngineInput(data,connection.info);MV.Constraints?.forJob(j.original,data,connection.info);
         if(j.config.maxSteps>(connection.info.maxAFIRSteps??500))throw Error('指定したAFIRステップ数に対応したサーバーへ接続してください。');
@@ -122,6 +122,7 @@
     }catch(e){if(job===j)MV.EnergyProfile.restore();message(e.message);}finally{if(job===j){job=null;MV.EnergyProfile.finish();}sync();}
   }
   function showResult(r){
+    MV.ModelFUI?.showResult(r,MV.AFIRRunner.input(result),'afirModelFResult');
     const reason={converged:'人工力下で収束',step_limit:'未収束（ステップ上限）',cancelled:'中止（途中までの構造列）',failed:'計算失敗（途中までの構造列）'}[r.reason]||'未検証';
     $('afirResult').hidden=false;$('afirResultSummary').textContent=`${r.engine} / ${r.method} · ${reason} · ${r.steps}ステップ · 最大有効力 ${r.effectiveFmax.toPrecision(4)} eV/Å${r.fixedAtoms?.length?'（可動原子のみ） · 固定 '+r.fixedAtoms.length+'原子':''}`;
     showProfile(r,result,!!job?.livePreview&&MV.EnergyProfile.following());
@@ -130,14 +131,14 @@
   }
   function showProfile(r,j,follow=false){
     const base=MV.Periodic.snapshot(j.original);
-    MV.EnergyProfile.set({title:'AFIR探索'+(j.modelInput?.solvation?' · '+j.modelInput.solvation.solvent:'')+' · エネルギープロファイル',kind:'afir',details:()=>toggle(true),energies:r.energies,biasEnergies:r.biasEnergies,positions:i=>r.images[i],base:()=>base,exportXYZ:()=>exportXYZ(r,j)},follow);
+    MV.EnergyProfile.set({title:'AFIR探索'+(j.modelInput?.modelF?' · '+MV.ModelF.label(j.modelInput.modelF):'')+(j.modelInput?.solvation?' · '+j.modelInput.solvation.solvent:'')+' · エネルギープロファイル',kind:'afir',details:()=>toggle(true),energies:r.energies,biasEnergies:r.biasEnergies,positions:i=>r.images[i],base:()=>base,exportXYZ:()=>exportXYZ(r,j)},follow);
     if(j.trajectory===app().getState().metadata.trajectory&&j.trajectory)MV.EnergyProfile.bindTrajectory(j.trajectory);
   }
-  function exportXYZ(r,j){const base=MV.Periodic.snapshot(j.original);MV.TrajectoryUI.open({title:'AFIR探索',name:j.original.metadata.title,kind:'afir',symbols:r.symbols,atomIds:r.atomIds,cell:r.cell,images:r.images,energies:r.energies,biasEnergies:r.biasEnergies,charge:r.charge,multiplicity:r.multiplicity,engine:r.engine,method:r.method,base:()=>base});}
+  function exportXYZ(r,j){const base=MV.Periodic.snapshot(j.original);MV.TrajectoryUI.open({title:'AFIR探索',name:j.original.metadata.title,kind:'afir',symbols:r.symbols,atomIds:r.atomIds,cell:r.cell,images:r.images,energies:r.energies,biasEnergies:r.biasEnergies,modelF:r.modelF,surfaceComponents:r.surfaceComponents,charge:r.charge,multiplicity:r.multiplicity,engine:r.engine,method:r.method,base:()=>base});}
   function apply(){
     if(!result||dirty()||fingerprint(app().getState())!==result.fingerprint)throw Error('計算開始後に構造・設定が変わったため適用できません。結果JSONは保存できます。');
     const j=result,r=j.result;MV.AFIRRunner.validateResult(r,j);
-    const base=MV.Periodic.snapshot(j.original);const frames=r.images.map((positions,i)=>{const s=MV.Model.createState(base);s.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=positions[k];});s.metadata.afirCalculation={...(j.modelInput?.solvation?{solvation:j.modelInput.solvation,umaDevice:j.modelInput.umaDevice}:{}),fixedAtoms:r.fixedAtoms||[],engine:r.engine,method:r.method,physicalEnergyEV:r.energies[i],biasEnergyEV:r.biasEnergies[i],step:i,validation:'biased-trajectory-not-ts',atomIds:r.atomIds};MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);});
+    const base=MV.Periodic.snapshot(j.original);const frames=r.images.map((positions,i)=>{const s=MV.Model.createState(base);s.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=positions[k];});s.metadata.afirCalculation={...(j.modelInput?.solvation?{solvation:j.modelInput.solvation,umaDevice:j.modelInput.umaDevice}:{}),fixedAtoms:r.fixedAtoms||[],engine:r.engine,method:r.method,physicalEnergyEV:r.energies[i],biasEnergyEV:r.biasEnergies[i],step:i,validation:'biased-trajectory-not-ts',atomIds:r.atomIds};MV.ModelF?.attach(s,j.modelInput||{},r,i);MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);});
     const next=MV.Model.createState(frames[0]);MV.Bonding.refreshInferredBonds(next);next.metadata.trajectory=frames;next.metadata.frameIndex=0;next.viewSettings={...j.original.viewSettings,afirOverlay:visible};j.applied=true;j.trajectory=frames;app().change('AFIR trajectory',()=>next,true);$('dataReset').click();$('afirApply').disabled=true;showProfile(r,j);MV.Studio.play();message(frames.length>1?'構造列を適用し、FRAMESで再生しています。「戻す」で入力へ戻ります。推定結合は計算結果の各フレームで判定済みです。手動指定の結合は保持します。':'評価済みの構造が1点のためアニメーションはありません。「戻す」で入力へ戻ります。');
   }
   function init(){

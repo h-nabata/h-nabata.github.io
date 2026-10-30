@@ -180,6 +180,10 @@ Regression tests include analytic geometry for all six types, rigid-motion invar
 
 GRRM .comの単独・複数構造、共有Frozen Atomsに対応。複数ファイルをまとめてドロップできます。追加した量子化学・MD・周期系形式と制限は[IMPORT-FORMATS.md](IMPORT-FORMATS.md)を参照してください。
 
+### 2状態のポテンシャル面（bridge 1.14.0）
+
+異なるスピン多重度の2状態をAMFで合成し、下側／上側の面でMIN・AFIR・CI-NEB・LUP系などを実行できます。平滑化パラメータα、各状態のエネルギーとカップリング、上下両面の比較・CSV保存、条件保存と再開に対応します。[ModelFの使い方・式・適用範囲](./MODEL-F)を参照してください。ローカルのbridge.pyを更新し、再起動・再接続が必要です。
+
 ### リソース効率（bridge 1.13.0）
 
 周期近傍探索、剛体の並進・回転による投影、混合拘束の対象成分への縮約と行列再利用、可逆配列の再開保存、履歴追記と必要時読み込みを実装。MIN・スキャンに疎行列の前処理L-BFGSを追加し、可変セルには√Nで変位配分を調整する設定を追加しました。tblite／g-xTBの独立評価はローカルの `--workers` で並列化できます。

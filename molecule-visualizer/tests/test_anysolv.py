@@ -21,6 +21,9 @@ SOLVATION = {'model':'model_compact', 'solvent':'water', 'device':'cuda:1'}
 
 
 def fake_init(self, data, config, directory):
+    self.data,self.config,self.directory=data,config,directory
+    self.shared_state={'active':(data['charge'],data['multiplicity'])}
+    self.owns_process=True
     self.components, self.trace = {}, []
     self.timeout = 1
     self.process = SimpleNamespace(is_alive=lambda:True)

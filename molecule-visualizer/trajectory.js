@@ -105,6 +105,7 @@
       let comment=`MoleculeStudio frame=${k+1}/${selected.length} source_frame=${i+1}/${source.images.length} selection=${method}`;
       if(source.kind==='afir'||source.kind==='optimize')comment+=` step=${source.stepNumbers?.[i]??i}`;
       if(source.energies)comment+=` energy_eV=${source.energies[i].toPrecision(15)}`;
+      if(source.modelF){const s=source.modelF;comment+=` modelF=amf surface=${s.surface} alpha_kJ_mol=${s.alphaKJMol} multiplicities="${s.multiplicities.join(' ')}"`;if(source.surfaceComponents)for(const key of ['state1EV','state2EV','gapEV','couplingEV','lowerEV','upperEV'])comment+=` ${key}=${source.surfaceComponents[key][i].toPrecision(15)}`;}
       if(source.biasEnergies)comment+=` bias_eV=${source.biasEnergies[i].toPrecision(15)} biased_energy_eV=${(source.energies[i]+source.biasEnergies[i]).toPrecision(15)}`;
       const cell=source.cells?.[i]||source.cell;
       if(cell)comment+=` Lattice="${cell.vectors.flat().join(' ')}" pbc="${cell.pbc.map(v=>v?'T':'F').join(' ')}" Properties=species:S:1:pos:R:3`;

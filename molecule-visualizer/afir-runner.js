@@ -8,12 +8,12 @@
     const s=j.original,c=j.config;MV.AFIR.validate(s.atoms,c,s.metadata.cell);
     const data={...(j.modelInput||{}),...(j.groupConstraints?{groupConstraints:j.groupConstraints}:{}),...(j.internalConstraints?.length?{internalConstraints:j.internalConstraints}:{}),symbols:s.atoms.map(a=>a.element),atomIds:s.atoms.map(a=>a.id),images:[s.atoms.map(a=>[a.x,a.y,a.z])],cell:s.metadata.cell?{vectors:s.metadata.cell.vectors,pbc:s.metadata.cell.pbc}:null,
       ...(MV.Constraints?.indices(s).length?{fixedAtoms:MV.Constraints.indices(s)}:{}),mode:'afir',charge:c.charge,multiplicity:c.multiplicity,maxSteps:c.maxSteps,fmax:c.fmax,maxMove:c.maxMove,afir:c};
-    MV.Optimization?.forJob(s,data,j.connection?.info||connection()?.info);return data;
+    MV.Optimization?.forJob(s,data,j.connection?.info||connection()?.info);MV.ModelF?.validateInput(data,j.connection?.info||connection()?.info);return data;
   }
   function validateResult(r,j){
     const data=input(j),n=data.symbols.length;
     MV.Constraints?.validateResult(r,data);MV.GroupConstraints?.validateResult(r,data);MV.Optimization?.checkPositions(r.images,data);
-    MV.EngineUI.validateSolvationResult(r,data);
+    MV.EngineUI.validateSolvationResult(r,data);MV.ModelF?.validateResult(r,data);
     if(!r||r.schema!=='molecule-afir-trajectory/1'||r.validation!=='biased-trajectory-not-ts'||JSON.stringify(r.atomIds)!==JSON.stringify(data.atomIds)||JSON.stringify(r.symbols)!==JSON.stringify(data.symbols)||JSON.stringify(r.cell)!==JSON.stringify(data.cell)||r.charge!==data.charge||r.multiplicity!==data.multiplicity||r.units?.energy!=='eV'||r.units?.length!=='angstrom'||r.units?.force!=='eV/angstrom'||!r.conditionId||!['converged','step_limit','cancelled','failed'].includes(r.reason)||r.converged!==(r.reason==='converged'))throw Error('AFIR結果の原子対応・計算条件・単位・検証状態が一致しません。');
     if(!Array.isArray(r.images)||r.images.length<1||r.images.length>data.maxSteps+1||r.steps!==r.images.length-1||!Number.isInteger(r.evaluations)||r.evaluations<r.images.length||!r.images.every(p=>Array.isArray(p)&&p.length===n&&p.every(v=>Array.isArray(v)&&v.length===3&&v.every(x=>Number.isFinite(x)&&Math.abs(x)<=10000))))throw Error('AFIR構造列が不正です。');
     for(const key of ['energies','biasEnergies','biasedEnergies','imageFmax','physicalFmax'])if(!Array.isArray(r[key])||r[key].length!==r.images.length||!r[key].every(Number.isFinite))throw Error('AFIRのエネルギー・力の配列が不正です。');
@@ -27,7 +27,7 @@
   }
   async function run(j,progress){
     if(!available())throw Error('AFIRに対応したローカルサービス1.1.0以降へ接続してください。');
-    j.modelInput=MV.EngineUI.modelInput();
+    j.modelInput=MV.EngineUI.modelInput(j.config.multiplicity);
     j.internalConstraints=MV.ResearchUI?.constraintsInput(j.original,'afir')||[];
     j.connection=connection();j.connection.url=MV.EngineUI.endpoint(j.connection.url);
     j.groupConstraints=MV.GroupConstraints?.forJob(j.original,input(j),j.connection.info,MV.Geometry.atomicMass);

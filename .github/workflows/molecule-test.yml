@@ -65,6 +65,7 @@ jobs:
           node molecule-visualizer/tests/workflow-browser.cjs || molecule_test_status=1
           node molecule-visualizer/tests/analysis-browser.cjs || molecule_test_status=1
           node molecule-visualizer/tests/optimization-browser.cjs || molecule_test_status=1
+          node molecule-visualizer/tests/model-f-browser.cjs || molecule_test_status=1
           git fetch --depth=1 origin 0b1ce3a38659c588d1f60c224c87ef73da1e5eca
           node molecule-visualizer/tests/benchmark_resource_browser.cjs || molecule_test_status=1
           exit "$molecule_test_status"
