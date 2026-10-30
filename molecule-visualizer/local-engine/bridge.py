@@ -211,9 +211,10 @@ def model_f_components(energy1, energy2, settings):
     e1,e2=float(energy1),float(energy2)
     if not math.isfinite(e1) or not math.isfinite(e2):raise ValueError('ModelFの状態エネルギーが非有限値です。')
     delta=e1-e2;alpha=settings['alphaKJMol']/KJ_MOL_PER_EV
+    if not math.isfinite(delta):raise ValueError('ModelFの状態間エネルギー差が非有限値です。')
     if alpha>0 and abs(delta)<27*alpha:
         t=delta/alpha;decay=math.exp(-t*t);u=.5*alpha*decay
-        radius=math.hypot(delta,2*u)
+        radius=math.hypot(delta,alpha*decay)
         derivative=delta/radius*(1-2*decay*decay)
         shift=2*u*(u/(radius+abs(delta)))
     else:
@@ -249,7 +250,7 @@ class ModelFEngine:
         return tuple({**base,'multiplicity':m} for m in data['modelF']['multiplicities'])
 
     def _start(self,data):
-        self.data=data;self.settings=copy.deepcopy(data['modelF']);self.records={}
+        self.data=data;self.settings=copy.deepcopy(data['modelF']);self.records=OrderedDict()
         self.state_calls=[0,0];self.lock=threading.RLock()
         resume=data.get('_scanResume')
         if resume:
@@ -288,18 +289,28 @@ class ModelFEngine:
             except Exception as error:
                 raise ValueError(f'ModelF 状態{state+1}（多重度{self.settings["multiplicities"][state]}）の評価に失敗しました。{error}') from error
         row=model_f_components(answers[0][0],answers[1][0],self.settings)
-        if self.settings['alphaKJMol']==0 and abs(row['gapEV'])<=1e-12 and (not np.allclose(answers[0][1],answers[1][1],atol=1e-10,rtol=0) or (lattice is not None and not np.allclose(answers[0][2],answers[1][2],atol=1e-10,rtol=0))):
+        if self.settings['alphaKJMol']/KJ_MOL_PER_EV==0 and abs(row['gapEV'])<=1e-12 and (not np.allclose(answers[0][1],answers[1][1],atol=1e-10,rtol=0) or (lattice is not None and not np.allclose(answers[0][2],answers[1][2],atol=1e-10,rtol=0))):
             raise ValueError('ModelF α=0の交差点では力が一意に定まりません。αを正の値にして再計算してください。')
         for state,component in enumerate(components):
             for name,value in component.items():row[f'state{state+1}{name.title()}EV']=value
         weight1,weight2=row['weight1'],row['weight2']
         answer=(row[self.settings['surface']+'EV'],weight1*answers[0][1]+weight2*answers[1][1])
         if lattice is not None:answer+= (weight1*np.asarray(answers[0][2])+weight2*np.asarray(answers[1][2]),)
-        with self.lock:self.records[self.key(positions,lattice,answer[0])]=row
+        with self.lock:
+            key=self.key(positions,lattice,answer[0]);self.records[key]=row;self.records.move_to_end(key)
+            # A band stores only its latest evaluated geometries; do not retain
+            # a million unused component rows for a 100-image, 10000-step path.
+            if self.data['mode'] in PATH_MODES:
+                while len(self.records)>2048:self.records.popitem(last=False)
         return answer
 
     def __call__(self,index,positions):return self._evaluate(index,positions)
     def with_cell(self,index,positions,lattice):return self._evaluate(index,positions,lattice)
+
+    def note_cache_hit(self,index,positions,energy,lattice=None):
+        with self.lock:
+            key=self.key(positions,lattice,energy)
+            if key in self.records:self.records.move_to_end(key)
 
     def check_row(self,row,energy):
         try:
@@ -3018,6 +3029,7 @@ class ExactEvaluationCache:
         key=('cell',index,array.shape,array.tobytes(),cell.tobytes())
         if key in self.values:
             self.hits+=1;value=self.values.pop(key);self.values[key]=value
+            if hasattr(self.calculate,'note_cache_hit'):self.calculate.note_cache_hit(index,array,value[0],cell)
             return value[0],value[1].copy(),value[2].copy()
         started=time.perf_counter();energy,forces,stress=self.calculate.with_cell(index,array,cell)
         self.seconds+=time.perf_counter()-started;self.calls+=1
@@ -3035,6 +3047,7 @@ class ExactEvaluationCache:
                 self.hits += 1
                 energy, force = self.values.pop(key)
                 self.values[key] = (energy, force)
+                if hasattr(self.calculate,'note_cache_hit'):self.calculate.note_cache_hit(index,array,energy)
                 return energy, force.copy()
         started = time.perf_counter()
         energy, force = self.calculate(index, positions)

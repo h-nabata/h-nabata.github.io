@@ -47,6 +47,8 @@ class ModelF(unittest.TestCase):
                     self.assertAlmostEqual(row['weight1']+row['weight2'],1.)
         row=b.model_f_components(-1000000.,-999999.,settings(alpha=1e-300))
         self.assertEqual(row['lowerEV'],-1000000.)
+        self.assertEqual(b.model_f_components(0,0,settings(alpha=1e-321))['weight1'],.5)
+        with self.assertRaises(ValueError):b.model_f_components(-1e308,1e308,settings())
 
     def test_zero_coupling_and_nondifferentiable_crossing(self):
         d=self.data(modelF=settings(alpha=0));c=self.toy(d)
@@ -99,8 +101,9 @@ class ModelF(unittest.TestCase):
     def test_native_tblite_two_spin_forces_and_variable_cell_stress(self):
         p=np.array([[0.,0,0],[1.1,.1,0]])
         for surface in ('lower','upper'):
-            raw={'symbols':['H','H'],'images':[p.tolist()],'mode':'evaluate','modelF':settings(surface,100)}
+            raw={'symbols':['H','H'],'images':[p.tolist()],'mode':'evaluate','modelF':settings(surface,1000)}
             d=b.validate(raw,'tblite');c=b.ModelFEngine(d,CONFIG,tempfile.gettempdir());e,f=c(0,p)
+            self.assertGreater(c.records[c.key(p,energy=e)]['couplingEV'],1e-4)
             h=1e-4;shift=np.zeros_like(p);shift[1,0]=h
             numeric=-(c(1,p+shift)[0]-c(2,p-shift)[0])/(2*h)
             self.assertAlmostEqual(f[1,0],numeric,delta=3e-4)
@@ -270,6 +273,15 @@ class ModelF(unittest.TestCase):
             with patch.object(b,'make_calculator',factory):c=b.ModelFEngine(irc,CONFIG,'unused')
             r,_=self.run_job(irc,c);self.assertGreater(len(r['images']),2)
             self.assertEqual(len(r['surfaceComponents']['state2EV']),len(r['images']))
+
+    def test_long_path_component_cache_is_bounded_and_retains_reused_endpoints(self):
+        d=self.data(mode='cineb',optimizer='fire',images=[[[-1,0,0]],[[0,.2,0]],[[1,0,0]]])
+        c=self.toy(d);cache=b.ExactEvaluationCache(c,capacity=4);endpoint=np.array(d['images'][0])
+        for step in range(2500):
+            e0=cache(0,endpoint)[0];p=np.array([[step*.0001,.2,0]]);e1=cache(1,p)[0]
+        self.assertEqual(len(c.records),2048)
+        r={'images':[endpoint.tolist(),p.tolist()],'energies':[e0,e1]};c.annotate(r)
+        self.assertEqual(len(r['surfaceComponents']['gapEV']),2);self.assertEqual(cache.hits,2499)
 
 
 if __name__=='__main__':unittest.main()

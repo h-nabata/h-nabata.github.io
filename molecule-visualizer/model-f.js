@@ -18,7 +18,7 @@
   }
   function components(e1,e2,s){
     if(!Number.isFinite(e1)||!Number.isFinite(e2))throw Error('ModelFの状態エネルギーが不正です。');
-    const delta=e1-e2,a=s.alphaKJMol/K;let u=0,shift=0,derivative=Math.sign(delta);
+    const delta=e1-e2,a=s.alphaKJMol/K;if(!Number.isFinite(delta))throw Error('ModelFの状態間エネルギー差が非有限値です。');let u=0,shift=0,derivative=Math.sign(delta);
     if(a>0&&Math.abs(delta)<27*a){const t=delta/a,decay=Math.exp(-t*t),radius=Math.hypot(delta,a*decay);u=a/2*decay;derivative=delta/radius*(1-2*decay*decay);shift=2*u*(u/(radius+Math.abs(delta)));}
     const w=.5*(1+(s.surface==='lower'?-1:1)*derivative);
     return {state1EV:e1,state2EV:e2,gapEV:delta,couplingEV:u,lowerEV:Math.min(e1,e2)-shift,upperEV:Math.max(e1,e2)+shift,weight1:w,weight2:1-w};
@@ -43,7 +43,7 @@
     delete m.modelF;
     for(const key of ['externalCalculation','afirCalculation'])if(m[key]){delete m[key].modelF;delete m[key].surfaceComponents;}
     if(!data.modelF)return;
-    m.modelF=normalize(data.modelF);
+    m.modelF=normalize(data.modelF);m.multiplicity=m.modelF.multiplicities[0];if(Number.isInteger(data.charge))m.totalCharge=data.charge;
     for(const key of ['externalCalculation','afirCalculation'])if(m[key]){m[key].modelF=normalize(data.modelF);if(result?.surfaceComponents)m[key].surfaceComponents=row(result,i);}
   }
   function label(s){return s?`AMF${s.surface==='lower'?'下側':'上側'} · M=${s.multiplicities.join('/')} · α=${s.alphaKJMol} kJ/mol`:'';}

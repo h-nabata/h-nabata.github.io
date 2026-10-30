@@ -197,7 +197,7 @@
     $('engineVibrationStatus').textContent=r.vibrations?(r.vibrations.status==='completed'?`振動解析完了 · ${r.vibrations.settings.imaginaryThreshold} cm⁻¹超の虚振動 ${r.vibrations.significantImaginaryCount}本（全モードは表を表示）`:'振動解析は未完了: '+r.vibrations.error+' 構造の結果は保持しています。'):(r.mode==='ts'?'振動解析は未実施です。力の収束だけではTSは確定しません。':'');
     if(r.vibrations?.status==='completed'){
       const state=MV.Model.createState(j.frames[0]);state.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=r.images[0][k];});state.metadata.totalCharge=j.data.charge;state.metadata.multiplicity=j.data.multiplicity;
-      MV.VibrationUI.set(r.vibrations,state,`${j.original.metadata.title||'構造'} · ${r.engine} / ${r.method} · ${modeText[r.mode]} · ${reason}`);
+      MV.ModelF?.attach(state,j.data,r,0);MV.VibrationUI.set(r.vibrations,state,`${j.original.metadata.title||'構造'} · ${r.engine} / ${r.method} · ${modeText[r.mode]} · ${reason}`);
     }
     MV.ModelFUI?.showResult(r,j.data);MV.ResearchUI?.showResult(r,j);MV.OptimizationUI?.showResult(r,j);MV.DiagnosticsUI?.load(r,j);MV.StructureAnalysisUI?.setSource(r,j);MV.JobHistoryUI?.changed();
     showProfile(r,j,!!j.livePreview&&MV.EnergyProfile.following());

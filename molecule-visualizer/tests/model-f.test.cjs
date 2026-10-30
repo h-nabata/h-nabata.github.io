@@ -16,6 +16,8 @@ test('AMF eigenvalues and forces differentiate the Gaussian coupling at and away
  const c=F.components(-10,-10,settings());assert.ok(Math.abs(c.couplingEV*F.K-15)<1e-12);assert.ok(Math.abs((c.upperEV-c.lowerEV)*F.K-30)<1e-12);
  assert.equal(F.components(-1000000,-999999,settings('lower',1e-300)).lowerEV,-1000000);
  assert.equal(F.components(-2,-1,settings('upper',0)).upperEV,-1);
+ assert.equal(F.components(0,0,settings('lower',1e-321)).weight1,.5);
+ assert.throws(()=>F.components(-1e308,1e308,settings()));
 });
 test('ModelF inputs reject wrong capabilities, state identity, invalid alpha and thermochemistry',()=>{
  const {data}=fixture();F.validateInput(data,{modelF:{version:1}});
@@ -36,4 +38,5 @@ test('CSV and project metadata retain raw surfaces and XYZ comments identify the
  const csv=F.csv(r,data).trim().split('\n');assert.equal(csv.length,4);assert.ok(csv[0].includes('couplingEV'));assert.equal(csv[1].split(',')[5],String(r.energies[0]));
  const source={...r,symbols:['He'],kind:'path'};const xyz=T.xyz(source,[0,2]);assert.match(xyz,/modelF=amf surface=lower alpha_kJ_mol=30 multiplicities="1 3"/);assert.match(xyz,/state1EV=/);
  F.attach(state,{});assert.equal(state.metadata.modelF,undefined);assert.equal(state.metadata.externalCalculation.surfaceComponents,undefined);
+ F.attach(state,{modelF:{...settings(),multiplicities:[3,1]},charge:1});assert.equal(state.metadata.multiplicity,3);assert.equal(state.metadata.totalCharge,1);
 });
