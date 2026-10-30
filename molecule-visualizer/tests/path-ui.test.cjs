@@ -23,6 +23,7 @@ async function boot(version='1.9.0'){
 test('browser connects to the currently distributed bridge version',async()=>{
  const source=fs.readFileSync(path.join(__dirname,'../local-engine/bridge.py'),'utf8');
  const version=source.match(/^VERSION = '([^']+)'/m)?.[1];assert.ok(version);
+ assert.ok(fs.readFileSync(path.join(__dirname,'../index.html'),'utf8').includes(`bridge.py?v=${version}`),'download link must invalidate the old bridge cache');
  const {M}=await boot(version);assert.equal(M.EngineUI.getConnection().info.version,version);
 });
 test('LUP path form keeps CI-NEB defaults and sends current unsaved method settings without a spring',async()=>{
