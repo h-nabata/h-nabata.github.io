@@ -384,3 +384,5 @@ GPUネイティブUMA／AnySolv、実g-xTBの速度比較は未実施。局所�
 この作業環境ではChromiumのプロセス用ソケットとPID名前空間が制限されるため、実ブラウザおよびpsutilを使う子プロセス中止テストはGitHub ActionsのLinuxで検証する。ローカルの静的DOM初期化・選択拘束スモークは実施済み。速度倍率は新機能の合格基準にしていない。実g-xTB/UMAでの追加拘束、複雑な周期結晶の圧力相転移、長時間の全反応手順、全OSのブラウザ組合せはこの追加テストの範囲外。
 
 外圧1 GPaでのFIREセル最適化は、圧力なしの弾性平衡より体積が小さくなること、H−E=PV、分割再開の一致を検証する。`optimization-workflow.test.cjs` は経路最高点からTS・振動・IRCへの受渡し、実行中に編集した欄が後続条件を変えないこと、虚振動本数の不一致・中止で後続投入しないこと、配座MIN後の代表選択を合成ジョブで検査する。実tbliteのMIN→振動ブラウザ試験では力閾値0.0001 eV/Å・虚振動閾値20 cm⁻¹を用いる。緩いMIN閾値では回転由来の虚振動が閾値を超え、正しく停止する場合がある。
+
+2026-10-30の[GitHub Actions検証](https://github.com/h-nabata/h-nabata.github.io/actions/runs/40997566782)で、JavaScript 174/174、Python 138件合格・4件skip、ブラウザ15スイートが合格。skipは任意のg-xTB実行ファイル2件、UMA重み1件、AnySolv実モデル1件であり、skipは合格に含めない。AnySolv実モデルは同じrunの独立ジョブで別途合格した。セル・手順・PC/モバイル画面の画像は同runの `molecule-browser-results` artifactに保存。テストした機能のコミットは `01f360f54730cd81e6c8a4a3071f1559103f7bc4`。
