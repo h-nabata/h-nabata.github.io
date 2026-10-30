@@ -10,11 +10,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   const load=async()=>page.evaluate(()=>{const M=MoleculeVisualizer;M.App.change('public water',()=>M.IO.parseXYZToState('O 0 0 0\nH 1.05 0 0\nH -.24 .93 .1'),true);});await load();
   const download=async selector=>{const wait=page.waitForEvent('download');await page.click(selector);return fs.readFileSync(await (await wait).path(),'utf8');};
   const done=()=>page.waitForFunction(()=>!MoleculeVisualizer.EngineUI.isBusy()&&!document.getElementById('engineResult').hidden,{},{timeout:90000});
-  const select=async indices=>{await page.click('#btnClearSel');for(const i of indices){const p=await page.evaluate(i=>{const a=MoleculeVisualizer.App.renderer().projectedAtoms.find(a=>a.index===i+1);return{x:a.x,y:a.y};},i);await page.locator('canvas').click({position:p});}};
+  const select=async indices=>{await page.click('#btnClearSel');for(const i of indices){const p=await page.evaluate(i=>{const a=MoleculeVisualizer.App.renderer().projectedAtoms.find(a=>a.index===i+1);return{x:a.x,y:a.y};},i);await page.locator('canvas').click({position:p,modifiers:['Shift']});}};
   await page.click('#btnExternalEngine');await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
   assert.equal(await page.locator('#engineDialog').evaluate(e=>e.matches(':modal')),false);
   // The molecule remains selectable while the calculation panel is open.
-  await select([1,0,2]);assert.match(await page.locator('#constraintSelection').textContent(),/A: 2H.*B: 1O.*C: 3H/);
+  await select([1,0,2]);assert.match(await page.locator('#optimizationSelection').textContent(),/A: 2H.*B: 1O.*C: 3H/);
   await page.click('#engineClose');await page.locator('#constraintFromSelection').click();assert.equal(await page.locator('#internalConstraintRows > div').count(),1);
   const project=await page.evaluate(()=>MoleculeVisualizer.IO.stateToProjectText(MoleculeVisualizer.App.getState()));assert.ok(JSON.parse(project).metadata.optimization.coordinates.length===1);
   await page.evaluate(project=>{const M=MoleculeVisualizer;M.App.change('round trip',()=>M.IO.parseProject(project),true);},project);

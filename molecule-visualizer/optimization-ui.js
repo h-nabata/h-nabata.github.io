@@ -2,7 +2,7 @@
 (function(global){
  'use strict';
  const M=global.MoleculeVisualizer,$=id=>document.getElementById(id),O=M.Optimization,app=()=>M.App;
- let ready=false,last='',syncing=false,restoring=false;
+ let ready=false,last='',syncing=false,restoring=false,capturing=false;
  const labels={distance:'距離',angle:'角度',dihedral:'二面角'};
  const cellNames={fixed:'TV固定（原子位置のみ）',isotropic:'相似伸縮（格子形状を保持）',fixed_angles:'格子角固定（a・b・cの長さは独立）',a:'aの長さのみ',b:'bの長さのみ',c:'cの長さのみ（a・b固定）',ab:'abを同率伸縮（c固定）',c_vector:'cベクトルのみ（長さ・方向可変）',full:'全ひずみ（形状・体積可変）'};
  const el=(tag,text,attrs={})=>{const e=document.createElement(tag);if(text!=null)e.textContent=text;for(const [k,v] of Object.entries(attrs))e.setAttribute(k,v);return e;};
@@ -20,15 +20,15 @@
  function captureInternal(){if(restoring||!ready)return;try{const s=app().getState(),entries=[];
   for(const row of $('internalConstraintRows').children){const get=k=>row.querySelector(`[data-field="${k}"]`),type=get('type').value,atoms=get('atoms').value.trim().split(/[\s,、]+/).map(Number),value=Number(get('value').value);
    if(atoms.length!=={distance:2,angle:3,dihedral:4}[type]||atoms.some(i=>!Number.isInteger(i)||i<1||i>s.atoms.length)||!Number.isFinite(value))throw Error('拘束の原子番号と値を確認してください。');
-   entries.push({id:row.dataset.id||crypto.randomUUID(),type,atomIds:atoms.map(i=>s.atoms[i-1].id),value,enabled:row.querySelector('[data-field="enabled"]')?.checked!==false});}
-  change('internal constraints',c=>{c.coordinates=entries;c.internalEnabled=$('internalConstraintsEnabled').checked;});
- }catch(e){message(e.message);}}
+   row.dataset.id ||= crypto.randomUUID();entries.push({id:row.dataset.id,type,atomIds:atoms.map(i=>s.atoms[i-1].id),value,enabled:row.querySelector('[data-field="enabled"]')?.checked!==false});}
+  capturing=true;change('internal constraints',c=>{c.coordinates=entries;c.internalEnabled=$('internalConstraintsEnabled').checked;});
+ }catch(e){message(e.message);}finally{capturing=false;}}
  function sync(){if(!ready||syncing)return;syncing=true;try{
-  const s=app().getState(),c=O.config(s),a=selected();$('constraintSelection').textContent=a.map((x,i)=>`${'ABCD'[i]||i+1}: ${s.atoms.findIndex(y=>y.id===x.id)+1}${x.element}`).join(' → ')||'描画上で原子を順に選択してください。';
+  const s=app().getState(),c=O.config(s),a=selected();$('optimizationSelection').textContent=a.map((x,i)=>`${'ABCD'[i]||i+1}: ${s.atoms.findIndex(y=>y.id===x.id)+1}${x.element}`).join(' → ')||'Shift＋クリックまたは複数選択で、原子を順に選択してください。';
   $('constraintFromSelection').disabled=$('scanFromSelection').disabled=![2,3,4].includes(a.length);
   const signature=JSON.stringify([c,s.metadata.constraints,s.metadata.groupConstraints,s.atoms.map(a=>a.id)]);
-  if(signature!==last){last=signature;restoring=true;$('internalConstraintsEnabled').checked=c.internalEnabled;$('internalConstraintRows').replaceChildren();
-   for(const item of c.coordinates){const atoms=item.atomIds.map(id=>s.atoms.findIndex(a=>a.id===id));M.ResearchUI.coordinateRow($('internalConstraintRows'),false,{...item,atoms});$('internalConstraintRows').lastElementChild.dataset.id=item.id;}
+  if(signature!==last){last=signature;restoring=true;if(!capturing){$('internalConstraintsEnabled').checked=c.internalEnabled;$('internalConstraintRows').replaceChildren();
+   for(const item of c.coordinates){const atoms=item.atomIds.map(id=>s.atoms.findIndex(a=>a.id===id));M.ResearchUI.coordinateRow($('internalConstraintRows'),false,{...item,atoms});$('internalConstraintRows').lastElementChild.dataset.id=item.id;}}
    const out=$('constraintOverview');out.replaceChildren();
    function row(name,detail,on,toggle,remove,ids){const tr=el('tr'),td=el('td'),check=el('input',null,{type:'checkbox','aria-label':name+'を有効にする'});check.checked=on;check.onchange=safe(()=>toggle(check.checked));td.append(check);tr.append(td,el('td',name),el('td',detail));const actions=el('td');for(const [text,fn] of [['選択',()=>{s.selectedAtomIds=new Set(ids.filter(id=>s.atoms.some(a=>a.id===id)));s.selectedBondIds.clear();app().setState(s,true);}],['削除',remove]]){const b=el('button',text,{class:'mv-btn',type:'button'});b.onclick=safe(fn);actions.append(b);}tr.append(actions);out.append(tr);}
    const nums=ids=>ids.map(id=>{const i=s.atoms.findIndex(a=>a.id===id);return i<0?'削除済み':i+1;}).join(', ');
@@ -70,10 +70,10 @@
   }root.append(el('p','色の基準は各方向の収束点の最低エネルギー。未計算点は補間しません。',{class:'mv-small'}));$('researchResult').append(root);
  }
  function build(){
-  const panel=el('section',null,{class:'mv-panel',id:'optimizationPanel'});panel.innerHTML='<h2>最適化の拘束</h2><p class="mv-small">計算中に固定する条件です。計測値の固定表示とは独立しています。</p><p id="constraintSelection" class="mv-small"></p><div class="mv-row"><button class="mv-btn" id="constraintFromSelection">現在値で固定</button><button class="mv-btn" id="scanFromSelection">選択座標をスキャン</button><button class="mv-btn" id="constraintGroup">重心拘束を登録</button></div><div class="mv-row"><label><input type="checkbox" id="fixDirectionX">X</label><label><input type="checkbox" id="fixDirectionY">Y</label><label><input type="checkbox" id="fixDirectionZ" checked>Z</label><button class="mv-btn" id="fixDirections">選択原子の方向を固定</button><button class="mv-btn" id="rigidSelection">選択を剛体にする</button></div><div class="mv-table-scroll"><table><thead><tr><th>有効</th><th>拘束</th><th>対象・現在値 / 目標</th><th>操作</th></tr></thead><tbody id="constraintOverview"></tbody></table></div><p id="optimizationMessage" role="status" class="mv-small"></p>';
+  const panel=el('section',null,{class:'mv-panel',id:'optimizationPanel'});panel.innerHTML='<h2>最適化の拘束</h2><p class="mv-small">計算中に固定する条件です。計測値の固定表示とは独立しています。</p><p id="optimizationSelection" class="mv-small"></p><div class="mv-row"><button class="mv-btn" id="constraintFromSelection">現在値で固定</button><button class="mv-btn" id="scanFromSelection">選択座標をスキャン</button><button class="mv-btn" id="constraintGroup">重心拘束を登録</button></div><div class="mv-row"><label><input type="checkbox" id="fixDirectionX">X</label><label><input type="checkbox" id="fixDirectionY">Y</label><label><input type="checkbox" id="fixDirectionZ" checked>Z</label><button class="mv-btn" id="fixDirections">選択原子の方向を固定</button><button class="mv-btn" id="rigidSelection">選択を剛体にする</button></div><div class="mv-table-scroll"><table><thead><tr><th>有効</th><th>拘束</th><th>対象・現在値 / 目標</th><th>操作</th></tr></thead><tbody id="constraintOverview"></tbody></table></div><p id="optimizationMessage" role="status" class="mv-small"></p>';
   $('groupConstraintPanel').before(panel);
   const shortcut=el('button','拘束一覧',{class:'mv-btn',id:'btnConstraintOverview'});$('btnGroupConstraints').after(shortcut);shortcut.onclick=()=>{document.querySelector('[data-workspace-jump="coordinates"]')?.click();panel.scrollIntoView({block:'nearest'});};
-  $('viewer').before(el('p','入力構造',{id:'optimizationState',class:'mv-optimization-state',role:'status'}));
+  $('viewer').closest('.mv-viewer-shell').before(el('p','入力構造',{id:'optimizationState',class:'mv-optimization-state',role:'status'}));
   $('constraintFromSelection').onclick=safe(()=>addCoordinate(false));$('scanFromSelection').onclick=safe(()=>addCoordinate(true));$('constraintGroup').onclick=()=>M.GroupConstraintUI.open();
   $('fixDirections').onclick=safe(()=>{const atoms=selected(),axes=['X','Y','Z'].map(k=>$('fixDirection'+k).checked);if(!atoms.length||!axes.some(Boolean))throw Error('原子と固定方向を選択してください。');change('direction constraints',c=>{for(const a of atoms){c.fixedComponents=c.fixedComponents.filter(x=>x.atomId!==a.id);c.fixedComponents.push({id:crypto.randomUUID(),atomId:a.id,axes,enabled:true});}});});
   $('rigidSelection').onclick=safe(()=>{const ids=selected().map(a=>a.id);if(ids.length<2||ids.length>50)throw Error('剛体は2〜50原子を選択してください。');change('rigid fragment',c=>{if(c.rigidGroups.some(g=>g.atomIds.some(id=>ids.includes(id))))throw Error('剛体原子団は重複できません。');c.rigidGroups.push({id:crypto.randomUUID(),atomIds:ids,enabled:true});});});
