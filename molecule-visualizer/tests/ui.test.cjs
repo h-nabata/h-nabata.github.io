@@ -200,6 +200,31 @@ test('bulk bond keys preserve boundary bonds, coordinates, selection and existin
  nodes.get('dataReset').click();const large=MV.Model.createState({atoms:Array.from({length:143},(_,i)=>({id:'n'+i,element:'C',x:i,y:0,z:0}))});MV.Model.selectAllAtoms(large);app.setState(large,true);canvas.focus();
  const before=MV.IO.stateToProjectText(large);canvas.fire('keydown',{key:'B',shiftKey:true});assert.equal(MV.IO.stateToProjectText(app.getState()),before);assert.match(nodes.get('statusBadge').textContent,/10000/);
 });
+test('cell removal preserves atoms, bonds, selection and camera, updates only the current frame, and undoes once',()=>{
+ const {MV,nodes}=boot(false,true),app=MV.App,s=app.getState();nodes.get('cancelAdvanced').disabled=true;
+ s.metadata.cell=MV.Periodic.cell([[10,0,0],[2,9,0],[1,1,8]],[true,false,true]);s.metadata.externalCalculation={energyEV:-1};
+ s.selectedAtomIds.add(s.atoms[1].id);const frame=MV.Periodic.snapshot(s);s.metadata.trajectory=[frame,JSON.parse(JSON.stringify(frame))];s.metadata.frameIndex=0;app.setState(s,true);
+ const before=MV.IO.stateToProjectText(s),atoms=JSON.stringify(s.atoms),bonds=JSON.stringify(s.bonds),camera=JSON.stringify(app.renderer().orientation);
+ assert.equal(nodes.get('btnRemoveCell').disabled,false);nodes.get('btnRemoveCell').click();
+ const next=app.getState();assert.equal(next.metadata.cell,null);assert.equal(next.metadata.trajectory[0].metadata.cell,null);assert.ok(next.metadata.trajectory[1].metadata.cell);assert.equal(next.metadata.externalCalculation,undefined);
+ assert.equal(JSON.stringify(next.atoms),atoms);assert.equal(JSON.stringify(next.bonds),bonds);assert.equal(next.selectedAtomIds.has(s.atoms[1].id),true);assert.equal(JSON.stringify(app.renderer().orientation),camera);
+ assert.doesNotMatch(nodes.get('dataText').value,/^TV /m);assert.doesNotMatch(MV.IO.stateToXYZText(next),/Lattice=|pbc=/);assert.equal(nodes.get('btnRemoveCell').disabled,true);
+ const saved=MV.IO.stateToProjectText(next);assert.equal(MV.IO.parseProject(saved).metadata.cell,null);
+ app.removeCell();nodes.get('btnUndo').click();assert.equal(MV.IO.stateToProjectText(app.getState()),before);nodes.get('btnRedo').click();assert.equal(MV.IO.stateToProjectText(app.getState()),saved);
+ nodes.get('frameNext').click();assert.ok(app.getState().metadata.cell);nodes.get('framePrev').click();assert.equal(app.getState().metadata.cell,null);
+});
+test('cell removal rejects drafts and active jobs, and adopts a preview in a single undo step',()=>{
+ const {MV,nodes}=boot(false,true),app=MV.App,s=app.getState();nodes.get('cancelAdvanced').disabled=true;
+ s.metadata.cell=MV.Periodic.cell([[8,0,0],[0,8,0],[0,0,8]]);app.setState(s,true);const before=MV.IO.stateToProjectText(s);
+ nodes.get('dataText').value+='\nH invalid 0 0';nodes.get('dataText').fire('input');const draft=nodes.get('dataText').value;
+ assert.throws(()=>app.removeCell(),/編集中/);assert.equal(nodes.get('dataText').value,draft);assert.equal(MV.IO.stateToProjectText(app.getState()),before);nodes.get('dataReset').click();
+ MV.EngineUI={isBusy:()=>true};assert.throws(()=>app.removeCell(),/計算/);delete MV.EngineUI;
+ nodes.get('cancelAdvanced').disabled=false;assert.throws(()=>app.removeCell(),/計算/);nodes.get('cancelAdvanced').disabled=true;
+ const base=MV.Periodic.snapshot(s);MV.EnergyProfile.set({title:'cell preview',kind:'path',energies:[0,1],base:()=>base,positions:i=>base.atoms.map(a=>[a.x+2*i,a.y,a.z])});MV.EnergyProfile.select(1);
+ nodes.get('btnRemoveCell').click();assert.equal(app.getState().atoms[0].x,2);assert.equal(app.getState().metadata.cell,null);assert.equal(app.renderer().previewOnly,false);
+ nodes.get('btnUndo').click();assert.equal(MV.IO.stateToProjectText(app.getState()),before);
+ nodes.get('btnCell').click();nodes.get('cellRemove').click();assert.equal(app.getState().metadata.cell,null);assert.equal(nodes.get('cellDialog').open,false);
+});
 test('bulk bond edit adopts displayed geometry and undoes the entire operation once',()=>{
  const {MV,nodes,canvas}=boot(false,true),app=MV.App,s=app.getState();s.selectedAtomIds=new Set(s.atoms.map(a=>a.id));app.setState(s,true);
  const before=MV.IO.stateToProjectText(s),base=MV.Periodic.snapshot(s);

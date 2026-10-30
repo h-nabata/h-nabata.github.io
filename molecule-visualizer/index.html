@@ -19,8 +19,8 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./group-constraints.js?v=group-centers-44"></script>
 <script defer src="./group-constraints-ui.js?v=group-centers-44"></script>
 <script defer src="./renderer3dmol.js?v=performance-41"></script>
-<script defer src="./ui.js?v=group-centers-44"></script>
-<script defer src="./studio.js?v=constraints-34"></script>
+<script defer src="./ui.js?v=cell-remove-45"></script>
+<script defer src="./studio.js?v=cell-remove-45"></script>
 <script defer src="./advanced.js?v=group-centers-44"></script>
 <script defer src="./generator-ui.js?v=performance-41"></script>
 <script defer src="./trajectory.js?v=research-38"></script>
@@ -81,7 +81,7 @@ title: 分子構造エディタ | Molecule Studio
         <p id="vibrationMessage" class="mv-small" role="status"></p>
       </section>
       <details class="mv-view-options" id="viewOptions"><summary>投影・視野角・その他の表示設定</summary><div class="mv-view-controls"><label for="projectionMode">投影</label><select id="projectionMode"><option value="orthographic">平行投影</option><option value="perspective">透視投影</option></select><label for="cameraFov">視野角</label><input id="cameraFov" type="range" min="10" max="90" value="45" step="1" disabled><output id="cameraFovValue" for="cameraFov">45°</output><button class="mv-btn" id="btnCenterOrigin" title="選択によらず全原子の質量重心を原点へ移動。周期系も原子のみ移動し、格子は維持します。">重心を原点へ</button><button class="mv-btn" id="btnDataDock">XYZを直接編集</button></div><details class="mv-help"><summary>操作の説明</summary><p class="mv-small" id="rotationHint">左ドラッグ：画面のどこでも同じ感度で自由回転。Shift＋左ドラッグ：左右に動かして画面に垂直な軸まわりに回転（ロール）。XY / XZ / YZで向きを揃えられます。視野角が大きいほど遠近感が強くなります。構造緩和は現在の結合次数に基づく概略調整です。</p></details></details>
-      <div class="mv-cellbar"><button class="mv-btn" id="btnCell">周期セル・スーパーセル</button><span id="cellStatus">非周期構造</span><span id="pbcMeasure"></span><span id="fractionalInfo"></span></div>
+      <div class="mv-cellbar"><button class="mv-btn" id="btnCell">周期セル・スーパーセル</button><button class="mv-btn" id="btnRemoveCell" disabled title="表示中の構造のセルと周期境界条件を削除します。原子座標と結合は保持し、戻す操作で復元できます。構造列では現在のフレームが対象です。">セルを削除</button><span id="cellStatus">非周期構造</span><span id="pbcMeasure"></span><span id="fractionalInfo"></span></div>
       <div class="mv-selection-bar"><strong id="selectionSummary">原子をクリックして選択</strong><label class="mv-check"><input id="multiSelect" type="checkbox">複数選択</label><button class="mv-btn" id="btnClearSel">解除</button></div>
       <details class="mv-measurements" open><summary>計測・固定表示 <span id="measurementCount">固定 0件</span></summary>
         <div class="mv-row"><label for="measurementType">計測</label><select id="measurementType"><option>2・3・4・6原子を選択</option></select><output id="measurementValue">—</output><button class="mv-btn" id="pinMeasurement" disabled>この計測を固定</button></div>

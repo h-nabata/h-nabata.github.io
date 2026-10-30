@@ -5,7 +5,7 @@
   const $=id=>document.getElementById(id), app=()=>MV.App, state=()=>app().getState();
   let ready=false, timer=null, axis=null, worker=null, jobId=0, pending=null, ketcherPromise=null, chemBusy=false;
   function message(text,error=false){app().setStatus(text,error);if($('chemMessage'))$('chemMessage').textContent=text;}
-  function bind(id,fn){$(id).addEventListener('click',async()=>{try{if(['btnCell','cellApply','cellRemove','cellWrap','cellSuper','chemFrom3D'].includes(id))app().useDisplayedStructure();await fn();}catch(e){message(e.message,true);}});}
+  function bind(id,fn){$(id).addEventListener('click',async()=>{try{if(['btnCell','cellApply','cellWrap','cellSuper','chemFrom3D'].includes(id))app().useDisplayedStructure();await fn();}catch(e){message(e.message,true);}});}
   function download(text,name){const url=URL.createObjectURL(new Blob([text],{type:'text/plain;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
   function readNumbers(id,n){const values=$(id).value.trim().split(/[\s,]+/).map(Number);if(values.length!==n||values.some(x=>!Number.isFinite(x)))throw Error(`${n}個の数値を入力してください。`);return values;}
   function sync(){
@@ -90,7 +90,8 @@
     });
     bind('btnCell',()=>{const c=state().metadata.cell||P.cell([[10,0,0],[0,10,0],[0,0,10]]);$('cellVectors').value=c.vectors.map(r=>r.join(' ')).join('\n');['pbcA','pbcB','pbcC'].forEach((id,i)=>$(id).checked=c.pbc[i]);$('cellDialog').showModal();});
     bind('cellApply',()=>{const n=readNumbers('cellVectors',9),c=P.cell([n.slice(0,3),n.slice(3,6),n.slice(6)],['pbcA','pbcB','pbcC'].map(id=>$(id).checked));app().change('cell',s=>{if($('keepFractional').checked&&s.metadata.cell)s.atoms.forEach(a=>{[a.x,a.y,a.z]=P.cartesian(P.fractional(P.xyz(a),s.metadata.cell),c);});s.metadata.cell=c;},true);$('cellDialog').close();});
-    bind('cellRemove',()=>{app().change('remove cell',s=>{s.metadata.cell=null;},true);$('cellDialog').close();});
+    bind('btnRemoveCell',()=>app().removeCell());
+    bind('cellRemove',()=>{app().removeCell();$('cellDialog').close();});
     bind('cellWrap',()=>app().change('wrap',s=>{P.wrap(s);}));
     bind('cellSuper',()=>{app().change('supercell',s=>P.supercell(s,readNumbers('repeatCell',3)),true);$('cellDialog').close();});
     bind('savePOSCAR',()=>download(P.toPOSCAR(app().getDisplayedState()),'POSCAR'));

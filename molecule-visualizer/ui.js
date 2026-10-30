@@ -83,6 +83,7 @@
   function syncXYZEditor(){
     const el=byId('dataText');if(!el)return;
     byId('btnCopySelection').disabled=!getDisplayedState().atoms.some(a=>state.selectedAtomIds.has(a.id));
+    for(const id of ['btnRemoveCell','cellRemove'])byId(id).disabled=!getDisplayedState().metadata.cell;
     const preview=Boolean(renderer?.previewOnly);
     el.readOnly=preview;
     for(const id of ['dataApply','cellLowerTriangular','btnDataFile','inputFormat'])byId(id).disabled=preview;
@@ -120,6 +121,19 @@
     if(parsed.metadata.cell){if(next.metadata.cell&&!/\bLattice=/.test(input))parsed.metadata.cell.pbc=next.metadata.cell.pbc.slice();next.metadata.cell=parsed.metadata.cell;}
     if(!isMol&&!same)Bonding.refreshInferredBonds(next);
     pushHistory('structure text');xyzDirty=false;byId('inputFormat').value='auto';setState(next,true);setStatus('座標・構造データを適用しました。「戻す」で復元できます。');
+  }
+  function removeCell(){
+    if(!getDisplayedState().metadata.cell)return false;
+    if(xyzDirty)throw Error('編集中の座標を適用するか、現在の構造を再表示してからセルを削除してください。');
+    if(MV.EngineUI?.isBusy()||MV.AFIRUI?.isBusy()||!byId('cancelAdvanced').disabled)throw Error('計算を終了または中止してからセルを削除してください。');
+    const next=Model.cloneState(freezeDisplayedStructure());
+    if(renderer.previewOnly){delete next.metadata.trajectory;delete next.metadata.frameIndex;}
+    next.metadata.cell=null;
+    delete next.metadata.externalCalculation;delete next.metadata.afirCalculation;
+    if(next.metadata.trajectory)next.metadata.trajectory[next.metadata.frameIndex||0]=MV.Periodic.snapshot(next);
+    pushHistory('remove cell');setState(next,true);
+    setStatus('表示中の構造のセルを削除し、非周期構造にしました。原子座標と結合は保持しています。「戻す」で復元できます。');
+    return true;
   }
   function setMeasure(msg) { const el = byId("measureBadge"); if (el) el.textContent = msg; }
   function pushHistory(label) { finishBondKeyEdit(); history.push(label, state); }
@@ -1171,7 +1185,7 @@
   MV.App = {
     init,
     getState: function () { return state; },
-    getDisplayedState, freezeDisplayedStructure, useDisplayedStructure,
+    getDisplayedState, freezeDisplayedStructure, useDisplayedStructure, removeCell,
     save: saveLocal,
     setState,
     renderer: () => renderer,

@@ -54,6 +54,16 @@ const fixture=require('./import-fixtures.cjs');
   await page.click('#tab-atoms');await page.locator('#coordinateImportHelp summary').click();
   await page.setInputFiles('#dataFile',{name:'coords.gro',mimeType:'text/plain',buffer:Buffer.from(fixture.gro)});await page.waitForFunction(()=>document.getElementById('inputFormat').value==='gro');
   await page.click('#dataApply');await page.waitForFunction(()=>MoleculeVisualizer.App.getState().metadata.sourceFormat==='gro');s=await state();assert.equal(s.atoms[1].z,.74);assert.equal(s.metadata.cell.vectors[0][0],10);
+  // Removing the cell is a model edit: no stale TV/Lattice in exports or localhost jobs.
+  const originalCell=s.metadata.cell,geometry=await page.evaluate(()=>{const M=MoleculeVisualizer;return JSON.stringify([M.App.getState().atoms,M.App.getState().bonds,M.App.renderer().orientation]);});
+  const coordinateText=await page.locator('#dataText').inputValue();await page.fill('#dataText',coordinateText+'\nH invalid 0 0');await page.click('#btnRemoveCell');
+  assert.match(await page.locator('#statusBadge').textContent(),/編集中/);assert.deepEqual((await state()).metadata.cell,originalCell);assert.equal(await page.locator('#dataText').inputValue(),coordinateText+'\nH invalid 0 0');await page.click('#dataReset');
+  await page.click('#btnRemoveCell');assert.equal((await state()).metadata.cell,null);assert.equal(await page.locator('#btnRemoveCell').isDisabled(),true);assert.equal(await page.locator('#cellStatus').textContent(),'非周期構造');
+  assert.equal(await page.evaluate(()=>{const M=MoleculeVisualizer;return JSON.stringify([M.App.getState().atoms,M.App.getState().bonds,M.App.renderer().orientation]);}),geometry);assert.doesNotMatch(await page.locator('#dataText').inputValue(),/^TV /m);
+  await page.click('#btnUndo');assert.deepEqual((await state()).metadata.cell,originalCell);await page.click('#btnRedo');assert.equal((await state()).metadata.cell,null);
+  await page.click('#btnExport');assert.doesNotMatch(await page.locator('#exportText').inputValue(),/Lattice=|pbc=/);const removedDownload=page.waitForEvent('download');await page.click('#btnSaveProject');const removedText=fs.readFileSync(await (await removedDownload).path(),'utf8');assert.equal(JSON.parse(removedText).metadata.cell,null);await page.locator('[data-close=exportDialog]').click();
+  await page.setInputFiles('#fileInput',{name:'nonperiodic.json',mimeType:'application/json',buffer:Buffer.from(removedText)});await page.waitForFunction(()=>document.getElementById('statusBadge').textContent.includes('読み込みました'));assert.equal((await state()).metadata.cell,null);
+  await page.click('#btnExternalEngine');await page.selectOption('#engineMode','optimize');await page.click('#engineRun');await page.waitForFunction(()=>!MoleculeVisualizer.EngineUI.isBusy());assert.equal(posted.length,2);assert.equal(posted.at(-1).cell,null);await page.click('#engineApply');assert.equal((await state()).metadata.cell,null);
   // A late file read cannot overwrite a newer edit.
   await page.evaluate(()=>{window.originalRead=MoleculeVisualizer.Formats.readFiles;MoleculeVisualizer.Formats.readFiles=async(...args)=>{await new Promise(resolve=>window.finishRead=resolve);return originalRead(...args);};});
   await drop([{name:'late.com',text:fixture.grrm}]);await page.waitForFunction(()=>!!window.finishRead);
@@ -62,6 +72,6 @@ const fixture=require('./import-fixtures.cjs');
   await page.evaluate(()=>MoleculeVisualizer.Formats.readFiles=window.originalRead);
   assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
   await page.screenshot({path:'test-artifacts/imports.png',fullPage:true});
-  console.log(JSON.stringify({passed:true,checks:['GRRM drop and frozen atoms','frame navigation and canvas selection','fixed atom job transport and apply','project save/reopen','multi-file atomic failure and undo','ORCA local companion','GRO editor hints','stale read rejected','no external upload']}));
+  console.log(JSON.stringify({passed:true,checks:['GRRM drop and frozen atoms','frame navigation and canvas selection','fixed atom job transport and apply','project save/reopen','multi-file atomic failure and undo','ORCA local companion','GRO editor hints','cell removal, undo/redo, export/reopen and nonperiodic job/apply','stale read rejected','no external upload']}));
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
