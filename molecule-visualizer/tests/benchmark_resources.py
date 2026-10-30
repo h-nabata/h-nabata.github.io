@@ -51,4 +51,24 @@ for method in ('lbfgs','precon-lbfgs'):
     t=time.perf_counter();r=new.calculate_job(data,potential,None);elapsed=time.perf_counter()-t
     assert r['converged'];np.testing.assert_allclose(r['images'][0],origin,atol=2e-5)
     iterations.append({'method':method,'steps':r['steps'],'evaluations':r['evaluations'],'seconds':elapsed})
-print(json.dumps({'python':sys.version.split()[0],'numpy':np.__version__,'rows':rows,'syntheticElasticChain':iterations},indent=2))
+extra={}
+if '--native' in sys.argv:
+    water=np.array([[0,0,0],[.96,0,0],[-.24,.93,0]])
+    positions=np.concatenate([water+[4*(i%2),4*(i//2),0] for i in range(4)])
+    raw={'symbols':['O','H','H']*4,'images':[positions.tolist()],'mode':'optimize','optimizer':'lbfgs',
+         'rigidGroups':[list(range(3*i,3*i+3)) for i in range(4)],'maxSteps':100,'fmax':.01,'maxMove':.04}
+    samples={'before':[],'after':[]};last={};final_positions={}
+    for repetition in range(6):
+        for label,module in [('before',old),('after',new)]:
+            data=module.validate(raw,'tblite');engine=module.TBLiteEngine(data,{'method':'GFN2-xTB'},tempfile.gettempdir())
+            cache=module.ExactEvaluationCache(engine);started=time.perf_counter()
+            result=module.calculate_job(data,cache,tempfile.gettempdir());elapsed=time.perf_counter()-started
+            assert result['converged']
+            if repetition:samples[label].append(elapsed)
+            last[label]={'evaluations':cache.calls,'steps':result['steps'],'energyEV':result['energies'][0]}
+            final_positions[label]=np.array(result['images'][0])
+            if hasattr(cache,'close'):cache.close()
+    np.testing.assert_allclose(final_positions['before'],final_positions['after'],atol=1e-9,rtol=0)
+    extra['nativeRigidWaterCluster']={label:{'medianSeconds':float(np.median(values)),**last[label]} for label,values in samples.items()}
+    extra['nativeRigidWaterCluster']['maxCoordinateDifferenceAngstrom']=float(np.max(np.abs(final_positions['before']-final_positions['after'])))
+print(json.dumps({'python':sys.version.split()[0],'numpy':np.__version__,'rows':rows,'syntheticElasticChain':iterations,**extra},indent=2))

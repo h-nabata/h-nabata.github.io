@@ -405,12 +405,18 @@ Node 24.22.1で200原子×200フレームを含む20回のUndo保存を比較。
 
 疎グラフ前処理の合成弾性鎖では、同じ力閾値・最大変位でL-BFGSが12評価、新方式が11評価。原子数30のこの小例では全時間は約0.016→0.015秒であり、大きな一般的速度向上を主張しない。実tbliteの非周期MIN・周期固定原子MINも収束を確認する。
 
+実tblite GFN2-xTBの4剛体水分子（12原子）、L-BFGS、力閾値0.01 eV/Å、最大変位0.04 Åでは、同じ73回のエンジン評価・72ステップで収束した。ウォームアップ後5回の計算本体時間の中央値は0.4065→0.2125秒（1.91倍、47.7%短縮）。独立の再測定では0.3887→0.2115秒（1.84倍）だった。最終エネルギーは両者−552.42620050 eV、最終座標の最大差は1.67×10⁻¹² Åだった。この比較は剛体拘束処理の軽量化の効果であり、新しい前処理法を使った値ではない。CLI起動、履歴保存、HTTP通信、ブラウザ描画を含まない。
+
+200原子・200チェックポイントを20回に分けて実ディスクへ保存する合成試験では、累積書込量14.75→1.50 MB、20回の合計保存時間0.340→0.081秒だった。これは1回の測定であり、ファイルシステムのキャッシュ・ストレージに依存する参考値。完了時は全結果を保存し、軌跡の間引きや座標精度の削減は行わない。
+
 追加回帰は、非直交／部分周期／格子面の丸め誤差と距離閾値、剛体力の全距離拘束参照との一致・キラリティ、混合拘束因子の無効化、非実行形式の可逆配列と旧ASE形式、前処理MINの解析平衡・分割再開・単調なエネルギー、√Nセル計量の平衡と再開、並列評価の同時性と経路の一致、実tbliteの並列振動、未確定ジャーナル末尾からの復元、過去結果の必要時読み込み、Undoの独立性とフレーム共有を検証する。
 
 再現:
 
 ```bash
 OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 python molecule-visualizer/tests/benchmark_resources.py /path/to/baseline/bridge.py
+# tblite導入済みの場合、実GFN2-xTB緩和の比較も実行する
+OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 python molecule-visualizer/tests/benchmark_resources.py /path/to/baseline/bridge.py --native
 node --expose-gc molecule-visualizer/tests/benchmark_resource_memory.cjs /path/to/baseline-directory
 ```
 
