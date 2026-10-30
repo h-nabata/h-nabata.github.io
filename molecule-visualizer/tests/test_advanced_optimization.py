@@ -123,6 +123,21 @@ class Advanced(unittest.TestCase):
                 e1=engine.with_cell(0,p@np.linalg.solve(reference,c1),c1)[0];e2=engine.with_cell(0,p@np.linalg.solve(reference,c2),c2)[0]
                 numeric.append((e1-e2)/2e-4)
             np.testing.assert_allclose(analytic,numeric,atol=3e-4,rtol=2e-3,err_msg=mode)
+    def test_cell_fire_pressure_and_exact_resume(self):
+        ref=np.eye(3)*4
+        class Elastic:
+            def with_cell(self,i,p,cell):
+                delta=cell-ref*1.05
+                return float(.5*np.sum(delta**2)),np.zeros_like(p),cell.T@delta/abs(np.linalg.det(cell))
+        d=data(cell={'vectors':ref.tolist(),'pbc':[True]*3},cellOptimization={'mode':'isotropic','pressureGPa':1.,'stressTolerance':1e-6},optimizer='fire',maxSteps=300)
+        r=b.calculate_job(d,Elastic(),tempfile.gettempdir());self.assertTrue(r['converged'])
+        volume=abs(np.linalg.det(r['cell']['vectors']));self.assertLess(volume,abs(np.linalg.det(ref*1.05)))
+        self.assertAlmostEqual(r['enthalpies'][0]-r['energies'][0],volume/160.21766208,places=12)
+        whole=b.calculate_job({**d,'maxSteps':20},Elastic(),tempfile.gettempdir())
+        first=b.calculate_job({**d,'maxSteps':7},Elastic(),tempfile.gettempdir())
+        second=b.calculate_job({**d,'maxSteps':13,'images':first['images'],'cell':first['cell'],'_optimizerResume':first['optimizerState']},Elastic(),tempfile.gettempdir())
+        np.testing.assert_allclose(second['cell']['vectors'],whole['cell']['vectors'],atol=1e-12)
+
     def test_interrupted_cell_keeps_last_lattice_and_restart_state(self):
         from test_engine import CONFIG
         d=data(cell={'vectors':(np.eye(3)*4).tolist(),'pbc':[True]*3},cellOptimization={'mode':'c'},optimizer='lbfgs',maxSteps=3)
