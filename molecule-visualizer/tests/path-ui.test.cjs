@@ -1,6 +1,6 @@
 // Exercise the real path form/request boundary without a browser or compute engine.
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
-async function boot(){
+async function boot(version='1.9.0'){
  const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8'),nodes=new Map();
  class Element{
   constructor(id=''){this.id=id;this.value='';this.checked=false;this.hidden=false;this.disabled=false;this.children=[];this.events={};this.textContent='';this.firstChild={textContent:id};}
@@ -10,7 +10,7 @@ async function boot(){
  for(const m of html.matchAll(/<([\w-]+)\b([^>]*\bid="([^"]+)"[^>]*)>/g)){const node=new Element(m[3]);node.value=m[2].match(/value="([^"]*)"/)?.[1]||'';node.checked=/\bchecked\b/.test(m[2]);nodes.set(node.id,node);}
  for(const m of html.matchAll(/<select\b[^>]*id="([^"]+)"[^>]*>([\s\S]*?)<\/select>/g))nodes.get(m[1]).value=m[2].match(/<option\b[^>]*value="([^"]*)"/)?.[1]||'';
  const document={getElementById:id=>nodes.get(id),createElement:()=>new Element()},window={document};
- const info={version:'1.9.0',engine:'tblite',method:'GFN2-xTB',engineVersion:'fixture',modes:['evaluate','optimize','cineb','lup'],lup:true,pathOptimizers:{cineb:['fire'],lup:['fire','lbfgs']},maxImages:100,maxSteps:10000,vibrations:true,adaptiveNEB:true,pathSplit:true};
+ const info={version,engine:'tblite',method:'GFN2-xTB',engineVersion:'fixture',modes:['evaluate','optimize','cineb','lup'],lup:true,pathOptimizers:{cineb:['fire'],lup:['fire','lbfgs']},maxImages:100,maxSteps:10000,vibrations:true,adaptiveNEB:true,pathSplit:true};
  const ctx=vm.createContext({window,document,location:{hostname:'example.test'},URL,AbortController,setTimeout,clearTimeout,console,fetch:async()=>({ok:true,json:async()=>info})});
  for(const f of ['model','optimization','bonding','geometry','io','molfile','periodic','constraints','research-ui','engine-ui','path-refinement'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../'+f+'.js'),'utf8'),ctx,{filename:f+'.js'});
  const M=window.MoleculeVisualizer;let state=M.Model.createState({atoms:[{id:'o',element:'O',x:0,y:0,z:0},{id:'h1',element:'H',x:.96,y:0,z:0},{id:'h2',element:'H',x:-.24,y:.93,z:0}]});
@@ -20,6 +20,11 @@ async function boot(){
  M.ResearchUI.init=()=>{};M.EngineUI.init();nodes.get('engineURL').value='http://127.0.0.1:8766';nodes.get('engineToken').value='fixture-only';await nodes.get('engineConnect').click();assert.ok(M.EngineUI.getConnection());
  return {M,nodes,info,select(mode){nodes.get('engineMode').value=mode;M.EngineUI.settings();}};
 }
+test('browser connects to the currently distributed bridge version',async()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../local-engine/bridge.py'),'utf8');
+ const version=source.match(/^VERSION = '([^']+)'/m)?.[1];assert.ok(version);
+ const {M}=await boot(version);assert.equal(M.EngineUI.getConnection().info.version,version);
+});
 test('LUP path form keeps CI-NEB defaults and sends current unsaved method settings without a spring',async()=>{
  const {M,nodes,select}=await boot();M.EngineUI.prepareNEB();assert.equal(nodes.get('engineMode').value,'cineb');assert.equal(nodes.get('engineSteps').value,'100');
  select('lup');assert.equal(nodes.get('lupOptimizer').value,'lbfgs');assert.equal(nodes.get('engineScope').value,'all');assert.equal(nodes.get('engineScope').disabled,true);assert.equal(nodes.get('engineSpringLabel').hidden,true);assert.equal(nodes.get('engineClimbLabel').hidden,false);assert.equal(nodes.get('engineLUPSettings').hidden,false);assert.equal(nodes.get('engineAdaptiveSettings').hidden,false);
