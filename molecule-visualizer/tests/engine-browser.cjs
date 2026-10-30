@@ -263,6 +263,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.match(await page.locator('#energyProfile circle[tabindex="0"]').nth(3).getAttribute('aria-label'),/ΔE 3.000000/);
   // Backdrop dismisses settings without stopping this in-flight job; padding
   // and a drag out of the dialog must not dismiss it accidentally.
+  await page.evaluate(()=>{document.getElementById('optimizationDock').checked=false;});
   await page.click('#profileDetails');const dialog=page.locator('#engineDialog'),box=await dialog.boundingBox();
   await page.mouse.click(box.x+8,box.y+8);assert.equal(await dialog.isVisible(),true);
   await page.mouse.move(box.x+8,box.y+8);await page.mouse.down();await page.mouse.move(3,3);await page.mouse.up();assert.equal(await dialog.isVisible(),true);

@@ -10,7 +10,7 @@
  function fingerprint(s){return JSON.stringify([s.atoms,s.bonds,s.metadata]);}
  function stageConditions(){return {tsMethod:$('engineTSMethod').value,trustRadius:Number($('engineTrust').value),vibrations:{delta:Number($('engineVibrationDelta').value),nfree:Number($('engineVibrationNfree').value),imaginaryThreshold:Number($('engineVibrationThreshold').value)},irc:{direction:'both',stepSize:Number($('ircStepSize').value),relaxEndpoints:true}};}
  function stageInput(base,mode,images,conditions){
-  const keys=['symbols','atomIds','cell','charge','multiplicity','maxSteps','fmax','maxMove','umaDevice','solvation'];const data={};for(const key of keys)if(base[key]!=null)data[key]=clone(base[key]);data.mode=mode;data.images=clone(images);
+  const keys=['symbols','atomIds','cell','charge','multiplicity','maxSteps','fmax','maxMove','umaDevice','solvation'];const data={};for(const key of keys)if(base[key]!=null)data[key]=clone(base[key]);data.mode=mode;data.cell=clone(base.cell||null);data.images=clone(images);
   if(mode==='optimize')for(const key of ['optimizer','stagedOptimization','fixedAtoms','fixedComponents','rigidGroups','groupConstraints','internalConstraints','cellOptimization'])if(base[key]!=null)data[key]=clone(base[key]);
   if(mode==='ts'){data.optimizer=conditions.tsMethod;data.trustRadius=conditions.trustRadius;}
   if(mode==='vibrations')data.vibrations=clone(conditions.vibrations);

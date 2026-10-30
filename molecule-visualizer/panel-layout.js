@@ -72,7 +72,7 @@
     if(global.ResizeObserver){
       new global.ResizeObserver(sync).observe(shell);
       const layoutObserver=new global.ResizeObserver(fitAutomaticHeight);
-      document.querySelectorAll('.mv-page-buffer, .mv-app-header, .mv-document, .mv-stage-heading, .mv-stage-toolbar, .mv-calculation-controls, .mv-display-controls, .mv-trajectory').forEach(element=>layoutObserver.observe(element));
+      document.querySelectorAll('.mv-page-buffer, .mv-app-header, .mv-document, .mv-stage-heading, .mv-stage-toolbar, .mv-calculation-controls, .mv-display-controls, .mv-trajectory, #optimizationState').forEach(element=>layoutObserver.observe(element));
     }
     global.addEventListener('resize',fitAutomaticHeight);
     document.addEventListener('fullscreenchange',fitAutomaticHeight);

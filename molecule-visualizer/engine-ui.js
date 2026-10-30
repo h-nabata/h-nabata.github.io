@@ -59,7 +59,7 @@
     const all=JSON.parse(JSON.stringify(state.metadata.trajectory));all[state.metadata.frameIndex||0]=MV.Periodic.snapshot(state);return all;
   }
   function input(batchFrames){
-    MV.ConstraintUI?.flush();
+    MV.ConstraintUI?.flush();MV.OptimizationUI?.captureInternal();
     if(dirty())throw Error('座標編集欄の未適用データを先に適用するか、現在の構造を再表示してください。');
     if(!batchFrames&&$('engineScope').value==='current')app().useDisplayedStructure();
     const state=app().getState(),all=batchFrames||frames(state,$('engineScope').value),mode=batchFrames?'optimize':$('engineMode').value;

@@ -93,7 +93,7 @@
   function check(){saveSettings();const s=app().getState(),b=MV.AFIR.evaluate(s.atoms,config(),s.metadata.cell);message(`人工項のみ評価: ${b.energyEV.toFixed(6)} eV。物理ポテンシャルのエネルギーではありません。座標は変更していません。`);}
   async function run(){
     if(job)return;const foregroundElsewhere=!!MV.EngineUI?.isBusy(),connection=MV.EngineUI?.getConnection();if(foregroundElsewhere&&!connection?.info.jobQueue&&!connection?.info.queue){message('外部エンジンの計算を終了してから実行してください。');return;}let j;
-    try{if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();MV.ConstraintUI?.flush();const s=app().getState();MV.AFIR.validate(s.atoms,config(),s.metadata.cell);
+    try{if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();MV.ConstraintUI?.flush();MV.OptimizationUI?.captureInternal();const s=app().getState();MV.AFIR.validate(s.atoms,config(),s.metadata.cell);
       j={original:MV.Model.cloneState(s),fingerprint:fingerprint(s),config:JSON.parse(JSON.stringify(config())),cancelled:false,livePreview:$('afirLive').checked,previewCursor:0,liveEnergies:[],liveBiases:[]};
       if(j.livePreview&&!MV.EngineUI.getConnection()?.info.livePreview)throw Error('ライブ表示を使うにはbridge.pyを更新・再接続してください。');
       if(foregroundElsewhere){
