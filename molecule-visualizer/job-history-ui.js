@@ -24,7 +24,7 @@
         const actions=el('td'),active=['queued','running','stopping'].includes(j.status);
         if(active){actions.append(button('進捗を追跡',async()=>{if(MV.EngineUI.isBusy())throw Error('現在追跡中の計算が終了してから選択してください。');const full=await saved(j.id);$('jobHistoryDialog').close();$('engineDialog').close();MV.EngineUI.watchSaved(full);}),button('中止',async()=>{await api(`/api/jobs/${j.id}/cancel`,{});await refresh();}));}
         else{actions.append(button('結果を開く',async()=>MV.EngineUI.restoreJob(await saved(j.id))));actions.append(button('入力を復元',async()=>MV.EngineUI.restoreJob(await saved(j.id),true)));
-          actions.append(button(j.resumeKind==='scan_remaining'?'未完了のスキャンを再開':j.resumeKind==='restart'||['irc','vibrations'].includes(j.mode)?'保存条件で再実行':'保存構造から再開',async()=>{const resumed=await api(`/api/jobs/${j.id}/resume`,{});message(`計算${resumed.id.slice(0,8)}をキューへ追加しました。保存済みの元の結果も保持します。`);await refresh();}));
+          actions.append(button(j.resumeKind==='optimizer_state'?'最適化状態から継続':j.resumeKind==='scan_remaining'?'未完了のスキャンを再開':j.resumeKind==='restart'||['irc','vibrations'].includes(j.mode)?'保存条件で再実行':'保存構造から再開',async()=>{const resumed=await api(`/api/jobs/${j.id}/resume`,{});message(`計算${resumed.id.slice(0,8)}をキューへ追加しました。保存済みの元の結果も保持します。`);await refresh();}));
           actions.append(button(j.archived?'一覧へ戻す':'アーカイブ',async()=>{await api(`/api/jobs/${j.id}/archive`,{archived:!j.archived});await refresh();}));
           if(j.archived)actions.append(button('完全に削除',async()=>{if(!global.confirm('この計算の入力・結果・履歴をローカル保存先から完全に削除します。よろしいですか？'))return;await api(`/api/jobs/${j.id}/delete`,{});await refresh();}));
         }

@@ -34,7 +34,7 @@ from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 from scipy.spatial import cKDTree
 
-VERSION = '1.11.0'
+VERSION = '1.12.0'
 UMA_MODELS = ('uma-s-1p2p1', 'uma-s-1p2', 'uma-s-1p1', 'uma-m-1p1')
 ANYSOLV_MODELS = ('model_compact', 'model_moe')
 MAX_BODY = 8 * 1024 * 1024
@@ -54,7 +54,7 @@ def validate(data, engine):
     allowed = {'symbols', 'images', 'cell', 'charge', 'multiplicity', 'mode',
                'maxSteps', 'fmax', 'spring', 'maxMove', 'climbAfter', 'atomIds', 'afir', 'livePreview',
                'optimizer', 'trustRadius', 'vibrations', 'fixedAtoms', 'umaDevice', 'solvation',
-               'irc', 'thermochemistry', 'internalConstraints', 'groupConstraints', 'scan', 'adaptiveNEB', 'pathSplit', 'nodeIds', 'lup'}
+               'irc', 'thermochemistry', 'internalConstraints', 'groupConstraints', 'scan', 'adaptiveNEB', 'pathSplit', 'nodeIds', 'lup', 'fixedComponents', 'rigidGroups', 'cellOptimization', 'stagedOptimization'}
     if not isinstance(data, dict) or set(data) - allowed:
         raise ValueError('未定義の入力項目があります。コマンド・パス指定は受け付けません。')
     if type(data.get('livePreview', False)) is not bool:
@@ -118,7 +118,7 @@ def validate(data, engine):
             raise ValueError('全原子の一意なIDが必要です。')
         result['atomIds'] = ids[:]
     optimizer = data.get('optimizer', 'sella-prfo' if mode == 'ts' else 'lbfgs' if mode == 'lup' else 'fire')
-    choices = ('sella-prfo', 'sella-rfo') if mode == 'ts' else ('fire', 'lbfgs', 'bfgs') if mode in ('optimize', 'scan') else ('fire', 'lbfgs') if mode == 'lup' else ('fire',)
+    choices = ('sella-prfo', 'sella-rfo') if mode == 'ts' else ('fire', 'lbfgs', 'bfgs', 'staged') if mode in ('optimize', 'scan') else ('fire', 'lbfgs') if mode == 'lup' else ('fire',)
     if optimizer not in choices:
         raise ValueError('この操作では指定した最適化手法を使用できません。TSにはSella PRFO/RFOを指定してください。')
     result['optimizer'] = optimizer
@@ -167,11 +167,237 @@ def validate(data, engine):
         result['groupConstraints'] = validate_group_constraints(data['groupConstraints'], result)
     if mode == 'scan' or 'scan' in data:
         result['scan'] = validate_scan_settings(data, result)
+    validate_advanced_optimization(data, result, engine)
     validate_lup(data, result)
     validate_adaptive_neb(data, result)
     validate_irc_settings(data, result)
     validate_thermochemistry_settings(data, result)
     return result
+
+
+def validate_advanced_optimization(raw, data, engine):
+    active = any(raw.get(k) for k in ('fixedComponents','rigidGroups'))
+    if active and (data['mode'] not in ('optimize','afir','scan') or data.get('vibrations')):
+        raise ValueError('方向固定・剛体拘束はMIN・AFIR-MIN・スキャン専用です。')
+    if 'fixedComponents' in raw:
+        rows=raw['fixedComponents']; used=set()
+        if not isinstance(rows,list) or len(rows)>len(data['symbols']):
+            raise ValueError('方向固定の原子指定が不正です。')
+        for row in rows:
+            if (not isinstance(row,dict) or set(row)!={'atom','axes'} or type(row['atom']) is not int or
+                not 0<=row['atom']<len(data['symbols']) or row['atom'] in used or not isinstance(row['axes'],list) or
+                len(row['axes'])!=3 or any(type(x) is not bool for x in row['axes']) or not any(row['axes'])):
+                raise ValueError('方向固定は原子とXYZの真偽値3個を指定してください。')
+            used.add(row['atom'])
+        data['fixedComponents']=copy.deepcopy(rows)
+    if 'rigidGroups' in raw:
+        groups=raw['rigidGroups']; used=set(); count=0
+        if not isinstance(groups,list) or len(groups)>50:
+            raise ValueError('剛体原子団は50個以下にしてください。')
+        if groups and data.get('cell') and any(data['cell']['pbc']):
+            raise ValueError('剛体原子団は非周期系専用です。')
+        for g in groups:
+            if (not isinstance(g,list) or not 2<=len(g)<=50 or any(type(i) is not int or not 0<=i<len(data['symbols']) for i in g)
+                or len(set(g))!=len(g) or used.intersection(g)):
+                raise ValueError('剛体原子団は重複しない2〜50原子を指定してください。')
+            used.update(g);count+=len(g)*(len(g)-1)//2
+        if count>1500:raise ValueError('剛体内の距離拘束は合計1500本以下にしてください。')
+        data['rigidGroups']=copy.deepcopy(groups)
+    if data.get('optimizer')=='staged' or 'stagedOptimization' in raw:
+        if data['mode'] not in ('optimize','scan') or data.get('optimizer')!='staged':
+            raise ValueError('段階最適化は通常MIN・スキャンでstagedを選択してください。')
+        c=raw.get('stagedOptimization',{})
+        if not isinstance(c,dict) or set(c)-{'switchForce','stallSteps'}:raise ValueError('段階最適化の条件が不正です。')
+        data['stagedOptimization']={'switchForce':number(c.get('switchForce',.3),'切替力',data['fmax'],10),
+            'stallSteps':number(c.get('stallSteps',15),'停滞判定ステップ',5,100,True)}
+    c=raw.get('cellOptimization')
+    if c is None:return
+    if not isinstance(c,dict) or set(c)-{'mode','stressTolerance','pressureGPa','maxStrain'}:
+        raise ValueError('セル最適化の設定が不正です。')
+    mode=c.get('mode','fixed')
+    if mode not in ('fixed','isotropic','fixed_angles','a','b','c','ab','c_vector','full'):
+        raise ValueError('未対応のセル自由度です。')
+    if mode=='fixed':
+        data['cellOptimization']={'mode':'fixed'};return
+    if data['mode']!='optimize' or engine!='tblite' or not data.get('cell') or not all(data['cell']['pbc']):
+        raise ValueError('可変セルMINには3方向周期セルと応力対応tbliteが必要です。')
+    if any(data.get(k) for k in ('fixedAtoms','fixedComponents','rigidGroups','groupConstraints','internalConstraints','vibrations')):
+        raise ValueError('可変セルMINと原子・内部座標・重心・剛体拘束または振動解析の併用には対応していません。')
+    if data.get('optimizer') not in ('fire','lbfgs'):raise ValueError('可変セルではFIREまたはL-BFGSを指定してください。')
+    data['cellOptimization']={'mode':mode,'stressTolerance':number(c.get('stressTolerance',.001),'応力閾値 (eV/Å³)',1e-7,1),
+        'pressureGPa':number(c.get('pressureGPa',0),'外圧 (GPa)',-100,1000),
+        'maxStrain':number(c.get('maxStrain',.02),'最大対数ひずみ',.00001,.1)}
+
+
+def group_distance_jacobian(positions, config):
+    centers=group_centers(positions,config); matrix=group_coordinate_matrix({**config,'mode':'absolute'})
+    rows=[]
+    for i in range(len(centers)):
+        for j in range(i+1,len(centers)):
+            vector=centers[j]-centers[i];distance=np.linalg.norm(vector)
+            if distance<1e-8:raise ValueError('重心が一致するため距離の微分を定義できません。')
+            rows.append((vector/distance)@(matrix[j*3:j*3+3]-matrix[i*3:i*3+3]))
+    return np.array(rows)
+
+
+def serial_arrays(value):
+    if isinstance(value,np.ndarray):return value.tolist()
+    if isinstance(value,np.generic):return value.item()
+    if isinstance(value,dict):return {str(k):serial_arrays(v) for k,v in value.items()}
+    if isinstance(value,(list,tuple)):return [serial_arrays(v) for v in value]
+    return value
+
+
+def install_optimizer_state(optimizer, data, method):
+    """Capture ASE's public restart payload plus FIRE's adaptive parameters.
+
+    JSON only, no pickle, paths, or arbitrary attribute restoration. ASE version
+    is checked even for locally saved jobs; the last *evaluated* state is saved.
+    """
+    from ase.io.jsonio import encode, decode
+    import ase
+    saved={'payload':None}
+    optimizer.dump=lambda payload:saved.update(payload=encode(payload))
+    resume=data.get('_optimizerResume')
+    if resume:
+        if resume.get('implementation')!='ase' or resume.get('aseVersion')!=ase.__version__ or resume.get('method')!=method:
+            raise ValueError('保存した最適化状態の種類・ASEバージョンが一致しません。')
+        if not np.allclose(resume['positions'],data['images'][0],atol=1e-10,rtol=0):
+            raise ValueError('再開座標と最適化状態が一致しません。')
+        if resume.get('payload') is not None:
+            payload=decode(resume['payload'],always_array=False);optimizer.load=lambda:payload;optimizer.read()
+            saved['payload']=resume['payload']
+        if method=='fire':
+            for k in ('a','dt','Nsteps'):
+                if k in resume.get('fire',{}):setattr(optimizer,k,resume['fire'][k])
+        optimizer.maxstep=resume.get('maxstep',optimizer.maxstep)
+    def snapshot():
+        return {'schema':1,'implementation':'ase','aseVersion':ase.__version__,'method':method,
+            'positions':optimizer.atoms.positions.tolist(),'payload':saved['payload'],
+            'maxstep':optimizer.maxstep,'fire':{k:getattr(optimizer,k) for k in ('a','dt','Nsteps') if hasattr(optimizer,k)}}
+    return snapshot
+
+
+def cell_geometry(reference, mode, q):
+    """Row lattice vectors. Return lattice and exact derivatives dL/dq."""
+    from scipy.linalg import expm, expm_frechet
+    reference=np.asarray(reference,float);q=np.asarray(q,float)
+    if mode=='full':
+        bases=[]
+        for i,j in ((0,0),(1,1),(2,2),(1,2),(0,2),(0,1)):
+            b=np.zeros((3,3));b[i,j]=1;b[j,i]=1;bases.append(b)
+        u=sum((x*b for x,b in zip(q,bases)),start=np.zeros((3,3)))
+        return reference@expm(u),[reference@expm_frechet(u,b,compute_expm=False) for b in bases]
+    if mode=='c_vector':
+        lattice=reference.copy();lattice[2]=np.exp(q[0])*reference[2]+q[1]*reference[0]+q[2]*reference[1]
+        derivatives=[]
+        for v in (np.exp(q[0])*reference[2],reference[0],reference[1]):
+            b=np.zeros((3,3));b[2]=v;derivatives.append(b)
+        return lattice,derivatives
+    masks={'isotropic':[[1,1,1]],'fixed_angles':np.eye(3).tolist(),'a':[[1,0,0]],'b':[[0,1,0]],'c':[[0,0,1]],'ab':[[1,1,0]]}[mode]
+    scale=np.exp(q@np.array(masks));lattice=scale[:,None]*reference
+    return lattice,[np.array(mask)[:,None]*lattice for mask in masks]
+
+
+def cell_derivatives(lattice, derivatives, stress):
+    strain=np.array([(np.linalg.solve(lattice,d)+np.linalg.solve(lattice,d).T)/2 for d in derivatives])
+    basis=strain.reshape(len(strain),9);flat=np.asarray(stress).reshape(9)
+    derivative=abs(np.linalg.det(lattice))*(basis@flat)
+    projected=np.linalg.pinv(basis,rcond=1e-12)@(basis@flat)
+    return derivative,float(np.max(np.abs(projected)))
+
+
+def optimize_cell(data, calculate, progress=lambda p:None):
+    if not hasattr(calculate,'with_cell'):raise ValueError('この計算エンジンからセル応力を取得できません。')
+    config=data['cellOptimization'];mode=config['mode'];n=len(data['symbols'])
+    resume=data.get('_optimizerResume')
+    reference=np.array(resume['reference'] if resume else data['cell']['vectors'],float)
+    scale=float(np.mean(np.linalg.norm(reference,axis=1)))
+    size={'full':6,'fixed_angles':3,'c_vector':3}.get(mode,1)
+    q=np.array(resume['q'] if resume else np.zeros(size),float)
+    lattice,_=cell_geometry(reference,mode,q)
+    x=np.array(data['images'][0])@np.linalg.inv(lattice)@reference
+    y=np.concatenate((x.ravel(),q*scale));pressure=config['pressureGPa']/160.21766208
+    velocity=np.array(resume['velocity'] if resume else np.zeros_like(y));dt=resume['dt'] if resume else .05
+    alpha=resume['alpha'] if resume else .1;positive=resume['positive'] if resume else 0
+    pairs=[(np.array(a),np.array(b)) for a,b in resume.get('pairs',[])] if resume else []
+    previous_y=np.array(resume['previousY']) if resume and resume.get('previousY') is not None else None
+    previous_g=np.array(resume['previousG']) if resume and resume.get('previousG') is not None else None
+    trajectory={'images':[],'energies':[],'cells':[]};history=[];evaluations=0
+    def evaluate(v):
+        nonlocal evaluations
+        coordinates=v[:3*n].reshape(n,3);qq=v[3*n:]/scale
+        if np.max(np.abs(qq))>2:raise ValueError('セル変形が開始格子に対する範囲を超えました。')
+        ll,dl=cell_geometry(reference,mode,qq);transform=np.linalg.solve(reference,ll);positions=coordinates@transform
+        if not np.isfinite(ll).all() or np.linalg.cond(ll)>1e6 or abs(np.linalg.det(ll))<1e-6:
+            raise ValueError('セルが退化しました。')
+        cell={'vectors':ll.tolist(),'pbc':data['cell']['pbc']}
+        if has_atomic_collision(positions,cell):raise ValueError('セル最適化中に原子衝突を検出しました。')
+        energy,forces,stress=calculate.with_cell(0,positions,ll);evaluations+=1
+        forces=np.array(forces);stress=np.array(stress)
+        if forces.shape!=positions.shape or stress.shape!=(3,3) or not np.isfinite(forces).all() or not np.isfinite(stress).all() or not math.isfinite(energy):
+            raise ValueError('有限のエネルギー・力・応力が必要です。')
+        if not np.allclose(stress,stress.T,atol=1e-7,rtol=1e-5):raise ValueError('応力テンソルが非対称です。')
+        dq,residual=cell_derivatives(ll,dl,stress+pressure*np.eye(3))
+        gradient=np.concatenate(((-forces@transform.T).ravel(),dq/scale))
+        return dict(energy=float(energy),enthalpy=float(energy+pressure*abs(np.linalg.det(ll))),forces=forces,stress=stress,
+            residual=residual,gradient=gradient,positions=positions,cell=cell,lattice=ll,q=qq)
+    current=evaluate(y)
+    for step in range(data['maxSteps']+1):
+        fmax=force_max(current['forces']);g=current['gradient'];converged=fmax<=data['fmax'] and current['residual']<=config['stressTolerance']
+        state={'schema':1,'implementation':'cell','reference':reference.tolist(),'q':current['q'].tolist(),
+            'velocity':velocity.tolist(),'dt':dt,'alpha':alpha,'positive':positive,'pairs':serial_arrays(pairs),
+            'previousY':serial_arrays(previous_y),'previousG':serial_arrays(previous_g)}
+        trajectory['images'].append(current['positions'].tolist());trajectory['energies'].append(current['energy']);trajectory['cells'].append(current['cell'])
+        row={'step':step,'fmax':fmax,'stressResidual':current['residual'],'energyEV':current['energy'],
+             'enthalpyEV':current['enthalpy'],'volume':abs(np.linalg.det(current['lattice'])),'evaluations':evaluations}
+        history.append(row)
+        result=dict(mode='optimize',images=[current['positions'].tolist()],energies=[current['energy']],forces=[current['forces'].tolist()],
+            cell=current['cell'],cells=[current['cell']],stresses=[current['stress'].tolist()],cellOptimization=config,
+            stressResidual=current['residual'],enthalpies=[current['enthalpy']],imageFmax=[fmax],effectiveFmax=fmax,
+            converged=converged,reason='converged' if converged else 'step_limit',steps=step,evaluations=evaluations,
+            optimizer=data['optimizer'],optimizerState=state,trajectory=copy.deepcopy(trajectory),history=history[:],
+            climbingImage=None,maxTangentialStep=None,units={'length':'angstrom','energy':'eV','force':'eV/angstrom','stress':'eV/angstrom^3'})
+        progress({**row,'structureCheckpoint':result,**({'preview':{'step':step,'images':result['images'],'energies':result['energies'],'cell':result['cell'],'cells':result['cells']}} if data.get('livePreview') else {})})
+        if converged or step==data['maxSteps']:return result
+        if data['optimizer']=='fire':
+            force=-g;power=float(velocity@force)
+            if power>0:
+                positive+=1
+                if positive>5:dt=min(dt*1.1,.5);alpha*=.99
+            else:velocity*=0;dt=max(dt*.5,1e-5);alpha=.1;positive=0
+            velocity=(1-alpha)*velocity+alpha*np.linalg.norm(velocity)/max(np.linalg.norm(force),1e-30)*force
+            velocity+=dt*force;direction=dt*velocity
+        else:
+            if previous_y is not None:
+                displacement=y-previous_y;change=g-previous_g
+                if displacement@change>1e-12:pairs=(pairs+[(displacement,change)])[-10:]
+            direction=g.copy();coefficients=[]
+            for a,b in reversed(pairs):
+                c=float(a@direction/(a@b));coefficients.append(c);direction-=c*b
+            factor=float(pairs[-1][0]@pairs[-1][1]/(pairs[-1][1]@pairs[-1][1])) if pairs else 1/70
+            direction*=max(1e-8,min(factor,1.))
+            for (a,b),c in zip(pairs,reversed(coefficients)):direction+=a*(c-float(b@direction/(a@b)))
+            direction=-direction
+            if direction@g>=0:pairs=[];direction=-g/70
+        multiplier=min(1.,config['maxStrain']*scale/max(np.max(np.abs(direction[3*n:])),1e-30))
+        accepted=None
+        for _ in range(24):
+            trial_y=y+multiplier*direction
+            try:
+                ll,_=cell_geometry(reference,mode,trial_y[3*n:]/scale)
+                pp=trial_y[:3*n].reshape(n,3)@np.linalg.solve(reference,ll)
+                if force_max(pp-current['positions'])>data['maxMove']+1e-12:
+                    multiplier*=.5;continue
+                trial=evaluate(trial_y)
+            except ValueError:
+                multiplier*=.5;continue
+            if trial['enthalpy']<=current['enthalpy']+1e-4*multiplier*float(g@direction)+1e-12:
+                accepted=trial;break
+            multiplier*=.5
+        if accepted is None:raise ValueError('セル最適化の更新が停滞しました。最後の評価済み構造を保持します。')
+        previous_y=y.copy();previous_g=g.copy();y=trial_y;current=accepted
+        if multiplier<1:velocity*=multiplier
 
 
 def alpha_from_gamma(gamma):
@@ -278,6 +504,10 @@ def afir_relax(data, calculate, progress=lambda p:None):
     fixed, anchors = data.get('fixedAtoms', []), positions.copy()
     velocity = np.zeros_like(positions)
     dt, mix, positive = .05, .1, 0
+    resumed=data.get('_optimizerResume')
+    if resumed:
+        if resumed.get('implementation')!='afir':raise ValueError('AFIR再開状態の形式が不正です。')
+        velocity=np.array(resumed['velocity']);dt=resumed['dt'];mix=resumed['mix'];positive=resumed['positive']
     result = dict(schema='molecule-afir-trajectory/1', mode='afir', atomIds=data['atomIds'],
         images=[], energies=[], biasEnergies=[], biasedEnergies=[], forces=[], imageFmax=[], physicalFmax=[], history=[],
         validation='biased-trajectory-not-ts', converged=False, reason='step_limit',
@@ -307,9 +537,11 @@ def afir_relax(data, calculate, progress=lambda p:None):
             'componentFmax':{'physical':force_max(force), 'artificial':force_max(artificial),
                              'constraintCorrection':force_max(constraint_correction), 'effective':fmax}}
         result['history'].append(summary)
-        # One evaluated frame per checkpoint; no optimizer internals are claimed.
+        # Save the FIRE state before the next unevaluated step.
+        state={'schema':1,'implementation':'afir','velocity':velocity.tolist(),'dt':dt,'mix':mix,'positive':positive}
+        result['optimizerState']=state
         progress({**summary,
-                  'checkpoint':{'positions':positions.tolist(), 'force':force.tolist(),
+                  'checkpoint':{'optimizerState':state,'positions':positions.tolist(), 'force':force.tolist(),
                     'energy':float(energy), 'bias':bias, 'fmax':fmax, 'physicalFmax':result['physicalFmax'][-1], 'diagnostic':summary}})
         if fmax<=data['fmax']:
             result.update(converged=True, reason='converged'); break
@@ -665,9 +897,18 @@ def relax(data, calculate, progress=lambda _: None):
     insertion_events, blocked_intervals = [], []
     next_id, evaluations = 0, 0
     previous_positions, previous_energies = {}, {}
-    for step in range((0 if mode == 'evaluate' else max_steps) + 1):
+    resumed=data.get('_optimizerResume');offset=0
+    if resumed:
+        if resumed.get('implementation')!='band':raise ValueError('保存されたFIRE/経路状態の形式が不正です。')
+        velocity=np.array(resumed['velocity']);dt=resumed['dt'];alpha=resumed['alpha'];positive=resumed['positive']
+        previous_climbing=resumed['previousClimbing'];offset=resumed['step']
+        lup_states={int(k):{name:np.array(v) if name in ('position','force') else [(np.array(a),np.array(b),rho) for a,b,rho in v] if name=='pairs' else v for name,v in state.items()} for k,state in resumed.get('lupStates',{}).items()}
+        lup_redistributions=resumed.get('redistributions',0);next_id=resumed.get('nextId',0)
+        insertion_events=copy.deepcopy(resumed.get('insertions',[]))
+    for local_step in range((0 if mode == 'evaluate' else max_steps) + 1):
+        step=local_step+offset
         for i in range(len(images)):
-            if step and mode != 'optimize' and i in (0, len(images)-1):
+            if local_step and mode != 'optimize' and i in (0, len(images)-1):
                 if mode == 'lup':
                     cache_hits += 1
                 continue
@@ -691,7 +932,7 @@ def relax(data, calculate, progress=lambda _: None):
         if fixed:
             effective[:, fixed, :] = 0
         preliminary_converged = force_max(effective) <= data['fmax']
-        if (adaptive_on and step < max_steps and len(images) < adaptive['maxImages']
+        if (adaptive_on and not (resumed and local_step==0) and local_step < max_steps and len(images) < adaptive['maxImages']
                 and (step % adaptive['interval'] == 0 or preliminary_converged)):
             candidates = adaptive_intervals(images, energies, adaptive)
             additions = {}
@@ -788,29 +1029,32 @@ def relax(data, calculate, progress=lambda _: None):
                 band_extra.update(pathMethod='lup-ci-string', optimizer=optimizer_method, lup=lup.copy(),
                     lupStatus={'redistributions':lup_redistributions, 'cacheHits':cache_hits,
                                'redistributionResidual':redistribution_residual})
-        final_step = mode == 'evaluate' or converged or step == max_steps
+        final_step = mode == 'evaluate' or converged or local_step == max_steps
+        optimizer_state={'schema':1,'implementation':'band','velocity':velocity.tolist(),'dt':dt,'alpha':alpha,
+            'positive':positive,'previousClimbing':previous_climbing,'step':step,'lupStates':serial_arrays(lup_states),
+            'redistributions':lup_redistributions,'nextId':next_id,'insertions':copy.deepcopy(insertion_events)}
         checkpoint = {}
         if trajectory is not None:
             positions = images[0].tolist()
             trajectory['images'].append(positions)
             trajectory['energies'].append(float(energies[0]))
             checkpoint = {'checkpoint': {'positions': positions, 'energy': float(energies[0]),
-                'force': physical[0].tolist(), 'fmax': maximum, 'diagnostics': diagnostics}}
+                'force': physical[0].tolist(), 'fmax': maximum, 'diagnostics': diagnostics,'optimizerState':optimizer_state}}
         elif mode in PATH_MODES:
             # Only completely evaluated bands are resumable. Histories have scalar
             # diagnostics, never one full set of component vectors per iteration.
             checkpoint = {'bandCheckpoint': {'images': images.tolist(), 'energies': energies.tolist(),
                 'forces': physical.tolist(), 'effectiveFmax': maximum, 'imageFmax': [force_max(f) for f in effective],
-                'steps': step, 'evaluations': evaluations, 'climbingImage': climbing,
-                'history': copy.deepcopy(history[-100:]), 'diagnostics': diagnostics, **band_extra}}
-        progress({**summary, **checkpoint, **({'preview': {'step': step, 'images': images.tolist(),
+                'steps': local_step, 'evaluations': evaluations, 'climbingImage': climbing,
+                'optimizerState':optimizer_state,'history': copy.deepcopy(history[-100:]), 'diagnostics': diagnostics, **band_extra}}
+        progress({**summary, **checkpoint, **({'preview': {'step': local_step, 'images': images.tolist(),
                   'energies': energies.tolist(), 'nodeIds': node_ids[:], 'diagnostics': diagnostics}}
                   if data.get('livePreview') else {})})
         if final_step:
             return {'images': images.tolist(), 'energies': energies.tolist(), 'forces': physical.tolist(),
                     'effectiveFmax': maximum, 'imageFmax': [force_max(f) for f in effective],
                     'converged': converged, 'reason': 'evaluated' if mode == 'evaluate' else 'converged' if converged else 'step_limit',
-                    'steps': step, 'climbingImage': climbing, 'mode': mode, 'evaluations': evaluations,
+                    'steps': local_step, 'optimizerState':optimizer_state,'climbingImage': climbing, 'mode': mode, 'evaluations': evaluations,
                     'maxTangentialStep': max_parallel_step if mode == 'perpendicular' else None,
                     'history': history, 'fixedAtoms': fixed, **({'trajectory': trajectory} if trajectory is not None else {}),
                     'diagnostics': diagnostics, 'forceComponents': {key: value.tolist() for key, value in components.items()}, **band_extra,
@@ -935,7 +1179,7 @@ def ase_atoms(data, calculate):
     atoms = Atoms(data['symbols'], positions=data['images'][0],
                   cell=None if cell is None else cell['vectors'], pbc=False if cell is None else cell['pbc'])
     atoms.calc = LocalCalculator()
-    if data.get('internalConstraints') or data.get('groupConstraints'):
+    if any(data.get(k) for k in ('internalConstraints','groupConstraints','fixedComponents','rigidGroups')):
         atoms.set_constraint(internal_coordinate_constraint(data))
     elif data.get('fixedAtoms'):
         from ase.constraints import FixAtoms
@@ -951,6 +1195,8 @@ def group_centers(positions, config):
 
 def group_coordinates(centers, config):
     c = np.asarray(centers, dtype=float)
+    if config['mode']=='distances':
+        return np.array([np.linalg.norm(c[j]-c[i]) for i in range(len(c)) for j in range(i+1,len(c))])
     return (c[1:]-c[0] if config['mode']=='relative' and len(c)>1 else c).ravel()
 
 
@@ -972,9 +1218,11 @@ def validate_group_constraints(config, data):
         raise ValueError('原子団の重心拘束はMIN・AFIR-MIN・緩和スキャン専用です。')
     if data.get('cell') and any(data['cell']['pbc']):
         raise ValueError('原子団の重心拘束は非周期系専用です。周期境界をまたぐ重心は扱いません。')
-    if config['mode'] not in ('relative','absolute'):
+    if config['mode'] not in ('relative','absolute','distances'):
         raise ValueError('重心拘束はrelativeまたはabsoluteを指定してください。')
     groups, masses, count = config['groups'], config['masses'], len(data['symbols'])
+    if config['mode']=='distances' and (not isinstance(groups,list) or len(groups)<2):
+        raise ValueError('重心間距離の固定には2原子団以上が必要です。')
     if not isinstance(groups, list) or not 1<=len(groups)<=100:
         raise ValueError('重心拘束には1〜100個の原子団が必要です。')
     used = set()
@@ -995,6 +1243,8 @@ def validate_group_constraints(config, data):
         raise ValueError('重心拘束の参照座標が不正です。')
     if np.max(np.abs(group_coordinates(centers,result)-group_coordinates(reference,result)))>1e-6:
         raise ValueError('入力構造と保存された重心拘束の参照座標が一致しません。')
+    if config['mode']=='distances' and np.min(group_coordinates(centers,result))<1e-6:
+        raise ValueError('重心が一致する原子団の距離拘束は定義できません。')
     result['referenceCenters'] = copy.deepcopy(reference)
     return result
 
@@ -1050,7 +1300,7 @@ def validate_internal_constraints(data, normalized):
 
 def validate_scan_settings(data, normalized):
     config = data.get('scan', {})
-    if normalized['mode'] != 'scan' or not isinstance(config, dict) or set(config)-{'coordinates','stopOnFailure'}:
+    if normalized['mode'] != 'scan' or not isinstance(config, dict) or set(config)-{'coordinates','stopOnFailure','bidirectional','adaptive'}:
         raise ValueError('scanは緩和スキャン専用です。coordinates・stopOnFailureを指定してください。')
     coordinates = config.get('coordinates')
     if not isinstance(coordinates, list) or not 1 <= len(coordinates) <= 2:
@@ -1066,7 +1316,20 @@ def validate_scan_settings(data, normalized):
         raise ValueError('スキャン座標が別のスキャン軸または固定した内部座標と重複しています。')
     if 'afir' in data or 'vibrations' in data:
         raise ValueError('緩和スキャンは人工力・振動解析を加えず実行します。')
-    return {'coordinates':coordinates, 'stopOnFailure':config.get('stopOnFailure',True)}
+    if type(config.get('bidirectional',False)) is not bool:raise ValueError('往復スキャンは真偽値で指定してください。')
+    total=math.prod(c['points'] for c in coordinates)*(2 if config.get('bidirectional') else 1)
+    if total>400:raise ValueError('往復を含むスキャンは400点以下にしてください。')
+    result={'coordinates':coordinates,'stopOnFailure':config.get('stopOnFailure',True)}
+    if config.get('bidirectional'):result['bidirectional']=True
+    adaptive=config.get('adaptive')
+    if adaptive is not None:
+        if not isinstance(adaptive,dict) or set(adaptive)-{'enabled','maxPoints','levels','energyGap','rmsGap'} or type(adaptive.get('enabled',True)) is not bool:
+            raise ValueError('適応スキャンの条件が不正です。')
+        result['adaptive']={'enabled':adaptive.get('enabled',True),'maxPoints':number(adaptive.get('maxPoints',max(total,200)),'最大スキャン点',total,400,True),
+            'levels':number(adaptive.get('levels',3),'追加段階',1,8,True),
+            'energyGap':number(adaptive.get('energyGap',.1),'エネルギー差 (eV)',.00001,100),
+            'rmsGap':number(adaptive.get('rmsGap',.2),'原子RMS変位 (Å)',.001,20)}
+    return result
 
 
 def internal_coordinate_values(positions, coordinates, cell=None):
@@ -1118,33 +1381,42 @@ def internal_coordinate_constraint(data):
     """
     from ase.constraints import FixConstraint
     coordinates = copy.deepcopy(data.get('internalConstraints', []))
+    for group_indices in data.get('rigidGroups',[]):
+        for ii,i in enumerate(group_indices):
+            for j in group_indices[ii+1:]:
+                coordinates.append({'type':'distance','atoms':[i,j],'value':float(np.linalg.norm(np.array(data['images'][0][i])-data['images'][0][j]))})
     fixed = data.get('fixedAtoms', [])
     anchors = np.array(data['images'][0], dtype=float)
     cell = data.get('cell')
     free = np.ones(anchors.shape, dtype=bool); free[fixed] = False
+    for item in data.get('fixedComponents',[]):
+        free[item['atom'],np.array(item['axes'],dtype=bool)]=False
+    fixed_mask=~free
     free = free.ravel()
     group = data.get('groupConstraints')
-    linear = group_coordinate_matrix(group) if group else np.empty((0, anchors.size))
+    distance_groups = bool(group and group['mode']=='distances')
+    linear = group_coordinate_matrix(group) if group and not distance_groups else np.empty((0, anchors.size))
     targets = group_coordinates(group.get('referenceCenters',group_centers(anchors,group)),group) if group else np.empty(0)
     # COM derivatives are constant: factorize once for COM-only optimizations.
-    linear_inverse = np.linalg.pinv(linear[:,free], rcond=1e-10) if group and not coordinates else None
+    linear_inverse = np.linalg.pinv(linear[:,free], rcond=1e-10) if group and not coordinates and not distance_groups else None
 
     class InternalConstraint(FixConstraint):
         def jacobian(self, positions):
-            return np.vstack((internal_coordinate_jacobian(positions, coordinates, cell), linear))[:,free]
+            return np.vstack((internal_coordinate_jacobian(positions, coordinates, cell), group_distance_jacobian(positions,group) if distance_groups else linear))[:,free]
 
         def get_removed_dof(self, atoms):
-            return len(fixed)*3+int(np.linalg.matrix_rank(self.jacobian(atoms.positions)))
+            j=self.jacobian(atoms.positions)
+            return int(fixed_mask.sum())+(int(np.linalg.matrix_rank(j)) if j.size else 0)
 
         def residual(self, positions):
-            return np.concatenate((internal_coordinate_residual(internal_coordinate_values(positions, coordinates, cell), coordinates), linear@np.asarray(positions).ravel()-targets))
+            return np.concatenate((internal_coordinate_residual(internal_coordinate_values(positions, coordinates, cell), coordinates), (group_coordinates(group_centers(positions,group),group) if distance_groups else linear@np.asarray(positions).ravel())-targets))
 
         def project(self, positions):
             candidate = np.array(positions, dtype=float, copy=True)
-            candidate[fixed] = anchors[fixed]
+            candidate[fixed_mask] = anchors[fixed_mask]
             for _ in range(160):
                 residual = self.residual(candidate)
-                if np.max(np.abs(residual)) <= 1e-8:
+                if np.max(np.abs(residual), initial=0.) <= 1e-8:
                     return candidate
                 jacobian = self.jacobian(candidate)
                 norms = np.linalg.norm(jacobian,axis=1)
@@ -1160,7 +1432,7 @@ def internal_coordinate_constraint(data):
                 accepted = False
                 for fraction in (1.,.5,.25,.125,.0625,.03125,.015625):
                     proposed = candidate+fraction*displacement
-                    proposed[fixed] = anchors[fixed]
+                    proposed[fixed_mask] = anchors[fixed_mask]
                     try:
                         error = np.linalg.norm(self.residual(proposed)/scales)
                     except (ValueError, ZeroDivisionError):
@@ -1218,14 +1490,22 @@ def constrained_minimize(data, calculate, directory=None, progress=lambda p: Non
 
     atoms = ase_atoms(data,evaluate)
     initial = atoms.positions.copy()
-    if data.get('internalConstraints') or data.get('groupConstraints'):
+    if any(data.get(k) for k in ('internalConstraints','groupConstraints','fixedComponents','rigidGroups')):
         atoms.positions[:] = atoms.constraints[0].project(initial)
         if atoms.constraints[0].get_removed_dof(atoms)>=3*len(atoms):
             raise ValueError('拘束が全自由度を固定しています。緩和できる自由度を残してください。')
     group = data.get('groupConstraints')
     projection = {'inputPositions':initial.tolist(),'positions':atoms.positions.tolist(),
                   'maxDisplacement':force_max(atoms.positions-initial)}
-    optimizer = {'fire':FIRE,'lbfgs':LBFGS,'bfgs':BFGS}[data.get('optimizer','fire')](atoms,maxstep=data['maxMove'],logfile=None)
+    staged=data.get('optimizer')=='staged'
+    method=data.get('_optimizerResume',{}).get('method', 'fire' if staged else data.get('optimizer','fire'))
+    optimizer = {'fire':FIRE,'lbfgs':LBFGS,'bfgs':BFGS}[method](atoms,maxstep=data['maxMove'],logfile=None)
+    snapshot=install_optimizer_state(optimizer,data,method)
+    stages=copy.deepcopy(data.get('_optimizerResume',{}).get('stages',[]))
+    if not stages:stages=[{'step':0,'method':method,'maxMove':data['maxMove']}]
+    offset=data.get('_optimizerResume',{}).get('completedSteps',0)
+    recent_maxima=list(data.get('_optimizerResume',{}).get('recentMaxima',[]))
+    def optimizer_state():return {**snapshot(),'stages':copy.deepcopy(stages),'completedSteps':offset+len(trajectory['images'])-1,'recentMaxima':recent_maxima[-100:]}
     trajectory = {'images':[],'energies':[]}
     forces, maxima, physical_maxima, biases, history = [],[],[],[],[]
     force_components = {}
@@ -1246,6 +1526,7 @@ def constrained_minimize(data, calculate, directory=None, progress=lambda p: Non
         else:
             forces[:]=[physical.tolist()]
         maxima.append(maximum);physical_maxima.append(force_max(physical));biases.append(bias)
+        if step or not recent_maxima:recent_maxima.append(maximum)
         components = {'physical':physical,'artificial':last['artificial'],'effective':effective,
                       'constraintCorrection':effective-physical-last['artificial']}
         for key,component in components.items():
@@ -1260,21 +1541,38 @@ def constrained_minimize(data, calculate, directory=None, progress=lambda p: Non
         history.append(summary)
         saved = {'positions':positions,'energy':energy,'force':physical.tolist(),'fmax':maximum,
                  'physicalFmax':force_max(physical),'bias':bias,'internalConstraints':data.get('internalConstraints',[]),
-                 'constraintProjection':projection,'componentFmax':summary['componentFmax']}
+                 'constraintProjection':projection,'componentFmax':summary['componentFmax'],
+                 'fixedComponents':data.get('fixedComponents',[]),'rigidGroups':data.get('rigidGroups',[]),
+                 'optimizerState':optimizer_state()}
         if group:
             saved['groupConstraints'] = copy.deepcopy(group)
         progress({**summary,'phase':'optimization','checkpoint':saved,
                   **({'preview':{'step':step,'images':[positions],'energies':[energy]}} if data.get('livePreview') else {})})
 
-    optimizer.attach(checkpoint,interval=1)
-    converged = bool(optimizer.run(fmax=data['fmax'],steps=data['maxSteps']))
+    for iteration in range(data['maxSteps']+1):
+        checkpoint()
+        converged=maxima[-1]<=data['fmax']
+        if converged or iteration==data['maxSteps']:break
+        config=data.get('stagedOptimization',{'switchForce':.3,'stallSteps':15})
+        since=offset+iteration-stages[-1]['step']
+        switch=staged and method=='fire' and since>=3 and maxima[-1]<=config['switchForce'] and not any(x.get('reason')=='stall' for x in stages)
+        stall=staged and since>=config['stallSteps'] and maxima[-1]>=.98*min(recent_maxima[-config['stallSteps']:]) and len(stages)<5
+        if switch or stall:
+            method='lbfgs' if switch else 'fire'
+            maxstep=optimizer.maxstep if switch else max(.001,optimizer.maxstep*.5)
+            optimizer={'fire':FIRE,'lbfgs':LBFGS}[method](atoms,maxstep=maxstep,logfile=None)
+            snapshot=install_optimizer_state(optimizer,{k:v for k,v in data.items() if k!='_optimizerResume'},method)
+            stages.append({'step':offset+iteration,'method':method,'maxMove':maxstep,'reason':'switch_force' if switch else 'stall'})
+        optimizer.step()
+
     converged = converged and maxima[-1]<=data['fmax']
     result = dict(mode=data['mode'],images=[trajectory['images'][-1]],energies=[trajectory['energies'][-1]],
         forces=[forces[-1]],imageFmax=[maxima[-1]],effectiveFmax=maxima[-1],
         converged=converged,reason='converged' if converged else 'step_limit',steps=len(trajectory['images'])-1,
         evaluations=atoms.calc.evaluations,optimizer=data.get('optimizer','fire'),climbingImage=None,maxTangentialStep=None,
         trajectory=trajectory,history=history,fixedAtoms=data.get('fixedAtoms',[]),internalConstraints=data.get('internalConstraints',[]),
-        constraintProjection=projection,validation='constrained-minimum-candidate',
+        constraintProjection=projection,validation='constrained-minimum-candidate',optimizerState=optimizer_state(),optimizationStages=stages,
+        fixedComponents=data.get('fixedComponents',[]),rigidGroups=data.get('rigidGroups',[]),
         forceComponents=force_components,forceComponentImageIndices=[0],
         units={'length':'angstrom','energy':'eV','force':'eV/angstrom','angle':'degree'})
     if group:
@@ -1288,16 +1586,44 @@ def constrained_minimize(data, calculate, directory=None, progress=lambda p: Non
     return result
 
 
+def adaptive_scan_candidates(result, config):
+    settings=config['adaptive'];nodes=result['scan']['nodes'];axes=config['coordinates']
+    existing={(n.get('direction','forward'),tuple(n['targets'])) for n in result['scan']['plan']}
+    candidates=[]
+    for direction in ('forward','reverse'):
+        indices=[i for i,n in enumerate(nodes) if n.get('direction','forward')==direction and n['converged']]
+        for axis in range(len(axes)):
+            rows={}
+            for i in indices:
+                key=tuple(x for k,x in enumerate(nodes[i]['targets']) if k!=axis)
+                rows.setdefault(key,[]).append(i)
+            for values in rows.values():
+                values.sort(key=lambda i:nodes[i]['targets'][axis],reverse=direction=='reverse')
+                for i,j in zip(values,values[1:]):
+                    left,right=nodes[i],nodes[j];level=max(left.get('level',0),right.get('level',0))+1
+                    if level>settings['levels']:continue
+                    energy=abs(result['energies'][j]-result['energies'][i])
+                    rms=float(np.sqrt(np.mean(np.sum((np.array(result['images'][i])-result['images'][j])**2,axis=1))))
+                    target=tuple((np.array(left['targets'])+right['targets'])/2)
+                    key=(direction,target)
+                    if key not in existing and (energy>settings['energyGap'] or rms>settings['rmsGap']):
+                        candidates.append({'targets':list(target),'direction':direction,'level':level})
+                        existing.add(key)
+    return candidates
+
+
 def relaxed_scan(data, calculate, directory, progress=lambda p: None):
     """Serpentine 1D/2D constrained minima; resume only fully evaluated grid nodes."""
     config = data['scan']; coordinates = config['coordinates']
     axes = [np.linspace(c['start'],c['stop'],c['points']).tolist() for c in coordinates]
     grid = [[x] for x in axes[0]] if len(axes)==1 else [[x,y] for i,x in enumerate(axes[0]) for y in (axes[1] if i%2==0 else axes[1][::-1])]
+    plan=[{'targets':v,'direction':'forward','level':0} for v in grid]
+    if config.get('bidirectional'):plan += [{'targets':v,'direction':'reverse','level':0} for v in reversed(grid)]
     result = dict(mode='scan',images=[],energies=[],forces=[],imageFmax=[],history=[],steps=0,evaluations=0,
         converged=False,reason='running',effectiveFmax=0.,climbingImage=None,maxTangentialStep=None,
         fixedAtoms=data.get('fixedAtoms',[]),internalConstraints=data.get('internalConstraints',[]),
         forceComponents={key:[] for key in ('physical','artificial','effective','constraintCorrection')},
-        scan={**copy.deepcopy(config),'nodes':[],'totalNodes':len(grid),'order':'serpentine'},
+        scan={**copy.deepcopy(config),'nodes':[],'totalNodes':len(plan),'order':'serpentine','plan':copy.deepcopy(plan)},
         units={'length':'angstrom','energy':'eV','force':'eV/angstrom','angle':'degree'},validation='constrained-minima-not-ts')
     if data.get('groupConstraints'):
         result['groupConstraints'] = copy.deepcopy(data['groupConstraints'])
@@ -1307,10 +1633,12 @@ def relaxed_scan(data, calculate, directory, progress=lambda p: None):
         if resume.get('mode')!='scan' or resume.get('scan',{}).get('coordinates')!=coordinates:
             raise ValueError('保存されたスキャン条件が一致しません。')
         nodes = resume.get('scan',{}).get('nodes',[])
+        plan=copy.deepcopy(resume.get('scan',{}).get('plan',plan));result['scan']['plan']=plan
+        result['scan']['totalNodes']=len(plan)
         if resume.get('energyComponents'):
             result['energyComponents']={key:[] for key in resume['energyComponents']}
         for i,node in enumerate(nodes):
-            if i>=len(grid) or node.get('index')!=i or not np.allclose(node.get('targets',[]),grid[i],rtol=0,atol=1e-10):
+            if i>=len(plan) or node.get('index')!=i or not np.allclose(node.get('targets',[]),plan[i]['targets'],rtol=0,atol=1e-10):
                 raise ValueError('保存されたスキャン点の順序・目標値が不正です。')
             if not node.get('converged'):
                 break
@@ -1328,14 +1656,21 @@ def relaxed_scan(data, calculate, directory, progress=lambda p: None):
             result['steps'] += node['steps'];result['evaluations'] += node['evaluations']
         if result['images']:
             seed=copy.deepcopy(result['images'][-1])
-    for index in range(len(result['images']),len(grid)):
-        targets = grid[index]
+    index=len(result['images'])
+    while index<len(plan):
+        task=plan[index];targets=task['targets']
+        if task.get('level',0):
+            candidates=[i for i,n in enumerate(result['scan']['nodes']) if n['converged'] and n.get('direction','forward')==task['direction']]
+            if candidates:
+                ranges=np.array([abs(c['stop']-c['start']) for c in coordinates])
+                near=min(candidates,key=lambda i:np.linalg.norm((np.array(result['scan']['nodes'][i]['targets'])-targets)/ranges))
+                seed=copy.deepcopy(result['images'][near])
         constraints = copy.deepcopy(data.get('internalConstraints',[]))+[
             {'type':c['type'],'atoms':c['atoms'],'value':value} for c,value in zip(coordinates,targets)]
         node_data = {**data,'mode':'optimize','images':[seed],'internalConstraints':constraints}
         def node_progress(value):
             public = {k:v for k,v in value.items() if k not in ('checkpoint','structureCheckpoint')}
-            public.update(phase='scan',scanNode=index,scanTotal=len(grid),scanTargets=targets)
+            public.update(phase='scan',scanNode=index,scanTotal=len(plan),scanTargets=targets)
             progress(public)
         optimized = constrained_minimize(node_data,calculate,directory,node_progress)
         node_positions = optimized['images'][0]
@@ -1344,7 +1679,7 @@ def relaxed_scan(data, calculate, directory, progress=lambda p: None):
         actual = internal_coordinate_values(node_positions,coordinates,data.get('cell')).tolist()
         node = {'index':index,'targets':targets,'actual':actual,'converged':optimized['converged'],
                 'reason':optimized['reason'],'steps':optimized['steps'],'evaluations':optimized['evaluations'],
-                'effectiveFmax':optimized['effectiveFmax']}
+                'effectiveFmax':optimized['effectiveFmax'],'direction':task['direction'],'level':task.get('level',0)}
         for key in ('images','energies','forces','imageFmax'):
             result[key].append(optimized[key][0])
         for key in result['forceComponents']:
@@ -1356,12 +1691,19 @@ def relaxed_scan(data, calculate, directory, progress=lambda p: None):
         result['history'].append({'step':result['steps'],'scanNode':index,'fmax':optimized['effectiveFmax'],
             'energyEV':optimized['energies'][0],'energies':result['energies'][:],'evaluations':result['evaluations'],
             'componentFmax':optimized['history'][-1]['componentFmax']})
-        progress({'phase':'scan','scanNode':index,'scanTotal':len(grid),'scanTargets':targets,
+        if index+1==len(plan) and config.get('adaptive',{}).get('enabled'):
+            candidates=adaptive_scan_candidates(result,config)
+            room=config['adaptive']['maxPoints']-len(plan)
+            plan.extend(candidates[:max(0,room)])
+            result['scan'].update(plan=copy.deepcopy(plan),totalNodes=len(plan),
+                adaptiveStatus={'unresolvedIntervals':len(candidates),'budgetReached':len(candidates)>room})
+        progress({'phase':'scan','scanNode':index,'scanTotal':len(plan),'scanTargets':targets,
             'structureCheckpoint':copy.deepcopy(result),
             **({'preview':{'step':result['steps'],'images':copy.deepcopy(result['images']),'energies':result['energies'][:]}} if data.get('livePreview') else {})})
         if not optimized['converged'] and config['stopOnFailure']:
             result['reason']='scan_node_unconverged'
             break
+        index+=1
     else:
         result['converged']=all(n['converged'] for n in result['scan']['nodes'])
         result['reason']='converged' if result['converged'] else 'scan_nodes_unconverged'
@@ -1383,6 +1725,7 @@ def ase_optimize(data, calculate, progress=lambda p: None):
     else:
         from ase.optimize import LBFGS, BFGS
         optimizer = (LBFGS if data['optimizer']=='lbfgs' else BFGS)(atoms, maxstep=data['maxMove'], logfile=None)
+    snapshot=install_optimizer_state(optimizer,data,data['optimizer']) if data['mode']!='ts' else lambda:None
     trajectory, history = {'images': [], 'energies': []}, []
 
     def checkpoint():
@@ -1398,7 +1741,7 @@ def ase_optimize(data, calculate, progress=lambda p: None):
             maxDisplacement=0. if step==0 else force_max(atoms.positions-np.array(trajectory['images'][-2])),
             componentFmax={'physical':force_max(physical), 'effective':maximum, 'constraintCorrection':force_max(force-physical)})
         history.append(summary)
-        progress({**summary, 'phase':'optimization', 'checkpoint':dict(positions=positions, energy=float(energy), force=physical.tolist(), fmax=maximum, diagnostic=summary),
+        progress({**summary, 'phase':'optimization', 'checkpoint':dict(positions=positions, energy=float(energy), force=physical.tolist(), fmax=maximum, diagnostic=summary,optimizerState=snapshot()),
             **({'preview':dict(step=step, images=[positions], energies=[float(energy)])} if data.get('livePreview') else {})})
 
     optimizer.attach(checkpoint, interval=1)
@@ -1407,7 +1750,7 @@ def ase_optimize(data, calculate, progress=lambda p: None):
     converged = converged and maximum<=data['fmax']
     return dict(images=[atoms.positions.tolist()], energies=[float(atoms.get_potential_energy())], forces=[atoms.get_forces(apply_constraint=False).tolist()],
         imageFmax=[maximum], effectiveFmax=maximum, converged=converged, reason='converged' if converged else 'step_limit',
-        steps=len(trajectory['images'])-1, evaluations=atoms.calc.evaluations, mode=data['mode'], optimizer=data['optimizer'],
+        optimizerState=snapshot(),steps=len(trajectory['images'])-1, evaluations=atoms.calc.evaluations, mode=data['mode'], optimizer=data['optimizer'],
         climbingImage=None, maxTangentialStep=None, trajectory=trajectory, history=history, fixedAtoms=data.get('fixedAtoms', []),
         forceComponents={'physical':[atoms.get_forces(apply_constraint=False).tolist()], 'effective':[force.tolist()],
                          'constraintCorrection':[(force-atoms.get_forces(apply_constraint=False)).tolist()]},
@@ -1451,11 +1794,13 @@ def vibration_analysis(data, calculate, directory, progress=lambda p: None):
 
 
 def calculate_job(data, calculate, directory, progress=lambda p: None):
-    if data['mode']=='irc':
+    if data.get('cellOptimization',{}).get('mode','fixed')!='fixed':
+        result = optimize_cell(data, calculate, progress)
+    elif data['mode']=='irc':
         result = irc_calculation(data, calculate, directory, progress)
     elif data['mode']=='scan':
         result = relaxed_scan(data, calculate, directory, progress)
-    elif (data.get('internalConstraints') or data.get('groupConstraints')) and data['mode'] in ('optimize', 'afir'):
+    elif (any(data.get(k) for k in ('internalConstraints','groupConstraints','fixedComponents','rigidGroups')) or data.get('optimizer')=='staged' ) and data['mode'] in ('optimize', 'afir'):
         result = constrained_minimize(data, calculate, directory, progress)
     elif data['mode']=='afir':
         result = afir_relax(data, calculate, progress)
@@ -1757,7 +2102,13 @@ class TBLiteEngine:
         self.Calculator, self.data, self.config = Calculator, data, config
         self.calculators, self.results = {}, {}
 
+    def with_cell(self, index, positions, lattice):
+        return self._evaluate(index,positions,lattice,True)
+
     def __call__(self, index, positions):
+        return self._evaluate(index,positions,None,False)
+
+    def _evaluate(self, index, positions, lattice, stress):
         if index not in self.calculators:
             cell = self.data['cell']
             calc = self.Calculator(self.config['method'], np.array([atomic_numbers[s] for s in self.data['symbols']]),
@@ -1769,10 +2120,12 @@ class TBLiteEngine:
             calc.set('accuracy', .01 if self.data['mode'] in ('ts', 'irc') or 'vibrations' in self.data else 1.0)
             self.calculators[index] = calc
         calc = self.calculators[index]
-        calc.update(positions / Bohr)
+        calc.update(positions / Bohr, lattice=None if lattice is None else np.asarray(lattice)/Bohr)
         result = calc.singlepoint(self.results.get(index))
         self.results[index] = result
-        return float(result.get('energy')) * Hartree, -np.asarray(result.get('gradient')) * Hartree / Bohr
+        energy=float(result.get('energy'))*Hartree;forces=-np.asarray(result.get('gradient'))*Hartree/Bohr
+        if stress:return energy,forces,np.asarray(result.get('virial'))*Hartree/abs(np.linalg.det(lattice))
+        return energy,forces
 
 
 def parse_gradient(text, symbols, positions):
@@ -2207,6 +2560,22 @@ class ExactEvaluationCache:
         self.calls = self.hits = 0
         self.seconds = 0.
 
+    def with_cell(self, index, positions, lattice):
+        if not hasattr(self.calculate, 'with_cell'):
+            raise ValueError('この計算エンジンはセル応力に対応していません。')
+        array=np.asarray(positions,dtype=np.float64);cell=np.asarray(lattice,dtype=np.float64)
+        key=('cell',index,array.shape,array.tobytes(),cell.tobytes())
+        if key in self.values:
+            self.hits+=1;value=self.values.pop(key);self.values[key]=value
+            return value[0],value[1].copy(),value[2].copy()
+        started=time.perf_counter();energy,forces,stress=self.calculate.with_cell(index,array,cell)
+        self.seconds+=time.perf_counter()-started;self.calls+=1
+        forces=np.asarray(forces,float);stress=np.asarray(stress,float)
+        if math.isfinite(energy) and forces.shape==array.shape and stress.shape==(3,3) and np.isfinite(forces).all() and np.isfinite(stress).all():
+            self.values[key]=(float(energy),forces.copy(),stress.copy())
+            while len(self.values)>self.capacity:self.values.popitem(last=False)
+        return energy,forces.copy(),stress.copy()
+
     def __call__(self, index, positions):
         array = np.asarray(positions, dtype=np.float64)
         key = (index, array.shape, array.tobytes())
@@ -2268,7 +2637,8 @@ def execute_with_calculator(data, config, directory, messages, calculator):
                 row['energyComponents'] = additions['energyComponents']
     result['engine'] = config['engine']
     result['method'] = engine_method(config)
-    result['symbols'], result['cell'] = data['symbols'], data['cell']
+    result['symbols'] = data['symbols']
+    result.setdefault('cell',data['cell'])
     result['charge'], result['multiplicity'] = data['charge'], data['multiplicity']
     if 'atomIds' in data:
         result['atomIds'] = data['atomIds']
@@ -2614,7 +2984,7 @@ class Jobs:
                 row.update(mode=job['data']['mode'], atoms=len(job['data']['symbols']),
                            steps=job.get('result', {}).get('steps', job.get('progress', {}).get('step', 0)),
                            hasResult=bool(job.get('result')), resumable=job['status'] in self.TERMINAL and not job.get('_active'))
-                row['resumeKind'] = ('scan_remaining' if job['data']['mode']=='scan' and job.get('result') else
+                row['resumeKind'] = ('optimizer_state' if job.get('result',{}).get('optimizerState') else 'scan_remaining' if job['data']['mode']=='scan' and job.get('result') else
                                      'geometry' if job['data']['mode'] in ('optimize','afir','ts', *PATH_MODES) and job.get('result') else 'restart')
                 if job.get('_active') and job['status'] in self.TERMINAL:
                     row['status'] = 'running'
@@ -2676,6 +3046,7 @@ class Jobs:
                                 rows.append(row)
                         checkpoint = value.pop('checkpoint', None)
                         if checkpoint is not None:
+                            if job['checkpoints']:job['checkpoints'][-1].pop('optimizerState',None)
                             job['checkpoints'].append(checkpoint)
                         for key in ('bandCheckpoint','structureCheckpoint'):
                             saved = value.pop(key, None)
@@ -2737,7 +3108,7 @@ class Jobs:
                           maxTangentialStep=None, error=job.get('error'))
             result.setdefault('history', [])
         result['conditionId'] = hashlib.sha256(json.dumps({'data':data, 'identity':job.get('configFingerprint') or calculation_identity(data, self.config)}, sort_keys=True).encode()).hexdigest()
-        result.update(mode=data['mode'], symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
+        result.update(mode=data['mode'], symbols=data['symbols'], cell=result.get('cell',data['cell']), charge=data['charge'], multiplicity=data['multiplicity'],
             **self._record_identity(job), units={'length':'angstrom','energy':'eV','force':'eV/angstrom'})
         result['fixedAtoms'] = data.get('fixedAtoms', [])
         if job.get('diagnosticsHistory'):
@@ -2751,7 +3122,7 @@ class Jobs:
         last = frames[-1]
         return dict(mode=data['mode'], optimizer=data.get('optimizer','fire'), **self._record_identity(job),
             fixedAtoms=data.get('fixedAtoms', []),
-            **{k:copy.deepcopy(last[k]) for k in ('internalConstraints','groupConstraints','constraintProjection') if k in last},
+            **{k:copy.deepcopy(last[k]) for k in ('internalConstraints','groupConstraints','constraintProjection','optimizerState','fixedComponents','rigidGroups') if k in last},
             **({'atomIds':data['atomIds']} if 'atomIds' in data else {}),
             symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
             images=[last['positions']], energies=[last['energy']], forces=[last['force']],
@@ -2770,7 +3141,7 @@ class Jobs:
         energies, biases = [p['energy'] for p in frames], [p['bias'] for p in frames]
         return dict(schema='molecule-afir-trajectory/1', mode='afir', **self._record_identity(job),
             fixedAtoms=data.get('fixedAtoms', []),
-            **{k:copy.deepcopy(frames[-1][k]) for k in ('internalConstraints','groupConstraints','constraintProjection') if k in frames[-1]},
+            **{k:copy.deepcopy(frames[-1][k]) for k in ('internalConstraints','groupConstraints','constraintProjection','optimizerState','fixedComponents','rigidGroups') if k in frames[-1]},
             atomIds=data['atomIds'],
             symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
             images=[p['positions'] for p in frames], energies=energies, biasEnergies=biases,
@@ -2820,6 +3191,7 @@ class Jobs:
                 raise RuntimeError('実行中・待機中の計算は再開できません。')
             data = copy.deepcopy(job['data'])
             data.pop('_scanResume', None)
+            data.pop('_optimizerResume', None)
             if job.get('configFingerprint') != calculation_identity(data, self.config):
                 raise RuntimeError('保存時とエンジン・モデル・パッケージ・計算設定が異なります。同じ環境で再開するか、結果を新しい入力として実行してください。')
             # Revalidate stored public settings; no arbitrary paths or code can be restored.
@@ -2829,8 +3201,13 @@ class Jobs:
                 data['images'] = copy.deepcopy(result['images'] if data['mode'] in PATH_MODES else [result['images'][-1]])
                 if data['mode'] in PATH_MODES and result.get('nodeIds'):
                     data['nodeIds'] = copy.deepcopy(result['nodeIds'])
+                if data.get('cellOptimization',{}).get('mode','fixed')!='fixed':
+                    data['cell']=copy.deepcopy(result['cell'])
                 data = validate(data, self.config['engine'])
                 kind = 'geometry'
+                if result.get('optimizerState'):
+                    data['_optimizerResume']=copy.deepcopy(result['optimizerState'])
+                    kind='optimizer_state'
             elif result and data['mode']=='scan' and result.get('scan', {}).get('nodes'):
                 data['_scanResume'] = copy.deepcopy(result)
                 kind = 'scan_remaining'
@@ -2955,7 +3332,7 @@ class Handler(BaseHTTPRequestHandler):
                                    'device':config.get('anysolvDevice'), 'precision':config['umaPrecision']},
                         'maxMultiplicity':100, 'maxAtomicNumber':83} if config['engine']=='uma' else {}),
                     'sellaVersion':sella_version(), 'vibrations':1, 'maxVibrationAtoms':200, 'pathCheckpoint':1, 'fixedAtoms':True,
-                    'irc':bool(sella_version()), 'thermochemistry':True, 'internalConstraints':True, 'groupConstraints':True, 'scan':True,
+                    'irc':bool(sella_version()), 'thermochemistry':True, 'internalConstraints':True, 'groupConstraints':True, 'scan':True, 'advancedOptimization':True, 'optimizerRestart':True, 'cellOptimization':config['engine']=='tblite',
                     'adaptiveNEB':True, 'pathSplit':True, 'history':True, 'queue':True, 'residentModels':True,
                     'lup':True, 'pathOptimizers':{'cineb':['fire'], 'lup':['fire','lbfgs']},
                     'persistentHistory':bool(self.server.jobs.history_dir), 'jobQueue':True, 'modelResidency':True,

@@ -64,6 +64,7 @@ jobs:
           node molecule-visualizer/tests/measurements-browser.cjs || molecule_test_status=1
           node molecule-visualizer/tests/workflow-browser.cjs || molecule_test_status=1
           node molecule-visualizer/tests/analysis-browser.cjs || molecule_test_status=1
+          node molecule-visualizer/tests/optimization-browser.cjs || molecule_test_status=1
           exit "$molecule_test_status"
       - uses: actions/upload-artifact@v4
         if: always()

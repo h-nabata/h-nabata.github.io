@@ -4,13 +4,13 @@
   const defaults=()=>({schema:'molecule-group-centers/1',enabled:false,mode:'relative',groups:[]});
   function config(state){
     const c=state.metadata?.groupConstraints||defaults();
-    if(c.schema!=='molecule-group-centers/1'||typeof c.enabled!=='boolean'||!['relative','absolute'].includes(c.mode)||!Array.isArray(c.groups)||c.groups.length>100||c.groups.some(g=>!g||typeof g.id!=='string'||!g.id||typeof g.label!=='string'||g.label.length>100||typeof g.enabled!=='boolean'||!Array.isArray(g.atomIds)||!g.atomIds.length||g.atomIds.some(id=>typeof id!=='string'||!id)||new Set(g.atomIds).size!==g.atomIds.length)||new Set(c.groups.map(g=>g.id)).size!==c.groups.length)throw Error('原子団の重心拘束の設定が不正です。「重心拘束をすべて解除」で指定し直してください。');
+    if(c.schema!=='molecule-group-centers/1'||typeof c.enabled!=='boolean'||!['relative','absolute','distances'].includes(c.mode)||!Array.isArray(c.groups)||c.groups.length>100||c.groups.some(g=>!g||typeof g.id!=='string'||!g.id||typeof g.label!=='string'||g.label.length>100||typeof g.enabled!=='boolean'||!Array.isArray(g.atomIds)||!g.atomIds.length||g.atomIds.some(id=>typeof id!=='string'||!id)||new Set(g.atomIds).size!==g.atomIds.length)||new Set(c.groups.map(g=>g.id)).size!==c.groups.length)throw Error('原子団の重心拘束の設定が不正です。「重心拘束をすべて解除」で指定し直してください。');
     return c;
   }
   function centers(positions,wire){
     return wire.groups.map(group=>{let total=0;const sum=[0,0,0];for(const i of group){const m=wire.masses[i],p=positions?.[i];if(!Number.isFinite(m)||m<.1||m>400||!Array.isArray(p)||p.length!==3||!p.every(Number.isFinite))throw Error('重心の座標・質量が不正です。');total+=m;for(let k=0;k<3;k++)sum[k]+=m*p[k];}return sum.map(v=>v/total);});
   }
-  const values=(c,wire)=>wire.mode==='relative'&&c.length>1?c.slice(1).map(p=>p.map((x,k)=>x-c[0][k])):c;
+  const values=(c,wire)=>wire.mode==='distances'?c.flatMap((p,i)=>c.slice(i+1).map(q=>[Math.hypot(...p.map((x,k)=>x-q[k]))])):wire.mode==='relative'&&c.length>1?c.slice(1).map(p=>p.map((x,k)=>x-c[0][k])):c;
   function forJob(state,data,info,massOf){
     const c=config(state);if(!c.enabled)return null;
     if(!['optimize','afir','scan'].includes(data.mode)||data.vibrations)throw Error('原子団の重心拘束はMIN・AFIR-MIN・緩和スキャン専用です。');
@@ -19,6 +19,8 @@
     if(JSON.stringify(state.atoms.map(a=>a.element))!==JSON.stringify(data.symbols))throw Error('重心拘束の原子対応には全構造の元素・File-orderの一致が必要です。');
     const ids=new Map(state.atoms.map((a,i)=>[a.id,i])),used=new Set();
     const groups=c.groups.filter(g=>g.enabled).map(g=>g.atomIds.map(id=>{if(!ids.has(id))throw Error('重心拘束に削除済みの原子があります。原子団を指定し直してください。');if(used.has(id))throw Error('重心拘束の原子団は重複しないように指定してください。');used.add(id);return ids.get(id);}));
+    if(c.mode==='distances'&&groups.length<2)throw Error('重心間距離の固定には2原子団以上が必要です。');
+    if(c.mode==='distances'&&!info?.advancedOptimization&&info)throw Error('重心間距離の固定にはbridge.py 1.12.0以降が必要です。');
     if(!groups.length)throw Error('重心拘束の対象原子団を1個以上有効にしてください。');
     const wire={mode:c.mode,groups,masses:state.atoms.map(massOf)};
     centers(data.images[0],wire);return wire;

@@ -1,0 +1,12 @@
+/* The desktop calculation panel leaves the molecule available for selection. */
+.mv-app .mv-optimization-state{margin:0;padding:7px 12px;background:#eaf4f3;color:#244e59;font-size:12px;line-height:1.6;border-top:1px solid #d0e3e4;overflow-wrap:anywhere}
+.mv-app #optimizationPanel{margin:12px 0;border-left:3px solid #a55a84}
+.mv-app #optimizationPanel .mv-row{flex-wrap:wrap}
+.mv-app #optimizationPanel td{font-size:12px;vertical-align:top;overflow-wrap:anywhere}
+.mv-app #optimizationPanel td:last-child{white-space:nowrap}
+.mv-app #optimizationPanel .mv-btn{font-size:12px}
+.mv-app .mv-scan-map{padding:10px 0}.mv-app .mv-scan-map td{padding:2px;text-align:center}.mv-app .mv-scan-map .mv-btn{min-width:64px;color:#183647}
+.mv-app #workflowResults .mv-btn{font-size:12px}.mv-app #workflowMessage{padding:8px;background:#f2f7f8;white-space:pre-wrap}
+.mv-app .research-coordinate input[data-field="enabled"]{width:auto}
+@media(min-width:1000px){.mv-app #engineDialog[open]:not(:modal){position:fixed;left:auto;right:12px;top:80px;bottom:12px;margin:0;width:440px;max-width:38vw;height:calc(100vh - 100px);max-height:none;overflow:auto;z-index:90;box-sizing:border-box;border:1px solid #b8cdd6;box-shadow:0 10px 30px #18354b26;padding:15px}.mv-app #engineDialog[open]:not(:modal) .mv-grid{grid-template-columns:1fr}.mv-app #engineDialog[open]:not(:modal) .mv-dialog-actions{position:sticky;bottom:-15px;background:white;border-top:1px solid #d4e1e9;padding:12px 0;z-index:2}}
+@media(max-width:600px){.mv-app #optimizationPanel table{min-width:360px}.mv-app #optimizationState{font-size:11px}.mv-app #optimizationPanel .mv-btn{min-height:36px}}

@@ -12,7 +12,7 @@ async function boot(){
  const document={getElementById:id=>nodes.get(id),createElement:()=>new Element()},window={document};
  const info={version:'1.9.0',engine:'tblite',method:'GFN2-xTB',engineVersion:'fixture',modes:['evaluate','optimize','cineb','lup'],lup:true,pathOptimizers:{cineb:['fire'],lup:['fire','lbfgs']},maxImages:100,maxSteps:10000,vibrations:true,adaptiveNEB:true,pathSplit:true};
  const ctx=vm.createContext({window,document,location:{hostname:'example.test'},URL,AbortController,setTimeout,clearTimeout,console,fetch:async()=>({ok:true,json:async()=>info})});
- for(const f of ['model','bonding','geometry','io','molfile','periodic','constraints','research-ui','engine-ui','path-refinement'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../'+f+'.js'),'utf8'),ctx,{filename:f+'.js'});
+ for(const f of ['model','optimization','bonding','geometry','io','molfile','periodic','constraints','research-ui','engine-ui','path-refinement'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../'+f+'.js'),'utf8'),ctx,{filename:f+'.js'});
  const M=window.MoleculeVisualizer;let state=M.Model.createState({atoms:[{id:'o',element:'O',x:0,y:0,z:0},{id:'h1',element:'H',x:.96,y:0,z:0},{id:'h2',element:'H',x:-.24,y:.93,z:0}]});
  state.metadata.pathNodeId='n0';state.metadata.trajectory=[0,.1,.2].map((shift,i)=>{const f=M.Periodic.snapshot(state);f.atoms[1].x+=shift;f.metadata.pathNodeId='n'+i;return f;});state.metadata.frameIndex=0;
  M.App={getState:()=>state,getDisplayedState:()=>state,useDisplayedStructure(){},freezeDisplayedStructure(){},change(_label,fn){state=fn(state)||state;}};M.EnergyProfile={reset(){}};M.Studio={stop(){}};M.App.setStatus=()=>{};

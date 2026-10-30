@@ -91,7 +91,7 @@ class PersistentHistory(unittest.TestCase):
             self.assertEqual(public['result']['trajectory'], result['trajectory'])
             with patch.object(restored, '_launch_next'):
                 resumed = restored.resume(job['id'])
-            self.assertEqual(resumed['resumeKind'], 'geometry')
+            self.assertEqual(resumed['resumeKind'], 'optimizer_state')
             self.assertEqual(resumed['parentId'], job['id'])
             self.assertEqual(resumed['data']['images'], result['images'])
             self.assertEqual(resumed['data']['maxSteps'], 2)

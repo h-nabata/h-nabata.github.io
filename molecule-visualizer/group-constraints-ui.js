@@ -44,7 +44,7 @@
         list.append(row);
       }
     }
-    const summary=c.enabled?`${active.length}原子団 · ${c.mode==='absolute'||active.length===1?'重心位置を固定':'相対位置を固定'}`:'オフ';
+    const summary=c.enabled?`${active.length}原子団 · ${c.mode==='distances'?'重心間距離を固定':c.mode==='absolute'||active.length===1?'重心位置を固定':'相対位置を固定'}`:'オフ';
     for(const id of ['groupConstraintSummary','engineGroupConstraintSummary','afirGroupConstraintSummary'])$(id).textContent='重心拘束: '+summary;
     $('btnGroupConstraints').setAttribute('aria-pressed',String(c.enabled));
     for(const field of $('groupConstraintFields').querySelectorAll('input,button,select'))field.disabled=!!busy();

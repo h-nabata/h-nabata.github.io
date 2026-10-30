@@ -81,6 +81,7 @@
     pushHistory('use displayed structure');setState(next,true);return state;
   }
   function syncXYZEditor(){
+    MV.OptimizationUI?.sync();
     const el=byId('dataText');if(!el)return;
     byId('btnCopySelection').disabled=!getDisplayedState().atoms.some(a=>state.selectedAtomIds.has(a.id));
     for(const id of ['btnRemoveCell','cellRemove'])byId(id).disabled=!getDisplayedState().metadata.cell;
@@ -176,7 +177,7 @@
     MV.Studio?.sync();
     MV.MeasurementUI?.sync();
     MV.AFIRUI?.sync();
-    MV.ConstraintUI?.sync();MV.GroupConstraintUI?.sync();
+    MV.ConstraintUI?.sync();MV.GroupConstraintUI?.sync();MV.OptimizationUI?.sync();
   }
 
   function setState(nextState, preserveCamera, navigation=false) {
@@ -197,7 +198,7 @@
     MV.Studio?.sync();
     MV.MeasurementUI?.sync();
     MV.AFIRUI?.sync();
-    MV.ConstraintUI?.sync();MV.GroupConstraintUI?.sync();
+    MV.ConstraintUI?.sync();MV.GroupConstraintUI?.sync();MV.OptimizationUI?.sync();
   }
 
   function renderAfterEdit(preserveCamera) {

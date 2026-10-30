@@ -82,12 +82,13 @@
       if(typeof source.base!=='function')throw Error('原子情報がないため描画へ反映できません。XYZ保存を利用してください。');
       if(selected.length>200||selected.length*source.symbols.length>100000)throw Error('描画への反映は200フレーム・合計100000原子までです。ノード数を減らしてください。');
       if(toNEB&&(selected.length<3||selected.length>100||source.symbols.length>500))throw Error('CI-NEB入力は3〜100ノード・500原子までです。');
+      if(toNEB&&source.cells&&selected.some(i=>JSON.stringify(source.cells[i])!==JSON.stringify(source.cells[selected[0]])))throw Error('CI-NEBには同じセルの構造列が必要です。可変セルの軌跡はXYZとして保存できます。');
       const original=source,ids=selected.slice(),method=$('trajectoryMethod').value,settings=options();
       const frames=ids.map(i=>{
         const s=MV.Model.createState(original.base(i));
         if(JSON.stringify(s.atoms.map(a=>a.element))!==JSON.stringify(original.symbols)||original.atomIds&&JSON.stringify(s.atoms.map(a=>a.id))!==JSON.stringify(original.atomIds))throw Error('抽出元の原子対応が一致しません。');
         s.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=original.images[i][k];});
-        s.metadata.cell=original.cell||null;s.metadata.totalCharge=original.charge;s.metadata.multiplicity=original.multiplicity;
+        s.metadata.cell=original.cells?.[i]||original.cell||null;s.metadata.totalCharge=original.charge;s.metadata.multiplicity=original.multiplicity;
         delete s.metadata.externalCalculation;delete s.metadata.afirCalculation;
         s.metadata.trajectoryExtraction={sourceKind:original.kind,sourceFrame:i,sourceCount:original.images.length,method,...(original.kind==='afir'?settings:{})};
         if(original.kind==='afir')s.metadata.afirCalculation={engine:original.engine,method:original.method,physicalEnergyEV:original.energies[i],biasEnergyEV:original.biasEnergies?.[i],step:original.stepNumbers?.[i]??i,validation:'biased-trajectory-not-ts',atomIds:s.atoms.map(a=>a.id)};

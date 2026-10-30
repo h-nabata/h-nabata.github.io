@@ -10,6 +10,8 @@
     if(biasEnergies&&!energies)throw Error('人工項と併せて物理エネルギーが必要です。');
     if(source.stepNumbers&&(!Array.isArray(source.stepNumbers)||source.stepNumbers.length!==images.length||source.stepNumbers.some(i=>!Number.isInteger(i)||i<0||i>=limit)))throw Error('最適化ステップの番号が不正です。');
     if(cell&&(!Array.isArray(cell.vectors)||cell.vectors.length!==3||cell.vectors.some(v=>!Array.isArray(v)||v.length!==3||v.some(x=>!Number.isFinite(x)))||!Array.isArray(cell.pbc)||cell.pbc.length!==3||cell.pbc.some(x=>typeof x!=='boolean')))throw Error('構造列のセルが不正です。');
+    if(source.cells&&(!Array.isArray(source.cells)||source.cells.length!==images.length))throw Error("構造列とセル数が一致しません。");
+    if(source.cells)source.cells.forEach(c=>validate({symbols,images:[images[0]],cell:c}));
     return source;
   }
   function distances(images){
@@ -104,7 +106,8 @@
       if(source.kind==='afir'||source.kind==='optimize')comment+=` step=${source.stepNumbers?.[i]??i}`;
       if(source.energies)comment+=` energy_eV=${source.energies[i].toPrecision(15)}`;
       if(source.biasEnergies)comment+=` bias_eV=${source.biasEnergies[i].toPrecision(15)} biased_energy_eV=${(source.energies[i]+source.biasEnergies[i]).toPrecision(15)}`;
-      if(source.cell)comment+=` Lattice="${source.cell.vectors.flat().join(' ')}" pbc="${source.cell.pbc.map(v=>v?'T':'F').join(' ')}" Properties=species:S:1:pos:R:3`;
+      const cell=source.cells?.[i]||source.cell;
+      if(cell)comment+=` Lattice="${cell.vectors.flat().join(' ')}" pbc="${cell.pbc.map(v=>v?'T':'F').join(' ')}" Properties=species:S:1:pos:R:3`;
       return [source.symbols.length,comment,...coordinates(source,i)].join('\n')+'\n';
     }).join('');
   }

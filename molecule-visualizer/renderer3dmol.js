@@ -232,6 +232,7 @@
       .sort((a, b) => a.z - b.z)
       .forEach(pa => this.drawAtom(pa));
 
+    MV.OptimizationUI?.draw(this,atomById,center,scale,width,height);
     this.drawVibrationVectors(center,scale,width,height);
     this.drawAnalysisOverlay(center,scale,width,height);
 

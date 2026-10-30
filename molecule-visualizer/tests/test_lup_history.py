@@ -51,13 +51,13 @@ class LUPHistory(unittest.TestCase):
                 self.assertAlmostEqual(well(0, np.array(image))[0], energy, places=12)
             with patch.object(restored, '_launch_next'):
                 resumed = restored.resume(created['id'])
-            self.assertEqual(resumed['resumeKind'], 'geometry')
+            self.assertEqual(resumed['resumeKind'], 'optimizer_state')
             self.assertEqual(resumed['parentId'], created['id'])
             for key in ('mode', 'optimizer', 'lup', 'climbAfter', 'atomIds', 'nodeIds'):
                 self.assertEqual(resumed['data'][key], data[key])
             self.assertEqual(resumed['data']['images'], result['images'])
             self.assertEqual(restored.get(created['id'])['result'], recovered['result'])
-            self.assertEqual(restored.listing()['jobs'][-1]['resumeKind'], 'geometry')
+            self.assertEqual(restored.listing()['jobs'][-1]['resumeKind'], 'optimizer_state')
 
     def test_failure_after_redistribution_keeps_old_evaluated_coordinates(self):
         data = b.validate({**request(), 'lup': {'redistributeEvery': 1}}, 'tblite')
