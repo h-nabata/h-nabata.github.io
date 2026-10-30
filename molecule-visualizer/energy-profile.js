@@ -7,7 +7,7 @@
   function element(tag,attrs,text){const e=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));if(text)e.textContent=text;return e;}
   function restore(draw=true,deferred=false){
     if(!active)return;active=false;app().renderer().previewOnly=false;$('profilePreview').hidden=true;
-    if(draw)app().renderer().renderState(app().getState(),true,deferred);
+    if(draw)app().renderer().renderState(app().getState(),true,deferred);MV.OptimizationUI?.sync();
   }
   function select(i,preview=true){
     if(!data||!Number.isInteger(i)||i<0||i>=data.energies.length)return;
@@ -27,7 +27,7 @@
     state.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=positions[k];});
     if(data.kind!=='evaluate')MV.Bonding.refreshInferredBonds(state);
     state.viewSettings={...app().getState().viewSettings};state.selectedAtomIds.clear();state.selectedBondIds.clear();
-    active=true;app().renderer().previewOnly=true;app().renderer().renderState(state,true);
+    active=true;app().renderer().previewOnly=true;app().renderer().renderState(state,true);MV.OptimizationUI?.sync();
     $('profilePreview').hidden=false;$('profilePreview').textContent='計算結果のプレビュー · '+(isStep(data)?'ステップ '+i:'構造 '+(i+1))+'（入力座標は保持）';
   }
   // Preserve extrema in each bucket; limit SVG size even for 10,001 frames.

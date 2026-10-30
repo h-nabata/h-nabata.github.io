@@ -106,7 +106,8 @@
     if(connection.info.vibrations)data.atomIds=all[0].atoms.map(a=>a.id);
     if(data.maxSteps>(connection.info.maxSteps??1000))throw Error('指定したステップ数に対応するため、bridge.pyを更新・再起動して再接続してください。');
     if(climbingModes.includes(mode)&&data.climbAfter>=data.maxSteps)throw Error('CI開始ステップを最大ステップ数より小さくしてください。');
-    return {data,frames:all,scope:$('engineScope').value,fingerprint:fingerprint(state),original:MV.Model.cloneState(state)};
+    const original=MV.Model.cloneState(state);MV.Optimization?.rememberCoordinates(original,data);all.forEach(f=>MV.Optimization?.rememberCoordinates(f,data));
+    return {data,frames:all,scope:$('engineScope').value,fingerprint:fingerprint(state),original};
   }
   function validateEngineInput(data,info){
     if(info.uma&&data.multiplicity>100)throw Error('UMAのスピン多重度は1〜100にしてください。');

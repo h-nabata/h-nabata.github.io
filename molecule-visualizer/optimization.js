@@ -13,6 +13,7 @@
     data.rigidGroups=rigid.map(x=>indices(s,x.atomIds));
   }
   function attach(s,data){const c=defaults();c.coordinates=(data.internalConstraints||[]).map((x,i)=>({id:'restored-coordinate-'+i,type:x.type,value:x.value,atomIds:x.atoms.map(k=>s.atoms[k].id),enabled:true}));c.internalEnabled=!!c.coordinates.length;c.fixedComponents=(data.fixedComponents||[]).map((x,i)=>({id:'restored-direction-'+i,atomId:s.atoms[x.atom].id,axes:x.axes.slice(),enabled:true}));c.rigidGroups=(data.rigidGroups||[]).map((x,i)=>({id:'restored-rigid-'+i,atomIds:x.map(k=>s.atoms[k].id),enabled:true}));s.metadata.optimization=c;return s;}
+  function rememberCoordinates(s,data){const c=clone(config(s));if(data.internalConstraints?.length){const entries=data.internalConstraints.map((x,i)=>{const ids=x.atoms.map(k=>s.atoms[k].id),previous=c.coordinates.find(y=>y.type===x.type&&JSON.stringify(y.atomIds)===JSON.stringify(ids));return {id:previous?.id||'input-coordinate-'+i,type:x.type,value:x.value,atomIds:ids,enabled:true};});c.coordinates=[...entries,...c.coordinates.filter(x=>x.enabled===false&&!entries.some(y=>y.id===x.id))];c.internalEnabled=true;}else c.internalEnabled=false;s.metadata.optimization=c;return s;}
   function checkPositions(images,data){for(const p of images){for(const c of data.fixedComponents||[])for(let k=0;k<3;k++)if(c.axes[k]&&Math.abs(p[c.atom][k]-data.images[0][c.atom][k])>1e-9)throw Error('方向固定が保たれていない結果です。');for(const group of data.rigidGroups||[])for(let i=0;i<group.length;i++)for(let j=i+1;j<group.length;j++){const distance=(a,b)=>Math.hypot(...a.map((v,k)=>v-b[k]));if(Math.abs(distance(p[group[i]],p[group[j]])-distance(data.images[0][group[i]],data.images[0][group[j]]))>1e-6)throw Error('剛体原子団の形状が保たれていません。');}}}
   const det=a=>a[0][0]*(a[1][1]*a[2][2]-a[1][2]*a[2][1])-a[0][1]*(a[1][0]*a[2][2]-a[1][2]*a[2][0])+a[0][2]*(a[1][0]*a[2][1]-a[1][1]*a[2][0]);
   const near=(a,b,tol=1e-8)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every((x,i)=>Array.isArray(x)?near(x,b[i],tol):Number.isFinite(x)&&Math.abs(x-b[i])<=tol);
@@ -36,5 +37,5 @@
       if(!Number.isFinite(r.stressResidual)||r.stressResidual<0||r.converged&&r.stressResidual>data.cellOptimization.stressTolerance)throw Error('応力の収束状態が不正です。');
     }
   }
-  return {defaults,config,indices,forJob,attach,checkPositions,checkCell,validateResult,validCell,near,clone};
+  return {defaults,config,indices,forJob,attach,rememberCoordinates,checkPositions,checkCell,validateResult,validCell,near,clone};
 });

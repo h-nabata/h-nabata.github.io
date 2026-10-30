@@ -356,9 +356,11 @@ def optimize_cell(data, calculate, progress=lambda p:None):
             cell=current['cell'],cells=[current['cell']],stresses=[current['stress'].tolist()],cellOptimization=config,
             stressResidual=current['residual'],enthalpies=[current['enthalpy']],imageFmax=[fmax],effectiveFmax=fmax,
             converged=converged,reason='converged' if converged else 'step_limit',steps=step,evaluations=evaluations,
-            optimizer=data['optimizer'],optimizerState=state,trajectory=copy.deepcopy(trajectory),history=history[:],
+            optimizer=data['optimizer'],optimizerState=state,trajectory=trajectory,history=history,
             climbingImage=None,maxTangentialStep=None,units={'length':'angstrom','energy':'eV','force':'eV/angstrom','stress':'eV/angstrom^3'})
-        progress({**row,'structureCheckpoint':result,**({'preview':{'step':step,'images':result['images'],'energies':result['energies'],'cell':result['cell'],'cells':result['cells']}} if data.get('livePreview') else {})})
+        checkpoint={'positions':result['images'][0],'energy':current['energy'],'force':current['forces'].tolist(),'fmax':fmax,
+            **{key:result[key] for key in ('cell','cells','stresses','cellOptimization','stressResidual','enthalpies','optimizerState')}}
+        progress({**row,'checkpoint':checkpoint,**({'preview':{'step':step,'images':result['images'],'energies':result['energies'],'cell':result['cell'],'cells':result['cells']}} if data.get('livePreview') else {})})
         if converged or step==data['maxSteps']:return result
         if data['optimizer']=='fire':
             force=-g;power=float(velocity@force)
@@ -3124,12 +3126,13 @@ class Jobs:
             fixedAtoms=data.get('fixedAtoms', []),
             **{k:copy.deepcopy(last[k]) for k in ('internalConstraints','groupConstraints','constraintProjection','optimizerState','fixedComponents','rigidGroups') if k in last},
             **({'atomIds':data['atomIds']} if 'atomIds' in data else {}),
-            symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
+            symbols=data['symbols'], cell=last.get('cell',data['cell']), charge=data['charge'], multiplicity=data['multiplicity'],
+            **{k:copy.deepcopy(last[k]) for k in ('cells','stresses','cellOptimization','stressResidual','enthalpies') if k in last},
             images=[last['positions']], energies=[last['energy']], forces=[last['force']],
             imageFmax=[last['fmax']], effectiveFmax=last['fmax'], steps=len(frames)-1, evaluations=len(frames),
             converged=False, reason='cancelled' if job['status']=='cancelled' else 'failed', error=job.get('error'),
             climbingImage=None, maxTangentialStep=None,
-            trajectory={'images':[p['positions'] for p in frames], 'energies':[p['energy'] for p in frames], **checkpoint_components(frames)},
+            trajectory={'images':[p['positions'] for p in frames], 'energies':[p['energy'] for p in frames], **({'cells':[p['cell'] for p in frames]} if 'cellOptimization' in last else {}), **checkpoint_components(frames)},
             **checkpoint_components([last]),
             history=copy.deepcopy(job.get('diagnosticsHistory')) or [{'step':i, 'fmax':p['fmax'], 'energies':[p['energy']], 'climbingImage':None, 'evaluations':i+1} for i,p in enumerate(frames)],
             **({'componentFmax':copy.deepcopy(last['componentFmax'])} if 'componentFmax' in last else {}),

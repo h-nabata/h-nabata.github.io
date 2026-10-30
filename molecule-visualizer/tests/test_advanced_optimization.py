@@ -69,7 +69,7 @@ class Advanced(unittest.TestCase):
                 delta=lattice-ref*1.04;dp=positions-p;energy=.5*np.sum(delta**2)+.5*np.sum(dp**2)
                 sigma=(lattice.T@delta+positions.T@dp)/abs(np.linalg.det(lattice))
                 return energy,-dp,(sigma+sigma.T)/2
-        for mode in ('isotropic','fixed_angles','c','c_vector','full'):
+        for mode in ('isotropic','fixed_angles','a','b','c','ab','c_vector','full'):
             d=data(cell={'vectors':ref.tolist(),'pbc':[True]*3},cellOptimization={'mode':mode,'stressTolerance':1e-6},optimizer='lbfgs',maxSteps=300)
             r=b.calculate_job(d,Elastic(),tempfile.gettempdir());self.assertTrue(r['converged'],(mode,r['effectiveFmax'],r['stressResidual']))
             if mode=='c':np.testing.assert_array_equal(np.array(r['cell']['vectors'])[:2],ref[:2])
@@ -123,6 +123,21 @@ class Advanced(unittest.TestCase):
                 e1=engine.with_cell(0,p@np.linalg.solve(reference,c1),c1)[0];e2=engine.with_cell(0,p@np.linalg.solve(reference,c2),c2)[0]
                 numeric.append((e1-e2)/2e-4)
             np.testing.assert_allclose(analytic,numeric,atol=3e-4,rtol=2e-3,err_msg=mode)
+    def test_interrupted_cell_keeps_last_lattice_and_restart_state(self):
+        from test_engine import CONFIG
+        d=data(cell={'vectors':(np.eye(3)*4).tolist(),'pbc':[True]*3},cellOptimization={'mode':'c'},optimizer='lbfgs',maxSteps=3)
+        class Elastic:
+            def with_cell(self,i,p,cell):
+                delta=cell-np.eye(3)*4.2
+                return .5*np.sum(delta**2),np.zeros_like(p),(cell.T@delta)/abs(np.linalg.det(cell))
+        events=[];r=b.calculate_job(d,Elastic(),tempfile.gettempdir(),events.append)
+        self.assertTrue(all('checkpoint' in e and 'structureCheckpoint' not in e for e in events))
+        jobs=b.Jobs.__new__(b.Jobs);jobs.config=CONFIG
+        job={'data':d,'status':'interrupted','checkpoints':[e['checkpoint'] for e in events],'diagnosticsHistory':[],'configFingerprint':'public-test'}
+        partial=jobs.partial_optimization(job)
+        self.assertEqual(partial['cell'],r['cell']);self.assertEqual(partial['trajectory']['cells'],r['trajectory']['cells'])
+        self.assertEqual(partial['optimizerState'],r['optimizerState']);self.assertFalse(partial['converged'])
+
     def test_cell_invalid_combinations(self):
         base=dict(cell={'vectors':(np.eye(3)*4).tolist(),'pbc':[True]*3},cellOptimization={'mode':'c'})
         for patch in ({'fixedAtoms':[0]},{'vibrations':{}},{'cell':{'vectors':(np.eye(3)*4).tolist(),'pbc':[True,True,False]}}):
