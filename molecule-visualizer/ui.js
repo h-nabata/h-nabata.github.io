@@ -75,7 +75,7 @@
   function useDisplayedStructure(){
     if(!renderer?.previewOnly)return state;
     if(xyzDirty)throw Error('未適用の座標編集を保持しています。入力構造に戻り、編集を適用または破棄してから操作してください。');
-    const next=Model.cloneState(freezeDisplayedStructure());
+    const next=Model.cloneEditableState(freezeDisplayedStructure());
     delete next.metadata.trajectory;delete next.metadata.frameIndex;
     delete next.metadata.externalCalculation;delete next.metadata.afirCalculation;
     pushHistory('use displayed structure');setState(next,true);return state;
@@ -114,7 +114,7 @@
       byId('coordinateFormat').value=isMol&&!parsed.metadata.cell?'mol3000':'xyz';byId('inputFormat').value='auto';
       setState(parsed,false);setStatus(`${parsed.atoms.length}原子 / ${parsed.metadata.trajectory?.length||1}構造を読み込みました。`+(parsed.metadata.importWarnings||[]).join(' '));return;
     }
-    const next=Model.cloneState(state),same=next.atoms.length===parsed.atoms.length&&next.atoms.every((a,i)=>a.element===parsed.atoms[i].element);
+    const next=Model.cloneEditableState(state),same=next.atoms.length===parsed.atoms.length&&next.atoms.every((a,i)=>a.element===parsed.atoms[i].element);
     if(isMol){next.atoms=parsed.atoms;next.bonds=parsed.bonds;next.metadata={...next.metadata,...parsed.metadata,cell:null};next.selectedAtomIds.clear();next.selectedBondIds.clear();next.metadata.suppressedBondKeys=[];byId('coordinateFormat').value='mol3000';}
     else if(same)next.atoms.forEach((a,i)=>{const b=parsed.atoms[i];Object.assign(a,{x:b.x,y:b.y,z:b.z});if(Object.keys(b.xyzExtras||{}).length)a.xyzExtras=b.xyzExtras;});
     else{next.atoms=parsed.atoms;next.bonds=[];next.selectedAtomIds.clear();next.selectedBondIds.clear();next.metadata.suppressedBondKeys=[];}
@@ -127,7 +127,7 @@
     if(!getDisplayedState().metadata.cell)return false;
     if(xyzDirty)throw Error('編集中の座標を適用するか、現在の構造を再表示してからセルを削除してください。');
     if(MV.EngineUI?.isBusy()||MV.AFIRUI?.isBusy()||!byId('cancelAdvanced').disabled)throw Error('計算を終了または中止してからセルを削除してください。');
-    const next=Model.cloneState(freezeDisplayedStructure());
+    const next=Model.cloneEditableState(freezeDisplayedStructure());
     if(renderer.previewOnly){delete next.metadata.trajectory;delete next.metadata.frameIndex;}
     next.metadata.cell=null;
     delete next.metadata.externalCalculation;delete next.metadata.afirCalculation;
@@ -743,7 +743,7 @@
     pushHistory(create?'create selected atom bonds':'delete selected atom bonds');
     // Adopting a displayed result and editing its bonds form one undo operation.
     if(renderer.previewOnly){
-      state=Model.cloneState(base);state.selectedAtomIds=new Set(ids);
+      state=Model.cloneEditableState(base);state.selectedAtomIds=new Set(ids);
       delete state.metadata.trajectory;delete state.metadata.frameIndex;
       delete state.metadata.externalCalculation;delete state.metadata.afirCalculation;
     }
@@ -1190,7 +1190,7 @@
     save: saveLocal,
     setState,
     renderer: () => renderer,
-    change(label, fn, fit=false) { const next=Model.cloneState(state); const result=fn(next)||next; pushHistory(label); setState(result,!fit); },
+    change(label, fn, fit=false) { const next=Model.cloneEditableState(state); const result=fn(next)||next; pushHistory(label); setState(result,!fit); },
     setStatus, loadText
   };
 })(window);

@@ -55,6 +55,25 @@
     return bond;
   }
 
+  // Only trajectory frames are immutable. The editable current frame, its
+  // metadata and each trajectory's index array remain independent.
+  const frozenFrames=new WeakSet();
+  function freezeTree(value){if(value&&typeof value==='object'&&!Object.isFrozen(value)){for(const child of Object.values(value))freezeTree(child);Object.freeze(value);}return value;}
+  function shareTrajectory(frames){
+    return frames.map((frame,i)=>{
+      if(frozenFrames.has(frame))return frame;
+      const snapshot=freezeTree(JSON.parse(JSON.stringify(frame)));frozenFrames.add(snapshot);
+      frames[i]=snapshot;return snapshot;
+    });
+  }
+  function cloneMetadata(metadata,share=false){
+    const trajectory=metadata?.trajectory,rest={...metadata};
+    if(trajectory)rest.trajectory=null;
+    const result=JSON.parse(JSON.stringify(rest));
+    if(trajectory)result.trajectory=share?shareTrajectory(trajectory):JSON.parse(JSON.stringify(trajectory));
+    return result;
+  }
+
   function createState(options) {
     const opts = options || {};
     return {
@@ -67,12 +86,12 @@
         sourceFormat: "xyz",
         bondsInferred: false,
         manualBondIds: []
-      }, opts.metadata || {}),
+      }, Object.isFrozen(opts.metadata)?cloneMetadata(opts.metadata,true):opts.metadata || {}),
       viewSettings: Object.assign({}, DEFAULT_VIEW_SETTINGS, opts.viewSettings || {})
     };
   }
 
-  function cloneState(state) {
+  function cloneState(state, shareFrames=false) {
     return createState({
       atoms: state.atoms.map(a => ({
         id: a.id,
@@ -93,7 +112,7 @@
       })),
       selectedAtomIds: Array.from(state.selectedAtomIds || []),
       selectedBondIds: Array.from(state.selectedBondIds || []),
-      metadata: JSON.parse(JSON.stringify(state.metadata || {})),
+      metadata: cloneMetadata(state.metadata,shareFrames),
       viewSettings: Object.assign({}, state.viewSettings || {})
     });
   }
@@ -235,6 +254,8 @@
     createBond,
     createState,
     cloneState,
+    shareTrajectory,
+    cloneEditableState:state=>cloneState(state,true),
     setSelectedAtoms,
     setSelectedBonds,
     toggleAtomSelection,

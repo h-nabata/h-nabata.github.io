@@ -196,41 +196,49 @@
     this.cameraDistance=height/Math.max(1,Math.min(width,height))*Math.max(4.2,span*1.15)/(2*Math.tan(fov*Math.PI/360));
     const atoms = this.state.atoms || [];
     if (atoms.length === 0) {
-      this.projectedAtoms = []; this.projectedBonds = [];
+      this.projectedAtoms = []; this.projectedBonds = [];this.geometryCache=null;
       this.drawEmpty(width, height);
       if(this.state?.viewSettings.showAxes)this.drawAxes(center,scale,width,height);
       return;
     }
-    this.projectedAtoms = atoms.map((atom,index) => Object.assign(this.project(atom, center, scale, width, height), {index:index+1})).filter(p=>p.visible);
-    const atomById = new Map(this.projectedAtoms.map(pa => [pa.atom.id, pa]));
-
-    const cell=this.state.metadata.cell,mic=cell?MV.Periodic.prepareMinimumImage(cell):null;
-    this.projectedBonds = (this.state.bonds || []).flatMap(bond => {
-      const a=atomById.get(bond.atom1),b=atomById.get(bond.atom2);if(!a||!b)return [];
-      if(!cell)return [{bond,a,b}];
-      const image=mic([b.atom.x-a.atom.x,b.atom.y-a.atom.y,b.atom.z-a.atom.z]);
-      if(!image.shift.some(Boolean))return [{bond,a,b}];
-      const offset=MV.Periodic.cartesian(image.shift,cell);
-      const translate=(atom,sign)=>this.project({x:atom.x+sign*offset[0],y:atom.y+sign*offset[1],z:atom.z+sign*offset[2]},center,scale,width,height);
-      return [{bond,a,b:translate(b.atom,1)},{bond,a:translate(a.atom,-1),b}];
-    });
-    this.projectedBonds=this.projectedBonds.filter(p=>p.a.visible&&p.b.visible);
-    if (this.state.metadata.cell) this.drawCell(center,scale,width,height);
-
-    if (this.state.viewSettings.style !== "vdw") this.projectedBonds
-      .slice()
-      .sort((m, n) => ((m.a.z + m.b.z) / 2) - ((n.a.z + n.b.z) / 2))
-      .forEach(item => this.drawBond(item));
-
+    const cell=this.state.metadata.cell;
+    const cameraKey=[width,height,center.x,center.y,center.z,scale,this.panX,this.panY,this.cameraDistance,this.state.viewSettings.projection,this.state.viewSettings.style,...this.orientation,JSON.stringify(cell||null)].join('|');
+    let cache=this.geometryCache;
+    const bonds=this.state.bonds||[];
+    let same=cache&&cache.key===cameraKey&&cache.atoms.length===atoms.length&&cache.bonds.length===bonds.length;
+    if(same)for(let i=0;i<atoms.length;i++){const a=atoms[i],old=cache.atoms[i];if(a.id!==old.id||a.element!==old.element||a.x!==old.x||a.y!==old.y||a.z!==old.z){same=false;break;}}
+    if(same)for(let i=0;i<bonds.length;i++){const a=bonds[i],old=cache.bonds[i];if(a.id!==old.id||a.atom1!==old.atom1||a.atom2!==old.atom2){same=false;break;}}
+    if(!same){
+      this.projectedAtoms=atoms.map((atom,index)=>Object.assign(this.project(atom,center,scale,width,height),{index:index+1})).filter(p=>p.visible);
+      const atomById=new Map(this.projectedAtoms.map(pa=>[pa.atom.id,pa]));
+      const mic=cell?MV.Periodic.prepareMinimumImage(cell):null;
+      this.projectedBonds=bonds.flatMap(bond=>{
+        const a=atomById.get(bond.atom1),b=atomById.get(bond.atom2);if(!a||!b)return [];
+        if(!cell)return [{bond,a,b}];
+        const image=mic([b.atom.x-a.atom.x,b.atom.y-a.atom.y,b.atom.z-a.atom.z]);
+        if(!image.shift.some(Boolean))return [{bond,a,b}];
+        const offset=MV.Periodic.cartesian(image.shift,cell);
+        const translate=(atom,sign)=>this.project({x:atom.x+sign*offset[0],y:atom.y+sign*offset[1],z:atom.z+sign*offset[2]},center,scale,width,height);
+        return [{bond,a,b:translate(b.atom,1)},{bond,a:translate(a.atom,-1),b}];
+      }).filter(p=>p.a.visible&&p.b.visible);
+      cache=this.geometryCache={key:cameraKey,atoms:atoms.map(a=>({id:a.id,element:a.element,x:a.x,y:a.y,z:a.z})),bonds:bonds.map(b=>({id:b.id,atom1:b.atom1,atom2:b.atom2})),atomById,
+        sortedAtoms:this.projectedAtoms.slice().sort((a,b)=>a.z-b.z),sortedBonds:this.projectedBonds.slice().sort((a,b)=>(a.a.z+a.b.z)-(b.a.z+b.b.z))};
+      this.projectionBuilds=(this.projectionBuilds||0)+1;
+    }else{
+      // A new state may have equal coordinates but edited atom/bond attributes.
+      const byId=new Map(atoms.map(a=>[a.id,a])),bondById=new Map(bonds.map(b=>[b.id,b]));
+      for(const pa of this.projectedAtoms)pa.atom=byId.get(pa.atom.id);
+      for(const pb of this.projectedBonds)pb.bond=bondById.get(pb.bond.id);
+    }
+    const atomById=cache.atomById;
+    if(cell)this.drawCell(center,scale,width,height);
+    if(this.state.viewSettings.style!=='vdw')for(const item of cache.sortedBonds)this.drawBond(item);
     this.afirMemberships=new Map();
     const fragments=this.state.metadata.afir?.fragments;
     if(this.state.viewSettings.afirOverlay&&Array.isArray(fragments))for(const [i,fragment] of fragments.entries()){
       for(const id of new Set(Array.isArray(fragment?.atomIds)?fragment.atomIds:[])){if(!this.afirMemberships.has(id))this.afirMemberships.set(id,[]);this.afirMemberships.get(id).push(i);}
     }
-    this.projectedAtoms
-      .slice()
-      .sort((a, b) => a.z - b.z)
-      .forEach(pa => this.drawAtom(pa));
+    for(const pa of cache.sortedAtoms)this.drawAtom(pa);
 
     MV.OptimizationUI?.draw(this,atomById,center,scale,width,height);
     this.drawVibrationVectors(center,scale,width,height);
@@ -375,11 +383,6 @@
   Renderer3DMol.prototype.drawAtom = function (pa) {
     const selected = this.state.selectedAtomIds && this.state.selectedAtomIds.has(pa.atom.id);
     const color = ELEMENT_COLORS[pa.atom.element] || "#9ca3af";
-    const grad = this.ctx.createRadialGradient(pa.x - pa.radius * 0.35, pa.y - pa.radius * 0.45, pa.radius * 0.1, pa.x, pa.y, pa.radius);
-    grad.addColorStop(0, "#ffffff");
-    grad.addColorStop(0.22, color);
-    grad.addColorStop(1, "#111827");
-
     if (selected) {
       this.ctx.beginPath();
       this.ctx.arc(pa.x, pa.y, pa.radius + 7, 0, Math.PI * 2);
@@ -390,13 +393,23 @@
       this.ctx.stroke();
     }
 
-    this.ctx.beginPath();
-    this.ctx.arc(pa.x, pa.y, pa.radius, 0, Math.PI * 2);
-    this.ctx.fillStyle = grad;
-    this.ctx.fill();
-    this.ctx.lineWidth = 1.4;
-    this.ctx.strokeStyle = pa.atom.element === "H" ? "#9ca3af" : "#111827";
-    this.ctx.stroke();
+    const paint=(ctx,x,y)=>{
+      const grad=ctx.createRadialGradient(x-pa.radius*.35,y-pa.radius*.45,pa.radius*.1,x,y,pa.radius);
+      grad.addColorStop(0,'#ffffff');grad.addColorStop(.22,color);grad.addColorStop(1,'#111827');
+      ctx.beginPath();ctx.arc(x,y,pa.radius,0,Math.PI*2);ctx.fillStyle=grad;ctx.fill();
+      ctx.lineWidth=1.4;ctx.strokeStyle=pa.atom.element==='H'?'#9ca3af':'#111827';ctx.stroke();
+    };
+    const dpr=this.pixelRatio||1,pad=Math.ceil(pa.radius+2),size=pad*2;
+    let sprite;
+    if(this.state.viewSettings.projection!=='perspective'&&size*dpr<=256&&typeof this.ctx.drawImage==='function'){
+      const sprites=this.atomSprites||(this.atomSprites=new Map()),key=[pa.atom.element,pa.radius,dpr].join(':');
+      sprite=sprites.get(key);
+      if(!sprite){
+        const bitmap=document.createElement('canvas'),ctx=bitmap.getContext?.('2d');
+        if(ctx){bitmap.width=bitmap.height=Math.ceil(size*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);paint(ctx,pad,pad);sprite=bitmap;sprites.set(key,sprite);while(sprites.size>64)sprites.delete(sprites.keys().next().value);}
+      }
+    }
+    if(sprite)this.ctx.drawImage(sprite,pa.x-pad,pa.y-pad,size,size);else paint(this.ctx,pa.x,pa.y);
 
     if(this.state.viewSettings.afirOverlay && MV.AFIR){
       const memberships=this.afirMemberships?.get(pa.atom.id)||[];

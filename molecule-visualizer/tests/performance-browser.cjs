@@ -18,6 +18,13 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict');
    return {queued,rendered,unchanged:before===after,hit:!!hit,n:r.projectedAtoms.length};
   });
   assert.deepEqual(result,{queued:0,rendered:1,unchanged:true,hit:true,n:1000});
+  const cache=await page.evaluate(()=>{
+    const M=MoleculeVisualizer,r=M.App.renderer(),s=M.App.getState(),start=r.projectionBuilds;
+    s.selectedAtomIds=new Set([s.atoms[0].id]);r.updateSelection(s);
+    const reused=r.projectionBuilds===start,old=r.projectedAtoms[0].x;
+    s.atoms[0].x+=.1;r.renderState(s,true);
+    return {reused,moved:r.projectedAtoms[0].x!==old,sprites:r.atomSprites?.size||0};
+  });assert.equal(cache.reused,true);assert.equal(cache.moved,true);assert.ok(cache.sprites>0&&cache.sprites<=64);
   const polling=await page.evaluate(async()=>{
    const M=MoleculeVisualizer,request=M.EngineUI.request,calls=[];
    M.EngineUI.request=async(c,path)=>{calls.push(path);return {status:'running',preview:{images:[]},previewVersion:2};};

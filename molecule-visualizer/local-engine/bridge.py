@@ -7,7 +7,11 @@ are accepted over HTTP. Run --help; installation and numerical details: README.m
 from __future__ import annotations
 
 import argparse
+import base64
 from collections import OrderedDict
+from functools import lru_cache
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import ContextVar
 import copy
 import importlib.metadata
 import json
@@ -34,7 +38,7 @@ from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 from scipy.spatial import cKDTree
 
-VERSION = '1.12.0'
+VERSION = '1.13.0'
 UMA_MODELS = ('uma-s-1p2p1', 'uma-s-1p2', 'uma-s-1p1', 'uma-m-1p1')
 ANYSOLV_MODELS = ('model_compact', 'model_moe')
 MAX_BODY = 8 * 1024 * 1024
@@ -93,11 +97,8 @@ def validate(data, engine):
         if any(pbc) and engine == 'uma':
             raise ValueError('このUMA接続は分子用omol・非周期系専用です。周期系には対応していません。')
     for image in images:
-        for i in range(len(symbols) - 1):
-            vectors = image[i+1:] - image[i]
-            distances = find_mic(vectors, cell['vectors'], cell['pbc'])[1] if cell and any(cell['pbc']) else np.linalg.norm(vectors, axis=1)
-            if np.min(distances) < .1:
-                raise ValueError('0.1 Å未満で重なった原子があります。初期経路の衝突を解消してください。')
+        if has_atomic_collision(image, cell):
+            raise ValueError('0.1 Å未満で重なった原子があります。初期経路の衝突を解消してください。')
     result = dict(symbols=symbols, images=images.tolist(), cell=cell, charge=charge,
                   multiplicity=multiplicity, mode=mode, livePreview=data.get('livePreview', False))
     step_default, step_limit = (10000 if mode == 'afir' else 100 if mode == 'lup' else 150), 10000
@@ -118,7 +119,7 @@ def validate(data, engine):
             raise ValueError('全原子の一意なIDが必要です。')
         result['atomIds'] = ids[:]
     optimizer = data.get('optimizer', 'sella-prfo' if mode == 'ts' else 'lbfgs' if mode == 'lup' else 'fire')
-    choices = ('sella-prfo', 'sella-rfo') if mode == 'ts' else ('fire', 'lbfgs', 'bfgs', 'staged') if mode in ('optimize', 'scan') else ('fire', 'lbfgs') if mode == 'lup' else ('fire',)
+    choices = ('sella-prfo', 'sella-rfo') if mode == 'ts' else ('fire', 'lbfgs', 'bfgs', 'staged', 'precon-lbfgs') if mode in ('optimize', 'scan') else ('fire', 'lbfgs') if mode == 'lup' else ('fire',)
     if optimizer not in choices:
         raise ValueError('この操作では指定した最適化手法を使用できません。TSにはSella PRFO/RFOを指定してください。')
     result['optimizer'] = optimizer
@@ -212,7 +213,7 @@ def validate_advanced_optimization(raw, data, engine):
             'stallSteps':number(c.get('stallSteps',15),'停滞判定ステップ',5,100,True)}
     c=raw.get('cellOptimization')
     if c is None:return
-    if not isinstance(c,dict) or set(c)-{'mode','stressTolerance','pressureGPa','maxStrain'}:
+    if not isinstance(c,dict) or set(c)-{'mode','stressTolerance','pressureGPa','maxStrain','metric'}:
         raise ValueError('セル最適化の設定が不正です。')
     mode=c.get('mode','fixed')
     if mode not in ('fixed','isotropic','fixed_angles','a','b','c','ab','c_vector','full'):
@@ -224,7 +225,8 @@ def validate_advanced_optimization(raw, data, engine):
     if any(data.get(k) for k in ('fixedAtoms','fixedComponents','rigidGroups','groupConstraints','internalConstraints','vibrations')):
         raise ValueError('可変セルMINと原子・内部座標・重心・剛体拘束または振動解析の併用には対応していません。')
     if data.get('optimizer') not in ('fire','lbfgs'):raise ValueError('可変セルではFIREまたはL-BFGSを指定してください。')
-    data['cellOptimization']={'mode':mode,'stressTolerance':number(c.get('stressTolerance',.001),'応力閾値 (eV/Å³)',1e-7,1),
+    if c.get('metric','reference') not in ('reference','balanced'):raise ValueError('セルの計量が不正です。')
+    data['cellOptimization']={'mode':mode,'metric':c.get('metric','reference'),'stressTolerance':number(c.get('stressTolerance',.001),'応力閾値 (eV/Å³)',1e-7,1),
         'pressureGPa':number(c.get('pressureGPa',0),'外圧 (GPa)',-100,1000),
         'maxStrain':number(c.get('maxStrain',.02),'最大対数ひずみ',.00001,.1)}
 
@@ -248,6 +250,33 @@ def serial_arrays(value):
     return value
 
 
+def encode_restart(value):
+    """Lossless numeric arrays; never pickle or executable object restoration."""
+    if isinstance(value,np.ndarray):
+        if value.dtype.kind not in 'biuf' or not np.isfinite(value).all():raise ValueError('再開配列が不正です。')
+        return {'array':base64.b64encode(value.tobytes()).decode('ascii'),'shape':list(value.shape),'dtype':value.dtype.str}
+    if isinstance(value,np.generic):return value.item()
+    if isinstance(value,(tuple,list)):return [encode_restart(v) for v in value]
+    if isinstance(value,dict):return {k:encode_restart(v) for k,v in value.items()}
+    return value
+
+
+def decode_restart(value):
+    if isinstance(value,dict) and set(value)=={'array','shape','dtype'}:
+        dtype=np.dtype(value['dtype']);shape=value['shape']
+        if dtype.kind not in 'biuf' or dtype.itemsize>8 or not isinstance(shape,list) or len(shape)>4 or any(type(n) is not int or n<0 for n in shape):raise ValueError('再開配列が不正です。')
+        size=math.prod(shape)*dtype.itemsize
+        if size>128*1024*1024 or len(value['array'])>180*1024*1024:raise ValueError('再開配列が大きすぎます。')
+        raw=base64.b64decode(value['array'],validate=True)
+        if len(raw)!=size:raise ValueError('再開配列のサイズが一致しません。')
+        array=np.frombuffer(raw,dtype=dtype).reshape(shape).copy()
+        if not np.isfinite(array).all():raise ValueError('再開配列が不正です。')
+        return array
+    if isinstance(value,dict):return {k:decode_restart(v) for k,v in value.items()}
+    if isinstance(value,list):return [decode_restart(v) for v in value]
+    return value
+
+
 def install_optimizer_state(optimizer, data, method):
     """Capture ASE's public restart payload plus FIRE's adaptive parameters.
 
@@ -257,7 +286,7 @@ def install_optimizer_state(optimizer, data, method):
     from ase.io.jsonio import encode, decode
     import ase
     saved={'payload':None}
-    optimizer.dump=lambda payload:saved.update(payload=encode(payload))
+    optimizer.dump=lambda payload:saved.update(payload=json.dumps(encode_restart(payload),separators=(',',':'),allow_nan=False))
     resume=data.get('_optimizerResume')
     if resume:
         if resume.get('implementation')!='ase' or resume.get('aseVersion')!=ase.__version__ or resume.get('method')!=method:
@@ -265,15 +294,16 @@ def install_optimizer_state(optimizer, data, method):
         if not np.allclose(resume['positions'],data['images'][0],atol=1e-10,rtol=0):
             raise ValueError('再開座標と最適化状態が一致しません。')
         if resume.get('payload') is not None:
-            payload=decode(resume['payload'],always_array=False);optimizer.load=lambda:payload;optimizer.read()
-            saved['payload']=resume['payload']
+            payload=decode_restart(json.loads(resume['payload'])) if resume.get('payloadEncoding')=='arrays-v1' else decode(resume['payload'],always_array=False)
+            optimizer.load=lambda:payload;optimizer.read()
+            saved['payload']=json.dumps(encode_restart(payload),separators=(',',':'),allow_nan=False)
         if method=='fire':
             for k in ('a','dt','Nsteps'):
                 if k in resume.get('fire',{}):setattr(optimizer,k,resume['fire'][k])
         optimizer.maxstep=resume.get('maxstep',optimizer.maxstep)
     def snapshot():
         return {'schema':1,'implementation':'ase','aseVersion':ase.__version__,'method':method,
-            'positions':optimizer.atoms.positions.tolist(),'payload':saved['payload'],
+            'positions':optimizer.atoms.positions.tolist(),'payload':saved['payload'],'payloadEncoding':'arrays-v1',
             'maxstep':optimizer.maxstep,'fire':{k:getattr(optimizer,k) for k in ('a','dt','Nsteps') if hasattr(optimizer,k)}}
     return snapshot
 
@@ -312,7 +342,7 @@ def optimize_cell(data, calculate, progress=lambda p:None):
     config=data['cellOptimization'];mode=config['mode'];n=len(data['symbols'])
     resume=data.get('_optimizerResume')
     reference=np.array(resume['reference'] if resume else data['cell']['vectors'],float)
-    scale=float(np.mean(np.linalg.norm(reference,axis=1)))
+    scale=float(resume["scale"]) if resume and "scale" in resume else float(np.mean(np.linalg.norm(reference,axis=1)))*(math.sqrt(n) if config.get("metric")=="balanced" else 1.)
     size={'full':6,'fixed_angles':3,'c_vector':3}.get(mode,1)
     q=np.array(resume['q'] if resume else np.zeros(size),float)
     lattice,_=cell_geometry(reference,mode,q)
@@ -345,7 +375,7 @@ def optimize_cell(data, calculate, progress=lambda p:None):
     current=evaluate(y)
     for step in range(data['maxSteps']+1):
         fmax=force_max(current['forces']);g=current['gradient'];converged=fmax<=data['fmax'] and current['residual']<=config['stressTolerance']
-        state={'schema':1,'implementation':'cell','reference':reference.tolist(),'q':current['q'].tolist(),
+        state={'schema':1,'implementation':'cell','reference':reference.tolist(),'scale':scale,'q':current['q'].tolist(),
             'velocity':velocity.tolist(),'dt':dt,'alpha':alpha,'positive':positive,'pairs':serial_arrays(pairs),
             'previousY':serial_arrays(previous_y),'previousG':serial_arrays(previous_g)}
         trajectory['images'].append(current['positions'].tolist());trajectory['energies'].append(current['energy']);trajectory['cells'].append(current['cell'])
@@ -463,24 +493,68 @@ def prepare_afir(symbols, ids, config):
     return terms
 
 
+_metrics = ContextVar('resource_metrics', default=None)
+
+
+def measured(name):
+    def decorate(function):
+        def call(*args, **kwargs):
+            metrics = _metrics.get()
+            if metrics is None:
+                return function(*args, **kwargs)
+            start = time.perf_counter()
+            try:
+                return function(*args, **kwargs)
+            finally:
+                metrics[name+'Seconds'] = metrics.get(name+'Seconds', 0.) + time.perf_counter()-start
+                metrics[name+'Calls'] = metrics.get(name+'Calls', 0) + 1
+        return call
+    return decorate
+
+
+@lru_cache(maxsize=32)
+def cell_search_geometry(vectors):
+    lattice = np.array(vectors).reshape(3,3)
+    inverse = np.linalg.inv(lattice)
+    return inverse, float(np.linalg.norm(inverse, ord=2))
+
+
+@measured('collision')
 def has_atomic_collision(positions, cell=None, threshold=.1):
-    """Exact final distance check; a tree only rejects impossible gas-phase pairs."""
-    if len(positions) < 2:
+    """Conservative fractional-space broad phase, exact Cartesian MIC final test.
+
+    ||dr @ inv(L)|| <= ||dr|| * ||inv(L)||. Wrapping only periodic fractional
+    components cannot increase this lower-bound distance. Thus no short pair is
+    discarded, including skew and partially periodic cells. Ill-conditioned
+    cells fall back to bounded exhaustive candidate enumeration.
+    """
+    p = np.asarray(positions, float)
+    if len(p) < 2:
         return False
-    if cell and any(cell['pbc']):
-        for i in range(len(positions)-1):
-            distances = find_mic(positions[i+1:]-positions[i], cell['vectors'], cell['pbc'])[1]
-            if np.any(distances < threshold):
-                return True
+    periodic = cell and any(cell['pbc'])
+    if periodic:
+        inverse, bound = cell_search_geometry(tuple(np.asarray(cell['vectors']).ravel()))
+        fractional = p @ inverse
+        mask = np.asarray(cell['pbc'], bool)
+        padding = 1e-12 * (1 + np.max(np.abs(fractional)))
+        fractional[:,mask] %= 1.
+        fractional[:,mask] = np.where(fractional[:,mask]>=1.,0.,fractional[:,mask])
+        radius = threshold*bound + padding
+        if radius < .5:
+            pairs = cKDTree(fractional, boxsize=np.where(mask, 1., 0.)).query_pairs(radius, output_type='ndarray')
+            if not len(pairs): return False
+            a,b = pairs.T
+        else:
+            a,b = np.triu_indices(len(p),1)
+        # Bound MIC temporaries even for tiny/very skew cells.
+        for start in range(0,len(a),4096):
+            distances = find_mic(p[b[start:start+4096]]-p[a[start:start+4096]], cell['vectors'], cell['pbc'])[1]
+            if np.any(distances < threshold): return True
         return False
-    if len(positions) < 64:
-        a, b = np.triu_indices(len(positions), 1)
-    else:
-        pairs = cKDTree(positions).query_pairs(threshold*(1+1e-12), output_type='ndarray')
-        if not len(pairs):
-            return False
-        a, b = pairs.T
-    return bool(np.any(np.linalg.norm(positions[a]-positions[b], axis=1) < threshold))
+    pairs = cKDTree(p).query_pairs(threshold*(1+1e-12), output_type='ndarray')
+    if not len(pairs): return False
+    a,b = pairs.T
+    return bool(np.any(np.linalg.norm(p[a]-p[b],axis=1) < threshold))
 
 
 def afir_bias(positions, symbols, ids, config, prepared=None):
@@ -909,24 +983,26 @@ def relax(data, calculate, progress=lambda _: None):
         insertion_events=copy.deepcopy(resumed.get('insertions',[]))
     for local_step in range((0 if mode == 'evaluate' else max_steps) + 1):
         step=local_step+offset
+        pending=[]
         for i in range(len(images)):
             if local_step and mode != 'optimize' and i in (0, len(images)-1):
-                if mode == 'lup':
-                    cache_hits += 1
+                if mode == 'lup': cache_hits += 1
                 continue
             if mode == 'lup' and node_ids[i] in lup_cache and np.array_equal(images[i], lup_cache[node_ids[i]][0]):
                 _, energies[i], physical[i] = lup_cache[node_ids[i]]
                 cache_hits += 1
                 continue
-            progress({'step': step, 'image': i+1, 'images': len(images), 'evaluations': evaluations})
-            energy, force = calculate(i, images[i])
+            pending.append((i,images[i]))
+        answers=evaluate_many(calculate,pending)
+        for (i,positions),(energy,force) in zip(pending,answers):
             force = np.asarray(force, dtype=float)
-            if not np.isfinite(energy) or force.shape != images[i].shape or not np.isfinite(force).all():
+            if not np.isfinite(energy) or force.shape != positions.shape or not np.isfinite(force).all():
                 raise ValueError('エンジンから有限なエネルギー・力を取得できませんでした。')
             energies[i], physical[i] = energy, force
             evaluations += 1
+            progress({'step': step, 'image': i+1, 'images': len(images), 'evaluations': evaluations})
             if mode == 'lup':
-                lup_cache[node_ids[i]] = (images[i].copy(), float(energy), force.copy())
+                lup_cache[node_ids[i]] = (positions.copy(), float(energy), force.copy())
         climbing = int(np.argmax(energies[1:-1]))+1 if mode in ('cineb', 'lup') and step >= data['climbAfter'] else None
         effective, tangents = band_forces(images, energies, physical, mode, data['spring'], climbing)
         if mode == 'evaluate':
@@ -1164,12 +1240,8 @@ def ase_atoms(data, calculate):
             positions = self.atoms.positions
             if not np.isfinite(positions).all() or np.max(np.abs(positions))>1e4:
                 raise ValueError('座標が数値範囲を超えました。')
-            if len(positions)>1:
-                left,right = np.triu_indices(len(positions),1)
-                vectors = positions[right]-positions[left]
-                distances = find_mic(vectors,cell['vectors'],cell['pbc'])[1] if cell and any(cell['pbc']) else np.linalg.norm(vectors,axis=-1)
-                if np.min(distances)<.1:
-                    raise ValueError('最適化・振動変位中に0.1 Å未満の原子衝突を検出しました。')
+            if has_atomic_collision(positions, cell):
+                raise ValueError('最適化・振動変位中に0.1 Å未満の原子衝突を検出しました。')
             energy, force = calculate(0, positions.copy())
             force = np.asarray(force, dtype=float)
             if not math.isfinite(energy) or force.shape!=positions.shape or not np.isfinite(force).all():
@@ -1334,36 +1406,98 @@ def validate_scan_settings(data, normalized):
     return result
 
 
+def coordinate_batches(coordinates):
+    return [(kind, np.array([i for i,c in enumerate(coordinates) if c['type']==kind],int),
+             np.array([c['atoms'] for c in coordinates if c['type']==kind],int))
+            for kind in ('distance','angle','dihedral') if any(c['type']==kind for c in coordinates)]
+
+
 def internal_coordinate_values(positions, coordinates, cell=None):
-    from ase import Atoms
-    atoms = Atoms(numbers=np.ones(len(positions), dtype=int), positions=positions,
-        cell=None if cell is None else cell['vectors'], pbc=False if cell is None else cell['pbc'])
-    mic = bool(cell and any(cell['pbc']))
-    methods = {'distance':atoms.get_distance, 'angle':atoms.get_angle, 'dihedral':atoms.get_dihedral}
-    return np.array([methods[c['type']](*c['atoms'], mic=mic) for c in coordinates], dtype=float)
+    from ase.geometry import get_angles, get_dihedrals
+    p = np.asarray(positions)
+    values = np.empty(len(coordinates))
+    kwargs = {'cell':cell['vectors'], 'pbc':cell['pbc']} if cell and any(cell['pbc']) else {}
+    for kind, rows, ids in coordinate_batches(coordinates):
+        q = p[ids]
+        if kind=='distance':
+            v=q[:,1]-q[:,0]
+            values[rows] = find_mic(v,**kwargs)[1] if kwargs else np.linalg.norm(v,axis=1)
+        elif kind=='angle':
+            values[rows] = get_angles(q[:,0]-q[:,1],q[:,2]-q[:,1],**kwargs)
+        else:
+            values[rows] = get_dihedrals(q[:,1]-q[:,0],q[:,2]-q[:,1],q[:,3]-q[:,2],**kwargs)
+    return values
 
 
-def internal_coordinate_jacobian(positions, coordinates, cell=None):
-    """ASE analytic Wilson B matrix, with angular rows measured in degrees/Å."""
+def internal_coordinate_jacobian(positions, coordinates, cell=None, columns=None):
+    """Batched ASE analytical derivatives; no per-row Atoms/geometry allocation."""
     from ase.geometry import get_distances_derivatives, get_angles_derivatives, get_dihedrals_derivatives
     p = np.asarray(positions, dtype=float)
     kwargs = {'cell':cell['vectors'], 'pbc':cell['pbc']} if cell and any(cell['pbc']) else {}
-    rows = []
-    for coordinate in coordinates:
-        ids, kind = coordinate['atoms'], coordinate['type']
-        q = p[ids]
-        if kind == 'distance':
-            derivatives = get_distances_derivatives([q[1]-q[0]], **kwargs)[0]
-        elif kind == 'angle':
-            derivatives = get_angles_derivatives([q[0]-q[1]], [q[2]-q[1]], **kwargs)[0]
-        else:
-            derivatives = get_dihedrals_derivatives([q[1]-q[0]], [q[2]-q[1]], [q[3]-q[2]], **kwargs)[0]
-        row = np.zeros_like(p); row[ids] = derivatives
-        rows.append(row.ravel())
-    result = np.array(rows).reshape((len(coordinates), p.size))
+    lookup=np.full(p.size,-1,int) if columns is not None else np.arange(p.size)
+    if columns is not None:lookup[columns]=np.arange(np.count_nonzero(columns))
+    result=np.zeros((len(coordinates),p.size if columns is None else np.count_nonzero(columns)))
+    for kind, rows, ids in coordinate_batches(coordinates):
+        q=p[ids]
+        if kind=='distance': derivatives=get_distances_derivatives(q[:,1]-q[:,0],**kwargs)
+        elif kind=='angle': derivatives=get_angles_derivatives(q[:,0]-q[:,1],q[:,2]-q[:,1],**kwargs)
+        else: derivatives=get_dihedrals_derivatives(q[:,1]-q[:,0],q[:,2]-q[:,1],q[:,3]-q[:,2],**kwargs)
+        cols=lookup[ids[:,:,None]*3+np.arange(3)]
+        valid=cols>=0
+        rr=np.broadcast_to(rows[:,None,None],cols.shape)
+        result[rr[valid],cols[valid]]=derivatives[valid]
     if not np.isfinite(result).all():
         raise ValueError('内部座標の微分が定義できません。直線角や重なった原子を避けてください。')
     return result
+
+
+def rigid_only_constraint(data):
+    """Exact rigid retraction and six-column Euclidean tangent projection.
+
+    Kabsch rotations have det=+1, so reflection/chirality is preserved. SVD of
+    the 3k x 6 tangent basis also covers diatomics and linear groups (rank 5).
+    Mixed constraints use the joint nonlinear solver below.
+    """
+    from ase.constraints import FixConstraint
+    reference=np.asarray(data['images'][0],float)
+    groups=[np.array(g,int) for g in data['rigidGroups']]
+    centered=[reference[g]-reference[g].mean(axis=0) for g in groups]
+    class Rigid(FixConstraint):
+        cached=None
+        def basis(self, positions):
+            if self.cached is not None and np.array_equal(self.cached[0],positions): return self.cached[1]
+            bases=[]
+            for g in groups:
+                q=positions[g]-positions[g].mean(axis=0)
+                matrix=np.empty((len(g),3,6));matrix[:,:,:3]=np.eye(3)
+                matrix[:,:,3:]=np.stack([np.cross(axis,q) for axis in np.eye(3)],axis=-1)
+                u,s,_=np.linalg.svd(matrix.reshape(-1,6),full_matrices=False)
+                bases.append(u[:,s>s[0]*1e-10])
+            self.cached=(positions.copy(),bases)
+            return bases
+        def get_removed_dof(self,atoms):
+            return sum(3*len(g)-basis.shape[1] for g,basis in zip(groups,self.basis(atoms.positions)))
+        @measured('constraint')
+        def project(self,positions):
+            out=np.array(positions,copy=True)
+            for g,ref in zip(groups,centered):
+                target=out[g];center=target.mean(axis=0)
+                u,_,vt=np.linalg.svd(ref.T@(target-center))
+                correction=np.eye(3);correction[-1,-1]=np.linalg.det(u@vt)
+                out[g]=ref@(u@correction@vt)+center
+            return out
+        def adjust_positions(self,atoms,newpositions):
+            delta=newpositions-atoms.positions
+            for fraction in (1.,.5,.25,.125,.0625,.03125,.015625,.0078125):
+                candidate=self.project(atoms.positions+fraction*delta)
+                if force_max(candidate-atoms.positions)<=data.get('maxMove',.04)+1e-10:
+                    newpositions[:]=candidate;return
+            raise ValueError('剛体拘束の最大変位を満たせません。')
+        @measured('constraint')
+        def adjust_forces(self,atoms,forces):
+            for g,basis in zip(groups,self.basis(atoms.positions)):
+                forces[g]=(basis@(basis.T@forces[g].ravel())).reshape(-1,3)
+    return Rigid()
 
 
 def internal_coordinate_residual(values, coordinates):
@@ -1382,6 +1516,8 @@ def internal_coordinate_constraint(data):
     rigid-body forces. The latter is essential for fixed atoms and linear systems.
     """
     from ase.constraints import FixConstraint
+    if data.get('rigidGroups') and not any(data.get(k) for k in ('fixedAtoms','fixedComponents','internalConstraints','groupConstraints')):
+        return rigid_only_constraint(data)
     coordinates = copy.deepcopy(data.get('internalConstraints', []))
     for group_indices in data.get('rigidGroups',[]):
         for ii,i in enumerate(group_indices):
@@ -1400,19 +1536,35 @@ def internal_coordinate_constraint(data):
     linear = group_coordinate_matrix(group) if group and not distance_groups else np.empty((0, anchors.size))
     targets = group_coordinates(group.get('referenceCenters',group_centers(anchors,group)),group) if group else np.empty(0)
     # COM derivatives are constant: factorize once for COM-only optimizations.
-    linear_inverse = np.linalg.pinv(linear[:,free], rcond=1e-10) if group and not coordinates and not distance_groups else None
+
+    involved = set(i for c in coordinates for i in c['atoms'])
+    if group: involved.update(i for g in group['groups'] for i in g)
+    active = free & np.repeat([i in involved for i in range(len(anchors))],3)
+    constant = not coordinates and not distance_groups
 
     class InternalConstraint(FixConstraint):
+        factor_cache = None
+        def factor(self, positions):
+            if self.factor_cache is not None and (constant or np.array_equal(self.factor_cache[0],positions)):
+                return self.factor_cache[1:]
+            j=self.jacobian(positions)
+            scales=np.maximum(np.linalg.norm(j,axis=1),1e-12)
+            u,s,vt=np.linalg.svd(j/scales[:,None],full_matrices=False)
+            keep=s>(s[0]*1e-10 if len(s) else 0)
+            u,s,vt=u[:,keep],s[keep],vt[keep]
+            self.factor_cache=(positions.copy(),scales,u,s,vt)
+            return scales,u,s,vt
+
         def jacobian(self, positions):
-            return np.vstack((internal_coordinate_jacobian(positions, coordinates, cell), group_distance_jacobian(positions,group) if distance_groups else linear))[:,free]
+            return np.vstack((internal_coordinate_jacobian(positions, coordinates, cell, active), (group_distance_jacobian(positions,group) if distance_groups else linear)[:,active]))
 
         def get_removed_dof(self, atoms):
-            j=self.jacobian(atoms.positions)
-            return int(fixed_mask.sum())+(int(np.linalg.matrix_rank(j)) if j.size else 0)
+            return int(fixed_mask.sum())+len(self.factor(atoms.positions)[2])
 
         def residual(self, positions):
             return np.concatenate((internal_coordinate_residual(internal_coordinate_values(positions, coordinates, cell), coordinates), (group_coordinates(group_centers(positions,group),group) if distance_groups else linear@np.asarray(positions).ravel())-targets))
 
+        @measured('constraint')
         def project(self, positions):
             candidate = np.array(positions, dtype=float, copy=True)
             candidate[fixed_mask] = anchors[fixed_mask]
@@ -1420,13 +1572,11 @@ def internal_coordinate_constraint(data):
                 residual = self.residual(candidate)
                 if np.max(np.abs(residual), initial=0.) <= 1e-8:
                     return candidate
-                jacobian = self.jacobian(candidate)
-                norms = np.linalg.norm(jacobian,axis=1)
-                if np.any((norms<1e-12)&(np.abs(residual)>1e-8)):
+                scales,u,s,vt = self.factor(candidate)
+                if np.any((scales<=1e-12)&(np.abs(residual)>1e-8)):
                     raise ValueError('固定原子・内部座標・原子団の重心拘束が両立しません。拘束対象を確認してください。')
-                scales = np.maximum(norms, 1e-12)
-                correction = -linear_inverse@residual if linear_inverse is not None else np.linalg.lstsq(jacobian/scales[:,None], -residual/scales, rcond=1e-10)[0]
-                displacement = np.zeros(candidate.size); displacement[free] = correction
+                correction = -vt.T@((u.T@(residual/scales))/s)
+                displacement = np.zeros(candidate.size); displacement[active] = correction
                 displacement = displacement.reshape(candidate.shape)
                 maximum = force_max(displacement)
                 displacement *= min(1., .2/max(maximum,1e-300))
@@ -1459,21 +1609,81 @@ def internal_coordinate_constraint(data):
                     return
             raise ValueError('拘束を保ったまま指定した最大原子変位で更新できません。') from last_error
 
+        @measured('constraint')
         def adjust_forces(self, atoms, forces):
-            values = forces.ravel()[free]
-            # Euclidean Cartesian projection; masses enter through the COM Jacobian.
-            if linear_inverse is not None:
-                projected = values-linear_inverse@(linear[:,free]@values)
-            else:
-                jacobian = self.jacobian(atoms.positions)
-                scales = np.maximum(np.linalg.norm(jacobian,axis=1),1e-12)
-                jacobian = jacobian/scales[:,None]
-                multipliers = np.linalg.lstsq(jacobian.T, values, rcond=1e-10)[0]
-                projected = values-jacobian.T@multipliers
-            forces[:] = 0
-            forces.ravel()[free] = projected
+            values=forces.ravel()[active]
+            _,_,_,vt=self.factor(atoms.positions)
+            forces.ravel()[active]=values-vt.T@(vt@values)
+            forces[fixed_mask]=0
 
     return InternalConstraint()
+
+
+class GraphLBFGS:
+    """Limited-memory MIN with a fixed sparse positive bond-graph metric.
+
+    Only the search direction changes; Cartesian forces, constraints and the
+    stopping criterion are unmodified. Three N-dimensional solves replace a
+    dense 3N Hessian. Armijo tests use actual projected displacements.
+    """
+    def __init__(self, atoms, maxstep=.04, logfile=None):
+        from scipy.sparse import coo_matrix, eye
+        from scipy.sparse.linalg import factorized
+        self.atoms,self.maxstep=atoms,maxstep
+        self.pairs=[];self.previous=None;self.graph=None;self.solve=None
+        self.dump=lambda payload:None
+
+    def build(self):
+        from scipy.sparse import coo_matrix, eye
+        from scipy.sparse.linalg import factorized
+        n=len(self.atoms)
+        if self.graph is None:
+            from ase.neighborlist import neighbor_list
+            radii=covalent_radii[self.atoms.numbers]
+            i,j,d=neighbor_list('ijd',self.atoms,1.4*radii,self_interaction=False)
+            keep=i<j;i,j,d=i[keep],j[keep],d[keep]
+            weights=20*np.exp(np.clip(3*(1-d/(radii[i]+radii[j])),-10,3))
+            self.graph=(i.tolist(),j.tolist(),weights.tolist())
+        i,j,w=self.graph;i=np.asarray(i,int);j=np.asarray(j,int);w=np.asarray(w)
+        matrix=eye(n,format='csc')+coo_matrix((np.r_[w,w,-w,-w],(np.r_[i,j,i,j],np.r_[i,j,j,i])),shape=(n,n)).tocsc()
+        self.solve=factorized(matrix)
+
+    def read(self):
+        value=self.load()
+        self.graph=value['graph'];self.pairs=[(np.array(a),np.array(b)) for a,b in value['pairs']]
+        self.previous=None if value['previous'] is None else tuple(np.array(v) for v in value['previous'])
+        self.build()
+
+    @measured('optimizer')
+    def step(self):
+        if self.solve is None:self.build()
+        x=self.atoms.positions.copy();g=-self.atoms.get_forces().ravel();energy=self.atoms.get_potential_energy()
+        if self.previous is not None:
+            a=x.ravel()-self.previous[0];b=g-self.previous[1]
+            if a@b>1e-12*np.linalg.norm(a)*np.linalg.norm(b):self.pairs=(self.pairs+[(a,b)])[-20:]
+        q=g.copy();coefficients=[]
+        for a,b in reversed(self.pairs):
+            c=float(a@q/(a@b));coefficients.append(c);q-=c*b
+        z=self.solve(q.reshape(-1,3)).ravel()
+        for (a,b),c in zip(self.pairs,reversed(coefficients)):z+=a*(c-float(b@z/(a@b)))
+        direction=-z.reshape(-1,3)
+        if direction.ravel()@g>=0:self.pairs=[];direction=-g.reshape(-1,3)/70
+        direction*=min(1.,self.maxstep/max(force_max(direction),1e-30))
+        accepted=False
+        for fraction in (1.,.5,.25,.125,.0625,.03125,.015625,.0078125,.00390625,.001953125,.0009765625,.00048828125):
+            try:
+                self.atoms.set_positions(x+fraction*direction)
+                delta=(self.atoms.positions-x).ravel()
+                trial=self.atoms.get_potential_energy()
+                if delta@g<0 and trial<=energy+1e-4*float(delta@g)+1e-12:
+                    accepted=True;break
+            except (ValueError,ZeroDivisionError):pass
+            self.atoms.positions[:]=x
+        if not accepted:
+            self.atoms.positions[:]=x
+            raise ValueError('前処理L-BFGSの線探索が停滞しました。最後の評価済み構造を保持します。')
+        self.previous=(x.ravel(),g.copy())
+        self.dump({'graph':self.graph,'pairs':serial_arrays(self.pairs),'previous':serial_arrays(self.previous)})
 
 
 def constrained_minimize(data, calculate, directory=None, progress=lambda p: None):
@@ -1501,7 +1711,7 @@ def constrained_minimize(data, calculate, directory=None, progress=lambda p: Non
                   'maxDisplacement':force_max(atoms.positions-initial)}
     staged=data.get('optimizer')=='staged'
     method=data.get('_optimizerResume',{}).get('method', 'fire' if staged else data.get('optimizer','fire'))
-    optimizer = {'fire':FIRE,'lbfgs':LBFGS,'bfgs':BFGS}[method](atoms,maxstep=data['maxMove'],logfile=None)
+    optimizer = {'fire':FIRE,'lbfgs':LBFGS,'bfgs':BFGS,'precon-lbfgs':GraphLBFGS}[method](atoms,maxstep=data['maxMove'],logfile=None)
     snapshot=install_optimizer_state(optimizer,data,method)
     stages=copy.deepcopy(data.get('_optimizerResume',{}).get('stages',[]))
     if not stages:stages=[{'step':0,'method':method,'maxMove':data['maxMove']}]
@@ -1777,7 +1987,25 @@ def vibration_analysis(data, calculate, directory, progress=lambda p: None):
     atoms = ase_atoms(data, evaluate)
     vibrations = Vibrations(atoms, name=str(Path(directory)/'vibrations'), delta=settings['delta'], nfree=settings['nfree'])
     try:
-        vibrations.run()
+        if hasattr(calculate,'prepare_vibrations'):calculate.prepare_vibrations(atoms.positions)
+        if getattr(calculate,'workers',1)>1:
+            iterator=iter(vibrations.iterdisplace(inplace=False))
+            from itertools import islice
+            while True:
+                chunk=list(islice(iterator,calculate.workers))
+                if not chunk:break
+                items=[]
+                for lane,(disp,displaced) in enumerate(chunk):
+                    if has_atomic_collision(displaced.positions,data.get('cell')):
+                        raise ValueError('振動変位中に原子衝突を検出しました。')
+                    items.append((lane,displaced.positions.copy()))
+                for (disp,_),(energy,forces) in zip(chunk,evaluate_many(calculate,items)):
+                    with vibrations.cache.lock(disp.name) as handle:
+                        if handle is not None:handle.save({'forces':np.asarray(forces)})
+                    done+=1
+                    progress({'phase':'vibrations','vibrationDone':done,'vibrationTotal':total})
+        else:
+            vibrations.run()
         modes = vibrations.get_vibrations()
         frequencies, energies = modes.get_frequencies(), modes.get_energies()
         vectors = modes.get_modes(all_atoms=True)
@@ -1792,6 +2020,7 @@ def vibration_analysis(data, calculate, directory, progress=lambda p: None):
             units={'frequency':'cm^-1', 'quantum':'meV', 'displacement':'ASE Cartesian normal modes'},
             note='全3Nモード。並進・回転を射影除去していません。表示振幅は任意で、虚振動の動画は実時間の振動ではありません。')
     finally:
+        if hasattr(calculate,'finish_vibrations'):calculate.finish_vibrations()
         vibrations.clean()
 
 
@@ -1802,7 +2031,7 @@ def calculate_job(data, calculate, directory, progress=lambda p: None):
         result = irc_calculation(data, calculate, directory, progress)
     elif data['mode']=='scan':
         result = relaxed_scan(data, calculate, directory, progress)
-    elif (any(data.get(k) for k in ('internalConstraints','groupConstraints','fixedComponents','rigidGroups')) or data.get('optimizer')=='staged' ) and data['mode'] in ('optimize', 'afir'):
+    elif (any(data.get(k) for k in ('internalConstraints','groupConstraints','fixedComponents','rigidGroups')) or data.get('optimizer') in ('staged','precon-lbfgs') ) and data['mode'] in ('optimize', 'afir'):
         result = constrained_minimize(data, calculate, directory, progress)
     elif data['mode']=='afir':
         result = afir_relax(data, calculate, progress)
@@ -2123,11 +2352,27 @@ class TBLiteEngine:
             self.calculators[index] = calc
         calc = self.calculators[index]
         calc.update(positions / Bohr, lattice=None if lattice is None else np.asarray(lattice)/Bohr)
-        result = calc.singlepoint(self.results.get(index))
+        if getattr(self,'vibration_reference',None) is not None:
+            from tblite.interface import Result
+            restart=Result(self.vibration_reference)
+        else:restart=self.results.get(index)
+        result = calc.singlepoint(restart)
         self.results[index] = result
         energy=float(result.get('energy'))*Hartree;forces=-np.asarray(result.get('gradient'))*Hartree/Bohr
         if stress:return energy,forces,np.asarray(result.get('virial'))*Hartree/abs(np.linalg.det(lattice))
         return energy,forces
+
+    def prepare_vibrations(self, positions):
+        # All displacement forces use the same SCC starting state, regardless
+        # of lane count/scheduling. Fresh reference avoids job-history effects.
+        answer=self._evaluate(-1,positions,None,False)
+        self.vibration_reference=self.results.pop(-1)
+        self.calculators.pop(-1,None)
+        return answer
+
+    def finish_vibrations(self):
+        self.vibration_reference=None
+
 
 
 def parse_gradient(text, symbols, positions):
@@ -2556,7 +2801,10 @@ def calculation_identity(data, config):
 
 class ExactEvaluationCache:
     """Job-local, bounded, exact-coordinate reuse; no tolerance/rounded geometries."""
-    def __init__(self, calculate, capacity=128):
+    def __init__(self, calculate, capacity=128, workers=1):
+        self.lock = threading.RLock()
+        self.workers = workers
+        self.pool = ThreadPoolExecutor(max_workers=workers) if workers>1 else None
         self.calculate, self.capacity = calculate, capacity
         self.values = OrderedDict()
         self.calls = self.hits = 0
@@ -2581,21 +2829,56 @@ class ExactEvaluationCache:
     def __call__(self, index, positions):
         array = np.asarray(positions, dtype=np.float64)
         key = (index, array.shape, array.tobytes())
-        if key in self.values:
-            self.hits += 1
-            energy, force = self.values.pop(key)
-            self.values[key] = (energy, force)
-            return energy, force.copy()
+        with self.lock:
+            if key in self.values:
+                self.hits += 1
+                energy, force = self.values.pop(key)
+                self.values[key] = (energy, force)
+                return energy, force.copy()
         started = time.perf_counter()
         energy, force = self.calculate(index, positions)
-        self.seconds += time.perf_counter()-started
-        self.calls += 1
+        seconds = time.perf_counter()-started
         force = np.asarray(force, dtype=float)
-        if math.isfinite(energy) and force.shape == array.shape and np.isfinite(force).all():
-            self.values[key] = (float(energy), force.copy())
-            while len(self.values) > self.capacity:
-                self.values.popitem(last=False)
+        with self.lock:
+            self.seconds += seconds
+            self.calls += 1
+            if math.isfinite(energy) and force.shape == array.shape and np.isfinite(force).all():
+                self.values[key] = (float(energy), force.copy())
+                while len(self.values) > self.capacity:
+                    self.values.popitem(last=False)
         return energy, force.copy()
+
+    def map(self, evaluations):
+        # Never schedule the same calculator index concurrently. Each index owns
+        # its SCC restart state; ordering of the returned results is deterministic.
+        items=list(evaluations)
+        if len({i for i,p in items})!=len(items):
+            raise ValueError('並列評価には独立した構造番号が必要です。')
+        if self.pool is None: return [self(i,p) for i,p in items]
+        futures=[self.pool.submit(self,i,p) for i,p in items]
+        try:
+            return [f.result() for f in futures]
+        except BaseException:
+            for f in futures:f.cancel()
+            raise
+
+    def prepare_vibrations(self, positions):
+        if hasattr(self.calculate,'prepare_vibrations'):
+            start=time.perf_counter()
+            self.calculate.prepare_vibrations(positions)
+            self.seconds+=time.perf_counter()-start;self.calls+=1
+            self.values.clear() # preceding warm-start forces are not probe forces
+
+    def finish_vibrations(self):
+        if hasattr(self.calculate,'finish_vibrations'):self.calculate.finish_vibrations()
+        self.values.clear()
+
+    def close(self):
+        if self.pool is not None:self.pool.shutdown(wait=True,cancel_futures=True)
+
+
+def evaluate_many(calculate, items):
+    return calculate.map(items) if hasattr(calculate,'map') else [calculate(i,p) for i,p in items]
 
 
 def execute_with_calculator(data, config, directory, messages, calculator):
@@ -2625,10 +2908,22 @@ def execute_with_calculator(data, config, directory, messages, calculator):
                 key = (p.get('step'), tuple(p.get('energies', [p.get('energyEV')])))
                 component_history[key] = {name:copy.deepcopy(p[name]) for name in ('energyComponents','componentFmax') if name in p}
         messages.put(('progress', p))
-    cached = ExactEvaluationCache(calculator)
-    result = calculate_job(data, cached, directory, progress)
+    workers=config.get('workers',1) if config['engine'] in ('tblite','gxtb') and (data['mode'] in (*PATH_MODES,'evaluate','vibrations') or data.get('vibrations')) else 1
+    cached = ExactEvaluationCache(calculator, workers=workers)
+    metrics={};token=_metrics.set(metrics);started=time.perf_counter()
+    try:
+        result = calculate_job(data, cached, directory, progress)
+    finally:
+        cached.close();_metrics.reset(token)
+    metrics['wallSeconds']=time.perf_counter()-started
+    metrics['evaluationWorkers']=workers
+    try:
+        import resource
+        import sys
+        metrics['peakRSSBytes']=int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)*(1 if sys.platform=='darwin' else 1024)
+    except (ImportError,OSError):pass
     result['performance'] = {'engineCalls':cached.calls, 'exactCacheHits':cached.hits,
-                             'engineSeconds':cached.seconds}
+                             'engineSeconds':cached.seconds, **metrics}
     if isinstance(calculator, SolvatedUMAEngine):
         calculator.annotate(result)
         for row in result.get('history', []):
@@ -2654,6 +2949,9 @@ def worker(data, config, directory, messages):
     calculator = None
     try:
         config = job_config(data, config)
+        parallel=config.get('workers',1) if data['mode'] in (*PATH_MODES,'evaluate','vibrations') or data.get('vibrations') else 1
+        config = {**config,'threads':max(1,config['threads']//parallel)}
+        os.environ['OMP_MAX_ACTIVE_LEVELS']='1'
         for key in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS'):
             os.environ[key] = str(config['threads'])
         if config['engine'] == 'uma':
@@ -2718,7 +3016,7 @@ def provenance(config, data=None):
         config = job_config(data, config)
     s = config.get('solvation')
     return {'bridgeVersion':VERSION, 'engine':config['engine'], 'binarySHA256':config.get('binarySHA256'),
-        'threads':config['threads'], 'solvent':s['solvent'] if s else 'gas', 'aseVersion':importlib.metadata.version('ase'),
+        'threads':config['threads'], 'workers':config.get('workers',1), 'solvent':s['solvent'] if s else 'gas', 'aseVersion':importlib.metadata.version('ase'),
         'numpyVersion':np.__version__, 'sellaVersion':sella_version(),
         **({'uma':{'model':config['umaModel'], 'task':'omol', 'device':config['umaDevice'],
                    'inference':uma_settings(config), 'fairchemVersion':package_version('fairchem-core'),
@@ -2791,7 +3089,7 @@ class Jobs:
     TERMINAL = ('completed', 'cancelled', 'error', 'interrupted')
     SAVED_KEYS = ('id', 'status', 'progress', 'result', 'error', 'data', 'createdAt', 'updatedAt',
                   'parentId', 'resumeKind', 'archived', 'configFingerprint', 'checkpoints',
-                  'bandCheckpoint', 'structureCheckpoint', 'diagnosticsHistory', 'calculationProvenance', 'method', 'engine')
+                  'bandCheckpoint', 'structureCheckpoint', 'diagnosticsHistory', 'calculationProvenance', 'method', 'engine', '_storageSeconds')
 
     def __init__(self, config):
         self.config, self.lock, self.job = config, threading.RLock(), None
@@ -2805,28 +3103,99 @@ class Jobs:
             self.history_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
             self._load_history()
 
+    @staticmethod
+    def _read_record(path):
+        saved=json.loads(path.read_text(encoding='utf-8'))
+        digest=saved.pop('recordSHA256')
+        canonical=json.dumps(saved,sort_keys=True,ensure_ascii=False,allow_nan=False)
+        if not secrets.compare_digest(digest,hashlib.sha256(canonical.encode()).hexdigest()):
+            raise ValueError('history checksum')
+        return saved
+
+    @staticmethod
+    def _atomic_record(path, saved):
+        encoded=json.dumps(saved,sort_keys=True,ensure_ascii=False,allow_nan=False)
+        digest=hashlib.sha256(encoded.encode()).hexdigest()
+        temporary=path.with_suffix('.tmp')
+        with open(temporary,'w',encoding='utf-8') as stream:
+            try:os.chmod(temporary,0o600)
+            except OSError:pass
+            stream.write(encoded[:-1]+', "recordSHA256": "'+digest+'"}')
+            stream.flush();os.fsync(stream.fileno())
+        os.replace(temporary,path)
+
+    def _read_job(self,path):
+        saved=self._read_record(path)
+        if saved.get('schema')!='molecule-job-history/1' or saved.get('id')!=path.stem or not isinstance(saved.get('data'),dict):
+            raise ValueError('history format')
+        if 'journalBytes' in saved:
+            end=saved['journalBytes']
+            if type(end) is not int or end<0:raise ValueError('history journal')
+            checkpoints=[];diagnostics=[]
+            with open(path.with_suffix('.frames'),'rb') as stream:
+                while stream.tell()<end:
+                    line=stream.readline()
+                    if not line or stream.tell()>end:raise ValueError('incomplete history journal')
+                    block=json.loads(line);digest=block.pop('sha256')
+                    if hashlib.sha256(json.dumps(block,sort_keys=True).encode()).hexdigest()!=digest:raise ValueError('journal checksum')
+                    if block['from']!=len(checkpoints):raise ValueError('journal order')
+                    checkpoints.extend(block['frames'])
+                    diagnostics[block['diagnosticFrom']:]=block['diagnostics']
+            if checkpoints and saved.get('checkpointOptimizerState') is not None:
+                checkpoints[-1]['optimizerState']=saved['checkpointOptimizerState']
+            saved['checkpoints']=checkpoints;saved['diagnosticsHistory']=diagnostics
+        return {k:saved[k] for k in self.SAVED_KEYS if k in saved}
+
+    def _summary(self,job):
+        result=job.get('result',{})
+        return {'steps':result.get('steps',job.get('progress',{}).get('step',0)),
+                'hasResult':bool(result),'optimizerState':bool(result.get('optimizerState'))}
+
+    def _write_summary(self,job):
+        path=self.history_dir/(job['id']+'.json');stat=path.stat()
+        small={k:job[k] for k in self.SAVED_KEYS if k in job and k not in ('result','checkpoints','bandCheckpoint','structureCheckpoint','diagnosticsHistory')}
+        small['data']={'mode':job['data'].get('mode','evaluate'),'symbols':job['data'].get('symbols',[])}
+        small['_resultSummary']=self._summary(job)
+        self._atomic_record(path.with_suffix('.summary'),{'size':stat.st_size,'mtime':stat.st_mtime_ns,'job':small})
+
     def _load_history(self):
         for path in sorted(self.history_dir.glob('*.json')):
-            if not re.fullmatch(r'[a-f0-9]{32}\.json', path.name):
-                continue
+            if not re.fullmatch(r'[a-f0-9]{32}\.json',path.name):continue
             try:
-                saved = json.loads(path.read_text(encoding='utf-8'))
-                if saved.get('schema') != 'molecule-job-history/1' or saved.get('id') != path.stem or not isinstance(saved.get('data'), dict):
-                    raise ValueError('history format')
-                digest = saved.pop('recordSHA256')
-                if not secrets.compare_digest(digest, hashlib.sha256(json.dumps(saved, sort_keys=True, ensure_ascii=False, allow_nan=False).encode()).hexdigest()):
-                    raise ValueError('history checksum')
-                job = {k:saved[k] for k in self.SAVED_KEYS if k in saved}
-                job.setdefault('progress', {})
-                job.setdefault('checkpoints', [])
+                job=None
+                if path.with_suffix('.summary').exists():
+                    try:
+                        summary=self._read_record(path.with_suffix('.summary'));stat=path.stat()
+                        if summary['size']==stat.st_size and summary['mtime']==stat.st_mtime_ns:
+                            small=summary['job']
+                            if small['id']==path.stem and small['status'] in self.TERMINAL:
+                                job={**small,'_lazy':True}
+                    except (OSError,ValueError,KeyError,TypeError):pass # rebuild from the authoritative record
+                if job is None:job=self._read_job(path)
+                job.setdefault('progress',{});job.setdefault('checkpoints',[])
                 if job['status'] not in self.TERMINAL:
-                    job['status'], job['error'] = 'interrupted', 'サービス終了時に未完了でした。保存済みの構造・条件から再開できます。'
-                    self._recover_partial(job)
-                self.jobs[job['id']] = job
-                self._persist(job, force=True)
-            except (OSError, ValueError, KeyError, TypeError):
-                # Never overwrite an unreadable original; surface the skipped file count.
-                self.storage_error = '読み込めない履歴があります。元のファイルは保持しています。'
+                    job['status'],job['error']='interrupted','サービス終了時に未完了でした。保存済みの構造・条件から再開できます。'
+                    self._recover_partial(job);self._persist(job,force=True)
+                elif not job.get('_lazy'):
+                    self._write_summary(job)
+                    job['_resultSummary']=self._summary(job)
+                    for k in ('result','checkpoints','bandCheckpoint','structureCheckpoint','diagnosticsHistory'):job.pop(k,None)
+                    job['data']={'mode':job['data'].get('mode','evaluate'),'symbols':job['data'].get('symbols',[])}
+                    job['_lazy']=True
+                self.jobs[job['id']]=job
+            except (OSError,ValueError,KeyError,TypeError):
+                self.storage_error='読み込めない履歴があります。元のファイルは保持しています。'
+
+    def _evict_results(self,keep=None):
+        if not self.history_dir:return
+        candidates=[j for j in self.jobs.values() if j['status'] in self.TERMINAL and not j.get('_active') and not j.get('_lazy') and j.get('id')!=keep and not j.get('storageError')]
+        # Keep only two recently accessed completed results, independent of total history.
+        for job in sorted(candidates,key=lambda j:j.get('_access',0))[:-1]:
+            if not (self.history_dir/(job['id']+'.summary')).exists():continue
+            job['_resultSummary']=self._summary(job)
+            for key in ('result','checkpoints','bandCheckpoint','structureCheckpoint','diagnosticsHistory','preview'):job.pop(key,None)
+            job['data']={'mode':job['data'].get('mode','evaluate'),'symbols':job['data'].get('symbols',[])}
+            job['_lazy']=True
 
     def _persist(self, job, force=False):
         if not self.history_dir:
@@ -2836,33 +3205,42 @@ class Jobs:
             return
         keys = self.SAVED_KEYS
         if job['status'] in self.TERMINAL and job.get('result'):
+            if 'performance' in job['result']:job['result']['performance'].setdefault('historyWriteSecondsBeforeFinal',job.get('_storageSeconds',0.))
             # Terminal results already contain the complete retained trajectory.
             keys = tuple(k for k in keys if k not in ('checkpoints', 'bandCheckpoint', 'structureCheckpoint', 'diagnosticsHistory'))
         saved = {'schema':'molecule-job-history/1', **{k:job[k] for k in keys if k in job}}
-        # Internal scan restart data may contain a large result; its original record
-        # is already saved separately and is not an executable object.
         saved['updatedAt'] = time.time()*1000
+        started=time.perf_counter()
         try:
-            encoded = json.dumps(saved, sort_keys=True, ensure_ascii=False, allow_nan=False)
-            digest = hashlib.sha256(encoded.encode()).hexdigest()
-            target = self.history_dir/(job['id']+'.json')
-            temporary = target.with_suffix('.tmp')
-            with open(temporary, 'w', encoding='utf-8') as stream:
-                try:
-                    os.chmod(temporary, 0o600)
-                except OSError:
-                    pass
-                # Reuse the canonical JSON used for the checksum (v1-reader compatible).
-                stream.write(encoded[:-1]+', "recordSHA256": "'+digest+'"}')
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.replace(temporary, target)
-            job['updatedAt'], job['_lastPersist'] = saved['updatedAt'], now
-        except (OSError, ValueError) as error:
-            self.storage_error = '計算履歴を保存できません。空き容量・保存先の権限を確認してください。'
-            job['storageError'] = self.storage_error
-            if force and job['status'] == 'queued':
-                raise RuntimeError(self.storage_error) from error
+            target=self.history_dir/(job['id']+'.json')
+            journal=target.with_suffix('.frames')
+            checkpoints=job.get('checkpoints',[]);diagnostics=job.get('diagnosticsHistory',[])
+            journal_end=None
+            if job['status'] not in self.TERMINAL and (checkpoints or diagnostics):
+                begin=job.get('_journalCount',0);diag=max(0,job.get('_diagnosticCount',0)-1)
+                frames=[{k:v for k,v in frame.items() if k!='optimizerState'} for frame in checkpoints[begin:]]
+                block={'from':begin,'frames':frames,'diagnosticFrom':diag,'diagnostics':diagnostics[diag:]}
+                digest=hashlib.sha256(json.dumps(block,sort_keys=True).encode()).hexdigest()
+                with open(journal,'r+b' if journal.exists() else 'w+b') as stream:
+                    try:os.chmod(journal,0o600)
+                    except OSError:pass
+                    stream.seek(job.get('_journalBytes',0));stream.truncate()
+                    stream.write((json.dumps({**block,'sha256':digest})+'\n').encode())
+                    stream.flush();os.fsync(stream.fileno());journal_end=stream.tell()
+                saved.pop('checkpoints',None);saved.pop('diagnosticsHistory',None)
+                saved.update(journalBytes=journal_end,checkpointOptimizerState=checkpoints[-1].get('optimizerState') if checkpoints else None)
+            self._atomic_record(target,saved)
+            if journal_end is not None:
+                job.update(_journalBytes=journal_end,_journalCount=len(checkpoints),_diagnosticCount=len(diagnostics))
+            job['updatedAt'],job['_lastPersist']=saved['updatedAt'],now
+            if job['status'] in self.TERMINAL:
+                self._write_summary(job)
+                journal.unlink(missing_ok=True)
+            job['_storageSeconds']=job.get('_storageSeconds',0.)+time.perf_counter()-started
+        except (OSError,ValueError):
+            self.storage_error='計算履歴を保存できません。空き容量・保存先の権限を確認してください。'
+            job['storageError']=self.storage_error
+            if force and job['status']=='queued':raise RuntimeError(self.storage_error)
 
     def _find(self, identifier):
         job = self.jobs.get(identifier)
@@ -2871,6 +3249,14 @@ class Jobs:
             job = self.job
         if job is None:
             raise KeyError('計算が見つかりません。')
+        if job.get('_lazy'):
+            try:
+                loaded=self._read_job(self.history_dir/(identifier+'.json'))
+            except (OSError,ValueError,KeyError,TypeError) as error:
+                raise ValueError('保存履歴を読み込めません。元のファイルは保持しています。') from error
+            job.update(loaded);job.pop('_lazy',None)
+        job['_access']=time.monotonic()
+        self._evict_results(identifier)
         return job
 
     def start(self, data, parent_id=None, resume_kind=None):
@@ -2938,7 +3324,7 @@ class Jobs:
         directory = job['directory'] = tempfile.mkdtemp(prefix='molecule-engine-')
         data = job['data']
         for key in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS'):
-            os.environ[key] = str(self.config['threads'])
+            os.environ[key] = str(max(1,self.config['threads']//self.config.get('workers',1)))
         use_resident = self.config['engine'] == 'uma' and self.config.get('residentModels', True)
         if use_resident:
             key = residency_key(data, self.config)
@@ -2983,11 +3369,12 @@ class Jobs:
             rows = []
             for job in sorted(self.jobs.values(), key=lambda j:j['createdAt'], reverse=True):
                 row = {k:job[k] for k in ('id','status','createdAt','updatedAt','parentId','resumeKind','archived','error') if k in job}
+                summary=job.get('_resultSummary',{}) if job.get('_lazy') else self._summary(job)
                 row.update(mode=job['data']['mode'], atoms=len(job['data']['symbols']),
-                           steps=job.get('result', {}).get('steps', job.get('progress', {}).get('step', 0)),
-                           hasResult=bool(job.get('result')), resumable=job['status'] in self.TERMINAL and not job.get('_active'))
-                row['resumeKind'] = ('optimizer_state' if job.get('result',{}).get('optimizerState') else 'scan_remaining' if job['data']['mode']=='scan' and job.get('result') else
-                                     'geometry' if job['data']['mode'] in ('optimize','afir','ts', *PATH_MODES) and job.get('result') else 'restart')
+                           steps=summary.get('steps',0),
+                           hasResult=summary.get('hasResult',False), resumable=job['status'] in self.TERMINAL and not job.get('_active'))
+                row['resumeKind'] = ('optimizer_state' if summary.get('optimizerState') else 'scan_remaining' if job['data']['mode']=='scan' and summary.get('hasResult') else
+                                     'geometry' if job['data']['mode'] in ('optimize','afir','ts', *PATH_MODES) and summary.get('hasResult') else 'restart')
                 if job.get('_active') and job['status'] in self.TERMINAL:
                     row['status'] = 'running'
                 rows.append(row)
@@ -3082,7 +3469,11 @@ class Jobs:
                     job['status'] = job.get('terminalStatus', 'cancelled')
                     self._recover_partial(job)
                 self._persist(job, force=True)
+                # Completed results already contain the trajectory and restart state.
+                if job.get('result'):
+                    for key in ('checkpoints','bandCheckpoint','structureCheckpoint','diagnosticsHistory','preview'):job.pop(key,None)
                 job['_active'] = False
+                self._evict_results(job['id'])
                 self._launch_next()
 
     def _recover_partial(self, job):
@@ -3164,7 +3555,7 @@ class Jobs:
             result = self.public(job, compact)
             if preview:
                 if job['data']['mode'] == 'afir':
-                    frames = job['checkpoints']
+                    frames = job.get('checkpoints',[])
                     end = min(len(frames), after + 1000)
                     if 0 <= after < end:
                         part = frames[after:end]
@@ -3231,7 +3622,8 @@ class Jobs:
             if job.get('_active') or job['status'] not in self.TERMINAL:
                 raise RuntimeError('実行中・待機中の計算は削除できません。')
             if self.history_dir:
-                (self.history_dir/(identifier+'.json')).unlink(missing_ok=True)
+                for suffix in ('.json','.summary','.frames'):
+                    (self.history_dir/(identifier+suffix)).unlink(missing_ok=True)
             self.jobs.pop(identifier, None)
             if self.job is job:
                 self.job = None
@@ -3335,7 +3727,7 @@ class Handler(BaseHTTPRequestHandler):
                                    'device':config.get('anysolvDevice'), 'precision':config['umaPrecision']},
                         'maxMultiplicity':100, 'maxAtomicNumber':83} if config['engine']=='uma' else {}),
                     'sellaVersion':sella_version(), 'vibrations':1, 'maxVibrationAtoms':200, 'pathCheckpoint':1, 'fixedAtoms':True,
-                    'irc':bool(sella_version()), 'thermochemistry':True, 'internalConstraints':True, 'groupConstraints':True, 'scan':True, 'advancedOptimization':True, 'optimizerRestart':True, 'cellOptimization':config['engine']=='tblite',
+                    'irc':bool(sella_version()), 'thermochemistry':True, 'internalConstraints':True, 'groupConstraints':True, 'scan':True, 'resourceOptimization':1, 'evaluationWorkers':config.get('workers',1), 'advancedOptimization':True, 'optimizerRestart':True, 'cellOptimization':config['engine']=='tblite',
                     'adaptiveNEB':True, 'pathSplit':True, 'history':True, 'queue':True, 'residentModels':True,
                     'lup':True, 'pathOptimizers':{'cineb':['fire'], 'lup':['fire','lbfgs']},
                     'persistentHistory':bool(self.server.jobs.history_dir), 'jobQueue':True, 'modelResidency':True,
@@ -3452,6 +3844,7 @@ def main():
     parser.add_argument('--anysolv-device', type=device_name, help='Default AnySolv device; separate GPU when available, otherwise cpu')
     parser.add_argument('--port', type=int, default=8766)
     parser.add_argument('--threads', type=int, default=1)
+    parser.add_argument('--workers', type=int, default=1, help='Independent tblite/g-xTB evaluations (1-8, at most --threads); path/vibrations only')
     parser.add_argument('--job-timeout', type=int, default=1800, help='Maximum seconds per job')
     parser.add_argument('--evaluation-timeout', type=int, default=120, help='Maximum seconds per g-xTB evaluation')
     parser.add_argument('--allow-origin', action='append', default=[], help='Exact trusted origin, e.g. https://h-nabata.github.io')
@@ -3470,6 +3863,8 @@ def main():
         parser.error('--anysolv requires --engine uma')
     if not args.anysolv and any(x is not None for x in (args.anysolv_model, args.anysolv_checkpoint, args.anysolv_device)):
         parser.error('--anysolv-model/--anysolv-checkpoint/--anysolv-device require --anysolv')
+    if not 1<=args.workers<=min(8,args.threads) or (args.engine=='uma' and args.workers!=1):
+        parser.error('--workers は1〜min(8, threads)。UMAは1を指定してください。')
     if not 1 <= args.threads <= 64 or not 1 <= args.port <= 65535 or not 1 <= args.job_timeout <= 86400 or not 1 <= args.evaluation_timeout <= 3600:
         parser.error('Port/threads/timeouts are out of range')
     for origin in args.allow_origin:
@@ -3486,7 +3881,7 @@ def main():
             parser.error('Install tblite: python -m pip install tblite')
     if args.site_dir and not (Path(args.site_dir)/'index.html').is_file():
         parser.error('--site-dir must contain the Molecule Studio index.html')
-    config = {'engine': args.engine, 'method': args.method or 'GFN2-xTB', 'binary': args.binary, 'threads': args.threads,
+    config = {'engine': args.engine, 'method': args.method or 'GFN2-xTB', 'binary': args.binary, 'threads': args.threads, 'workers': args.workers,
               'jobTimeout': args.job_timeout, 'evaluationTimeout': args.evaluation_timeout,
               'historyDir':None if args.no_history else str(Path(args.history_dir).expanduser().resolve()),
               'residentModels':not args.no_resident_models}

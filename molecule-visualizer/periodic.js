@@ -43,7 +43,7 @@
   function wrap(s){const c=s.metadata.cell;if(!c)throw Error('周期セルがありません。');s.atoms.forEach(a=>{const f=fractional(xyz(a),c).map((x,i)=>c.pbc[i]?x-Math.floor(x):x);[a.x,a.y,a.z]=cartesian(f,c);});}
   function supercell(s,n){
     if(!s.metadata.cell)throw Error('周期セルがありません。');if(n.length!==3||n.some(x=>!Number.isInteger(x)||x<1||x>8)||s.atoms.length*n.reduce((a,b)=>a*b,1)>2000)throw Error('反復数は各1〜8、合計2000原子までです。');
-    const result=M.cloneState(s),c=s.metadata.cell;result.atoms=[];result.bonds=[];
+    const result=M.cloneEditableState(s),c=s.metadata.cell;result.atoms=[];result.bonds=[];
     for(let a=0;a<n[0];a++)for(let b=0;b<n[1];b++)for(let d=0;d<n[2];d++){
       const offset=cartesian([a,b,d],c),map=new Map();s.atoms.forEach(atom=>{const next=M.createAtom({...atom,id:undefined,x:atom.x+offset[0],y:atom.y+offset[1],z:atom.z+offset[2]});map.set(atom.id,next.id);result.atoms.push(next);});
       s.bonds.filter(b=>b.source!=='inferred').forEach(b=>result.bonds.push(M.createBond({...b,id:undefined,atom1:map.get(b.atom1),atom2:map.get(b.atom2)})));
@@ -66,7 +66,7 @@
     const title=comment.replace(/\b(Lattice|pbc)="[^"]*"/gi,'').replace(/\bProperties=\S+/i,'').trim();
     const s=M.createState({atoms,metadata:{title,sourceFormat:'xyz',cell:c}});MV.Bonding.refreshInferredBonds(s);return s;
   }
-  function snapshot(s){const metadata=JSON.parse(JSON.stringify(s.metadata));delete metadata.trajectory;delete metadata.frameIndex;delete metadata.measurements;return {atoms:JSON.parse(JSON.stringify(s.atoms)),bonds:JSON.parse(JSON.stringify(s.bonds)),metadata};}
+  function snapshot(s){const {trajectory,frameIndex,measurements,...rest}=s.metadata;const metadata=JSON.parse(JSON.stringify(rest));return {atoms:JSON.parse(JSON.stringify(s.atoms)),bonds:JSON.parse(JSON.stringify(s.bonds)),metadata};}
   // Normalize Unicode whitespace without collapsing the XYZ comment line.
   function normalizeXYZInput(text){return String(text).replace(/\r\n|[\r\u0085\u2028\u2029\v\f]/g,'\n').replace(/[\uFEFF\u200B]/g,'').replace(/[^\S\n]/gu,' ');}
   function parseXYZ(text){
@@ -97,7 +97,7 @@
   }
   // GRRM-style editor: TV rows are cell vectors, never atoms.
   function editorText(s,header=true){
-    const copy=M.cloneState(s),c=copy.metadata.cell;copy.metadata.cell=null;
+    const copy=M.cloneEditableState(s),c=copy.metadata.cell;copy.metadata.cell=null;
     const lines=toXYZ(copy).split('\n').slice(0,-1);
     if(c)lines.push(...c.vectors.map(r=>'TV '+r.map(x=>x.toFixed(10)).join(' ')));
     return (header?lines:lines.slice(2)).join('\n')+'\n';
