@@ -5,10 +5,10 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  const model=process.env.LLMLIP_TEST_MODEL;if(!model)throw Error('Set LLMLIP_TEST_MODEL to an absolute .e3rs model directory');
  const root=path.resolve(__dirname,'..'),history=fs.mkdtempSync(path.join(os.tmpdir(),'llmlip-test-'));
  const engine=spawn(process.env.PYTHON||'python',['-u',path.join(root,'local-engine/bridge.py'),'--engine','llmlip','--llmlip-model','first='+model,'--llmlip-model','second='+model,'--llmlip-model','unavailable='+path.join(history,'missing.e3rs'),'--threads','4','--workers','2','--port','8778','--history-dir',history,'--site-dir',root],{env:{...process.env,OMP_NUM_THREADS:'1',OPENBLAS_NUM_THREADS:'1'}});
- let out='',err='',browser;engine.stderr.on('data',d=>err+=d);
+ let out='',err='',browser,page;engine.stderr.on('data',d=>err+=d);
  try{
   const token=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('bridge startup: '+err)),60000);engine.stdout.on('data',d=>{out+=d;const m=out.match(/Token: (\S+)/);if(m){clearTimeout(timer);resolve(m[1]);}});engine.on('exit',code=>{clearTimeout(timer);reject(Error('bridge exit '+code+': '+err));});});
-  browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:1280,height:1000}}),errors=[],posted=[];
+  browser=await chromium.launch({headless:true});page=await browser.newPage({viewport:{width:1280,height:1000}});const errors=[],posted=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/api/jobs'))posted.push(r.postDataJSON());});
   await page.goto('http://127.0.0.1:8778/');await page.waitForSelector('canvas');
   await page.click('#btnConstraints');const point=await page.evaluate(()=>{const p=MoleculeVisualizer.App.renderer().projectedAtoms.find(a=>a.index===1);return{x:p.x,y:p.y};});
@@ -17,7 +17,8 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
   assert.equal(await page.locator('#engineLLMLIPFields').isVisible(),true);assert.match(await page.locator('#engineLLMLIPFields').textContent(),/β版/);
   assert.equal(await page.locator('#engineUMAFields').isVisible(),false);assert.equal(await page.locator('#modelFEnabled').isDisabled(),true);
-  assert.equal(await page.locator('#engineLLMLIPModel option[value=unavailable]').isDisabled(),true);
+  // isDisabled() follows the enclosing label to its SELECT in Playwright 1.55.
+  assert.equal(await page.locator('#engineLLMLIPModel option[value=unavailable]').evaluate(option=>option.disabled),true);
   await page.uncheck('#engineLive');await page.selectOption('#engineMode','optimize');await page.fill('#engineSteps','2');await page.fill('#engineFmax','0.00001');await page.fill('#engineLLMLIPThreads','2');
   await page.evaluate(()=>{if(document.activeElement.id!=='engineLLMLIPThreads')throw Error('lost input focus');document.getElementById('engineRun').click();});
   const done=async()=>{await page.waitForFunction(()=>!MoleculeVisualizer.EngineUI.isBusy(),null,{timeout:60000});assert.equal(await page.locator('#engineResult').isVisible(),true,await page.locator('#engineMessage').textContent());};
@@ -39,5 +40,6 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.setViewportSize({width:390,height:844});await page.locator('#engineLLMLIPFields').scrollIntoViewIfNeeded();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:'test-artifacts/llmlip-mobile.png'});
   await page.fill('#engineToken','changed');assert.equal(await page.locator('#engineLLMLIPFields').isVisible(),false);assert.equal(await page.locator('#engineRun').isDisabled(),true);
   assert.deepEqual(errors,[]);console.log('llmlip native browser: selection, capabilities, focused threads, fixed MIN, model switch, apply/export/history, desktop/mobile passed.');
+ }catch(error){if(page){fs.mkdirSync('test-artifacts',{recursive:true});await page.screenshot({path:'test-artifacts/llmlip-failure.png'}).catch(()=>{});}throw error;
  }finally{if(browser)await browser.close();engine.kill('SIGTERM');await new Promise(resolve=>engine.exitCode!==null?resolve():engine.once('exit',resolve));fs.rmSync(history,{recursive:true,force:true});}
 })().catch(e=>{console.error(e);process.exitCode=1;});

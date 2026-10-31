@@ -27,11 +27,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: actions/cache@v4
+        id: llmlip-wheel
+        with:
+          path: .llmlip-wheels
+          key: llmlip-cpu-${{ runner.os }}-${{ runner.arch }}-py312-parallel-6bfb0418cc5aba0a13416fd783994fa82552cc34-v1
+      - name: Install CPU adapter dependencies
+        run: python -m pip install -r molecule-visualizer/local-engine/requirements.txt 'sella>=2.6,<3' 'maturin>=1.9,<2'
       - name: Build pinned CPU binding without PyTorch
+        if: steps.llmlip-wheel.outputs.cache-hit != 'true'
+        run: python -m maturin build --release --locked --manifest-path .llmlip-upstream/crates/llmlip-py/Cargo.toml --features parallel --out .llmlip-wheels
+      - name: Install native CPU wheel
         run: |
-          python -m pip install -r molecule-visualizer/local-engine/requirements.txt 'sella>=2.6,<3' 'maturin>=1.9,<2'
-          python -m maturin build --release --locked --manifest-path .llmlip-upstream/crates/llmlip-py/Cargo.toml --features parallel --out /tmp/llmlip-wheels
-          python -m pip install /tmp/llmlip-wheels/*.whl
+          python -m pip install .llmlip-wheels/*.whl
           python -c "import importlib.util; assert importlib.util.find_spec('torch') is None"
       - name: Native public synthetic model and adapter contracts
         run: python -m unittest discover -s molecule-visualizer/tests -p test_llmlip.py -v
