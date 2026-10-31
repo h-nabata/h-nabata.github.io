@@ -22,17 +22,20 @@
     // Results already own immutable coordinate arrays. Do not expand every
     // trajectory frame into atoms/bonds when no comparison has been requested.
     const template=MV.Model.shareTrajectory([MV.Periodic.snapshot(base)])[0],symbols=template.atoms.map(a=>a.element),atomIds=template.atoms.map(a=>a.id),cache=new Map();
-    latest={title:`${result.mode}の構造列`,count:history.images.length,atomCount:symbols.length,
-      positions:i=>history.images[i],symbols:()=>symbols,atomIds:()=>atomIds,
-      periodic:()=>history.images.some((_,i)=>(history.cells?.[i]||result.cell)?.pbc?.some(Boolean)),
+    // Keep only fields required by comparison, not the result's force arrays,
+    // diagnostics or other trajectories when the job itself is released.
+    const {images,energies,cells}=history,{cell,charge,multiplicity}=result;
+    latest={title:`${result.mode}の構造列`,count:images.length,atomCount:symbols.length,
+      positions:i=>images[i],symbols:()=>symbols,atomIds:()=>atomIds,
+      periodic:()=>images.some((_,i)=>(cells?.[i]||cell)?.pbc?.some(Boolean)),
       frame(i){
         if(cache.has(i)){const frame=cache.get(i);cache.delete(i);cache.set(i,frame);return frame;}
-        const s=MV.Model.createState(template);s.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=history.images[i][k];});
-        s.metadata.cell=history.cells?.[i]||result.cell||null;s.metadata.totalCharge=result.charge;s.metadata.multiplicity=result.multiplicity;
-        s.metadata.externalCalculation={...(s.metadata.externalCalculation||{}),energyEV:history.energies?.[i],comparisonConditionKey:conditionKey};
+        const s=MV.Model.createState(template);s.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=images[i][k];});
+        s.metadata.cell=cells?.[i]||cell||null;s.metadata.totalCharge=charge;s.metadata.multiplicity=multiplicity;
+        s.metadata.externalCalculation={...(s.metadata.externalCalculation||{}),energyEV:energies?.[i],comparisonConditionKey:conditionKey};
         MV.Bonding.refreshInferredBonds(s);const frame=MV.Model.shareTrajectory([MV.Periodic.snapshot(s)])[0];cache.set(i,frame);
         if(cache.size>8)cache.delete(cache.keys().next().value);return frame;
-      },energies:history.energies,conditionKey};
+      },energies,conditionKey};
     if(initialized)$('analysisLatest').disabled=false;
   }
   function getSource(){

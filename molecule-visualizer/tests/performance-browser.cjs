@@ -26,6 +26,9 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict');
     return {reused,moved:r.projectedAtoms[0].x!==old,sprites:r.atomSprites?.size||0};
   });assert.equal(cache.reused,true);assert.equal(cache.moved,true);assert.ok(cache.sprites>0&&cache.sprites<=64);
   const rows=await page.evaluate(()=>{
+   // The projection check changed a coordinate directly, without updating the
+   // table. Flush that legitimate text change before measuring selection only.
+   document.getElementById('btnClearSel').click();
    const body=document.querySelector('#atomTable tbody'),first=body.firstElementChild,checkbox=first.querySelector('input');
    const observer=new MutationObserver(()=>{});observer.observe(body,{childList:true,subtree:true});
    document.getElementById('btnSelectAll').click();document.getElementById('btnClearSel').click();

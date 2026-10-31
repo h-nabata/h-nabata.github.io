@@ -27,11 +27,14 @@ test('receiving a long result builds no frames; the size guard runs before coord
 test('comparison materializes only selected frames, bounds reuse and snapshots the input template',()=>{
  const {M,state,result,points,get,renderer,builds}=boot();
  const images=Array.from({length:12},(_,i)=>points.map(p=>[p[0]+i,p[1],p[2]]));
- M.StructureAnalysisUI.setSource({...result,trajectory:{images,energies:images.map((_,i)=>-i)}},{original:state});
+ const originalResult={...result,trajectory:{images,energies:images.map((_,i)=>-i)}};
+ M.StructureAnalysisUI.setSource(originalResult,{original:state});
+ for(const object of [originalResult,originalResult.trajectory])for(const key of Object.keys(object))Object.defineProperty(object,key,{get(){throw Error('comparison must not reread the discarded result object');}});
  state.atoms[0].element='N';state.bonds[0].order=3;M.StructureAnalysisUI.refresh();assert.equal(builds(),0);
  get('analysisReference').value='0';get('analysisMobile').value='1';get('analysisOverlay').click();
  assert.equal(builds(),2);assert.match(get('analysisMessage').textContent,/RMSD = 0\.00000/);
  assert.equal(renderer.state.atoms[0].element,'C');assert.equal(renderer.state.bonds.find(b=>b.id==='manual').order,2);
+ assert.equal(renderer.state.metadata.totalCharge,0);assert.equal(renderer.state.metadata.multiplicity,1);
  renderer.state.atoms[0].x=99;renderer.state.metadata.externalCalculation.energyEV=99;
  get('analysisOverlay').click();assert.equal(builds(),2);assert.equal(renderer.state.atoms[0].x,0);assert.equal(renderer.state.metadata.externalCalculation.energyEV,0);
  for(let i=2;i<12;i++){get('analysisReference').value=String(i-1);get('analysisMobile').value=String(i);get('analysisOverlay').click();}
