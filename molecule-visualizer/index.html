@@ -417,11 +417,12 @@ H 1.0 0 0
   <h2>外部エンジン / 経路緩和</h2>
   <p class="mv-small">計算はこのPCで起動したサービス上で実行します。座標はローカルサービスへ送信されます。接続トークンはこの画面のメモリだけに保持します。</p>
   <details class="mv-engine-setup"><summary>初回のセットアップ：tblite / g-xTB / UMA / llmlip.rsを選ぶ</summary>
-    <p><a href="./local-engine/bridge.py?v=1.15.0" download>bridge.pyをダウンロード</a>し、使いたいエンジンの手順で起動してください。tblite / g-xTBはPython 3.10以上、UMAはPython 3.12の専用環境を推奨します。</p>
+    <p><a href="./local-engine/bridge.py?v=1.15.0" download>bridge.pyをダウンロード</a>し、使いたいエンジンの手順で起動してください。tblite / g-xTBはPython 3.10以上、UMA / llmlip.rsはPython 3.12の専用環境を推奨します。</p>
     <ul>
       <li><strong>tblite</strong>：GFN2-xTB（既定）、GFN1-xTB、IPEA1-xTBを利用します。このアプリでは非周期系と固定セルの周期系に対応します。</li>
       <li><strong>g-xTB</strong>：公式のg-xTB対応実行ファイルを別途用意します。このアプリでは非周期系に対応します。tbliteのPythonパッケージは不要です。</li>
       <li><strong>UMA</strong>：fairchem-coreの学習済みモデルをローカルで実行します。この接続は非周期分子用のomolタスクです。CPU / CUDAを選べます。</li>
+      <li><strong>llmlip.rs（CPU・β版）</strong>：変換済みモデルをローカルCPUで実行します。推論時のPyTorch・CUDAは不要で、対応元素・周期条件は登録モデルごとに確認します。</li>
     </ul>
     <p>通常配布版tblite 0.7.0はg-xTBに対応していません（2026年10月15日確認）。g-xTBを使いたい場合は、下の「g-xTBを使う」を選んでください。両方をインストールする必要はありません。</p>
     <details><summary>tbliteを使う（GFN2-xTB / GFN1-xTB / IPEA1-xTB）</summary>
@@ -490,7 +491,7 @@ python bridge.py --engine uma --uma-device cuda:0 --anysolv --anysolv-model mode
     <details><summary>SellaでTS最適化・IRCを使う場合（追加パッケージ）</summary>
       <p>bridge.pyを実行する同じPython環境で、次を実行してください。振動解析のみならSellaは不要で、導入済みのASEを使います。</p>
       <pre>python -m pip install --only-binary=:all: "sella&gt;=2.6,&lt;3"</pre>
-      <p>Python 3.12・Sella 2.6で確認しています。対応するwheelが見つからない場合はPython 3.12の環境を作成してください。Sellaはbridgeと同じPython環境に追加します。エネルギー・力は接続中のtblite / g-xTB / UMAで計算します。導入後はbridgeを再起動し、再接続してください。</p>
+      <p>Python 3.12・Sella 2.6で確認しています。対応するwheelが見つからない場合はPython 3.12の環境を作成してください。Sellaはbridgeと同じPython環境に追加します。エネルギー・力は接続中のtblite / g-xTB / UMA / llmlip.rsで計算します。導入後はbridgeを再起動し、再接続してください。</p>
     </details>
     <p>起動時に表示されるURLとTokenを下欄に入力します。端末は利用中開いたままにしてください。ブラウザが要求した場合は、このサイトからのローカルネットワーク接続を許可します。WSLではサービスも計算エンジンと同じWSL環境で起動します。</p>
     <p><a href="https://github.com/h-nabata/h-nabata.github.io/blob/main/molecule-visualizer/local-engine/README.md" target="_blank" rel="noopener">導入・周期系・計算方式の詳しい説明</a></p>
