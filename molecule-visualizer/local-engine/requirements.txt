@@ -4,3 +4,6 @@ psutil>=5.9,<8
 # tblite backend: see README.md for OS-specific setup.
 # Windows: conda-forge package tblite-python (not pip source builds).
 # Other platforms: python -m pip install --only-binary=:all: "tblite>=0.4,<1"
+
+# Python 3.10 only: llmlip model manifests (Python 3.11+ has tomllib).
+tomli>=2,<3; python_version < "3.11"

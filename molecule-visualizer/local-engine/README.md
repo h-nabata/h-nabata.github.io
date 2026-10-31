@@ -2,7 +2,117 @@
 
 IRC、履歴保存・再開、モデル常駐・キュー、内部座標拘束・スキャン、自動ノード追加、診断、熱化学、構造比較の操作と計算上の条件は[反応経路・計算管理・解析](../RESEARCH.md)にまとめています。
 
-Molecule Studioの「外部エンジン / 経路緩和」から、このPCで動く **tblite / g-xTB / UMA** を利用できます。ユーザーが起動した `bridge.py` が計算を仲介します。GitHub Pagesに計算サーバーや座標をアップロードする必要はありません。
+Molecule Studioの「外部エンジン / 経路緩和」から、このPCで動く **tblite / g-xTB / UMA / llmlip.rs（CPU・β版）** を利用できます。ユーザーが起動した `bridge.py` が計算を仲介します。GitHub Pagesに計算サーバーや座標をアップロードする必要はありません。
+
+<a id="llmlip-cpu"></a>
+## llmlip.rs（CPU・β版）
+
+bridge.py 1.15.0で追加した暫定接続です。[llmlip.rs](https://github.com/mizukami-group/llmlip.rs)のソース公開版`6bfb0418cc5aba0a13416fd783994fa82552cc34`を対象にしています。上流にはPython/PyO3 APIとASEアダプターがあり、エネルギーと保存力（エネルギーの負の勾配）を一度の呼び出しで取得できます。本接続は`llmlip.Model.predict()`を直接呼び、既存のASE・AFIR・経路緩和へ渡します。CLIは1評価ごとにモデルを読み直すため、自動フォールバックには使用しません。
+
+### CPU版の導入
+
+Linux / WSL2、Python 3.12を推奨します。Rust 1.89以上、C/C++コンパイラとリンカーを事前に導入してください。次は専用のPython環境を使う例です。`maturin develop`は仮想環境内で実行します。
+
+```bash
+git clone https://github.com/h-nabata/h-nabata.github.io.git
+git clone https://github.com/mizukami-group/llmlip.rs.git
+cd llmlip.rs
+git checkout 6bfb0418cc5aba0a13416fd783994fa82552cc34
+python3.12 -m venv .venv
+source .venv/bin/activate
+python -m pip install 'maturin>=1.9,<2'
+python -m pip install -r ../h-nabata.github.io/molecule-visualizer/local-engine/requirements.txt
+maturin develop --release --locked --manifest-path crates/llmlip-py/Cargo.toml --features parallel
+python -c "from llmlip._llmlip import Model; print('llmlip native CPU binding OK')"
+```
+
+`Cargo.lock`を保持してください。`parallel`はRayonによるCPU並列処理を有効にします。上のビルドにはPyTorch・CUDA・外部BLASは不要です。`--all-features`や`apple-metal`は指定しません。本接続はMetal関連の実行設定も無効にします。Windowsネイティブ／macOSのビルド・実機試験は別途必要です。Python 3.10の場合はrequirementsに含まれる`tomli`も必要です。
+
+TS・IRCを使う場合だけ、同じ環境へ追加します。
+
+```bash
+python -m pip install 'sella>=2.6,<3'
+```
+
+### モデルの取得・配置
+
+学習済みモデルの重みは同梱していません。上流の[変換手順](https://github.com/mizukami-group/llmlip.rs/blob/6bfb0418cc5aba0a13416fd783994fa82552cc34/converters/README.md)と各モデルのライセンスを確認し、チェックポイントを取得して`.e3rs`へ変換してください。変換時に必要となるPyTorchやモデル固有ライブラリは、推論用とは別の環境に導入できます。
+
+```bash
+python converters/convert.py list
+python converters/convert.py info uma-s-1p2
+# 利用条件の確認・必要な承認・チェックポイント取得後、変換用環境で実行
+python converters/convert.py convert uma-s-1p2 \
+  --checkpoint /absolute/path/uma-s-1p2.pt \
+  --out /absolute/path/models/uma-s-1p2.e3rs --accept-license
+```
+
+`.e3rs`は通常、`manifest.toml`と重み・モデル記述ファイルを含むディレクトリです。変換結果を丸ごと保存し、運転中は内容を変更しないでください。PyTorchの`.pt`や`.model`をそのまま指定することはできません。モデルのロード成功や対応元素一覧は、その元素を含む任意の化合物・反応に対する精度保証ではありません。
+
+本接続で実チェックポイントまで検証したモデルはMACE-MP-0b3 mediumです。材料用モデルであり、分子反応の正確さを保証するものではありません。[公式配布元](https://github.com/ACEsuit/mace-mp/releases/tag/mace_mp_0b3)の`mace-mp-0b3-medium.model`を取得後、上流の[専用変換手順](https://github.com/mizukami-group/llmlip.rs/blob/6bfb0418cc5aba0a13416fd783994fa82552cc34/converters/README.md#分離後の変換確認)を使います。今回の変換環境はMACE 0.3.16・e3nn 0.4.4・PyTorch 2.8.0 CPUです。専用スクリプトはMACEのソースcheckoutと、その隣の`mace.PINNED_COMMIT`にcheckoutのcommit IDも要求します。
+
+```bash
+# llmlip.rsディレクトリ内。変換用Python環境で実行する例
+git clone https://github.com/ACEsuit/mace.git /absolute/path/mace
+git -C /absolute/path/mace checkout 4d2da09413ac1407f37cdbb6b81fa28e4c15655e
+git -C /absolute/path/mace rev-parse HEAD > /absolute/path/mace.PINNED_COMMIT
+python tools/reference/generate_mace_fixtures.py \
+  --mace-dir /absolute/path/mace \
+  --e3nn-compat-path /absolute/path/conversion-env/lib/python3.12/site-packages \
+  --artifact /absolute/path/mace-mp-0b3-medium.model \
+  --emit-mp0b-runtime-model \
+  --mp0b-runtime-model-out /absolute/path/models/mp0b.e3rs
+```
+
+推論用環境に戻して`--llmlip-model mace-mp0b=/absolute/path/models/mp0b.e3rs`で登録します。他の系列の学習済み重みは本接続では未実測です。能力情報に合致しても、利用前に単点・数値勾配と元実装との比較を行ってください。
+
+接続試験だけなら上流同梱の`examples/model.e3rs`を指定できます。これはH/O用の**人工モデルであり、科学計算には使用できません**。UIと結果JSONにも検証用と表示・記録します。
+
+### 起動・選択
+
+前の仮想環境を有効にしたまま、実在するモデルの絶対パスを指定します。
+
+```bash
+python ../h-nabata.github.io/molecule-visualizer/local-engine/bridge.py \
+  --engine llmlip \
+  --llmlip-model my-model=/absolute/path/models/my-model.e3rs \
+  --threads 8 --workers 1 \
+  --allow-origin https://h-nabata.github.io
+```
+
+`--llmlip-model other-model=/absolute/path/other.e3rs`を追加すれば複数モデルを登録できます。IDは英数字・`_`・`-`の1〜64文字です。起動時に順にモデルを開いて実装能力を確認し、読み込めないモデルは選択不可にします。利用可能なモデルがゼロならサービスを起動しません。モデルの絶対パスや任意のコマンドはHTTP入力として受け付けません。
+
+画面の計算エンジンで「llmlip.rs（CPU・β版）」を選び、起動時のURL・Tokenで接続してください。モデル・head（モデル内の出力対象）・精度・CPUスレッド数を選べます。エンジンの切替は対応する`--engine`で起動したローカルサービスへの接続で行います。ブラウザがPythonプロセスを起動することはありません。
+
+| 設定・機能 | llmlip.rs接続の扱い |
+|---|---|
+| 対応モデル | 登録した`.e3rs`を実際にロードし、`capabilities()`からエネルギー・力・対応元素・精度・headを確認。上流の全チェックポイントに対応するわけではありません。未知のモデル形式は無効化。 |
+| 単位・原子順 | 座標・セルはÅ、エネルギーはeV、力はeV/Å。原子番号を既存の元素検証へ通し、File-order順の元素記号とfloat64の座標配列を渡します。力の符号反転や原子単位からの再変換はしません。 |
+| 電荷・スピン | ORBの必須条件、UMAの`omol` headには全電荷と多重度`2S+1`を渡します。それ以外は電荷0・多重度1だけを受理し、モデルへは未指定とします。これは一重項を計算で識別するという意味ではありません。 |
+| 周期境界 | 検証対象ソースのモデル別対応表に従い、固定セルの非周期／部分周期／3方向周期を検査。UMA `omol`は非周期限定。各予測時のRust検証も有効。セルがカットオフに対して小さい場合はエラー。 |
+| MIN・AFIR・CI-NEB・LUP | 既存の共通計算インターフェースを使用。AFIRの人工項を物理ポテンシャルと区別し、経路の端点固定も維持。 |
+| TS・IRC・振動解析 | float64対応モデルで使用。TS・IRCはSellaを追加。有限差分の座標幅・収束条件は既存設定を使用し、float32では無効化。 |
+| 未対応機能 | セル最適化・応力出力、ModelF、AnySolv。上流が一部の応力計算を実装していても本接続では公開しません。 |
+| CPUスレッド | `--threads`は1〜64、画面からはその上限以内。変更時は常駐プロセスを再生成し、初回だけ固定されるRayon設定を確実に更新。 |
+| 並列評価 | `--workers`は1〜min(8, threads)。単点の構造列・CI-NEB/LUP・振動解析で既存の並列評価器を利用。モデル重みは共有、各入力は独立。Rayonは`threads // workers`、BLAS/OpenMPは1にして多重並列を抑制。必ず速くなる設定ではないため、まずworkers=1で比較。 |
+| 常駐・履歴 | 同じモデル・head・精度・スレッド設定なら重みを再利用。ジョブごとに座標・電荷・スピンと結果キャッシュを更新。モデル切替・中止・失敗・終了時に解放。既存キュー・履歴再開を使用。 |
+
+モデル全ファイルのSHA256、登録ID、head、精度、スレッド数、llmlipの版、CPU/direct/β表示を結果へ保存します。履歴再開時はモデル同一性を確認し、条件の違う計算結果を混ぜません。重みのパス・接続Tokenは保存結果に含めません。学習済み重みや計算対象の座標をブラウザから外部へ送信する処理もありません。
+
+### 検証
+
+アプリのリポジトリルートから実行します。`LLMLIP_TEST_MODEL`にはH/Oを含むfloat64モデルを指定してください。既定試験では、学習済み重みを暗黙に取得しません。
+
+```bash
+node --test molecule-visualizer/tests/*.test.cjs
+python -m unittest discover -s molecule-visualizer/tests -p 'test_*.py' -v
+LLMLIP_TEST_MODEL=/absolute/path/model.e3rs \
+  python -m unittest discover -s molecule-visualizer/tests -p test_llmlip.py -v
+LLMLIP_TEST_MODEL=/absolute/path/model.e3rs \
+  node molecule-visualizer/tests/llmlip-browser.cjs
+```
+
+最後の試験にはNode.jsのPlaywrightとChromiumが必要です。実行結果・未実施の範囲は[AFIR-VALIDATION.md](../AFIR-VALIDATION.md)へ記録します。上流の[検証範囲](https://github.com/mizukami-group/llmlip.rs/blob/6bfb0418cc5aba0a13416fd783994fa82552cc34/docs/VALIDATION.md)と本接続の試験を区別してください。
 
 ## UMA（fairchem-core）の導入と設定
 

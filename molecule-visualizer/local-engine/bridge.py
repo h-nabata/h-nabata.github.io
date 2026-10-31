@@ -38,7 +38,7 @@ from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 from scipy.spatial import cKDTree
 
-VERSION = '1.14.0'
+VERSION = '1.15.0'
 KJ_MOL_PER_EV = 96.48533212331002
 UMA_MODELS = ('uma-s-1p2p1', 'uma-s-1p2', 'uma-s-1p1', 'uma-m-1p1')
 ANYSOLV_MODELS = ('model_compact', 'model_moe')
@@ -59,7 +59,7 @@ def validate(data, engine):
     allowed = {'symbols', 'images', 'cell', 'charge', 'multiplicity', 'mode',
                'maxSteps', 'fmax', 'spring', 'maxMove', 'climbAfter', 'atomIds', 'afir', 'livePreview',
                'optimizer', 'trustRadius', 'vibrations', 'fixedAtoms', 'umaDevice', 'solvation',
-               'irc', 'thermochemistry', 'internalConstraints', 'groupConstraints', 'scan', 'adaptiveNEB', 'pathSplit', 'nodeIds', 'lup', 'fixedComponents', 'rigidGroups', 'cellOptimization', 'stagedOptimization', 'modelF'}
+               'irc', 'thermochemistry', 'internalConstraints', 'groupConstraints', 'scan', 'adaptiveNEB', 'pathSplit', 'nodeIds', 'lup', 'fixedComponents', 'rigidGroups', 'cellOptimization', 'stagedOptimization', 'modelF', 'llmlip'}
     if not isinstance(data, dict) or set(data) - allowed:
         raise ValueError('未定義の入力項目があります。コマンド・パス指定は受け付けません。')
     if type(data.get('livePreview', False)) is not bool:
@@ -67,7 +67,7 @@ def validate(data, engine):
     symbols = data.get('symbols')
     if not isinstance(symbols, list) or not 1 <= len(symbols) <= 500:
         raise ValueError('原子数は1〜500にしてください。')
-    maximum_z = {'gxtb':103, 'tblite':86, 'uma':83}[engine]
+    maximum_z = {'gxtb':103, 'tblite':86, 'uma':83, 'llmlip':118}[engine]
     if any(not isinstance(s, str) or s not in atomic_numbers or not 1 <= atomic_numbers[s] <= maximum_z for s in symbols):
         raise ValueError(f'このエンジンの入力元素は原子番号{maximum_z}までです。対応パラメータの有無は計算時にも検査します。')
     images = np.asarray(data.get('images'), dtype=float)
@@ -156,6 +156,19 @@ def validate(data, engine):
         if engine != 'uma':
             raise ValueError('umaDeviceはUMA専用です。')
         result['umaDevice'] = device_name(data['umaDevice'])
+    if 'llmlip' in data:
+        s = data['llmlip']
+        if engine != 'llmlip' or not isinstance(s, dict) or set(s)-{'model', 'head', 'dtype', 'threads'}:
+            raise ValueError('llmlipには登録モデル・head・dtype・threadsだけを指定してください。')
+        if not isinstance(s.get('model'), str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', s['model']):
+            raise ValueError('llmlipの登録モデルIDを指定してください。パスは受け付けません。')
+        if s.get('dtype', 'float64') not in ('float64', 'float32'):
+            raise ValueError('llmlipのdtypeはfloat64またはfloat32です。')
+        if s.get('head') is not None and (not isinstance(s['head'], str) or not 1 <= len(s['head']) <= 100):
+            raise ValueError('llmlipのhead指定が不正です。')
+        result['llmlip'] = dict(s)
+        if 'threads' in s:
+            result['llmlip']['threads'] = number(s['threads'], 'CPUスレッド数', 1, 64, True)
     if 'solvation' in data:
         s = data['solvation']
         if engine != 'uma' or not isinstance(s, dict) or set(s) != {'model', 'solvent', 'device'}:
@@ -175,6 +188,8 @@ def validate(data, engine):
     validate_irc_settings(data, result)
     validate_thermochemistry_settings(data, result)
     if 'modelF' in data:
+        if engine == 'llmlip':
+            raise ValueError('llmlip.rs β版ではModelFの2状態合成面は未対応です。')
         result['modelF'] = validate_model_f(data['modelF'], result, engine)
     return result
 
@@ -354,7 +369,7 @@ class ModelFEngine:
 
 def make_calculator(data,config,directory):
     if data.get('modelF'):return ModelFEngine(data,config,directory)
-    cls=SolvatedUMAEngine if config.get('solvation') else {'tblite':TBLiteEngine,'gxtb':GXTBEngine,'uma':UMAEngine}[config['engine']]
+    cls=SolvatedUMAEngine if config.get('solvation') else {'tblite':TBLiteEngine,'gxtb':GXTBEngine,'uma':UMAEngine,'llmlip':LLMLIPEngine}[config['engine']]
     return cls(data,config,directory)
 
 
@@ -2677,8 +2692,204 @@ def anysolv_catalog(config, checkpoint=None):
         raise ValueError('AnySolvの溶媒表・モデルを確認できません。--anysolv-model と --anysolv-checkpoint のローカルファイルを確認してください。モデルの自動切り替えは行いません。') from error
 
 
+LLMLIP_SOURCE_REVISION = '6bfb0418cc5aba0a13416fd783994fa82552cc34'
+# PyO3 capabilities() does not expose boundary-condition support in this revision.
+# Conservative table from model.rs::external_graph_capabilities; Rust still validates
+# each actual prediction. New architectures are disabled until their contract is checked.
+LLMLIP_PBC = {
+    'synthetic-local-v1':'partial', 'synthetic-equivariant-v1':'none',
+    'nequip-lite-v1':'partial', 'nequip-oam-l-v1':'partial', 'nequix-v1':'partial',
+    'mace-lite-v1':'partial', 'mace-mh1-v1':'partial', 'mace-polar-v1':'none',
+    'allegro-oam-l-v1':'full', 'pet-lite-v1':'full', 'esen-oam-v1':'partial',
+    'uma-v1':'partial', 'orb-v3-conservative-omol-v1':'none',
+}
+
+
+def configure_llmlip_cpu(threads, workers=1):
+    # Set before importing native code. Rayon owns parallelism; nested BLAS stays serial.
+    for name in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'VECLIB_MAXIMUM_THREADS'):
+        os.environ[name] = '1'
+    os.environ['OMP_MAX_ACTIVE_LEVELS'] = '1'
+    os.environ['RAYON_NUM_THREADS'] = str(max(1, threads // workers))
+    for name in ('LLMLIP_MACE_METAL', 'LLMLIP_MACE_MP0B_METAL', 'LLMLIP_MACE_POLAR_METAL', 'LLMLIP_PET_METAL', 'LLMLIP_PET_METAL_VJP'):
+        os.environ[name] = '0'
+
+
+def llmlip_model_class():
+    try:
+        from llmlip._llmlip import Model
+        return Model
+    except ImportError as error:
+        raise ValueError('llmlip.rsのネイティブPythonバインディングがありません。READMEのCPUビルド手順で導入してください。CLIへの自動切替は行いません。') from error
+
+
+def llmlip_artifact(path, digest=False):
+    """A self-contained, immutable directory; fingerprint includes all model bytes."""
+    root = Path(path)
+    if not root.is_dir() or not (root/'manifest.toml').is_file():
+        raise ValueError('manifest.tomlを含む.e3rsモデルディレクトリが必要です。')
+    rows = []; sha = hashlib.sha256()
+    for file in sorted(root.rglob('*')):
+        if file.is_symlink():
+            raise ValueError('モデルはシンボリックリンクを含まない自己完結したディレクトリに配置してください。')
+        if not file.is_file():
+            continue
+        relative = file.relative_to(root).as_posix(); stat = file.stat()
+        rows.append((relative, stat.st_size, stat.st_mtime_ns))
+        if digest:
+            sha.update(relative.encode()+b'\0'+str(stat.st_size).encode()+b'\0')
+            with file.open('rb') as source:
+                for chunk in iter(lambda: source.read(1024*1024), b''):
+                    sha.update(chunk)
+    return sha.hexdigest() if digest else rows
+
+
+def llmlip_inspect(path):
+    try:
+        import tomllib
+    except ImportError:
+        import tomli as tomllib
+    manifest = tomllib.loads((Path(path)/'manifest.toml').read_text(encoding='utf-8'))
+    if (manifest.get('length_unit'), manifest.get('energy_unit'), manifest.get('force_unit')) != ('angstrom', 'eV', 'eV/angstrom'):
+        raise ValueError('llmlipモデルの単位はangstrom / eV / eV/angstromである必要があります。')
+    model = llmlip_model_class()(str(path))
+    caps = model.capabilities()
+    architecture = caps.architecture
+    if architecture not in LLMLIP_PBC:
+        raise ValueError('このモデル形式はllmlip.rs β接続では未検証です。')
+    if not caps.supports_energy or not caps.supports_forces:
+        raise ValueError('このモデルはエネルギー・力の推論に必要な実装または重みが不足しています。')
+    species = list(caps.supported_species) or manifest.get('species', {}).get('symbols', [])
+    if not species or any(s not in atomic_numbers or atomic_numbers[s] < 1 for s in species):
+        raise ValueError('モデルの対応元素を判定できません。')
+    heads = list(caps.supported_heads)
+    dtype = [name for name in ('float64', 'float32') if getattr(caps, 'supports_'+name)]
+    if not dtype:
+        raise ValueError('対応する計算精度がありません。')
+    pbc = LLMLIP_PBC[architecture]
+    # Dispersion wrappers have narrower PBC support than their base architecture.
+    if manifest.get('dispersion') and pbc == 'partial':
+        pbc = 'full'
+    return dict(architecture=architecture, species=species, heads=heads, dtypes=dtype,
+                defaultHead='omol' if architecture=='uma-v1' and 'omol' in heads else heads[0] if heads else None,
+                periodic=pbc, charge=bool(caps.input_requirements.total_charge),
+                spin=bool(caps.input_requirements.spin_multiplicity), synthetic=architecture.startswith('synthetic-'),
+                stress=False, available=True, sha256=llmlip_artifact(path, digest=True))
+
+
+def llmlip_catalog(specs):
+    configure_llmlip_cpu(1)
+    llmlip_model_class()  # Missing native module is a startup error, not an empty catalog.
+    paths = {}; catalog = []
+    for spec in specs:
+        identifier, sep, value = spec.partition('=')
+        if not sep or not re.fullmatch(r'[A-Za-z0-9_-]{1,64}', identifier) or identifier in paths:
+            raise ValueError('--llmlip-modelは重複しないID=/absolute/path/model.e3rsで指定してください。')
+        path = Path(value).expanduser()
+        if not path.is_absolute():
+            raise ValueError('--llmlip-modelのパスは絶対パスにしてください。')
+        paths[identifier] = str(path.resolve())
+        try:
+            item = llmlip_inspect(paths[identifier])
+        except Exception as error:
+            # ModelLoadError can expose local paths. Only the exception class crosses HTTP.
+            item = dict(available=False, error='モデルを使用できません（'+type(error).__name__+'）。重み・形式・対応ビルドを確認してください。')
+        catalog.append(dict(id=identifier, **item))
+    if not any(item['available'] for item in catalog):
+        raise ValueError('利用可能なllmlipモデルがありません。変換済みの重みとPythonバインディングを確認してください。')
+    return paths, catalog
+
+
+def llmlip_job_config(data, config):
+    selection = data.get('llmlip', config.get('llmlipSelection', {}))
+    identifier = selection.get('model', config['llmlipDefaultModel'])
+    item = next((m for m in config['llmlipModels'] if m['id']==identifier), None)
+    if not item or not item['available']:
+        raise ValueError('選択したllmlipモデルを利用できません。登録モデル一覧を確認してください。')
+    dtype = selection.get('dtype', item['dtypes'][0])
+    if dtype not in item['dtypes']:
+        raise ValueError('選択したllmlipモデルは指定の計算精度に対応していません。')
+    head = selection.get('head', item['defaultHead'])
+    if (item['heads'] and head not in item['heads']) or (not item['heads'] and head is not None):
+        raise ValueError('選択したllmlipモデルのheadに対応していません。')
+    threads = number(selection.get('threads', config['threads']), 'CPUスレッド数', 1, config.get('llmlipMaxThreads', config['threads']), True)
+    if threads < config.get('workers', 1):
+        raise ValueError('CPUスレッド数は起動時の--workers以上にしてください。')
+    conditioned = item['architecture']=='uma-v1' and head=='omol'
+    charge, spin = item['charge'] or conditioned, item['spin'] or conditioned
+    if data.get('symbols'):
+        if set(data['symbols'])-set(item['species']):
+            raise ValueError('選択したllmlipモデルの対応外元素が含まれています。')
+        if (not charge and data['charge']!=0) or (not spin and data['multiplicity']!=1):
+            raise ValueError('このllmlipモデル/headは電荷・スピンを指定できません。電荷0・多重度1の入力だけを受け付けます（スピン状態の識別はしません）。')
+        pbc = data.get('cell', {}).get('pbc', [False]*3) if data.get('cell') else [False]*3
+        # UMA molecular head is deliberately limited to molecules in this integration.
+        policy = 'none' if conditioned else item['periodic']
+        if any(pbc) and (policy=='none' or (policy=='full' and not all(pbc))):
+            raise ValueError('選択したllmlipモデル/headは指定の周期境界条件に対応していません。')
+        if dtype!='float64' and (data['mode'] in ('ts', 'irc', 'vibrations') or data.get('vibrations')):
+            raise ValueError('llmlip.rs β版のTS・IRC・有限差分振動解析にはfloat64を指定してください。')
+        if data.get('modelF') or data.get('cellOptimization', {}).get('mode', 'fixed')!='fixed':
+            raise ValueError('llmlip.rs β版ではModelF・セル最適化は未対応です。')
+    return {**config, 'threads':threads, 'llmlipSelection':dict(model=identifier, head=head, dtype=dtype, threads=threads),
+            'llmlipCapabilities':item, 'llmlipCharge':charge, 'llmlipSpin':spin}
+
+
+class LLMLIPEngine:
+    """Persistent PyO3 model, one conservative energy+force call per geometry.
+
+    The existing ASE-facing bridge consumes __call__; no duplicate optimizers or
+    separate mutable ASE calculators are needed. PyO3 releases the GIL and owns
+    each request's Rust Structure, allowing independent image evaluations.
+    """
+    def __init__(self, data, config, directory):
+        config = llmlip_job_config(data, config)
+        configure_llmlip_cpu(config['threads'], config.get('workers', 1))
+        self.path = config['llmlipPaths'][config['llmlipSelection']['model']]
+        self.digest = config['llmlipCapabilities']['sha256']
+        if llmlip_artifact(self.path, digest=True) != self.digest:
+            raise ValueError('llmlipモデルが起動後に変更されています。bridgeを再起動してください。')
+        try:
+            self.model = llmlip_model_class()(self.path)
+        except Exception as error:
+            raise ValueError('llmlipモデルの読み込みに失敗しました。ローカルの重み・形式・メモリを確認してください。') from error
+        self.stamp = llmlip_artifact(self.path)
+        self.reset(data, config, directory)
+
+    def reset(self, data, config, directory):
+        config = llmlip_job_config(data, config)
+        if llmlip_artifact(self.path) != self.stamp:
+            raise ValueError('常駐中のllmlipモデルファイルが変更されました。bridgeを再起動してください。')
+        self.data, self.config = data, config
+
+    def __call__(self, index, positions):
+        data, config = self.data, self.config
+        p = np.asarray(positions, dtype=np.float64)
+        if p.shape != (len(data['symbols']), 3) or not np.isfinite(p).all():
+            raise ValueError('llmlipへ渡す座標が不正です。')
+        cell = data.get('cell'); settings = config['llmlipSelection']
+        try:
+            prediction = self.model.predict(species=data['symbols'], positions=p,
+                cell=np.asarray(cell['vectors'], dtype=np.float64) if cell else None,
+                pbc=tuple(cell['pbc']) if cell else (False, False, False),
+                energy=True, forces=True, stress=False, virial=False,
+                dtype=settings['dtype'], head=settings['head'],
+                total_charge=float(data['charge']) if config['llmlipCharge'] else None,
+                spin_multiplicity=float(data['multiplicity']) if config['llmlipSpin'] else None)
+            energy = float(prediction.energy); force = np.asarray(prediction.forces, dtype=float)
+        except Exception as error:
+            if 'PBC cutoff' in str(error) and 'minimum-image limit' in str(error):
+                raise ValueError('llmlipの周期セルがモデルのカットオフに対して小さすぎます。十分な大きさのスーパーセルを指定してください。') from error
+            raise ValueError('llmlipの推論に失敗しました（'+type(error).__name__+'）。モデルの実装・適用範囲・入力条件を確認してください。') from error
+        if not math.isfinite(energy) or force.shape != p.shape or not np.isfinite(force).all():
+            raise ValueError('llmlipが不正なエネルギー・力を返しました。計算を停止しました。')
+        return energy, force.copy()  # Already eV and -dE/dR in eV/angstrom.
+
+
 def job_config(data, config):
     result = dict(config)
+    if config['engine'] == 'llmlip':
+        result = llmlip_job_config(data, result)
     if 'umaDevice' in data:
         if data['umaDevice'] not in [d['id'] for d in config.get('devices', [])]:
             raise ValueError('選択したUMAデバイスを利用できません。再接続してください。')
@@ -2959,6 +3170,9 @@ def engine_method(config, data=None):
     if config['engine'] == 'uma':
         s = config.get('solvation')
         return f"UMA / {config['umaModel']} / omol" + (f" + AnySolv / {s['model']} / {s['solvent']}" if s else '')
+    if config['engine'] == 'llmlip':
+        s = config.get('llmlipSelection', {})
+        return 'llmlip.rs（CPU・β） / '+s.get('model', config['llmlipDefaultModel'])+((' / '+s['head']) if s.get('head') else '')
     return config['method'] if config['engine'] == 'tblite' else 'g-xTB'
 
 
@@ -2994,6 +3208,7 @@ def residency_key(data, config):
     c = job_config(data, config)
     s = c.get('solvation')
     identity = {'engine':c['engine'], 'model':c.get('umaModel'), 'device':c.get('umaDevice'),
+                'llmlip':c.get('llmlipSelection'), 'llmlipHash':c.get('llmlipCapabilities', {}).get('sha256'),
                 'modelF':bool(data.get('modelF')),
                 'precision':c.get('umaPrecision'), 'threads':c['threads'],
                 'cudaMasks':c.get('cudaMasks', {}),
@@ -3129,7 +3344,7 @@ def execute_with_calculator(data, config, directory, messages, calculator):
                 key = (p.get('step'), tuple(p.get('energies', [p.get('energyEV')])))
                 component_history[key] = {name:copy.deepcopy(p[name]) for name in ('energyComponents','componentFmax') if name in p}
         messages.put(('progress', p))
-    workers=config.get('workers',1) if config['engine'] in ('tblite','gxtb') and (data['mode'] in (*PATH_MODES,'evaluate','vibrations') or data.get('vibrations')) else 1
+    workers=config.get('workers',1) if config['engine'] in ('tblite','gxtb','llmlip') and (data['mode'] in (*PATH_MODES,'evaluate','vibrations') or data.get('vibrations')) else 1
     cached = ExactEvaluationCache(calculator, workers=workers)
     metrics={};token=_metrics.set(metrics);started=time.perf_counter()
     try:
@@ -3175,10 +3390,13 @@ def worker(data, config, directory, messages):
     try:
         config = job_config(data, config)
         parallel=config.get('workers',1) if data['mode'] in (*PATH_MODES,'evaluate','vibrations') or data.get('vibrations') else 1
-        config = {**config,'threads':max(1,config['threads']//parallel)}
+        if config['engine'] != 'llmlip':
+            config = {**config,'threads':max(1,config['threads']//parallel)}
         os.environ['OMP_MAX_ACTIVE_LEVELS']='1'
         for key in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS'):
             os.environ[key] = str(config['threads'])
+        if config['engine'] == 'llmlip':
+            configure_llmlip_cpu(config['threads'], config.get('workers', 1))
         if config['engine'] == 'uma':
             messages.put(('progress', {'phase':'loading_model'}))
             config['umaRuntimeDevice'] = isolate_device(config, 'umaDevice')
@@ -3218,7 +3436,10 @@ def resident_worker(config, requests, messages):
             try:
                 if calculator is None:
                     output.put(('progress', {'phase':'loading_model', 'modelReused':False}))
-                    local['umaRuntimeDevice'] = isolate_device(local, 'umaDevice')
+                    if local['engine']=='uma':
+                        local['umaRuntimeDevice'] = isolate_device(local, 'umaDevice')
+                    elif local['engine']=='llmlip':
+                        configure_llmlip_cpu(local['threads'], local.get('workers', 1))
                     calculator = make_calculator(data,local,directory)
                 else:
                     calculator.reset(data, local, directory)
@@ -3237,8 +3458,14 @@ def resident_worker(config, requests, messages):
 def provenance(config, data=None):
     if data is not None:
         config = job_config(data, config)
+    elif config['engine']=='llmlip' and 'llmlipSelection' not in config:
+        config = job_config({}, config)
     s = config.get('solvation')
     return {'bridgeVersion':VERSION, 'engine':config['engine'], 'binarySHA256':config.get('binarySHA256'),
+        **({'llmlip':{**config['llmlipSelection'], 'beta':True, 'backend':'direct', 'device':'cpu',
+            'version':package_version('llmlip'), 'adapterSourceRevision':LLMLIP_SOURCE_REVISION,
+            'architecture':config['llmlipCapabilities']['architecture'], 'synthetic':config['llmlipCapabilities']['synthetic'],
+            'modelSHA256':config['llmlipCapabilities']['sha256']}} if config['engine']=='llmlip' else {}),
         **({'modelF':copy.deepcopy(data['modelF'])} if data and data.get('modelF') else {}),
         'threads':config['threads'], 'workers':config.get('workers',1), 'solvent':s['solvent'] if s else 'gas', 'aseVersion':importlib.metadata.version('ase'),
         'numpyVersion':np.__version__, 'sellaVersion':sella_version(),
@@ -3487,7 +3714,9 @@ class Jobs:
         return job
 
     def start(self, data, parent_id=None, resume_kind=None):
-        job_config(data, self.config)
+        resolved = job_config(data, self.config)
+        if self.config['engine']=='llmlip':
+            data = {**data, 'llmlip':dict(resolved['llmlipSelection'])}
         with self.lock:
             if self.closing:
                 raise RuntimeError('サービスの終了処理中です。')
@@ -3552,7 +3781,10 @@ class Jobs:
         data = job['data']
         for key in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS'):
             os.environ[key] = str(max(1,self.config['threads']//self.config.get('workers',1)))
-        use_resident = self.config['engine'] == 'uma' and self.config.get('residentModels', True)
+        if self.config['engine']=='llmlip':
+            local = job_config(data, self.config)
+            configure_llmlip_cpu(local['threads'], local.get('workers', 1))
+        use_resident = self.config['engine'] in ('uma','llmlip') and self.config.get('residentModels', True)
         if use_resident:
             key = residency_key(data, self.config)
             if self.resident and (self.resident['key'] != key or not self.resident['process'].is_alive()):
@@ -3612,7 +3844,7 @@ class Jobs:
         with self.lock:
             r = self.resident
             return {'engine':self.config['engine'], 'modelLoaded':bool(r and r['process'].is_alive() and r['ready']),
-                    'residentEnabled':self.config['engine']=='uma' and self.config.get('residentModels', True),
+                    'residentEnabled':self.config['engine'] in ('uma','llmlip') and self.config.get('residentModels', True),
                     'runningId':self.job['id'] if self.job and (self.job.get('_active') or self.job['status'] in ('running','stopping')) else None,
                     'queuedCount':sum(self.jobs[i]['status']=='queued' for i in self.pending),
                     'residentKey':r['key'] if r else None, 'loadedAt':r['loadedAt'] if r else None,
@@ -3961,7 +4193,13 @@ class Handler(BaseHTTPRequestHandler):
                     'lup':True, 'pathOptimizers':{'cineb':['fire'], 'lup':['fire','lbfgs']},
                     'persistentHistory':bool(self.server.jobs.history_dir), 'jobQueue':True, 'modelResidency':True,
                     'modes': MODES, 'compactPolling':1, 'livePreview': 1, 'optimizationTrajectory': 1, 'maxSteps': 10000, 'maxAFIRSteps': 10000, 'jobTimeout': config['jobTimeout'],
-                    'engineVersion': package_version('fairchem-core' if config['engine']=='uma' else 'tblite') if config['engine']!='gxtb' else 'locally configured binary'})
+                    'engineVersion': package_version('fairchem-core' if config['engine']=='uma' else 'tblite') if config['engine']!='gxtb' else 'locally configured binary',
+                    **({'llmlip':{'beta':True, 'models':config['llmlipModels'], 'defaultModel':config['llmlipDefaultModel'],
+                        'threads':config['threads'], 'maxThreads':config.get('llmlipMaxThreads', config['threads']),
+                        'workers':config.get('workers',1), 'backend':'direct', 'device':'cpu'},
+                        'engineVersion':package_version('llmlip'), 'modelF':None, 'cellOptimization':False,
+                        'periodic':any(m.get('periodic')!='none' for m in config['llmlipModels'] if m['available']),
+                        'maxAtomicNumber':118} if config['engine']=='llmlip' else {})})
             elif self.path == '/api/jobs':
                 self.response(200, self.server.jobs.listing())
             elif self.path == '/api/runtime':
@@ -4061,7 +4299,8 @@ def make_server(config, token, port=8766, origins=(), site_dir=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--engine', choices=('tblite', 'gxtb', 'uma'), default='tblite')
+    parser.add_argument('--engine', choices=('tblite', 'gxtb', 'uma', 'llmlip'), default='tblite')
+    parser.add_argument('--llmlip-model', action='append', default=[], metavar='ID=/absolute/path/model.e3rs', help='llmlip CPU beta; repeat to register local converted models')
     parser.add_argument('--method', choices=('GFN1-xTB', 'GFN2-xTB', 'IPEA1-xTB'), help='tblite only; default GFN2-xTB')
     parser.add_argument('--binary', help='Absolute path to the locally installed xtb with --gxtb --grad support')
     parser.add_argument('--uma-model', choices=UMA_MODELS, help='UMA only; default uma-s-1p2p1 (molecular omol task)')
@@ -4073,15 +4312,17 @@ def main():
     parser.add_argument('--anysolv-device', type=device_name, help='Default AnySolv device; separate GPU when available, otherwise cpu')
     parser.add_argument('--port', type=int, default=8766)
     parser.add_argument('--threads', type=int, default=1)
-    parser.add_argument('--workers', type=int, default=1, help='Independent tblite/g-xTB evaluations (1-8, at most --threads); path/vibrations only')
+    parser.add_argument('--workers', type=int, default=1, help='Independent tblite/g-xTB/llmlip evaluations (1-8, at most --threads); path/vibrations/evaluate only')
     parser.add_argument('--job-timeout', type=int, default=1800, help='Maximum seconds per job')
     parser.add_argument('--evaluation-timeout', type=int, default=120, help='Maximum seconds per g-xTB evaluation')
     parser.add_argument('--allow-origin', action='append', default=[], help='Exact trusted origin, e.g. https://h-nabata.github.io')
     parser.add_argument('--site-dir', help='Optional molecule-visualizer folder to serve the UI locally')
     parser.add_argument('--history-dir', default=str(default_history_directory()), help='Local persistent job records; default OS user data/molecule-studio/jobs')
     parser.add_argument('--no-history', action='store_true', help='Keep job records only until this server exits')
-    parser.add_argument('--no-resident-models', action='store_true', help='Release UMA/AnySolv model processes after each job')
+    parser.add_argument('--no-resident-models', action='store_true', help='Release UMA/AnySolv/llmlip model processes after each job')
     args = parser.parse_args()
+    if bool(args.llmlip_model) != (args.engine=='llmlip'):
+        parser.error('--engine llmlipには--llmlip-model ID=/absolute/path/model.e3rsが必要です。他のエンジンには指定できません。')
     if args.engine != 'tblite' and args.method is not None:
         parser.error('--method is for tblite only. UMA uses --uma-model and the molecular omol task.')
     if args.engine != 'gxtb' and args.binary is not None:
@@ -4114,6 +4355,13 @@ def main():
               'jobTimeout': args.job_timeout, 'evaluationTimeout': args.evaluation_timeout,
               'historyDir':None if args.no_history else str(Path(args.history_dir).expanduser().resolve()),
               'residentModels':not args.no_resident_models}
+    if args.engine == 'llmlip':
+        try:
+            paths, catalog = llmlip_catalog(args.llmlip_model)
+            config.update(llmlipPaths=paths, llmlipModels=catalog, llmlipMaxThreads=args.threads,
+                          llmlipDefaultModel=next(m['id'] for m in catalog if m['available']))
+        except (ValueError, ImportError) as error:
+            parser.error(str(error))
     if args.engine == 'uma':
         config.update(umaModel=args.uma_model or 'uma-s-1p2p1', umaDevice=args.uma_device or 'cpu',
                       umaPrecision=args.uma_precision or 'float64')

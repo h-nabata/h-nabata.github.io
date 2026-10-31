@@ -45,7 +45,7 @@
           if(state.result){validateResult(state.result,j);return state.result;}
           if(state.status==='error')throw Error(state.error||'計算エンジンが失敗しました。');return null;
         }
-        const p=state.progress||{};progress((p.phase==='loading_model'?'UMAモデルを読み込み中（初回はダウンロードを含みます）…':`AFIR探索中: ${p.step??0} / ${j.config.maxSteps} ステップ`)+(p.fmax!=null?` · 最大有効力 ${p.fmax.toPrecision(4)} eV/Å`:'')+(j.cancelled||state.status==='stopping'?' · 停止処理中':''),state.preview);
+        const p=state.progress||{};progress((p.phase==='loading_model'?(j.connection.info.llmlip?'llmlip.rsのローカルモデルを読み込み中…':'UMAモデルを読み込み中（初回はダウンロードを含みます）…'):`AFIR探索中: ${p.step??0} / ${j.config.maxSteps} ステップ`)+(p.fmax!=null?` · 最大有効力 ${p.fmax.toPrecision(4)} eV/Å`:'')+(j.cancelled||state.status==='stopping'?' · 停止処理中':''),state.preview);
         MV.DiagnosticsUI?.update(p,{mode:'afir',data:input(j),jobId:j.id});
         await new Promise(resolve=>setTimeout(resolve,600));
       }

@@ -1,12 +1,50 @@
 name: Molecule editor tests
 on:
   push:
-    branches: [main, molecule-studio-v3, molecule-research-workflows, molecule-performance-*]
+    branches: [main, molecule-studio-v3, molecule-research-workflows, molecule-performance-*, molecule-llmlip-*]
     paths: ['molecule-visualizer/**', '.github/workflows/molecule-test.yml']
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
+  llmlip-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      LLMLIP_TEST_MODEL: ${{ github.workspace }}/.llmlip-upstream/examples/model.e3rs
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: mizukami-group/llmlip.rs
+          ref: 6bfb0418cc5aba0a13416fd783994fa82552cc34
+          path: .llmlip-upstream
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build pinned CPU binding without PyTorch
+        run: |
+          python -m pip install -r molecule-visualizer/local-engine/requirements.txt 'sella>=2.6,<3' 'maturin>=1.9,<2'
+          python -m maturin build --release --locked --manifest-path .llmlip-upstream/crates/llmlip-py/Cargo.toml --features parallel --out /tmp/llmlip-wheels
+          python -m pip install /tmp/llmlip-wheels/*.whl
+          python -c "import importlib.util; assert importlib.util.find_spec('torch') is None"
+      - name: Native public synthetic model and adapter contracts
+        run: python -m unittest discover -s molecule-visualizer/tests -p test_llmlip.py -v
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Native CPU browser integration
+        run: node molecule-visualizer/tests/llmlip-browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: llmlip-browser-results
+          path: test-artifacts
+          retention-days: 7
   anysolv-native:
     runs-on: ubuntu-latest
     timeout-minutes: 10
