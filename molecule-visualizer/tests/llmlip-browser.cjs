@@ -30,7 +30,9 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.ok(!JSON.stringify(saved).includes(token));assert.ok(!JSON.stringify(saved).includes(model));
   await page.click('#engineApply');assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.getDisplayedState().atoms.map(a=>[a.x,a.y,a.z])),saved.result.images[0]);
   await page.click('#btnExport');const project=JSON.parse(await download('#btnSaveProject'));assert.deepEqual(project.metadata.externalCalculation.llmlip,saved.result.provenance.llmlip);await page.locator('#exportDialog [data-close]').click();
-  await page.click('#btnExternalEngine');await page.selectOption('#engineMode','evaluate');await page.selectOption('#engineLLMLIPModel','second');await page.fill('#engineLLMLIPThreads','4');await page.click('#engineRun');await done();
+  await page.click('#btnExternalEngine');await page.selectOption('#engineMode','evaluate');await page.selectOption('#engineLLMLIPModel','second');await page.fill('#engineLLMLIPThreads','4');
+  const beforeSwitch=posted.length;await page.click('#engineRun');assert.equal(posted.length,beforeSwitch);assert.match(await page.locator('#engineMessage').textContent(),/原子固定/);
+  await page.click('#engineConstraints');await page.uncheck('#constraintEnabled');await page.click('#btnExternalEngine');await page.click('#engineRun');await done();
   const second=JSON.parse(await download('#engineDownload'));assert.equal(second.result.provenance.llmlip.model,'second');assert.equal(second.result.provenance.llmlip.threads,4);
   // Reload the persisted first job through the same path used by history UI.
   await page.evaluate(async()=>{const M=MoleculeVisualizer,c=M.EngineUI.getConnection(),list=await M.EngineUI.request(c,'/api/jobs');const record=await M.EngineUI.request(c,'/api/jobs/'+list.jobs.find(j=>j.mode==='optimize').id);M.EngineUI.restoreJob(record);});

@@ -27,7 +27,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         id: llmlip-wheel
         with:
           path: .llmlip-wheels
@@ -43,6 +43,11 @@ jobs:
           python -c "import importlib.util; assert importlib.util.find_spec('torch') is None"
       - name: Native public synthetic model and adapter contracts
         run: python -m unittest discover -s molecule-visualizer/tests -p test_llmlip.py -v
+      - uses: actions/cache/save@v4
+        if: steps.llmlip-wheel.outputs.cache-hit != 'true'
+        with:
+          path: .llmlip-wheels
+          key: ${{ steps.llmlip-wheel.outputs.cache-primary-key }}
       - run: npm install --no-save playwright@1.55.0
       - run: npx playwright install --with-deps chromium
       - name: Native CPU browser integration
