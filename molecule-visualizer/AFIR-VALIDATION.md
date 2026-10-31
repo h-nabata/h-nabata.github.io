@@ -24,6 +24,10 @@ JavaScriptは186件合格。全Pythonは人工モデルを明示して187件を�
 
 未実施: MACE-MP-0b3以外の学習済み系列の実推論・変換比較、学習済みモデルによる実反応のTS／IRCと障壁精度、大規模系の性能比較、Windowsネイティブ／macOS。float32でのTS・IRC・振動、セル最適化、ModelF、AnySolvは本β接続では無効。
 
+[GitHub Actions 41171536887](https://github.com/h-nabata/h-nabata.github.io/actions/runs/41171536887)が成功（検証commit `7b4ec8d25ae45fc1d190db0d80224b57031388fe`）。通常環境のPythonは187件中175件合格・12件skip、JavaScriptは186件合格、既存16ブラウザースイートと描画比較が成功。12件skipは任意のg-xTB／UMA／AnySolvの4件と、別ジョブで扱うllmlip nativeの8件。ローカルでPID制約のあった既存のプロセス終了試験もCIでは成功した。
+
+同runの独立した`llmlip-native`ジョブはPyTorch未導入を確認してRust CPU bindingをビルドし、16件合格・学習済み水MIN1件skip。実Rust人工モデルでブラウザーの原子選択、フォーカス中のスレッド入力、固定MIN、モデル切替、既存の原子固定制限、結果適用、JSON／プロジェクト保存、履歴復元、未対応モデルの無効化、PC／390px表示を通過した。画面画像は`llmlip-browser-results` artifactに保存。先行CIで判明したPlaywrightのoption判定と固定解除漏れを試験側で修正した結果であり、数値モデルの精度とは区別する。AnySolv実モデルの独立ジョブも成功した。
+
 ## 2026-10-30: 2状態のModelF / AMF
 
 bridge 1.14.0で、異なる2多重度のAMF上下両面、α調整、モデル面上の最適化・経路緩和、両状態と上下両面の表示・保存を追加しました。定義・失敗条件は[AFIR.md](./AFIR.md)、操作・適用範囲は[MODEL-F.md](./MODEL-F.md)に記載します。
