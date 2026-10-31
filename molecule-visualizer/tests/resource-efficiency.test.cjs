@@ -1,6 +1,12 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
 function load(){const c=vm.createContext({window:{},console});for(const name of ['model','history','bonding','io','periodic'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',name+'.js'),'utf8'),c);return c.window.MoleculeVisualizer;}
+test('bulk selection validates IDs in linear work and preserves explicit selection order',()=>{
+ const {Model:M}=load(),n=5000;let reads=0;
+ const atoms=Array.from({length:n},(_,i)=>({get id(){reads++;return 'a'+i;}})),s={atoms};
+ const ids=Array.from({length:n},(_,i)=>'a'+(n-i-1));M.setSelectedAtoms(s,[...ids,'missing',ids[0]]);
+ assert.deepEqual([...s.selectedAtomIds],ids);assert.ok(reads<=n*2,`atom ID reads: ${reads}`);
+});
 test('undo shares frozen trajectory frames while edits, cells and navigation remain isolated',()=>{
  const M=load(),frame=M.Periodic.snapshot(M.Model.createState({atoms:[{id:'a',element:'C',x:1,y:2,z:3}],metadata:{cell:{vectors:[[5,0,0],[0,5,0],[0,0,5]],pbc:[true,true,true]}}}));
  const state=M.Model.createState(frame);state.metadata.trajectory=[frame,JSON.parse(JSON.stringify(frame))];state.metadata.frameIndex=0;

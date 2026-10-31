@@ -25,6 +25,13 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict');
     s.atoms[0].x+=.1;r.renderState(s,true);
     return {reused,moved:r.projectedAtoms[0].x!==old,sprites:r.atomSprites?.size||0};
   });assert.equal(cache.reused,true);assert.equal(cache.moved,true);assert.ok(cache.sprites>0&&cache.sprites<=64);
+  const rows=await page.evaluate(()=>{
+   const body=document.querySelector('#atomTable tbody'),first=body.firstElementChild,checkbox=first.querySelector('input');
+   const observer=new MutationObserver(()=>{});observer.observe(body,{childList:true,subtree:true});
+   document.getElementById('btnSelectAll').click();document.getElementById('btnClearSel').click();
+   const created=observer.takeRecords().reduce((n,r)=>n+r.addedNodes.length,0);observer.disconnect();
+   return {same:first===body.firstElementChild,checkbox:checkbox===body.firstElementChild.querySelector('input'),created,count:body.children.length};
+  });assert.deepEqual(rows,{same:true,checkbox:true,created:0,count:1000});
   const polling=await page.evaluate(async()=>{
    const M=MoleculeVisualizer,request=M.EngineUI.request,calls=[];
    M.EngineUI.request=async(c,path)=>{calls.push(path);return {status:'running',preview:{images:[]},previewVersion:2};};
@@ -42,6 +49,6 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict');
   assert.match(polling[4],/preview=1&after=0$/);assert.doesNotMatch(polling[4],/compact=/);
   await page.screenshot({path:'test-artifacts/performance-browser.png'});
   assert.deepEqual(errors,[]);
-  console.log('Performance browser checks passed: coalescing, picking, coordinates, compact polling and legacy fallback.');
+  console.log('Performance browser checks passed: coalescing, picking, coordinates, stable table rows, compact polling and legacy fallback.');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exit(1);});

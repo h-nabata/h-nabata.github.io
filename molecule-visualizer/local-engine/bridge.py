@@ -38,7 +38,7 @@ from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 from scipy.spatial import cKDTree
 
-VERSION = '1.15.0'
+VERSION = '1.16.0'
 KJ_MOL_PER_EV = 96.48533212331002
 UMA_MODELS = ('uma-s-1p2p1', 'uma-s-1p2', 'uma-s-1p1', 'uma-m-1p1')
 ANYSOLV_MODELS = ('model_compact', 'model_moe')
@@ -346,8 +346,10 @@ class ModelFEngine:
             self.check_row(row,result['energy']);result['surfaceComponents']=copy.copy(row)
         elif 'images' in result:
             rows=[]
+            cells=result.get('cells')
+            fixed_cell=result.get('cell') or self.data.get('cell')
             for i,p in enumerate(result['images']):
-                lattice=result.get('cells',[None]*len(result['images']))[i] or result.get('cell') or self.data.get('cell')
+                lattice=(cells[i] if cells is not None else None) or fixed_cell
                 row=self.records.get(self.key(p,lattice['vectors'] if isinstance(lattice,dict) else lattice,result['energies'][i]))
                 if row is None:raise ValueError('ModelFの両状態を評価済みの構造だけを保存できます。')
                 self.check_row(row,result['energies'][i]);rows.append(row)
@@ -2705,6 +2707,36 @@ LLMLIP_PBC = {
 }
 
 
+def cpu_plan(data, config):
+    """One CPU budget, sized to the independent evaluations available in a job."""
+    workers = 1
+    if config['engine'] in ('tblite', 'gxtb', 'llmlip'):
+        mode = data.get('mode')
+        if mode == 'vibrations' or data.get('vibrations'):
+            available = 1 + 3*len(data.get('symbols', []))*data.get('vibrations', {}).get('nfree', 2)
+        elif mode in (*PATH_MODES, 'evaluate'):
+            available = len(data.get('images', []))
+            if mode in PATH_MODES and data.get('adaptiveNEB', {}).get('enabled'):
+                available = max(available, data['adaptiveNEB']['maxImages'])
+        else:
+            available = 1
+        workers = max(1, min(config.get('workers', 1), config['threads'], available))
+    return {'evaluationWorkers':workers, 'threadsPerEvaluation':max(1, config['threads']//workers)}
+
+
+def configure_cpu_runtime(data, config):
+    # Also called in the parent BEFORE spawn: NumPy/OpenBLAS may initialize at
+    # module import, before worker() runs. Keep the requested total in config.
+    plan = cpu_plan(data, config)
+    if config['engine'] == 'llmlip':
+        configure_llmlip_cpu(config['threads'], plan['evaluationWorkers'])
+    else:
+        os.environ['OMP_MAX_ACTIVE_LEVELS'] = '1'
+        for key in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'VECLIB_MAXIMUM_THREADS'):
+            os.environ[key] = str(plan['threadsPerEvaluation'])
+    return plan
+
+
 def configure_llmlip_cpu(threads, workers=1):
     # Set before importing native code. Rayon owns parallelism; nested BLAS stays serial.
     for name in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS', 'VECLIB_MAXIMUM_THREADS'):
@@ -2844,7 +2876,7 @@ class LLMLIPEngine:
     """
     def __init__(self, data, config, directory):
         config = llmlip_job_config(data, config)
-        configure_llmlip_cpu(config['threads'], config.get('workers', 1))
+        self.runtime_threads = configure_cpu_runtime(data, config)['threadsPerEvaluation']
         self.path = config['llmlipPaths'][config['llmlipSelection']['model']]
         self.digest = config['llmlipCapabilities']['sha256']
         if llmlip_artifact(self.path, digest=True) != self.digest:
@@ -2858,6 +2890,8 @@ class LLMLIPEngine:
 
     def reset(self, data, config, directory):
         config = llmlip_job_config(data, config)
+        if cpu_plan(data, config)['threadsPerEvaluation'] != self.runtime_threads:
+            raise ValueError('llmlipのCPU配分が変わりました。新しい計算プロセスが必要です。')
         if llmlip_artifact(self.path) != self.stamp:
             raise ValueError('常駐中のllmlipモデルファイルが変更されました。bridgeを再起動してください。')
         self.data, self.config = data, config
@@ -3211,6 +3245,7 @@ def residency_key(data, config):
                 'llmlip':c.get('llmlipSelection'), 'llmlipHash':c.get('llmlipCapabilities', {}).get('sha256'),
                 'modelF':bool(data.get('modelF')),
                 'precision':c.get('umaPrecision'), 'threads':c['threads'],
+                'llmlipRuntimeThreads':cpu_plan(data,c)['threadsPerEvaluation'] if c['engine']=='llmlip' else None,
                 'cudaMasks':c.get('cudaMasks', {}),
                 'solvation':None if not s else {'model':s['model'], 'device':s['device'],
                     'hash':c.get('anysolvHashes', {}).get(s['model'])}}
@@ -3344,7 +3379,7 @@ def execute_with_calculator(data, config, directory, messages, calculator):
                 key = (p.get('step'), tuple(p.get('energies', [p.get('energyEV')])))
                 component_history[key] = {name:copy.deepcopy(p[name]) for name in ('energyComponents','componentFmax') if name in p}
         messages.put(('progress', p))
-    workers=config.get('workers',1) if config['engine'] in ('tblite','gxtb','llmlip') and (data['mode'] in (*PATH_MODES,'evaluate','vibrations') or data.get('vibrations')) else 1
+    plan=cpu_plan(data,config);workers=plan['evaluationWorkers']
     cached = ExactEvaluationCache(calculator, workers=workers)
     metrics={};token=_metrics.set(metrics);started=time.perf_counter()
     try:
@@ -3352,7 +3387,7 @@ def execute_with_calculator(data, config, directory, messages, calculator):
     finally:
         cached.close();_metrics.reset(token)
     metrics['wallSeconds']=time.perf_counter()-started
-    metrics['evaluationWorkers']=workers
+    metrics.update(plan)
     try:
         import resource
         import sys
@@ -3389,14 +3424,7 @@ def worker(data, config, directory, messages):
     calculator = None
     try:
         config = job_config(data, config)
-        parallel=config.get('workers',1) if data['mode'] in (*PATH_MODES,'evaluate','vibrations') or data.get('vibrations') else 1
-        if config['engine'] != 'llmlip':
-            config = {**config,'threads':max(1,config['threads']//parallel)}
-        os.environ['OMP_MAX_ACTIVE_LEVELS']='1'
-        for key in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS'):
-            os.environ[key] = str(config['threads'])
-        if config['engine'] == 'llmlip':
-            configure_llmlip_cpu(config['threads'], config.get('workers', 1))
+        configure_cpu_runtime(data, config)
         if config['engine'] == 'uma':
             messages.put(('progress', {'phase':'loading_model'}))
             config['umaRuntimeDevice'] = isolate_device(config, 'umaDevice')
@@ -3424,8 +3452,6 @@ def resident_worker(config, requests, messages):
     calculator = None
     watch_parent_lifetime()
     try:
-        for key in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS'):
-            os.environ[key] = str(config['threads'])
         while True:
             request = requests.get()
             if request is None:
@@ -3438,8 +3464,7 @@ def resident_worker(config, requests, messages):
                     output.put(('progress', {'phase':'loading_model', 'modelReused':False}))
                     if local['engine']=='uma':
                         local['umaRuntimeDevice'] = isolate_device(local, 'umaDevice')
-                    elif local['engine']=='llmlip':
-                        configure_llmlip_cpu(local['threads'], local.get('workers', 1))
+                    configure_cpu_runtime(data, local)
                     calculator = make_calculator(data,local,directory)
                 else:
                     calculator.reset(data, local, directory)
@@ -3468,6 +3493,7 @@ def provenance(config, data=None):
             'modelSHA256':config['llmlipCapabilities']['sha256']}} if config['engine']=='llmlip' else {}),
         **({'modelF':copy.deepcopy(data['modelF'])} if data and data.get('modelF') else {}),
         'threads':config['threads'], 'workers':config.get('workers',1), 'solvent':s['solvent'] if s else 'gas', 'aseVersion':importlib.metadata.version('ase'),
+        **({'cpuPlan':cpu_plan(data,config)} if data is not None else {}),
         'numpyVersion':np.__version__, 'sellaVersion':sella_version(),
         **({'uma':{'model':config['umaModel'], 'task':'omol', 'device':config['umaDevice'],
                    'inference':uma_settings(config), 'fairchemVersion':package_version('fairchem-core'),
@@ -3779,11 +3805,7 @@ class Jobs:
         context = mp.get_context('spawn')
         directory = job['directory'] = tempfile.mkdtemp(prefix='molecule-engine-')
         data = job['data']
-        for key in ('OMP_NUM_THREADS', 'OPENBLAS_NUM_THREADS', 'MKL_NUM_THREADS'):
-            os.environ[key] = str(max(1,self.config['threads']//self.config.get('workers',1)))
-        if self.config['engine']=='llmlip':
-            local = job_config(data, self.config)
-            configure_llmlip_cpu(local['threads'], local.get('workers', 1))
+        configure_cpu_runtime(data, job_config(data, self.config))
         use_resident = self.config['engine'] in ('uma','llmlip') and self.config.get('residentModels', True)
         if use_resident:
             key = residency_key(data, self.config)

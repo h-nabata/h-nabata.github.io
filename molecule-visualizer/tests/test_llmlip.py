@@ -109,7 +109,7 @@ class Contract(unittest.TestCase):
             calc.reset(b.validate(WATER,'llmlip'),config(item),tempfile.gettempdir())
             self.assertIs(calc.model,loaded)
             self.assertAlmostEqual(calc(0,p)[0],.5*(p*p).sum()+1)
-            self.assertEqual(os.environ['RAYON_NUM_THREADS'],'2')
+            self.assertEqual(os.environ['RAYON_NUM_THREADS'],'4')  # one image uses the full CPU budget
             self.assertEqual(os.environ['OPENBLAS_NUM_THREADS'],'1')
             self.assertEqual(os.environ['LLMLIP_MACE_METAL'],'0')
 
@@ -129,6 +129,15 @@ class Contract(unittest.TestCase):
         serialized=json.dumps(b.provenance(c,data))
         self.assertNotIn('/unused',serialized)
         self.assertIn('"backend": "direct"',serialized)
+
+    def test_resident_pool_identity_tracks_actual_cpu_split(self):
+        data=b.validate(WATER,'llmlip');c=config()
+        many={**data,'images':data['images']*2}
+        self.assertNotEqual(b.residency_key(data,c),b.residency_key(many,c))
+        self.assertEqual(b.residency_key(data,c),b.residency_key({**data,'mode':'optimize'},c))
+        with patch.object(b,'llmlip_model_class',return_value=FakeModel),patch.object(b,'llmlip_artifact',return_value='a'*64):
+            calc=b.LLMLIPEngine(data,c,None)
+            with self.assertRaisesRegex(ValueError,'CPU配分'):calc.reset(many,c,None)
 
     def test_invalid_predictions_and_modified_weights_fail(self):
         data=b.validate(WATER,'llmlip')
@@ -268,6 +277,22 @@ class Native(unittest.TestCase):
             restored=b.Jobs({**self.config,'historyDir':tmp})
             try:self.assertEqual(restored.get(first['id'])['result']['engine'],'llmlip')
             finally:restored.close()
+
+    def test_native_serial_parallel_serial_rebuilds_only_changed_pool_and_matches_forces(self):
+        jobs=b.Jobs({**self.config,'historyDir':None})
+        results=[];processes=[]
+        try:
+            for count in (1,2,2,1):
+                created=jobs.start(b.validate({**WATER,'images':WATER['images']*count},'llmlip'))
+                saved=wait_for(jobs,created['id']);self.assertEqual(saved['status'],'completed',saved)
+                result=saved['result'];results.append(result);processes.append(jobs.resident['process'])
+                self.assertEqual(result['performance']['evaluationWorkers'],count)
+                self.assertEqual(result['performance']['threadsPerEvaluation'],4//count)
+                self.assertEqual(result['provenance']['cpuPlan']['threadsPerEvaluation'],4//count)
+                np.testing.assert_allclose(result['energies'],results[0]['energies']*count,atol=1e-10,rtol=0)
+                np.testing.assert_allclose(result['forces'],results[0]['forces']*count,atol=1e-9,rtol=0)
+            self.assertIsNot(processes[0],processes[1]);self.assertIs(processes[1],processes[2]);self.assertIsNot(processes[2],processes[3])
+        finally:jobs.close()
 
     def test_native_irc_rejects_unconverged_input(self):
         if not b.sella_version():self.skipTest('Sella not installed')

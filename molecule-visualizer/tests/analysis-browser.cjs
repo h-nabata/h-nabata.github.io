@@ -22,6 +22,23 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   const pending=page.waitForEvent('download');await page.click('#analysisSaveRepresentatives');const download=await pending,text=fs.readFileSync(await download.path(),'utf8');assert.equal(download.suggestedFilename(),'molecule-representatives.xyz');assert.equal(text.match(/representative_frame=/g).length,2);assert.equal(await state(),original);
   await page.click('#analysisApplyRepresentatives');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.trajectory.length),2);await page.click('#analysisHide');
   await page.evaluate(()=>{
+   const M=MoleculeVisualizer,s=M.App.getState(),p=s.atoms.map(a=>[a.x,a.y,a.z]);
+   const infer=M.Bonding.refreshInferredBonds;window.analysisBuilds=0;
+   M.Bonding.refreshInferredBonds=function(s){window.analysisBuilds++;return infer(s);};
+   M.StructureAnalysisUI.setSource({mode:'optimize',symbols:s.atoms.map(a=>a.element),images:[p],energies:[-2],charge:0,multiplicity:1,cell:null,
+    trajectory:{images:[p,p.map(v=>v.map((x,k)=>x+(k===0?2:0)))],energies:[-1,-2]}},{original:s});
+  });
+  assert.equal(await page.evaluate(()=>window.analysisBuilds),0);
+  await page.click('#analysisToggle');await page.selectOption('#analysisSource','latest');
+  assert.equal(await page.evaluate(()=>window.analysisBuilds),0);
+  const beforeLatest=await state();await page.selectOption('#analysisMobile','1');await page.click('#analysisOverlay');
+  assert.match(await page.locator('#analysisMessage').textContent(),/RMSD = 0\.00000/);assert.equal(await state(),beforeLatest);
+  assert.equal(await page.evaluate(()=>window.analysisBuilds),2);await page.click('#analysisOverlay');assert.equal(await page.evaluate(()=>window.analysisBuilds),2);
+  await page.click('#analysisRestore');await page.click('#analysisCluster');await page.waitForFunction(()=>!document.getElementById('analysisSaveRepresentatives').disabled);
+  assert.equal(await page.locator('#analysisRows tr').count(),1);assert.match(await page.locator('#analysisRows').textContent(),/同一条件の最低エネルギー/);
+  assert.equal(await page.locator('#analysisRows tr td').nth(1).textContent(),'2');assert.equal(await page.evaluate(()=>window.analysisBuilds),2);
+  await page.click('#analysisHide');
+  await page.evaluate(()=>{
    const MV=MoleculeVisualizer,s=MV.App.getState(),p=s.atoms.map(a=>[a.x,a.y,a.z]),f=p.map((_,i)=>[i===0?.5:0,0,0]);
    MV.DiagnosticsUI.load({mode:'optimize',symbols:s.atoms.map(a=>a.element),images:[p],energies:[-2],effectiveFmax:.5,steps:1,forceComponents:{physical:[f],effective:[f]},history:[{step:0,fmax:1,energies:[-1],diagnostics:{rmsForce:.4}},{step:1,fmax:.5,energies:[-2],diagnostics:{rmsForce:.2}}]}, {data:{fmax:.05},frames:[MV.Periodic.snapshot(s)]});
   });

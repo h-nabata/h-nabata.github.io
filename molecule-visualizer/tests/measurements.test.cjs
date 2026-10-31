@@ -22,6 +22,17 @@ test('cone solver covers antipodal, planar, unequal-radius and one-cap-dominant 
  dirs.forEach((p,i)=>assert.ok(Math.acos(Math.max(-1,Math.min(1,G.dot(G.unit(p),r.axis))))+Math.asin(radii[i]/G.norm(p))<=r.halfAngle+1e-7));
  assert.throws(()=>Q.enclosingCone(dirs,[2,0,0]),/内側/);
 });
+test('cone reuse is exact, bounded, independent of caller mutation and rejects invalid input',()=>{
+ let solves=0;const math=Object.create(Math);math.cos=(...args)=>{solves++;return Math.cos(...args);};
+ const c=vm.createContext({window:{},Math:math});for(const f of ['model','geometry','io','periodic','measurements'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),c);
+ const cone=c.window.MoleculeVisualizer.Measurements.enclosingCone,dirs=[{x:1,y:0,z:1},{x:-.5,y:.86,z:1},{x:-.5,y:-.86,z:1}],radii=[.1,.2,.3];
+ const original=cone(dirs,radii),saved=JSON.stringify(original),count=solves;original.axis.x=99;
+ assert.equal(JSON.stringify(cone(dirs,radii)),saved);assert.equal(solves,count);
+ dirs[0].x+=1e-12;cone(dirs,radii);assert.ok(solves>count);const changed=solves;
+ radii[0]+=.01;cone(dirs,radii);assert.ok(solves>changed);
+ for(let i=0;i<130;i++)cone(dirs,[.5+i*.001,.2,.3]);const evicted=solves;cone(dirs,radii);assert.ok(solves>evicted);
+ assert.throws(()=>cone(dirs,[NaN,.2,.3]),/有限/);assert.throws(()=>cone(dirs,[9,.2,.3]),/内側/);
+});
 test('measurement values are invariant under rigid rotations/translations, including cone axes',()=>{
  const s=state([[0,0,-3],[1,0,0],[-.5,.866,0],[-.5,-.866,0],[1,0,2],[0,1,2]]),items=[measurement('distance',[0,1]),measurement('angle',[0,1,2]),measurement('dihedral',[0,1,2,3]),measurement('planeDistance',[1,2,3,0]),measurement('planeGap',[1,2,3,0,4,5]),measurement('cone',[0,1,2,3])],before=items.map(d=>Q.evaluate(s,d));
  for(const atom of s.atoms){Object.assign(atom,G.rotateAroundAxis(atom,{x:0,y:0,z:0},{x:1,y:2,z:3},73));atom.x+=15;atom.y-=7;atom.z+=21;}

@@ -5,6 +5,13 @@
   let latest=null,source=null,analysis=null,alignment=null,preview=null,initialized=false,worker=null;
   function message(text){$('analysisMessage').textContent=text;}
   function keyFromMetadata(frame){const m=frame.metadata||{},c=m.externalCalculation;return c?.comparisonConditionKey||'unknown:'+JSON.stringify({charge:m.totalCharge??null,multiplicity:m.multiplicity??null});}
+  const indices=s=>Array.from({length:s.count},(_,i)=>i);
+  function fromFrames(record){
+    const frames=record.frames;
+    return {...record,count:frames.length,atomCount:frames[0].atoms.length,frame:i=>frames[i],
+      positions:i=>positions(frames[i]),symbols:i=>frames[i].atoms.map(a=>a.element),atomIds:i=>frames[i].atoms.map(a=>a.id),
+      periodic:()=>frames.some(f=>f.metadata?.cell?.pbc?.some(Boolean))};
+  }
   function setSource(result,context={}){
     if(!result?.images?.length||!result.symbols?.length)return;
     const history=['optimize','ts','irc'].includes(result.mode)&&result.trajectory?.images?.length?result.trajectory:result;
@@ -12,33 +19,46 @@
     if(JSON.stringify(base.atoms?.map(a=>a.element))!==JSON.stringify(result.symbols))base=MV.Model.createState({atoms:result.symbols.map((element,i)=>({id:result.atomIds?.[i]||`analysis-${i+1}`,element})),metadata:{}});
     const data={...(context.data||{})};delete data.images;delete data.atomIds;delete data.livePreview;
     const conditionKey=JSON.stringify({settings:data,provenance:result.provenance,engine:result.engine,method:result.method,charge:result.charge,multiplicity:result.multiplicity});
-    latest={title:`${result.mode}の構造列`,frames:history.images.map((p,i)=>{const s=MV.Model.createState(MV.Periodic.snapshot(base));s.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=p[k];});s.metadata.cell=history.cells?.[i]||result.cell||null;s.metadata.totalCharge=result.charge;s.metadata.multiplicity=result.multiplicity;s.metadata.externalCalculation={...(s.metadata.externalCalculation||{}),energyEV:history.energies?.[i],comparisonConditionKey:conditionKey};MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);}),energies:history.energies?.slice(),conditionKeys:history.images.map(()=>conditionKey)};
+    // Results already own immutable coordinate arrays. Do not expand every
+    // trajectory frame into atoms/bonds when no comparison has been requested.
+    const template=MV.Model.shareTrajectory([MV.Periodic.snapshot(base)])[0],symbols=template.atoms.map(a=>a.element),atomIds=template.atoms.map(a=>a.id),cache=new Map();
+    latest={title:`${result.mode}の構造列`,count:history.images.length,atomCount:symbols.length,
+      positions:i=>history.images[i],symbols:()=>symbols,atomIds:()=>atomIds,
+      periodic:()=>history.images.some((_,i)=>(history.cells?.[i]||result.cell)?.pbc?.some(Boolean)),
+      frame(i){
+        if(cache.has(i)){const frame=cache.get(i);cache.delete(i);cache.set(i,frame);return frame;}
+        const s=MV.Model.createState(template);s.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=history.images[i][k];});
+        s.metadata.cell=history.cells?.[i]||result.cell||null;s.metadata.totalCharge=result.charge;s.metadata.multiplicity=result.multiplicity;
+        s.metadata.externalCalculation={...(s.metadata.externalCalculation||{}),energyEV:history.energies?.[i],comparisonConditionKey:conditionKey};
+        MV.Bonding.refreshInferredBonds(s);const frame=MV.Model.shareTrajectory([MV.Periodic.snapshot(s)])[0];cache.set(i,frame);
+        if(cache.size>8)cache.delete(cache.keys().next().value);return frame;
+      },energies:history.energies,conditionKey};
     if(initialized)$('analysisLatest').disabled=false;
   }
   function getSource(){
     const kind=$('analysisSource').value;
     if(kind==='latest'){if(!latest)throw Error('計算結果がまだありません。');return latest;}
-    if(kind==='batch'){const s=MV.BatchUI?.analysisSource();if(!s)throw Error('一括最適化の結果がありません。');return s;}
+    if(kind==='batch'){const s=MV.BatchUI?.analysisSource();if(!s)throw Error('一括最適化の結果がありません。');return fromFrames(s);}
     const state=MV.App.getState(),frames=MV.EngineUI.frames(state,'all');
-    return {title:'入力の構造フレーム',frames,energies:frames.map(f=>f.metadata?.externalCalculation?.energyEV??f.metadata?.afirCalculation?.physicalEnergyEV??null),conditionKeys:frames.map(keyFromMetadata),energyComparable:frames.map(f=>!!f.metadata?.externalCalculation?.comparisonConditionKey)};
+    return fromFrames({title:'入力の構造フレーム',frames,energies:frames.map(f=>f.metadata?.externalCalculation?.energyEV??f.metadata?.afirCalculation?.physicalEnergyEV??null),conditionKeys:frames.map(keyFromMetadata),energyComparable:frames.map(f=>!!f.metadata?.externalCalculation?.comparisonConditionKey)});
   }
   function options(a,b){return {selection:$('analysisAtoms').value,referenceSymbols:a.atoms.map(x=>x.element),mobileSymbols:b.atoms.map(x=>x.element),referenceIds:a.atoms.map(x=>x.id),mobileIds:b.atoms.map(x=>x.id)};}
   function refresh(){
     if(worker){message('重複判定が完了するまでお待ちください。');return;}
     restore();analysis=null;alignment=null;
     try{
-      source=getSource();if(source.frames.length>500)throw Error('比較は最大500構造です。先に構造列を抽出してください。');
-      if(source.frames.some(f=>f.metadata?.cell?.pbc?.some(Boolean)))throw Error('剛体重ね合わせは非周期分子用です。周期セルを持つ構造は比較できません。');
-      for(const id of ['analysisReference','analysisMobile']){const el=$(id),old=Number(el.value)||0;el.replaceChildren(...source.frames.map((_,i)=>{const o=document.createElement('option');o.value=i;o.textContent=source.labels?.[i]||`構造 ${i+1}`;return o;}));el.value=Math.min(old,source.frames.length-1);}
-      if(source.frames.length>1&&$('analysisReference').value===$('analysisMobile').value)$('analysisMobile').value=1;
-      $('analysisSummary').textContent=`${source.title} · ${source.frames.length}構造 · ${source.frames[0].atoms.length}原子`;
+      source=getSource();if(source.count>500)throw Error('比較は最大500構造です。先に構造列を抽出してください。');
+      if(source.periodic())throw Error('剛体重ね合わせは非周期分子用です。周期セルを持つ構造は比較できません。');
+      for(const id of ['analysisReference','analysisMobile']){const el=$(id),old=Number(el.value)||0;el.replaceChildren(...indices(source).map(i=>{const o=document.createElement('option');o.value=i;o.textContent=source.labels?.[i]||`構造 ${i+1}`;return o;}));el.value=Math.min(old,source.count-1);}
+      if(source.count>1&&$('analysisReference').value===$('analysisMobile').value)$('analysisMobile').value=1;
+      $('analysisSummary').textContent=`${source.title} · ${source.count}構造 · ${source.atomCount}原子`;
       $('analysisRows').replaceChildren();message('共通の原子IDがある場合はID、ない場合はFile-orderで対応させます。同種原子の入れ替えは推測しません。');
       for(const id of ['analysisApplyRepresentatives','analysisSaveRepresentatives'])$(id).disabled=true;
     }catch(error){source=null;message(error.message);}
   }
   function compare(){
     if(!source)throw Error('比較する構造を読み込んでください。');
-    const a=Number($('analysisReference').value),b=Number($('analysisMobile').value),ref=source.frames[a],mobile=source.frames[b];
+    const a=Number($('analysisReference').value),b=Number($('analysisMobile').value),ref=source.frame(a),mobile=source.frame(b);
     alignment=MV.StructureAnalysis.align(positions(ref),positions(mobile),options(ref,mobile));
     return {a,b,ref,mobile,...alignment};
   }
@@ -66,7 +86,8 @@
   async function cluster(){
     try{
       if(!source)throw Error('比較する構造を読み込んでください。');for(const id of ['analysisCluster','analysisSource','analysisRefresh','analysisAtoms','analysisThreshold'])$(id).disabled=true;message('重複を判定しています…');
-      analysis=await classify(source.frames.map(positions),{threshold:Number($('analysisThreshold').value),selection:$('analysisAtoms').value,symbolsByFrame:source.frames.map(f=>f.atoms.map(a=>a.element)),atomIdsByFrame:source.frames.map(f=>f.atoms.map(a=>a.id)),energies:source.energies,conditionKeys:source.conditionKeys,energyComparable:source.energyComparable});
+      const ids=indices(source);
+      analysis=await classify(ids.map(source.positions),{threshold:Number($('analysisThreshold').value),selection:$('analysisAtoms').value,symbolsByFrame:ids.map(source.symbols),atomIdsByFrame:ids.map(source.atomIds),energies:source.energies,conditionKeys:source.conditionKeys||ids.map(()=>source.conditionKey),energyComparable:source.energyComparable});
       const rows=$('analysisRows');rows.replaceChildren();
       for(const [i,c] of analysis.clusters.entries()){
         const tr=document.createElement('tr');for(const text of [i+1,c.representative+1,c.members.map(i=>i+1).join(', '),Math.max(...c.rmsds).toFixed(5),Number.isFinite(source.energies?.[c.representative])?source.energies[c.representative].toFixed(8):'—',c.energyComparable?'同一条件の最低エネルギー':'先頭構造（条件不明またはEなし）']){const td=document.createElement('td');td.textContent=text;tr.append(td);}rows.append(tr);
@@ -76,10 +97,10 @@
     }catch(error){message(error.message);}finally{for(const id of ['analysisCluster','analysisSource','analysisRefresh','analysisAtoms','analysisThreshold'])$(id).disabled=false;}
   }
   function save(text,name,type){const url=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-  function saveRepresentatives(){try{if(!analysis)throw Error('先に重複判定を実行してください。');save(analysis.representatives.map(i=>{const s=MV.Model.createState(source.frames[i]);s.metadata.title=`representative_frame=${i+1}${Number.isFinite(source.energies?.[i])?' energy_eV='+source.energies[i]:''}`;return MV.IO.stateToXYZText(s);}).join(''),'molecule-representatives.xyz','chemical/x-xyz;charset=utf-8');}catch(error){message(error.message);}}
+  function saveRepresentatives(){try{if(!analysis)throw Error('先に重複判定を実行してください。');save(analysis.representatives.map(i=>{const s=MV.Model.createState(source.frame(i));s.metadata.title=`representative_frame=${i+1}${Number.isFinite(source.energies?.[i])?' energy_eV='+source.energies[i]:''}`;return MV.IO.stateToXYZText(s);}).join(''),'molecule-representatives.xyz','chemical/x-xyz;charset=utf-8');}catch(error){message(error.message);}}
   function applyRepresentatives(){
-    try{guard();if(!analysis)throw Error('先に重複判定を実行してください。');const ids=analysis.representatives;if(ids.length>200||ids.length*source.frames[0].atoms.length>100000)throw Error('描画への反映は200フレーム・合計100000原子までです。XYZ保存を利用してください。');
-      const frames=ids.map(i=>MV.Periodic.snapshot(source.frames[i])),firstIds=JSON.stringify(frames[0].atoms.map(a=>a.id));
+    try{guard();if(!analysis)throw Error('先に重複判定を実行してください。');const ids=analysis.representatives;if(ids.length>200||ids.length*source.atomCount>100000)throw Error('描画への反映は200フレーム・合計100000原子までです。XYZ保存を利用してください。');
+      const frames=ids.map(i=>MV.Periodic.snapshot(source.frame(i))),firstIds=JSON.stringify(frames[0].atoms.map(a=>a.id));
       if(frames.some(f=>JSON.stringify(f.atoms.map(a=>a.id))!==firstIds))throw Error('フレームの原子ID・順序が一致しません。代表XYZを保存して読み込んでください。');
       restore();MV.Studio.stop();const next=MV.Model.createState(frames[0]);next.metadata.trajectory=frames;next.metadata.frameIndex=0;next.viewSettings={...MV.App.getState().viewSettings};MV.App.change('representative structures',()=>next,true);$('dataReset').click();MV.EnergyProfile.reset();message(`${frames.length}個の代表構造を元の座標のままフレームに取り込みました。「戻す」で復元できます。`);
     }catch(error){message(error.message);}

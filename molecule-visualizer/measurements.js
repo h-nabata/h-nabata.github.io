@@ -42,7 +42,19 @@
   /* Smallest spherical cap enclosing three vdW caps. Feasibility uses cap
    * centers, boundary samples and all pairwise boundary intersections. This
    * also covers collinear/coplanar directions and caps larger than hemispheres. */
+  const coneCache=new Map(),CONE_CACHE_LIMIT=128;
+  const copyCone=result=>({...result,axis:{...result.axis}});
   function enclosingCone(vectors,radii){
+    if(vectors.length!==3||radii.length!==3||vectors.some(v=>![v.x,v.y,v.z].every(Number.isFinite))||radii.some(r=>!Number.isFinite(r)))throw Error('円錐には有限な3方向と3半径が必要です。');
+    // Exact numerical inputs only. Camera motion and UI refreshes need no new
+    // spherical-cap solve; geometry/radius changes naturally miss this bounded cache.
+    const key=JSON.stringify([vectors.map(v=>[v.x,v.y,v.z]),radii]);
+    if(coneCache.has(key)){const result=coneCache.get(key);coneCache.delete(key);coneCache.set(key,result);return copyCone(result);}
+    const result=solveCone(vectors,radii);
+    coneCache.set(key,result);if(coneCache.size>CONE_CACHE_LIMIT)coneCache.delete(coneCache.keys().next().value);
+    return copyCone(result);
+  }
+  function solveCone(vectors,radii){
     const lengths=vectors.map(norm),u=vectors.map(unit),alpha=lengths.map((d,i)=>{if(!Number.isFinite(radii[i])||radii[i]<0||radii[i]>=d)throw Error('円錐の頂点がvdW球の内側にあるか、半径が不正です。');return Math.asin(radii[i]/d);});
     function feasible(theta){
       if(alpha.some(a=>theta<a-1e-12))return null;

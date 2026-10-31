@@ -1,5 +1,25 @@
 # AFIR追加機能の検証記録
 
+## 2026-10-31: 表示・結果処理・CPU配分（1.16.0）
+
+比較元は公開commit `f70b9b8ca1f1ba7f88eac09a7fcd3a5ed862a87c`。Linux、Node 24.22.1、Python 3.12.14、NumPy 2.3.5で公開可能な人工入力を使用しました。数値計算の物理式・精度・停止閾値は変更していません。
+
+| 対象と入力 | 変更前 | 変更後 | 測定範囲 |
+|---|---:|---:|---|
+| 結果を構造比較へ登録、100原子×1,000フレーム | 2,263 ms | 1.55 ms | 初回登録1回。全フレームの原子・結合生成を必要時まで遅延。 |
+| 同登録で追加保持するJS heap | 32.11 MB | 0.014 MB | `--expose-gc`で登録前後にGC。元の入力・結果配列、画面全体やRSSは含まない。 |
+| 5,000原子の選択ID検証 | 148.19 ms | 1.13 ms | warmup後5回の中央値。選択順・無効ID除外を同じ条件で照合。 |
+| 8種の円錐角を40回更新 | 76.76 ms | 0.87 ms | warmup後5回の中央値。数値の丸めなし、計算値は変更前と一致。 |
+| ModelF成分付与、10,000フレーム | 103.96 ms | 41.08 ms | warmup後5回の中央値。合成2状態、全成分を照合。 |
+
+速度はこの環境・入力に依存します。これはUI／結果処理の部分測定で、MACE・UMA・量子化学計算全体の高速化率ではありません。再現スクリプトは`tests/benchmark_efficiency.cjs`、`tests/benchmark_cpu_efficiency.py`。同じ比較元ディレクトリ／bridge.pyを引数に渡します。実Chromiumで1,000原子・999結合の選択、表レイアウトとDOM挿入数を測る`tests/benchmark_ui_efficiency.cjs`もCIに追加し、タイミングに不安定な合否閾値を設けず数値をartifactへ記録します。
+
+JavaScript回帰193件合格。追加試験は選択順の維持、表の行・フォーカス保持、Undo・並べ替え後の最新対象、円錐角の微小変更・半径変更・返却値変更・上限超過時の再計算、長い結果の未展開、周期系拒否、最大8フレームの保持、重複判定のエネルギー条件を検査します。
+
+全Pythonは上記llmlip節と同じ実MACE-MP-0b3を指定して192件を実行し、187件合格・4件skip・1件エラー。skipは実g-xTB2件、実UMA1件、実AnySolv1件。エラーは前回と同じ既存の`test_cancellation_and_timeout_kill_native_children`の隔離PIDに対するpsutil `NoSuchProcess`。llmlipの取消・履歴・常駐・単点／数値勾配・MIN・AFIR・CI-NEB・LUP・振動の各試験は成功しました。新しいCPU試験ではspawn時の環境変数、構造数・振動・適応経路に対する予算上限、実tbliteの1／2並列のエネルギー・力とMIN収束、実MACEで直列→並列→同じ並列→直列のプロセス再利用／再生成とエネルギー・力の一致を確認しました。通常環境の全回帰とブラウザー操作はGitHub Actionsで別途確認します。
+
+未測定・制約: 大規模学習済みモデルの全計算時間・CPU使用率、Windows/macOS、Safari・実タッチ端末。MIN＋振動の複合ジョブではスレッド配分を途中変更しません。llmlipのRayon配分を変える場合は安全な再初期化のため重みを再ロードします。未対応モデル機能やβ版表示は維持しています。
+
 ## 2026-10-31: llmlip.rs CPU・β接続（1.15.0）
 
 対象上流は`mizukami-group/llmlip.rs`の`6bfb0418cc5aba0a13416fd783994fa82552cc34`。Linux、Python 3.12、Rust 1.99.1、ASE 3.29.0、Sella 2.6.0、`maturin --release --locked --features parallel`でビルドしたPyO3 direct backendを使用した。推論環境にはPyTorchを導入せず、テストでも`torch`未importを確認した。学習済みモデルの変換・参照計算だけは別のPyTorch 2.8.0 CPU／MACE 0.3.16／e3nn 0.4.4環境で実行した。

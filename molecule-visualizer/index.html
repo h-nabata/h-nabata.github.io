@@ -3,7 +3,7 @@ layout: default
 title: 分子構造エディタ | Molecule Studio
 ---
 <link rel="stylesheet" href="./molecule-visualizer_style.css?v=research-39">
-<script defer src="./model.js?v=model-f-48"></script>
+<script defer src="./model.js?v=efficiency-50"></script>
 <script defer src="./bonding.js?v=performance-41"></script>
 <script defer src="./geometry.js?v=group-centers-44"></script>
 <script defer src="./io.js?v=16"></script>
@@ -11,7 +11,7 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./periodic.js?v=model-f-48"></script>
 <script defer src="./formats.js?v=16"></script>
 <script defer src="./structure-import.js?v=imports-42"></script>
-<script defer src="./measurements.js?v=16"></script>
+<script defer src="./measurements.js?v=efficiency-50"></script>
 <script defer src="./history.js?v=model-f-48"></script>
 <script defer src="./fragment-clipboard.js?v=clipboard-36"></script>
 <script defer src="./constraints.js?v=research-38"></script>
@@ -23,7 +23,7 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./workflow-ui.js?v=model-f-48"></script>
 <link rel="stylesheet" href="./optimization.css?v=model-f-48">
 <script defer src="./renderer3dmol.js?v=model-f-48"></script>
-<script defer src="./ui.js?v=model-f-48"></script>
+<script defer src="./ui.js?v=efficiency-50"></script>
 <script defer src="./studio.js?v=cell-remove-45"></script>
 <script defer src="./advanced.js?v=group-centers-44"></script>
 <script defer src="./generator-ui.js?v=performance-41"></script>
@@ -35,13 +35,13 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./research-ui.js?v=model-f-48"></script>
 <script defer src="./job-history-ui.js?v=lup-40"></script>
 <script defer src="./structure-analysis.js?v=research-38"></script>
-<script defer src="./structure-analysis-ui.js?v=model-f-48"></script>
+<script defer src="./structure-analysis-ui.js?v=efficiency-50"></script>
 <script defer src="./diagnostics-ui.js?v=lup-40"></script>
 <link rel="stylesheet" href="./research.css?v=research-38">
 <script defer src="./model-f.js?v=model-f-48"></script>
 <script defer src="./model-f-ui.js?v=model-f-48"></script>
 <script defer src="./llmlip-ui.js?v=llmlip-49"></script>
-<script defer src="./engine-ui.js?v=llmlip-49"></script>
+<script defer src="./engine-ui.js?v=efficiency-50"></script>
 <script defer src="./vibration-ui.js?v=constraints-34"></script>
 <script defer src="./path-refinement.js?v=lup-40"></script>
 <script defer src="./afir.js?v=17"></script>
@@ -417,7 +417,7 @@ H 1.0 0 0
   <h2>外部エンジン / 経路緩和</h2>
   <p class="mv-small">計算はこのPCで起動したサービス上で実行します。座標はローカルサービスへ送信されます。接続トークンはこの画面のメモリだけに保持します。</p>
   <details class="mv-engine-setup"><summary>初回のセットアップ：tblite / g-xTB / UMA / llmlip.rsを選ぶ</summary>
-    <p><a href="./local-engine/bridge.py?v=1.15.0" download>bridge.pyをダウンロード</a>し、使いたいエンジンの手順で起動してください。tblite / g-xTBはPython 3.10以上、UMA / llmlip.rsはPython 3.12の専用環境を推奨します。</p>
+    <p><a href="./local-engine/bridge.py?v=1.16.0" download>bridge.pyをダウンロード</a>し、使いたいエンジンの手順で起動してください。tblite / g-xTBはPython 3.10以上、UMA / llmlip.rsはPython 3.12の専用環境を推奨します。</p>
     <ul>
       <li><strong>tblite</strong>：GFN2-xTB（既定）、GFN1-xTB、IPEA1-xTBを利用します。このアプリでは非周期系と固定セルの周期系に対応します。</li>
       <li><strong>g-xTB</strong>：公式のg-xTB対応実行ファイルを別途用意します。このアプリでは非周期系に対応します。tbliteのPythonパッケージは不要です。</li>

@@ -28,6 +28,26 @@ function boot(afir=false,profile=false,modes=false,storage=null,constraints=fals
  if(modes)for(const f of ['vibration-ui','path-refinement'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
  if(afir)for(const f of ['afir','afir-ui'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);win.MoleculeVisualizer.App.init();if(constraints)win.MoleculeVisualizer.ConstraintUI.init();if(profile){win.MoleculeVisualizer.Studio.init();win.MoleculeVisualizer.EnergyProfile.init();win.MoleculeVisualizer.TrajectoryUI.init();}if(afir)win.MoleculeVisualizer.AFIRUI.init();if(modes)win.MoleculeVisualizer.VibrationUI.init();return {MV:win.MoleculeVisualizer,nodes,doc,win,timers,storage,navigator:ctx.navigator,canvas:nodes.get('viewer').children[0]};
 }
+test('table rows survive selection and edits, with current handlers after undo and reorder',()=>{
+ const {MV,nodes,doc}=boot(),app=MV.App;
+ const atomBody=doc.querySelector('#atomTable tbody'),bondBody=doc.querySelector('#bondTable tbody');
+ const atomRows=atomBody.children.slice(),bondRows=bondBody.children.slice(),first=atomRows[0],checkbox=first.children.at(-1).children[0];
+ checkbox.focus();checkbox.checked=true;checkbox.fire('change');
+ assert.equal(atomBody.children[0],first);assert.equal(doc.activeElement,checkbox);assert.equal(checkbox.checked,true);
+ assert.equal(bondBody.children[0],bondRows[0]);assert.equal(checkbox.events.change.length,1);
+ const edited=MV.Model.cloneEditableState(app.getState());edited.atoms[0].x=2;edited.bonds[0].order=3;
+ app.change('table edit',()=>edited,true);
+ assert.equal(atomBody.children[0],first);assert.equal(first.children[2].textContent,'2.000');
+ bondRows[0].click();assert.equal(nodes.get('bondOrder').value,'3');
+ nodes.get('btnUndo').click();assert.equal(atomBody.children[0],first);assert.equal(first.children[2].textContent,'0.000');
+ bondRows[0].click();assert.equal(nodes.get('bondOrder').value,'1');
+ const reordered=MV.Model.cloneEditableState(app.getState());reordered.atoms.reverse();app.setState(reordered,true);
+ assert.equal(atomBody.children.at(-1),first);assert.equal(checkbox.attrs['aria-label'],'3番を選択');
+ assert.match(bondBody.children[0].children[1].textContent,/^3:O$/);
+ const removedId=reordered.atoms[0].id;MV.Model.setSelectedAtoms(reordered,[removedId]);MV.Model.removeSelectedAtoms(reordered);app.setState(reordered,true);
+ assert.equal(atomBody.children.length,2);assert.equal(atomBody.children.includes(atomRows[2]),false);
+ assert.equal(atomBody.children.at(-1),first);assert.equal(checkbox.events.change.length,1);
+});
 test('app loads, atom edit/undo, invalid import is non-destructive, export uses latest state',()=>{const {MV,nodes}=boot(),app=MV.App;assert.equal(app.getState().atoms.length,3);assert.equal(nodes.get('statusBadge').classList!==null,true);
  const s=app.getState();s.selectedAtomIds.add(s.atoms[0].id);app.setState(s,true);nodes.get('dataText').value='O 2.5 0 0\nH .9572 0 0\nH -.239987 .926627 0';nodes.get('dataText').fire('input');nodes.get('dataApply').click();assert.equal(app.getState().atoms[0].x,2.5);nodes.get('btnUndo').click();assert.equal(app.getState().atoms[0].x,0);
  nodes.get('dataText').value='invalid';nodes.get('dataText').fire('input');nodes.get('dataApply').click();assert.equal(app.getState().atoms[0].x,0);assert.equal(nodes.get('dataText').value,'invalid');nodes.get('dataReset').click();assert.match(nodes.get('dataText').value,/O /);

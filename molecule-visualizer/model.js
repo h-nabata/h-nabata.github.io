@@ -193,7 +193,8 @@
   }
 
   function setSelectedAtoms(state, atomIdList) {
-    state.selectedAtomIds = new Set(atomIdList.filter(id => hasAtom(state, id)));
+    const validAtomIds = new Set(atomIds(state));
+    state.selectedAtomIds = new Set(atomIdList.filter(id => validAtomIds.has(id)));
   }
 
   function toggleAtomSelection(state, atomId, additive) {

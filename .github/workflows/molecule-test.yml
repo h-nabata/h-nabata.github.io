@@ -119,6 +119,8 @@ jobs:
           node molecule-visualizer/tests/model-f-browser.cjs || molecule_test_status=1
           git fetch --depth=1 origin 0b1ce3a38659c588d1f60c224c87ef73da1e5eca
           node molecule-visualizer/tests/benchmark_resource_browser.cjs || molecule_test_status=1
+          git fetch --depth=1 origin f70b9b8ca1f1ba7f88eac09a7fcd3a5ed862a87c
+          node molecule-visualizer/tests/benchmark_ui_efficiency.cjs || molecule_test_status=1
           exit "$molecule_test_status"
       - uses: actions/upload-artifact@v4
         if: always()

@@ -160,8 +160,9 @@
   }
 
   function selectedAtoms() {
+    const byId = new Map(state.atoms.map(atom => [atom.id, atom]));
     return Array.from(state.selectedAtomIds)
-      .map(id => state.atoms.find(atom => atom.id === id))
+      .map(id => byId.get(id))
       .filter(Boolean);
   }
 
@@ -857,79 +858,63 @@
     setStatus("編集をやり直しました。");
   }
 
-  function updateAtomTable() {
-    const tbody = document.querySelector("#atomTable tbody");
+  // Keep rows and their handlers while coordinates or selection change. A row
+  // reads its current item, so undo/frame changes cannot retain stale objects.
+  const tableCaches = new WeakMap();
+  function syncStructureTable(selector, items, selection, valuesFor, atomTable) {
+    const tbody = document.querySelector(selector);
     if (!tbody) return;
-    tbody.innerHTML = "";
-    state.atoms.forEach((atom, i) => {
-      const tr = document.createElement("tr");
-      if (state.selectedAtomIds.has(atom.id)) tr.classList.add("selected");
-      [String(i + 1), atom.element, atom.x.toFixed(3), atom.y.toFixed(3), atom.z.toFixed(3)].forEach(value => {
-        const td = document.createElement("td");
-        td.textContent = value;
-        tr.appendChild(td);
-      });
-      const tdS = document.createElement("td");
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.setAttribute("aria-label",`${i+1}番を選択`);
-      cb.checked = state.selectedAtomIds.has(atom.id);
-      cb.addEventListener("click", ev => ev.stopPropagation());
-      cb.addEventListener("change", ev => {
-        ev.stopPropagation();
-        const next = new Set(state.selectedAtomIds);
-        if (cb.checked) next.add(atom.id); else next.delete(atom.id);
-        Model.setSelectedAtoms(state, Array.from(next));
-        rerenderSelectionOnly();
-      });
-      tdS.appendChild(cb);
-      tr.appendChild(tdS);
-      tr.addEventListener("click", ev => {
-        Model.toggleAtomSelection(state, atom.id, additive(ev));
-        rerenderSelectionOnly();
-      });
-      tbody.appendChild(tr);
-    });
+    const previous = tableCaches.get(tbody) || new Map(), next = new Map();
+    let reordered = previous.size !== items.length, index = 0;
+    const oldOrder = previous.keys();
+    for (const item of items) {
+      const values = valuesFor(item, index), selected = selection.has(item.id);
+      if (oldOrder.next().value !== item.id) reordered = true;
+      let row = previous.get(item.id);
+      if (!row) {
+        const tr = document.createElement('tr'), cb = document.createElement('input');
+        const cells = values.map(() => {const td=document.createElement('td');tr.appendChild(td);return td;});
+        const td = document.createElement('td');cb.type='checkbox';td.appendChild(cb);tr.appendChild(td);
+        row = {tr, cb, cells, values:[], item, selected:null, index:-1};
+        cb.addEventListener('click', ev => ev.stopPropagation());
+        cb.addEventListener('change', ev => {
+          ev.stopPropagation();
+          const ids = new Set(atomTable ? state.selectedAtomIds : state.selectedBondIds);
+          if(cb.checked)ids.add(row.item.id);else ids.delete(row.item.id);
+          (atomTable ? Model.setSelectedAtoms : Model.setSelectedBonds)(state, Array.from(ids));
+          rerenderSelectionOnly();
+        });
+        tr.addEventListener('click', ev => {
+          const current = row.item;
+          if(atomTable)Model.toggleAtomSelection(state,current.id,additive(ev));
+          else {
+            Model.toggleBondSelection(state,current.id,additive(ev));
+            Model.setSelectedAtoms(state,[current.atom1,current.atom2]);
+            byId('bondOrder').value=String(current.order||1);byId('bondType').value=current.type||'covalent';
+          }
+          rerenderSelectionOnly();
+        });
+      }
+      row.item = item;
+      values.forEach((value,i)=>{if(row.values[i]!==value)row.cells[i].textContent=value;});
+      if(row.selected!==selected){row.tr.classList.toggle('selected',selected);row.cb.checked=selected;}
+      if(row.index!==index)row.cb.setAttribute('aria-label',`${index+1}番を選択`);
+      row.values=values;row.selected=selected;row.index=index++;
+      next.set(item.id,row);
+    }
+    if(reordered){tbody.innerHTML='';for(const row of next.values())tbody.appendChild(row.tr);}
+    tableCaches.set(tbody,next);
+  }
+
+  function updateAtomTable() {
+    syncStructureTable('#atomTable tbody',state.atoms,state.selectedAtomIds,
+      (atom,i)=>[String(i+1),atom.element,atom.x.toFixed(3),atom.y.toFixed(3),atom.z.toFixed(3)],true);
   }
 
   function updateBondTable() {
-    const tbody = document.querySelector("#bondTable tbody");
-    if (!tbody) return;
-    tbody.innerHTML = "";
-    state.bonds.forEach((bond, i) => {
-      const a1 = state.atoms.find(atom => atom.id === bond.atom1);
-      const a2 = state.atoms.find(atom => atom.id === bond.atom2);
-      const tr = document.createElement("tr");
-      if (state.selectedBondIds.has(bond.id)) tr.classList.add("selected");
-      [String(i + 1), a1 ? atomLabel(a1) : "?", a2 ? atomLabel(a2) : "?", String(bond.order), bond.type, bond.source].forEach(value => {
-        const td = document.createElement("td");
-        td.textContent = value;
-        tr.appendChild(td);
-      });
-      const tdS = document.createElement("td");
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.setAttribute("aria-label",`${i+1}番を選択`);
-      cb.checked = state.selectedBondIds.has(bond.id);
-      cb.addEventListener("click", ev => ev.stopPropagation());
-      cb.addEventListener("change", ev => {
-        ev.stopPropagation();
-        const next = new Set(state.selectedBondIds);
-        if (cb.checked) next.add(bond.id); else next.delete(bond.id);
-        Model.setSelectedBonds(state, Array.from(next));
-        rerenderSelectionOnly();
-      });
-      tdS.appendChild(cb);
-      tr.appendChild(tdS);
-      tr.addEventListener("click", ev => {
-        Model.toggleBondSelection(state, bond.id, additive(ev));
-        Model.setSelectedAtoms(state, [bond.atom1, bond.atom2]);
-        byId("bondOrder").value = String(bond.order || 1);
-        byId("bondType").value = bond.type || "covalent";
-        rerenderSelectionOnly();
-      });
-      tbody.appendChild(tr);
-    });
+    const labels = new Map(state.atoms.map((atom,i)=>[atom.id,`${i+1}:${atom.element}`]));
+    syncStructureTable('#bondTable tbody',state.bonds,state.selectedBondIds,
+      (bond,i)=>[String(i+1),labels.get(bond.atom1)||'?',labels.get(bond.atom2)||'?',String(bond.order),bond.type,bond.source],false);
   }
 
   function onKeyDown(e) {
