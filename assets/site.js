@@ -8,6 +8,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (typeof window.renderMathInElement === 'function') {
-    window.renderMathInElement(document.body, { ignoredClasses: ['mirror-main'] });
+    const options = { ignoredClasses: ['mirror-main'] };
+    if (document.getElementById('home-content')) {
+      options.delimiters = [
+        { left: '$$', right: '$$', display: true },
+        { left: '\\[', right: '\\]', display: true },
+        { left: '\\(', right: '\\)', display: false },
+        { left: '$', right: '$', display: false }
+      ];
+    }
+    window.renderMathInElement(document.body, options);
   }
 });
