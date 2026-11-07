@@ -1,6 +1,82 @@
 [
   {
     "layout": "qiita-mirror",
+    "title": "【機械学習ポテンシャル】llmlip.rsの動作をUMAで検証する（WSL2環境）",
+    "qiita_id": "11fe382619899ec26b97",
+    "qiita_url": "https://qiita.com/h-nabata/items/11fe382619899ec26b97",
+    "qiita_created": "2026-11-01T03:05:58+09:00",
+    "qiita_updated": "2026-11-01T03:05:58+09:00",
+    "mirror_saved": "2026-11-07T17:26:28+09:00",
+    "mirror_category": "計算化学・分子構造",
+    "mirror_tags": [
+      "Python",
+      "CPU",
+      "計算化学",
+      "ニューラルネットワークポテンシャル",
+      "機械学習ポテンシャル"
+    ],
+    "permalink": "/qiita/11fe382619899ec26b97.html",
+    "url": "/qiita/11fe382619899ec26b97.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【Linux】ローカルLLM用途のWindows／UbuntuデュアルブートPCを組む（Arc Pro B70×2＋RTX 3060 Ti）",
+    "qiita_id": "d06849def3607a31e03e",
+    "qiita_url": "https://qiita.com/h-nabata/items/d06849def3607a31e03e",
+    "qiita_created": "2026-10-25T21:19:17+09:00",
+    "qiita_updated": "2026-10-25T21:19:17+09:00",
+    "mirror_saved": "2026-11-07T17:26:28+09:00",
+    "mirror_category": "計算環境・Linux",
+    "mirror_tags": [
+      "Ubuntu",
+      "自作PC",
+      "デュアルブート",
+      "GPU",
+      "ローカルLLM"
+    ],
+    "permalink": "/qiita/d06849def3607a31e03e.html",
+    "url": "/qiita/d06849def3607a31e03e.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "【ローカルLLM】Intel系GPU×XeStrataでQwen3.8-Flash-Nextを動かす（WSL2 + Intel Arc Pro B70）",
+    "qiita_id": "2446e016df04e8349982",
+    "qiita_url": "https://qiita.com/h-nabata/items/2446e016df04e8349982",
+    "qiita_created": "2026-10-15T03:55:35+09:00",
+    "qiita_updated": "2026-10-15T10:36:34+09:00",
+    "mirror_saved": "2026-11-07T17:26:28+09:00",
+    "mirror_category": "LLM・生成AI",
+    "mirror_tags": [
+      "ローカルLLM",
+      "Qwen3.8-Flash-Next",
+      "Qwen3.8",
+      "strata",
+      "GPU"
+    ],
+    "permalink": "/qiita/2446e016df04e8349982.html",
+    "url": "/qiita/2446e016df04e8349982.html"
+  },
+  {
+    "layout": "qiita-mirror",
+    "title": "機械学習原子間ポテンシャル導入の先を考える",
+    "qiita_id": "b15d12b34b5880588842",
+    "qiita_url": "https://qiita.com/h-nabata/items/b15d12b34b5880588842",
+    "qiita_created": "2026-10-11T22:49:30+09:00",
+    "qiita_updated": "2026-10-11T22:52:55+09:00",
+    "mirror_saved": "2026-11-07T17:26:28+09:00",
+    "mirror_category": "計算化学・分子構造",
+    "mirror_tags": [
+      "機械学習",
+      "計算化学",
+      "マテリアルズインフォマティクス",
+      "機械学習ポテンシャル",
+      "科学技術計算"
+    ],
+    "permalink": "/qiita/b15d12b34b5880588842.html",
+    "url": "/qiita/b15d12b34b5880588842.html"
+  },
+  {
+    "layout": "qiita-mirror",
     "title": "【ローカルLLM】LLM-jp-4.1-33Bの推論性能検証（RTX 5070 Ti + RTX 3070 Ti）",
     "qiita_id": "2499d24fc29fa7f45844",
     "qiita_url": "https://qiita.com/h-nabata/items/2499d24fc29fa7f45844",

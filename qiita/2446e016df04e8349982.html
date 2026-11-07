@@ -1,0 +1,550 @@
+---
+layout: "qiita-mirror"
+title: "【ローカルLLM】Intel系GPU×XeStrataでQwen3.8-Flash-Nextを動かす（WSL2 + Intel Arc Pro B70）"
+qiita_id: "2446e016df04e8349982"
+qiita_url: "https://qiita.com/h-nabata/items/2446e016df04e8349982"
+qiita_created: "2026-10-15T03:55:35+09:00"
+qiita_updated: "2026-10-15T10:36:34+09:00"
+mirror_saved: "2026-11-07T17:26:28+09:00"
+mirror_category: "LLM・生成AI"
+mirror_tags: ["ローカルLLM", "Qwen3.8-Flash-Next", "Qwen3.8", "strata", "GPU"]
+permalink: "/qiita/2446e016df04e8349982.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<h1 data-sourcepos="1:1-1:46">
+<span id="はじめに--strataによる環境変化" class="fragment"></span><a href="#%E3%81%AF%E3%81%98%E3%82%81%E3%81%AB--strata%E3%81%AB%E3%82%88%E3%82%8B%E7%92%B0%E5%A2%83%E5%A4%89%E5%8C%96"><i class="fa fa-link"></i></a>はじめに ― Strataによる環境変化</h1>
+<p data-sourcepos="3:1-3:711">ローカルAIが普及しVRAM容量が正義となった昨今、NVIDIA系GPUを安価に入手するのは困難を極める。NVIDIA系GPUの主な利点はCUDAエコシステムが利用できることにあるが、ここ最近「<a href="https://github.com/Niko1221/Strata" rel="nofollow noopener" target="_blank"><strong>Strata</strong></a>」（ストラータ）という新しいLLM用ランタイムが<a href="https://github.com/Niko1221" rel="nofollow noopener" target="_blank">Niko Veit氏</a>（<a href="https://x.com/coldniko" rel="nofollow noopener" target="_blank">X</a>）によって公開されて以降、<strong>8～16GBの低容量VRAMのGPUと32～64GB中程度のRAMの組み合わせ</strong>で「<a href="https://huggingface.co/Qwen/Qwen3.8-Flash-Next" rel="nofollow noopener" target="_blank"><strong>Qwen3.8-Flash-Next</strong></a>」というMoEモデルを高速に動作可能な環境が急速に整ってきている。</p>
+<p data-sourcepos="5:1-5:813">この「Strata」はQwen3.8-Flash-Nextのアーキテクチャに特化したランタイムである（現在はその他のMoEモデルにも対応しつつある）。最初のバージョンがリリースされてから2週間しか経過していないが、既にスターが二万件以上、forkが二千件に達する勢いで普及・拡張されており、その利用拡大と機能拡張が急速に進んでいる。本家Strataの更新速度は尋常ではなく、ユーザーからは比較的低スペックな環境でも最先端MoEモデルを（IQ3_XXS版などの量子化版とはいえ）利用できることに歓喜する声と、相次ぐ更新にキャッチアップするための時間が全く不足していて睡眠時間を求める悲鳴が同時に上がっている。</p>
+<p data-sourcepos="7:1-7:661">既に世界中でStrataの派生版が様々に開発されており、NVIDIA系GPUだけでなく、AMD系やIntel系のGPUに対応したバージョンも続々と公開されている。今回利用するのはその派生版の一つで、<a href="https://github.com/MistVVK" rel="nofollow noopener" target="_blank">MistVVK氏</a>（<a href="https://x.com/maruru_289" rel="nofollow noopener" target="_blank">X</a>）によるIntel系GPU向けの派生版Strata「<a href="https://github.com/MistVVK/XeStrata" rel="nofollow noopener" target="_blank"><strong>XeStrata</strong></a>」（エックスイーストラータ）である。これはIntel系GPU向けにCUDAをSYCLで書き直した上で最適化したもので、B70+64GB RAMで報告されている実測値は約80 tok/sとかなりの速度が出ている。</p>
+<blockquote data-sourcepos="10:1-10:503">
+<p data-sourcepos="10:3-10:503">Qwen3.8-Flash-Nextは、次世代のQwen4系で採用されるアーキテクチャを先行公開した実験的モデルとして位置付けられている。アリババ社の開発チームは、同モデルで導入した新技術を基盤としてQwen4系の開発を進める方針を明らかにしている。Qwen4の最終的なモデル構成については未公表の部分もあるが、Qwen3.8-Flash-Nextで採用された主要な設計思想が引き継がれる見込みである。</p>
+</blockquote>
+<blockquote data-sourcepos="12:1-12:212">
+<p data-sourcepos="12:3-12:212">既にQiitaではStrataに関連する記事が20件ほど投稿されている。最近は本家Strataの更新内容が落ち着きつつある(？)ので、動作検証には良い頃合いに思われる。</p>
+</blockquote>
+<hr data-sourcepos="14:1-15:0">
+<p data-sourcepos="16:1-16:446">先週、Intel系GPUの最新モデル（とはいえ発売日は半年前）である<a href="https://link.amazon/B0fFJKA8B" rel="nofollow noopener" target="_blank">Arc Pro B70</a>を約24万円で購入する機会があった。発売時の希望小売価格からは1.5倍ほど高額ではあるものの、同じ32GBのVRAMを有するRTX 5090が100万円以上に値上がりしていることなどを踏まえると、昨今のVRAM単価を考えればお買い得だったと言える。</p>
+<blockquote data-sourcepos="18:1-18:321">
+<p data-sourcepos="18:3-18:321">とはいえRTX 5090のVRAM帯域はB70の約3倍であり、スペックとしてはRTX 5090が大きく勝る。また、GPU増設に伴い電源を玄人志向のATX対応1000W電源ユニット「<a href="https://link.amazon/B093ofXfc" rel="nofollow noopener" target="_blank">KRPW-GS1000W/90+</a>」に交換したため、＋約1万円の出費が生じている。</p>
+</blockquote>
+<p data-sourcepos="20:1-20:333">依然としてCUDAは便利で優れた実行環境を提供するものの、上述のStrata派生版のような非NVIDIA系GPU対応のランタイムの開発・チューニングが盛り上がりつつある今日では、新規に調達するGPUとしてNVIDIA系ではなくAMD系やIntel系も有力な選択肢となる。</p>
+<p data-sourcepos="22:1-22:242">そこで本稿では、近々リリースされるQwen4系への備えも兼ねて、<strong>Intel系GPU（Intel Arc Pro B70）× XeStrataによって<a href="https://huggingface.co/Qwen/Qwen3.8-Flash-Next" rel="nofollow noopener" target="_blank">Qwen3.8-Flash-Next</a>を動作させてみる</strong>。</p>
+<blockquote data-sourcepos="24:1-24:230">
+<p data-sourcepos="24:3-24:230">使用するのはISTA-DASLabが公開する <a href="https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF" rel="nofollow noopener" target="_blank">Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS</a> である。モデル本体は2分割GGUFで、合計約75.8GB（70.6GiB）。</p>
+</blockquote>
+<p data-sourcepos="26:1-26:66"><a href="https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF" class="mirror-link-card">https://huggingface.co/ISTA-DASLab/Qwen3.8-Flash-Next-GSQ-RCO-GGUF</a>
+</p>
+<div data-sourcepos="28:1-42:3" class="note warn">
+<span class="fa fa-fw fa-exclamation-circle"></span><div>
+<h3 data-sourcepos="30:1-30:23">
+<span id="xestrataの対応os" class="fragment"></span><a href="#xestrata%E3%81%AE%E5%AF%BE%E5%BF%9Cos"><i class="fa fa-link"></i></a>XeStrataの対応OS</h3>
+<p data-sourcepos="32:1-32:240">公式READMEによれば、XeStrataはLinuxとWindowsを正式な動作対象としている。WSL2については「動作する可能性はある」という位置付けであり、正式な動作確認対象には含まれていない。</p>
+<p data-sourcepos="34:1-34:386">WSL2ではWindows上の仮想環境でLinuxを動かすため、RAMの一部をWindows側で使用するほか、GPUへのアクセスにもWindowsのドライバや仮想化層が関与する。必ずしもハードウェアの性能を十分に発揮できないわけではないものの、ネイティブLinux環境とは異なる制約や性能差が生じる可能性がある。</p>
+<blockquote data-sourcepos="36:1-36:174">
+<p data-sourcepos="36:3-36:174">WSL2に割り当てるRAMの上限（デフォルトは物理RAMの半分）は変更可能であるが、すべてのメモリを割り当てられるわけではない。</p>
+</blockquote>
+<p data-sourcepos="38:1-38:478">XeStrataを正式な動作対象環境で利用し、OSやドライバに起因する制約をできるだけ避けたい場合は、Linuxを直接インストールする方法が考えられる。Windows環境も維持したいのであればデュアルブート構成にするのが方策の一つである。既存のSSDをパーティションで分割する方法のほか、別のSSDにLinuxをインストールしてWindows側の環境と分離する方法もある。</p>
+<p data-sourcepos="40:1-40:455">また、内蔵ストレージを増設したくない場合は、USB接続の外付けSSDなどにLinuxをインストールする方法もある。ただし、UEFIから外付けドライブを起動できることが前提となり、接続方式によっては内蔵NVMe SSDよりも読み書き速度が低下する可能性がある。特に、モデルがストレージ側にも乗る場合は推論速度への影響が大きいと思われる。</p>
+</div>
+</div>
+<p data-sourcepos="44:1-44:18">【参考記事】</p>
+<p data-sourcepos="46:1-46:53"><a href="/qiita/3e83d9b0a908fb6bcf50.html" class="mirror-link-card">https://qiita.com/h-nabata/items/3e83d9b0a908fb6bcf50</a>
+</p>
+<h1 data-sourcepos="48:1-48:29">
+<span id="実行環境比較対象" class="fragment"></span><a href="#%E5%AE%9F%E8%A1%8C%E7%92%B0%E5%A2%83%E6%AF%94%E8%BC%83%E5%AF%BE%E8%B1%A1"><i class="fa fa-link"></i></a>実行環境・比較対象</h1>
+<p data-sourcepos="50:1-50:267">実行環境は次の通り。Intel Arc Pro B70 32GBとRTX 3060 Ti 8GBのデュアルGPU構成だが、画面出力には後者のみを使用している。RAMに関しては、WSLへの割り当て上限を52GBとしている（デフォルト設定では32GB）。</p>
+<table data-sourcepos="52:1-60:50">
+<thead>
+<tr data-sourcepos="52:1-52:25">
+<th data-sourcepos="52:2-52:9">項目</th>
+<th data-sourcepos="52:11-52:24">実行環境</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="54:1-54:31">
+<td data-sourcepos="54:2-54:6">CPU</td>
+<td data-sourcepos="54:8-54:30">Intel Core i7-14700KF</td>
+</tr>
+<tr data-sourcepos="55:1-55:58">
+<td data-sourcepos="55:2-55:6">RAM</td>
+<td data-sourcepos="55:8-55:57">DDR5-5600 64GB／WSLへの割り当て上限52GB</td>
+</tr>
+<tr data-sourcepos="56:1-56:71">
+<td data-sourcepos="56:2-56:15">推論用GPU</td>
+<td data-sourcepos="56:17-56:70">Intel Arc Pro B70 32GB（PCIe 5.0 x16スロット）</td>
+</tr>
+<tr data-sourcepos="57:1-57:76">
+<td data-sourcepos="57:2-57:21">画面出力用GPU</td>
+<td data-sourcepos="57:23-57:75">NVIDIA RTX 3060 Ti 8GB（PCIe 4.0 x4スロット）</td>
+</tr>
+<tr data-sourcepos="58:1-58:41">
+<td data-sourcepos="58:2-58:5">OS</td>
+<td data-sourcepos="58:7-58:40">Windows 11＋WSL2／Ubuntu 24.04</td>
+</tr>
+<tr data-sourcepos="59:1-59:43">
+<td data-sourcepos="59:2-59:18">ビルド環境</td>
+<td data-sourcepos="59:20-59:42">Intel oneAPI 2026.1.1</td>
+</tr>
+<tr data-sourcepos="60:1-60:50">
+<td data-sourcepos="60:2-60:18">対象モデル</td>
+<td data-sourcepos="60:20-60:49">Qwen3.8-Flash-Next／IQ3_XXS</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="62:1-62:136">今回、以下のランタイムを比較する。<strong>いずれも WSL2 向けの独自の修正を加えたビルドを利用する</strong>。</p>
+<table data-sourcepos="64:1-67:138">
+<thead>
+<tr data-sourcepos="64:1-64:67">
+<th data-sourcepos="64:2-64:15">比較対象</th>
+<th data-sourcepos="64:17-64:39">基準バージョン</th>
+<th data-sourcepos="64:41-64:66">比較上の位置付け</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="66:1-66:93">
+<td data-sourcepos="66:2-66:23">本家Strata SYCL版</td>
+<td data-sourcepos="66:25-66:37"><strong>v0.1.43</strong></td>
+<td data-sourcepos="66:39-66:92">最新版はv0.1.44だが重大な差異は無い。</td>
+</tr>
+<tr data-sourcepos="67:1-67:138">
+<td data-sourcepos="67:2-67:11">XeStrata</td>
+<td data-sourcepos="67:13-67:28"><strong>xe0.1.43.1</strong></td>
+<td data-sourcepos="67:30-67:136">Intel GPU向け別ランタイムとの比較。組み込みのoneAPI環境でソースビルドする。</td>
+</tr>
+</tbody>
+</table>
+<h1 data-sourcepos="70:1-70:22">
+<span id="arc-pro-b70の導入" class="fragment"></span><a href="#arc-pro-b70%E3%81%AE%E5%B0%8E%E5%85%A5"><i class="fa fa-link"></i></a>Arc Pro B70の導入</h1>
+<p data-sourcepos="72:1-72:504">グラフィックボードの換装～ドライバのインストールはNVIDIA製品とほとんど同じ手順で実施できる。筆者の環境ではASRockマザーボード（ASRock Z790 Steel Legend WiFi）の<a href="https://www.asrock.com/mb/intel/Z790%20Steel%20Legend%20WiFi/bios.html" rel="nofollow noopener" target="_blank">BIOS</a>が古く、B70がうまく認識されなかったためBIOSの更新も行った（BIOSを9.03から22.02に更新）。<strong>BIOS更新の際は、USBフラッシュメモリや外付けSSDなどが必要。</strong></p>
+<p data-sourcepos="74:1-74:346">ドライバは<a href="https://www.intel.com/content/www/us/en/products/sku/245797/intel-arc-pro-b70-graphics/downloads.html" rel="nofollow noopener" target="_blank">Intel® Arc™ Pro B70 Graphics</a>をインストールする（Proのラベルが付いている方）。インストーラの起動後、以下の項目のみチェックを入れてインストールを実行すればよい。</p>
+<ul data-sourcepos="76:1-79:0">
+<li data-sourcepos="76:1-76:23">Intel Graphics Driver</li>
+<li data-sourcepos="77:1-77:25">Intel Graphics Software</li>
+<li data-sourcepos="78:1-79:0">oneAPI Level Zero SDK</li>
+</ul>
+<blockquote data-sourcepos="80:1-82:89">
+<p data-sourcepos="80:3-80:204">Windowsに複数ユーザーがいる場合は管理者権限のあるユーザーで作業を実施すること。一度インストールできれば他のユーザーの環境にも反映される。</p>
+<p data-sourcepos="82:3-82:89">インストールの過程で何度か再起動が行われるので気長に待つ。</p>
+</blockquote>
+<p data-sourcepos="84:1-84:617">...というわけでGPUを2枚搭載した環境を構築した。Intel Arc Pro B70（32GB）とGeForce RTX 3060 Ti（8GB）のデュアルGPU構成で、すべてのモニターをRTX 3060 Ti側に接続している。そのため、B70をディスプレイ描画に使用せず、搭載する32GBの専用VRAMのほぼ全容量をLLMの推論処理に利用できる構成となっている。Windowsのタスクマネージャーでも32GBの専用VRAMが正常に認識されていることを確認した（下図）。システムメモリは64GBで、DDR5のデュアルチャンネル構成としている。</p>
+<p data-sourcepos="86:1-86:121"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Fb2882a40-c97b-4c1a-aeb4-aadb832aea14.png?ixlib=rb-4.1.1&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=14e7f008e7767cfd3098fc983a7e4ead" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/9d759924f99e0b802a5d941b.png" alt="image.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/b2882a40-c97b-4c1a-aeb4-aadb832aea14.png" loading="lazy" decoding="async"></a></p>
+<div data-sourcepos="88:1-112:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<h3 data-sourcepos="90:1-90:70">
+<span id="マザーボードのgpuスロットの端子の規格について" class="fragment"></span><a href="#%E3%83%9E%E3%82%B6%E3%83%BC%E3%83%9C%E3%83%BC%E3%83%89%E3%81%AEgpu%E3%82%B9%E3%83%AD%E3%83%83%E3%83%88%E3%81%AE%E7%AB%AF%E5%AD%90%E3%81%AE%E8%A6%8F%E6%A0%BC%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6"><i class="fa fa-link"></i></a>マザーボードのGPUスロットの端子の規格について</h3>
+<p data-sourcepos="92:1-92:149">今回用いたPCのマザーボード（Z790 Steel Legend WiFi）には3つのPCIeスロットがあり、現在以下の構成となっている。</p>
+<table data-sourcepos="94:1-98:53">
+<thead>
+<tr data-sourcepos="94:1-94:79">
+<th data-sourcepos="94:2-94:15">スロット</th>
+<th data-sourcepos="94:17-94:27">接続先</th>
+<th data-sourcepos="94:29-94:57">スロットの接続仕様</th>
+<th data-sourcepos="94:59-94:78">今回の搭載GPU</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="96:1-96:65">
+<td data-sourcepos="96:2-96:23">PCIE1（最上段）</td>
+<td data-sourcepos="96:25-96:29">CPU</td>
+<td data-sourcepos="96:31-96:44">PCIe 5.0 x16</td>
+<td data-sourcepos="96:46-96:64">Intel Arc Pro B70</td>
+</tr>
+<tr data-sourcepos="97:1-97:66">
+<td data-sourcepos="97:2-97:8">PCIE2</td>
+<td data-sourcepos="97:10-97:29">チップセット</td>
+<td data-sourcepos="97:31-97:43">PCIe 4.0 x4</td>
+<td data-sourcepos="97:45-97:65">GeForce RTX 3060 Ti</td>
+</tr>
+<tr data-sourcepos="98:1-98:53">
+<td data-sourcepos="98:2-98:8">PCIE3</td>
+<td data-sourcepos="98:10-98:29">チップセット</td>
+<td data-sourcepos="98:31-98:43">PCIe 3.0 x2</td>
+<td data-sourcepos="98:45-98:52">なし</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="100:1-100:196">PCIeの帯域が狭ければGPU間の転送は遅くなるが、それだけでLLMの推論に不向きとは限らない。重要なのは推論中に何をどの程度転送するかである。</p>
+<p data-sourcepos="102:1-102:538">例えば、モデルの層を複数のGPUに分け、各GPUが担当する重みをVRAMに常駐させる方式では、毎tokenの生成時にモデル全体の重みを送り直すわけではない。GPU間を移動するのは主に、分割した層の境界を通る中間結果（activation）である。したがって、PCIe 3.0 x2のスロットでも、追加したGPUのVRAMを利用してモデルを収め、CPUやストレージへのオフロードを減らせるなら、性能面で有利になる可能性がある。</p>
+<p data-sourcepos="104:1-104:429">この考え方はPipeline Parallelismにも当てはまる。<a href="https://docs.pytorch.org/docs/stable/distributed.pipelining.html" rel="nofollow noopener" target="_blank">PyTorchの解説</a>では、段階間でactivationを送受信する方式として説明されている。<a href="https://docs.vllm.ai/en/stable/serving/parallelism_scaling/" rel="nofollow noopener" target="_blank">vLLMの解説</a>でも、NVLinkがない環境では通信負担を抑える選択肢としてPipeline Parallelismを挙げている。</p>
+<p data-sourcepos="106:1-106:358">一方、層内の計算を分割して頻繁に通信するTensor Parallelismや、実行中に重みをRAMからGPUへ転送する方式では、PCIe帯域の影響が大きくなり得る。層単位の分割でも、入力長、バッチサイズ、GPU間の転送経路、各GPUの処理速度によっては転送や待ち合わせが律速となる。</p>
+<p data-sourcepos="108:1-108:343">そのため、「PCIE3には推論用GPUを増設しない方がよい」や「M2_2を使うと必ず大きく遅くなる」などとは一律には判断できない。VRAMに重みを常駐させることで得られる利点と、通信帯域が減る不利を、実際に使うモデルとランタイムで比較する必要がある。</p>
+<blockquote data-sourcepos="110:1-110:407">
+<p data-sourcepos="110:3-110:407">複数GPU構成の一番のネックは推論速度がどうこうというよりも、電力供給かもしれない。それなりの容量の電源を使わなければ動作不良の元となり、最悪の場合はパーツの破損に繋がる恐れがある。各パーツのTDPの合計から電源の容量を計算しておき、マシン構成に合った電源を用意するべきである。</p>
+</blockquote>
+</div>
+</div>
+<h1 data-sourcepos="114:1-114:23">
+<span id="測定方法と結果" class="fragment"></span><a href="#%E6%B8%AC%E5%AE%9A%E6%96%B9%E6%B3%95%E3%81%A8%E7%B5%90%E6%9E%9C"><i class="fa fa-link"></i></a>測定方法と結果</h1>
+<h2 data-sourcepos="116:1-116:15">
+<span id="比較条件" class="fragment"></span><a href="#%E6%AF%94%E8%BC%83%E6%9D%A1%E4%BB%B6"><i class="fa fa-link"></i></a>比較条件</h2>
+<p data-sourcepos="117:1-117:15">比較には、</p>
+<ol data-sourcepos="119:1-121:0">
+<li data-sourcepos="119:1-119:23"><strong>Strata v0.1.44.1</strong></li>
+<li data-sourcepos="120:1-121:0"><strong>XeStrata xe0.1.43.1</strong></li>
+</ol>
+<p data-sourcepos="122:1-122:360">を使用した。冒頭に述べた通り、更新が非常に速いプロジェクトなので、ここでは測定に使用したバージョンを明記しておく。なお、いずれも WSL2 向けの独自の修正を加えたビルドを用いているため、配布状態のバイナリをそのまま比較した結果ではないことに注意。</p>
+<p data-sourcepos="124:1-124:227">GPU 計算は B70 に限定し、RTX 3060 Ti は画面出力のみに使用した。モデルと tokenizer を共通にし、同じ入力トークン列を渡した。5 配置 × 2 入力 × 5 回の計 50 件で比較した。</p>
+<table data-sourcepos="126:1-133:76">
+<thead>
+<tr data-sourcepos="126:1-126:25">
+<th data-sourcepos="126:2-126:9">項目</th>
+<th data-sourcepos="126:11-126:24">測定条件</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="128:1-128:50">
+<td data-sourcepos="128:2-128:12">モデル</td>
+<td data-sourcepos="128:14-128:49">Qwen3.8-Flash-Next-GSQ-RCO-IQ3_XXS</td>
+</tr>
+<tr data-sourcepos="129:1-129:80">
+<td data-sourcepos="129:2-129:50">設定上の最大 context／KV キャッシュ</td>
+<td data-sourcepos="129:52-129:79">32,768 トークン／FP16</td>
+</tr>
+<tr data-sourcepos="130:1-130:101">
+<td data-sourcepos="130:2-130:15">評価入力</td>
+<td data-sourcepos="130:17-130:100">約 1K 入力（1,017 トークン）、短い日本語入力（38 トークン）</td>
+</tr>
+<tr data-sourcepos="131:1-131:77">
+<td data-sourcepos="131:2-131:15">生成設定</td>
+<td data-sourcepos="131:17-131:76">温度 0、thinking 無効、生成上限 256 トークン</td>
+</tr>
+<tr data-sourcepos="132:1-132:29">
+<td data-sourcepos="132:2-132:6">MTP</td>
+<td data-sourcepos="132:8-132:28">有効、window = 4</td>
+</tr>
+<tr data-sourcepos="133:1-133:76">
+<td data-sourcepos="133:2-133:9">集計</td>
+<td data-sourcepos="133:11-133:75">実行順を入れ替えて各条件 5 回測定した中央値</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="135:1-135:165">以下では、GPU 上の expert キャッシュ容量を変えた比較と、XeStrata の公式キャリブレーションによる設定調整を分けて示す。</p>
+<h2 data-sourcepos="137:1-137:15">
+<span id="生成速度" class="fragment"></span><a href="#%E7%94%9F%E6%88%90%E9%80%9F%E5%BA%A6"><i class="fa fa-link"></i></a>生成速度</h2>
+<p data-sourcepos="139:1-139:237">5回試行した際の生成速度の中央値を表に示す。この生成速度は実際に出力されたトークン数を decode 時間で割った値である。採用されなかった先読みトークンは含めていない。</p>
+<table data-sourcepos="141:1-147:39">
+<thead>
+<tr data-sourcepos="141:1-141:106">
+<th data-sourcepos="141:2-141:18">ランタイム</th>
+<th style="text-align: right" data-sourcepos="141:20-141:49">expert キャッシュ容量</th>
+<th style="text-align: right" data-sourcepos="141:51-141:76">約 1K 入力（tok/s）</th>
+<th style="text-align: right" data-sourcepos="141:78-141:105">日本語入力（tok/s）</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="143:1-143:37">
+<td data-sourcepos="143:2-143:9">Strata</td>
+<td style="text-align: right" data-sourcepos="143:11-143:20">20.5 GiB</td>
+<td style="text-align: right" data-sourcepos="143:22-143:28">33.89</td>
+<td style="text-align: right" data-sourcepos="143:30-143:36">27.51</td>
+</tr>
+<tr data-sourcepos="144:1-144:37">
+<td data-sourcepos="144:2-144:9">Strata</td>
+<td style="text-align: right" data-sourcepos="144:11-144:20">21.5 GiB</td>
+<td style="text-align: right" data-sourcepos="144:22-144:28">35.69</td>
+<td style="text-align: right" data-sourcepos="144:30-144:36">29.23</td>
+</tr>
+<tr data-sourcepos="145:1-145:39">
+<td data-sourcepos="145:2-145:11">XeStrata</td>
+<td style="text-align: right" data-sourcepos="145:13-145:22">20.5 GiB</td>
+<td style="text-align: right" data-sourcepos="145:24-145:30">64.30</td>
+<td style="text-align: right" data-sourcepos="145:32-145:38">59.96</td>
+</tr>
+<tr data-sourcepos="146:1-146:39">
+<td data-sourcepos="146:2-146:11">XeStrata</td>
+<td style="text-align: right" data-sourcepos="146:13-146:22">21.5 GiB</td>
+<td style="text-align: right" data-sourcepos="146:24-146:30">68.36</td>
+<td style="text-align: right" data-sourcepos="146:32-146:38">59.74</td>
+</tr>
+<tr data-sourcepos="147:1-147:39">
+<td data-sourcepos="147:2-147:11">XeStrata</td>
+<td style="text-align: right" data-sourcepos="147:13-147:22">22.5 GiB</td>
+<td style="text-align: right" data-sourcepos="147:24-147:30">66.67</td>
+<td style="text-align: right" data-sourcepos="147:32-147:38">62.91</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="150:1-150:308">同じExpertキャッシュ容量で比較すると、XeStrataの生成速度はStrataの約1.9～2.0倍となった。一方、最初のトークンが返るまでの時間（TTFT）は、21.5 GiB・約 1K 入力で本家 Strata が 2.78 秒、XeStrata が 3.48 秒であり、本家の方が短かった。</p>
+<p data-sourcepos="152:1-152:66">XeStrata のキャッシュヒット率は次の通りである。</p>
+<table data-sourcepos="154:1-158:28">
+<thead>
+<tr data-sourcepos="154:1-154:66">
+<th data-sourcepos="154:2-154:31">expert キャッシュ容量</th>
+<th style="text-align: right" data-sourcepos="154:33-154:47">約 1K 入力</th>
+<th style="text-align: right" data-sourcepos="154:49-154:65">日本語入力</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="156:1-156:28">
+<td data-sourcepos="156:2-156:11">20.5 GiB</td>
+<td style="text-align: right" data-sourcepos="156:13-156:19">75.9%</td>
+<td style="text-align: right" data-sourcepos="156:21-156:27">63.0%</td>
+</tr>
+<tr data-sourcepos="157:1-157:28">
+<td data-sourcepos="157:2-157:11">21.5 GiB</td>
+<td style="text-align: right" data-sourcepos="157:13-157:19">80.1%</td>
+<td style="text-align: right" data-sourcepos="157:21-157:27">66.2%</td>
+</tr>
+<tr data-sourcepos="158:1-158:28">
+<td data-sourcepos="158:2-158:11">22.5 GiB</td>
+<td style="text-align: right" data-sourcepos="158:13-158:19">80.3%</td>
+<td style="text-align: right" data-sourcepos="158:21-158:27">68.8%</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="160:1-160:204">容量を増やすとヒット率は上がったが、約 1K 入力では 21.5 GiB から 22.5 GiB への増加分は小さかった。この変化分は生成速度の変動に概ね対応している。</p>
+<blockquote data-sourcepos="162:1-164:121">
+<p data-sourcepos="162:3-162:111">推論時のメモリは限界まで埋まっている。（PowerSehllとWSL以外は起動していない）</p>
+<p data-sourcepos="164:3-164:121"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F4675d401-581e-47a9-8365-af400aa0e690.png?ixlib=rb-4.1.1&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=cf9c23e413c083983e67ae0f9c42cc43" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/ae98c003389ef028c1936ae9.png" alt="mem.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/4675d401-581e-47a9-8365-af400aa0e690.png" loading="lazy" decoding="async"></a></p>
+</blockquote>
+<div data-sourcepos="167:1-187:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<h3 data-sourcepos="169:1-169:19">
+<span id="mtpの有効化" class="fragment"></span><a href="#mtp%E3%81%AE%E6%9C%89%E5%8A%B9%E5%8C%96"><i class="fa fa-link"></i></a>MTPの有効化</h3>
+<p data-sourcepos="171:1-171:324">今回、MTP（Multi-Token Prediction）の効果はエキスパートの配置を調整する前に実施した別系列の40件の測定で比較した（expertキャッシュは20.5 GiB、KVキャッシュはFP16）。各入力・各設定を5回ずつ測定している。表の数値はいずれも中央値である。</p>
+<table data-sourcepos="173:1-178:69">
+<thead>
+<tr data-sourcepos="173:1-173:85">
+<th data-sourcepos="173:2-173:18">ランタイム</th>
+<th data-sourcepos="173:20-173:27">入力</th>
+<th style="text-align: right" data-sourcepos="173:29-173:39">MTP無効</th>
+<th style="text-align: right" data-sourcepos="173:41-173:51">MTP有効</th>
+<th style="text-align: right" data-sourcepos="173:53-173:84">有効化による速度変化</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="175:1-175:63">
+<td data-sourcepos="175:2-175:9">Strata</td>
+<td data-sourcepos="175:11-175:17">約1K</td>
+<td style="text-align: right" data-sourcepos="175:19-175:31">24.54 tok/s</td>
+<td style="text-align: right" data-sourcepos="175:33-175:45">31.59 tok/s</td>
+<td style="text-align: right" data-sourcepos="175:47-175:62">約28.7%向上</td>
+</tr>
+<tr data-sourcepos="176:1-176:67">
+<td data-sourcepos="176:2-176:9">Strata</td>
+<td data-sourcepos="176:11-176:21">日本語</td>
+<td style="text-align: right" data-sourcepos="176:23-176:35">19.35 tok/s</td>
+<td style="text-align: right" data-sourcepos="176:37-176:49">26.02 tok/s</td>
+<td style="text-align: right" data-sourcepos="176:51-176:66">約34.5%向上</td>
+</tr>
+<tr data-sourcepos="177:1-177:65">
+<td data-sourcepos="177:2-177:11">XeStrata</td>
+<td data-sourcepos="177:13-177:19">約1K</td>
+<td style="text-align: right" data-sourcepos="177:21-177:33">44.41 tok/s</td>
+<td style="text-align: right" data-sourcepos="177:35-177:47">64.63 tok/s</td>
+<td style="text-align: right" data-sourcepos="177:49-177:64">約45.5%向上</td>
+</tr>
+<tr data-sourcepos="178:1-178:69">
+<td data-sourcepos="178:2-178:11">XeStrata</td>
+<td data-sourcepos="178:13-178:23">日本語</td>
+<td style="text-align: right" data-sourcepos="178:25-178:37">41.20 tok/s</td>
+<td style="text-align: right" data-sourcepos="178:39-178:51">60.41 tok/s</td>
+<td style="text-align: right" data-sourcepos="178:53-178:68">約46.6%向上</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="180:1-180:338">この試験では、両ランタイムともMTPの有効化によって生成速度が上がり、XeStrataでは約46%の向上となった。MTPにはトークンの先読みと検証のコストを要するため常に高速化できるとは限らないが、今回採用した版・設定・入力では非常に有効であった。</p>
+<blockquote data-sourcepos="182:1-183:444">
+<p data-sourcepos="182:3-183:444">StrataではMTP有効化後も生成トークン列が一致したが、XeStrataでは約1K入力の74番目、日本語入力の123番目から出力が分岐していた。<br>
+一般に、MTPを利用した投機的デコーディングでは、予測したトークンをメインモデルで検証するため、原理的には通常のデコーディングと同等の出力品質を維持する。ただし、実装上の数値誤差（CPU/GPUでの丸め方の違い、モデルの層の置き方、など）やサンプリング処理の違いによって、生成される文章が変化する場合がある。</p>
+</blockquote>
+<blockquote data-sourcepos="185:1-185:179">
+<p data-sourcepos="185:3-185:179">MTP有効時は両者ともwindowを4としたが、継続閾値はStrataが0.8、XeStrataが0.5であり、ランタイム間で全設定が同一というわけではない。</p>
+</blockquote>
+</div>
+</div>
+<h2 data-sourcepos="190:1-190:51">
+<span id="公式キャリブレーションによる調整" class="fragment"></span><a href="#%E5%85%AC%E5%BC%8F%E3%82%AD%E3%83%A3%E3%83%AA%E3%83%96%E3%83%AC%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E3%81%AB%E3%82%88%E3%82%8B%E8%AA%BF%E6%95%B4"><i class="fa fa-link"></i></a>公式キャリブレーションによる調整</h2>
+<p data-sourcepos="192:1-192:367">続いて XeStrata の公式キャリブレーションを実施した。公式の tools/calibrate.py は変更せずに使用した。expert キャッシュを 21.5 GiB に固定する条件と、容量を自動決定する条件の 2 通りを調べた。ここでいう容量の自動決定は、prefill の実行方式を選ぶ auto とは別の設定である。</p>
+<p data-sourcepos="194:1-194:510">公式キャリブレーションでは必要な処理を実行するため生成上限 512 トークンを許可した（前節の通常比較の生成上限は 256 トークン）。キャリブレーションには英語入力を用い、今回の集計では計 372 回の生成を行った。容量自動決定時の expert キャッシュは約 22.37～22.38 GiB、補完 RAM キャッシュは約 17.59～17.60 GiB となった。21.5 GiB 固定時の補完 RAM キャッシュは 18.47 GiB である。</p>
+<p data-sourcepos="196:1-196:364">容量自動決定時は、GPU に常駐しない expert の処理配分を指定する <code>pcie-frac</code> が 0.00 の条件で有利だった。これはモデル全体の GPU 配置率がゼロという意味ではない。頻繁に使う expert は GPU、残りは主に RAM 上の重みを使って CPU で処理する分担が、この環境では有力だった。</p>
+<p data-sourcepos="198:1-198:98">推測デコードの閾値 <code>spec-min-p</code> の探索では、0.5 より 0.7 の方が速かった。</p>
+<table data-sourcepos="200:1-203:68">
+<thead>
+<tr data-sourcepos="200:1-200:94">
+<th data-sourcepos="200:2-200:25">expert キャッシュ</th>
+<th style="text-align: right" data-sourcepos="200:27-200:44">spec-min-p = 0.5</th>
+<th style="text-align: right" data-sourcepos="200:46-200:63">spec-min-p = 0.7</th>
+<th style="text-align: right" data-sourcepos="200:65-200:93">同条件内の速度変化</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="202:1-202:65">
+<td data-sourcepos="202:2-202:18">21.5 GiB 固定</td>
+<td style="text-align: right" data-sourcepos="202:20-202:32">67.80 tok/s</td>
+<td style="text-align: right" data-sourcepos="202:34-202:46">72.66 tok/s</td>
+<td style="text-align: right" data-sourcepos="202:48-202:64">約 7.2% 向上</td>
+</tr>
+<tr data-sourcepos="203:1-203:68">
+<td data-sourcepos="203:2-203:21">容量自動決定</td>
+<td style="text-align: right" data-sourcepos="203:23-203:35">69.51 tok/s</td>
+<td style="text-align: right" data-sourcepos="203:37-203:49">74.01 tok/s</td>
+<td style="text-align: right" data-sourcepos="203:51-203:67">約 6.5% 向上</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="205:1-205:319">容量自動決定・<code>pcie-frac = 0.00</code>・<code>spec-min-p = 0.7</code> の場合は、中央値 <strong>74.16 tok/s</strong> が得られた。この結果から、今回の英語入力では、expert の配置容量を調整するだけでなく、推測デコードの設定を合わせて調整することも有効だったといえる。</p>
+<blockquote data-sourcepos="207:1-207:463">
+<p data-sourcepos="207:3-207:463">CPU worker 数は探索した候補中では 6 が最速だったが、13 との差は約 1% にとどまり、従来の 8 は探索されていない。また、毎回 80 個・160 個の expert を入れ替える設定も、今回の入力では有利にならなかった。容量自動設定も連続的な最適容量探索ではないため、公式キャリブレーションで得られた約 22.4 GiB が厳密な最適値というわけではない。</p>
+</blockquote>
+<div data-sourcepos="209:1-229:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<h3 data-sourcepos="211:1-211:25">
+<span id="pcie-frac-とは" class="fragment"></span><a href="#pcie-frac-%E3%81%A8%E3%81%AF"><i class="fa fa-link"></i></a><code>pcie-frac</code> とは？</h3>
+<p data-sourcepos="213:1-213:437"><code>--pcie-frac</code> は、<strong>VRAMに存在しないExpertの計算を、CPUとGPUにどのような割合で分担させるかを指定するパラメータ</strong>である。Strata／XeStrataでは、頻繁に使用するExpertの重みをVRAMにキャッシュし、キャッシュに存在しないExpert（システムRAM側に保持されている）についてはCPUで計算するか、PCIe経由でGPUに重みを転送して計算する。</p>
+<table data-sourcepos="215:1-221:19">
+<thead>
+<tr data-sourcepos="215:1-215:44">
+<th data-sourcepos="215:2-215:12">設定値</th>
+<th style="text-align: left" data-sourcepos="215:14-215:43">VRAMにないExpertの処理</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="217:1-217:25">
+<td data-sourcepos="217:2-217:5">0.0</td>
+<td style="text-align: left" data-sourcepos="217:7-217:24">CPUで100%計算</td>
+</tr>
+<tr data-sourcepos="218:1-218:30">
+<td data-sourcepos="218:2-218:5">0.2</td>
+<td style="text-align: left" data-sourcepos="218:7-218:29">GPUへ20%、CPUで80%</td>
+</tr>
+<tr data-sourcepos="219:1-219:30">
+<td data-sourcepos="219:2-219:5">0.5</td>
+<td style="text-align: left" data-sourcepos="219:7-219:29">GPUへ50%、CPUで50%</td>
+</tr>
+<tr data-sourcepos="220:1-220:30">
+<td data-sourcepos="220:2-220:5">0.8</td>
+<td style="text-align: left" data-sourcepos="220:7-220:29">GPUへ80%、CPUで20%</td>
+</tr>
+<tr data-sourcepos="221:1-221:19">
+<td data-sourcepos="221:2-221:5">1.0</td>
+<td style="text-align: left" data-sourcepos="221:7-221:18">GPUへ100%</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="223:1-223:129">例えば <code>--pcie-frac 0.35</code> なら、VRAMキャッシュにないExpertの約35%をGPU側で計算するよう指定される。</p>
+<p data-sourcepos="225:1-225:350">この割合はGPUのVRAM使用率ではない。また、実際の振り分けはExpert数の整数単位で行われるため、常に設定値と完全一致するわけではない。最適値はPCIe帯域、CPU性能、RAM帯域、GPU性能などに依存しするため、GPUへの転送を増やせば必ず高速になるわけではない。</p>
+<p data-sourcepos="227:1-227:221">なお、XeStrataは起動時にCPUとGPUそれぞれのExpert計算時間を測定し、自動的に処理を分担する機能を備えている。pcie-fracを固定すると、この自動調整を上書きできる。</p>
+</div>
+</div>
+<div data-sourcepos="232:1-261:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<h3 data-sourcepos="234:1-234:26">
+<span id="spec-min-p-とは" class="fragment"></span><a href="#spec-min-p-%E3%81%A8%E3%81%AF"><i class="fa fa-link"></i></a><code>spec-min-p</code> とは？</h3>
+<p data-sourcepos="236:1-236:310"><code>--spec-min-p</code> は、<strong>MTPが予測したトークンの確信度に関する閾値</strong>である。具体的には、MTPのドラフトモデルが予測したトークンについて、その予測確率が閾値以上であれば、後続のトークンもまとめて予測・検証する候補に加える。</p>
+<table data-sourcepos="238:1-244:50">
+<thead>
+<tr data-sourcepos="238:1-238:44">
+<th data-sourcepos="238:2-238:14">設定値</th>
+<th data-sourcepos="238:16-238:43">動作の傾向</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="240:1-240:58">
+<td data-sourcepos="240:2-240:8"><code>0.0</code></td>
+<td data-sourcepos="240:10-240:57">確信度による候補延長の制限なし</td>
+</tr>
+<tr data-sourcepos="241:1-241:60">
+<td data-sourcepos="241:2-241:8"><code>0.3</code></td>
+<td data-sourcepos="241:10-241:59">低確信度の予測も候補に加えやすい</td>
+</tr>
+<tr data-sourcepos="242:1-242:40">
+<td data-sourcepos="242:2-242:8"><code>0.5</code></td>
+<td data-sourcepos="242:10-242:39">中程度の閾値</td>
+</tr>
+<tr data-sourcepos="243:1-243:50">
+<td data-sourcepos="243:2-243:8"><code>0.7</code></td>
+<td data-sourcepos="243:10-243:49">確信度の高い予測を優先</td>
+</tr>
+<tr data-sourcepos="244:1-244:50">
+<td data-sourcepos="244:2-244:8"><code>0.9</code></td>
+<td data-sourcepos="244:10-244:49">非常に高い確信度を要求</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="246:1-246:96">例えば、MTPが次のような確率でトークンを予測した場合を考えてみる。</p>
+<table data-sourcepos="248:1-253:43">
+<thead>
+<tr data-sourcepos="248:1-248:61">
+<th data-sourcepos="248:2-248:15">予測位置</th>
+<th data-sourcepos="248:17-248:36">MTPの予測確率</th>
+<th data-sourcepos="248:38-248:48">閾値0.5</th>
+<th data-sourcepos="248:50-248:60">閾値0.7</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="250:1-250:43">
+<td data-sourcepos="250:2-250:7">1</td>
+<td data-sourcepos="250:9-250:18">0.92</td>
+<td data-sourcepos="250:20-250:30">通過</td>
+<td data-sourcepos="250:32-250:42">通過</td>
+</tr>
+<tr data-sourcepos="251:1-251:43">
+<td data-sourcepos="251:2-251:7">2</td>
+<td data-sourcepos="251:9-251:18">0.78</td>
+<td data-sourcepos="251:20-251:30">通過</td>
+<td data-sourcepos="251:32-251:42">通過</td>
+</tr>
+<tr data-sourcepos="252:1-252:43">
+<td data-sourcepos="252:2-252:7">3</td>
+<td data-sourcepos="252:9-252:18">0.62</td>
+<td data-sourcepos="252:20-252:30">通過</td>
+<td data-sourcepos="252:32-252:42">停止</td>
+</tr>
+<tr data-sourcepos="253:1-253:43">
+<td data-sourcepos="253:2-253:7">4</td>
+<td data-sourcepos="253:9-253:18">0.43</td>
+<td data-sourcepos="253:20-253:30">停止</td>
+<td data-sourcepos="253:32-253:42">停止</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="255:1-255:108">ここでの「通過」はメインモデルによる検証対象に加えられることを意味する。</p>
+<p data-sourcepos="257:1-257:243">閾値を下げれば多くのトークンを一度に検証できる可能性があるが、誤った予測が増えれば検証コストが無駄になる。逆に閾値を上げすぎると、MTPによる高速化の効果が減少する。</p>
+<blockquote data-sourcepos="259:1-259:117">
+<p data-sourcepos="259:3-259:117">なお、<code>spec-min-p</code>は通常のサンプリングに使用する<code>min_p</code>とは異なるパラメータである。</p>
+</blockquote>
+</div>
+</div>
+<h2 data-sourcepos="263:1-263:51">
+<span id="出力の再現性とメモリ使用上の注意" class="fragment"></span><a href="#%E5%87%BA%E5%8A%9B%E3%81%AE%E5%86%8D%E7%8F%BE%E6%80%A7%E3%81%A8%E3%83%A1%E3%83%A2%E3%83%AA%E4%BD%BF%E7%94%A8%E4%B8%8A%E3%81%AE%E6%B3%A8%E6%84%8F"><i class="fa fa-link"></i></a>出力の再現性とメモリ使用上の注意</h2>
+<p data-sourcepos="265:1-265:427">同じ設定で5回測定したところ、生成されたトークン列はすべて一致した。ただし、配置条件を変えると、数値や出力に違いが出た。今回の検証は動作と速度の確認が目的で、設定間で出力品質が同じかどうかは確かめていない。推測デコードの設定変更も、速度が上がっただけでは品質への影響がないとは言えない。</p>
+<p data-sourcepos="267:1-267:305">XeStrataの通常性能比較30件では、expertの読み出しによるfile readは0件だった。ただし、推論全体でSSDへのアクセスがなかったわけではない。PLEの読み出し、モデルの読み込み、OSのページング/スワップは別に確認する必要がある。</p>
+<blockquote data-sourcepos="269:1-269:184">
+<p data-sourcepos="269:3-269:184">参考情報として、初期設定の状態ではデコード速度が40 tok/s程度に留まっており、PLEがメモリ側に乗り切っていなかった可能性はある。</p>
+</blockquote>
+<p data-sourcepos="271:1-271:259">また、WSL2内に空きメモリがあるように見えても、Windows側の物理メモリやコミット容量が足りないことがある。キャッシュ容量を増やすときは、WSL2側とWindows側の両方のメモリ状況を確認する。</p>
+<blockquote data-sourcepos="273:1-282:76">
+<p data-sourcepos="273:3-273:86">WSLに割り当てるメモリの量を変更するには以下のようにする。</p>
+<p data-sourcepos="275:3-276:78">① <code>C:\Users\&lt;ユーザー名&gt;\.wslconfig</code> を作成する。<br>
+② 次の内容を書いて保存する。（メモリの容量は任意）</p>
+<div class="code-frame" data-lang="text" data-sourcepos="277:3-281:5"><div class="highlight"><pre><code>[wsl2]
+memory=52GB
+swap=8GB
+</code></pre></div></div>
+<p data-sourcepos="282:3-282:76">③ PowerShellで <code>wsl --shutdown</code> を実行し、WSLを再起動する。</p>
+</blockquote>
+<h2 data-sourcepos="285:1-285:12">
+<span id="まとめ" class="fragment"></span><a href="#%E3%81%BE%E3%81%A8%E3%82%81"><i class="fa fa-link"></i></a>まとめ</h2>
+<p data-sourcepos="287:1-287:415">今回の環境では、<strong>XeStrata は本家 Strata より優れたデコード速度を示し、公式キャリブレーションによる設定調整後は英語入力で約 74 tok/s 前後に達した</strong>。最適な配置はキャッシュ容量だけで決まるわけではなく、入力と推測デコードの設定、Windows／WSL2 双方のメモリ余裕にも左右されることが確かめられた。</p>
+<blockquote data-sourcepos="289:1-289:149">
+<p data-sourcepos="289:3-289:149">今回の検証はあくまで動作テストであり、速度を追求する場合はWSLではなくpureなLinux OSを利用すべきである。</p>
+</blockquote>
+<p data-sourcepos="291:1-291:328">結論として、CUDA環境でなくとも（それなりのRAM容量があれば）実用レベルの速度で125BのMoEモデルを動かせることが確認できた。実用的なLLMランタイムが登場してきたことで、Intel系GPUもAMD系GPUも今後さらなる値上がりの波に晒されそうである。</p>
+<p data-sourcepos="293:1-293:138">...というわけで、32GB級の非NVIDIA系GPUが20万円台で入手できる時期もそろそろ終わりそうな予感がする。</p>
+<p data-sourcepos="295:1-295:98">次回は<strong>RAMとVRAMを倍増した構成</strong>で今回同様のテストを実施してみたい。</p>
+<h1 data-sourcepos="297:1-297:11">
+<span id="おまけ" class="fragment"></span><a href="#%E3%81%8A%E3%81%BE%E3%81%91"><i class="fa fa-link"></i></a>おまけ</h1>
+<h2 data-sourcepos="299:1-299:41">
+<span id="xestrataのgui画像の読み取り" class="fragment"></span><a href="#xestrata%E3%81%AEgui%E7%94%BB%E5%83%8F%E3%81%AE%E8%AA%AD%E3%81%BF%E5%8F%96%E3%82%8A"><i class="fa fa-link"></i></a>XeStrataのGUI・画像の読み取り</h2>
+<p data-sourcepos="301:1-301:284"><code>setup.sh</code> を実行すればモデルが起動できる（Pythonの実行環境が必要）。Windowsのブラウザで <a href="http://127.0.0.1:8095" class="autolink" rel="nofollow noopener" target="_blank">http://127.0.0.1:8095</a> を開けばチャット用GUIを起動できる（ただしメモリに余裕はないのでChromeの利用はおすすめできない）。</p>
+<p data-sourcepos="303:1-303:118"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Fbf34e516-5118-494a-8d44-e2b34f0b9bfa.png?ixlib=rb-4.1.1&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=847b2227adfd14983420c0559346e588" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/c86be05759fcc727aabb0dd6.png" alt="UI.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/bf34e516-5118-494a-8d44-e2b34f0b9bfa.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="305:1-305:119"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F7c952b03-fa1f-4c31-a018-d1c3de1f557e.png?ixlib=rb-4.1.1&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=0c56bf67055f9a3f4c9f7b30e423dc0b" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/4f51868396e9e489fdf9861d.png" alt="UI2.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/7c952b03-fa1f-4c31-a018-d1c3de1f557e.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="307:1-307:84">モデル側は、以下のコマンドで画像の読み取りが可能になる。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="309:1-311:3"><div class="highlight"><pre><code>./setup.sh <span class="nt">--setup</span> <span class="nt">--vision</span> gpu
+</code></pre></div></div>
+<p data-sourcepos="313:1-313:143">今回は残念ながらブラウザの不具合(？)のため、筆者の環境では画像の読み取りテストは実施していない。</p>
+
+</div>
+{% endraw %}

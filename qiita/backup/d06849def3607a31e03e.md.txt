@@ -1,0 +1,590 @@
+# はじめに
+
+Windowsを使いながらLinux環境を利用するなら、WSLは便利な選択肢である。WSL環境であれば、OSを切り替えることなく、普段使いのWindowsアプリとLinuxの開発・計算ツールを併用できる。しかしながら、大量のメモリを必要とするGPU計算やローカルLLMの実験では、WindowsとLinuxで物理メモリを分け合うことが実用上の制約となる。
+
+> WSL2のメモリ上限はデフォルトで搭載メモリの50%に設定されている。この上限は変更できるが、Windows本体やブラウザなどが使うメモリがゼロになるわけではない。Linux側へ割り当てる容量を増やす際にも、Windows側の動作に必要な余裕を残す必要がある。
+
+そこで、**Windows環境を残しつつUbuntuを直接起動するデュアルブート構成**へと既存のPCを拡張した。OSの切り替えの際は再起動が必要になるものの、Ubuntuの使用中はWindows側の常駐処理にメモリを割く必要がなくなる。これにより、Linux自体が使用する分を除き、搭載したメモリを計算やファイルキャッシュに充てることができる。
+
+併せて、今回はPCのパーツ・構成を次のように増強した。
+
+- **メインメモリ：64GB → 128GB**
+- **GPU：Intel Arc Pro B70 32GB を追加**
+- **ストレージ：Windowsとは別にUbuntu用のSSDを追加**
+- **GPUの設置：RTX 3060 Tiを3枚目のGPUとしてPCIeライザーでケース外に配置**
+
+
+本稿では、今回の構築で実施した作業に関して、以下の点をまとめる。
+
+- 用意するパーツと、増設前に確認する条件
+- GPU・電源・PCIeライザーの配置と配線
+- Ubuntuをインストールする手順
+- 起動時にWindowsとUbuntuを選ぶOS選択メニューの設定
+- GPUが認識されない場合の確認方法と切り分け
+
+本稿が、異種GPUの増設、デュアルブートPCを組む際の参考となれば幸いである。
+
+# 構成と部品について
+
+## PC本体
+
+| パーツ類 | 今回の構成 | 備考 |
+|---|---|---|
+| CPU | Intel Core i7-14700KF | 内蔵GPUなし。ディスプレイはグラフィックボードに接続する |
+| マザーボード | ASRock Z790 Steel Legend WiFi | PCIeスロットのレーン数とM.2の排他制限に注意 |
+| メインメモリ | DDR5、合計128GB | [Crucial Pro 64GB Kit (32GBx2) DDR5-5600 UDIMM CP2K32G56C46U5](https://joshinweb.jp/peripheral/61330/0649528937810.html)、既存の32GBx2に同じ型番を1組追加 |
+| GPU 1・2 | SPARKLE Intel Arc Pro B70 32GB Blower ×2 | スロット1,2にマウント。各GPUの補助電源を個別に確保する |
+| GPU 3 | GeForce RTX 3060 Ti 8GB | 映像出力用。スロット3にライザーケーブルでGPUライザーにマウント。補助電源ユニットから給電（詳細は後述） |
+| メイン電源 | [玄人志向1000W KRPW-GS1000W/90+](https://link.amazon/B0hq7IEoS) | マザーボード、CPU、B70×2などに給電 |
+| サブ電源 | [Corsair RM850e 850W](https://link.amazon/B03yufxxO) | 3060 Tiとそのライザーに給電。世代・SKUで付属ケーブルが異なる |
+| Windows用SSD | [Crucial T700 2TB、CT2000T700SSD3](https://link.amazon/B02giZWtW) | 既存のWindows 11を維持 |
+| Ubuntu用SSD | [Crucial T700 2TB、CT2000T700SSD3](https://link.amazon/B02giZWtW) | Windows用とは別のNVMe SSD  |
+| OS | Windows 11／Ubuntu Desktop | Ubuntu 26.04 |
+
+B70 Blowerの型番はSBP70W-32Gで、[国内代理店の製品仕様](https://www.aiuto-jp.co.jp/products/product_6061.php)では補助電源が12V-2x6×1、TBPが330Wとなっている。B70二枚運用の場合、既存の電源ユニットの[12VHPWR 16ピン変換ケーブル](https://link.amazon/B0jddC39g)が余っていれば良いが、新たに2枚構成で組む場合は別途用意する必要がある。
+
+> メモリは既存の型番に合わせているので古いものを調達している。新たに PC を組む場合はよりクロック数の高い製品を選んでも良い（ただし値は張る）。
+> > 供給難が解消に向かうとされる2028年以降まで値下がりを待つという手もある。手元でモデルを動かす環境を急いで用意する必要はないが、現在出回っているモデルをローカルに保存しておけるだけのHDDくらいは用意しておきたい。（フル精度のオープンウェイトモデルを保存するなら8～16 TB程度は欲しい）
+
+> B70はアイドリング時でも40 W程度の待機電力を消費するため、電力効率の面であまり優れていない点には留意する必要がある。購入した理由は、比較的安かったから（2026年10月上旬時点で24～27万円）、という点に尽きる。今後Intel系GPUでも効率的にGPU計算が可能なシステムが整ってくると考えられるので、決して高い買い物では無いように思う。
+> > ちなみに2026年10月下旬現在、B70は32万円以上に高騰している。今回のPCを現在の価格で組む場合には100万円以上を要する。
+
+## 外付けGPUとOSの導入に必要なもの
+
+| 用意するもの | 今回使用したもの・選定条件 |
+|---|---|
+| 給電式PCIeライザーカード一式 | ここでは[サイバーワールドのVer.009S系](https://link.amazon/B0iV1uFDO)を利用する。マザーボード側のx1基板、GPUを挿すx16形状の基板、両者を結ぶケーブルが必要 |
+| 電源連動アダプター | [ペリフェラル4ピン入力のAdd2PSU型](https://link.amazon/B0d9jrv5h)。実際の端子構成と説明書を確認する |
+| GPU用スタンド／固定具 | [長尾製作所NB-VGA-DP01](https://link.amazon/B0bKt5EIo)を用意。固定用ネジは付属している |
+| 電源ケーブル | 各電源に適合するATX、PCIe、ペリフェラル用ケーブルを確認する（電源ユニットなどに付属している場合もあるので、必要なら買う） |
+| 書き込み可能なUSBメモリ | UbuntuのISOが収まる容量（16 GBもあれば十分）のUSB2系でよい。安いものだと[KIOXIA USBフラッシュメモリ 32GB USB2.0](https://link.amazon/B0gtF4vGC)など。 |
+| Ubuntu専用SSD | 保存するモデル・データ・環境の容量と余裕を見込む。ローカルLLM用途で色々なモデルを試すのであれば2 TB以上は必要。可能なら[4 TB以上のSSD](https://link.amazon/B0hcLESdL)が良い |
+| 作業用の小物 | 適切なドライバー、固定ネジ、絶縁スペーサー、ケーブル固定具など |
+
+[NB-VGA-DP01](https://www.nagao-ss.co.jp/nb-vga-dp01.html)はメーカー上「ディスプレイ台」として販売されている。台にGPUを載せただけで、通電用のケースや絶縁対策が完成するわけではない。基板の裏面が金属に触れないようにし、GPUや電源の吸排気も妨げない配置にする。
+
+> 筆者の場合はPCケースの側面ガラス板を取り外して使用している。サーキュレーターの送風直当てで運用しており、スペースがあれば1スロット目のB70の上にヒートシンクを乗せても良い。
+
+> 電源連動アダプター（Add2PSU）の起動検知用であれば、ペリフェラル4ピン（Molex）方式でもSATA電源方式でも、基本的に問題はない。大抵の電源ユニットに対応ケーブルが付属しているのでペリフェラル4ピン方式を選べば良い。
+
+## デバイスの配置
+
+[ASRockの公式仕様](https://www.asrock.com/mb/Intel/Z790%20Steel%20Legend%20WiFi/index.asp)で、Z790 Steel Legend WiFiの接続を確認する。
+
+| スロット | 電気的な接続 | 今回の割り当て |
+|---|---|---|
+| PCIE1 | CPU直結、PCIe 5.0 x16（M2_2使用時はx8） | B70 1枚目 |
+| PCIE2 | チップセット経由、PCIe 4.0 x4 | B70 2枚目 |
+| PCIE3 | チップセット経由、PCIe 3.0 x2 | x1ライザーを介した3060 Ti |
+
+> PCIE3自体には2レーンあるが、今回のライザーはx1なので接続幅は最大x1になる。また、[マニュアルのブロック図](https://download.asrock.com/Manual/Z790%20Steel%20Legend%20WiFi.pdf)にある通りチップセット配下の機器はCPUへの上流接続を共有しており、3枚のGPUそれぞれに独立したCPU直結x16帯域が与えられる構成ではない。
+
+このマザーボードでは、**M2_1とM2_2を同時に使用できない**。さらにM2_2にSSDを装着すると、PCIE1はx8動作になる。Windows用とUbuntu用のSSDを2枚装着するなら、たとえば次のいずれかにする。
+
+| 配置の考え方 | SSD 1 | SSD 2 | PCIE1への影響 |
+|---|---|---|---|
+| SSDのGen5接続を利用 | M2_2 | M2_3・M2_4・M2_5のいずれか | x8になる |
+| PCIE1のx16接続を維持 | M2_1 | M2_3・M2_4・M2_5のいずれか | M2_2を空ける |
+
+SSDからモデルの重みやEngramのデータを頻繁に読み出す場合、Ubuntu用のSSDはM2_2スロットに設置する方が有利と考えられる。M2_2はPCIe Gen5 x4に対応しており、Gen5対応SSDの読み出し性能を活用できるためである。ただし、M2_2を使用すると、GPUを接続するPCIE1のリンク幅がx16からx8に減少する。SSDからのデータ転送量とGPU側のPCIe通信量を比較して配置を決めることが望ましい。
+
+> CPUオフロード時はまずRAMから読み出され、それでも不足している場合に SSD から読み出される。一般論としてはRAM容量が少ない場合はSSD側の帯域を優先した方が良いと思われる。
+
+:::note info
+
+### 転送速度から考えるSSDの配置
+
+今回使用したマザーボード「ASRock Z790 Steel Legend WiFi」には、PCIeレーンの割り当てに関する制約がある。M2_2スロットにSSDを装着すると、最上段のGPUスロット（PCIE1）がPCIe Gen5 x16からx8動作に切り替わる。一方、M2_2はPCIe Gen5 x4に対応しており、Crucial T700のような高速SSDの性能を活用できる。
+
+そこで、**GPU側の帯域を優先する構成と、SSD側の帯域を優先する構成では、どちらがLLM推論に適しているのか**を考えてみる。
+
+* * *
+
+PCIeの理論上の最大転送帯域（片方向）は、次のとおりである。
+
+| 接続規格 | 理論帯域 |
+|---|---:|
+| PCIe Gen5 x16 | 63.02 GB/s |
+| PCIe Gen5 x8 | 31.51 GB/s |
+| PCIe Gen5 x4 | 15.75 GB/s |
+| PCIe Gen4 x4 | 7.88 GB/s |
+
+今回使用するIntel Arc Pro B70はPCIe Gen5 x16に対応し、Crucial T700 2TB（CT2000T700SSD3）はPCIe Gen5 x4に対応している。T700の公称最大連続読み出し速度は12,400MB/s、書き込み速度は11,800MB/sである。
+
+この仕様をもとに、次の2つの構成を比較すると以下のようになる。SSDをGen5接続にすることで、B70のPCIe帯域は半減する一方、T700の連続読み出し速度は約1.77倍になる計算である。
+
+| 項目 | 構成A：GPU帯域優先 | 構成B：SSD帯域優先 |
+|---|---|---|
+| T700の接続先 | M2_1またはM2_4など | M2_2 |
+| SSD接続規格 | Gen4 x4 | Gen5 x4 |
+| SSDの理論帯域 | 7.88GB/s | 15.75GB/s |
+| T700の最大読み出し速度 | 約7GB/s（推定） | 12.4GB/s（公称） |
+| B70（PCIE1）の接続 | Gen5 x16 | Gen5 x8 |
+| B70の理論PCIe帯域 | 63.02GB/s | 31.51GB/s |
+
+ここでSSDからモデルの重みを連続的に読み出す場合を考える。SSDが上記の速度を維持できると仮定すると、読み出しに必要な時間（理論値）は以下のようになる。例えば200GBのモデルデータであれば、理論上は約12.5秒の短縮が期待できる。
+
+| 読み出すデータ量 | Gen4接続（7GB/s） | Gen5接続（12.4GB/s） |
+|---|---:|---:|
+| 50GB | 約7.1秒 | 約4.0秒 |
+| 100GB | 約14.3秒 | 約8.1秒 |
+| 200GB | 約28.6秒 | 約16.1秒 |
+
+ここで考慮したいのは、SSDとGPUの帯域の大小関係である。T700の最大連続読み出し速度は12.4GB/sである。一方、B70をPCIe Gen5 x8で接続した場合でも、理論帯域は31.51GB/sとなる。
+
+つまり、**SSDから読み込んだモデルデータをGPUへ転送する処理だけを考えると、Gen5 x8のGPU接続帯域はT700の読み出し速度を十分に上回っている。**
+
+DeepSeekが提案したEngramは、巨大な埋め込みテーブルを参照することで、言語モデルの計算量と記憶容量を分離する仕組みである。Engramのデータは、GPUのVRAMだけでなく、ホストRAMやSSDなどへ配置することも想定されている。
+
+今回のPCには128GBのシステムメモリが搭載されているが、それを上回る規模のEngramを運用する場合、SSDへのオフロードが選択肢となる。Engramを利用するモデルだからといって必ずGen5 SSDが有利になるわけではないが、**SSDオフロードを積極的に利用する構成では、M2_2のGen5 x4接続は合理的な選択となる。**
+
+* * *
+
+今回のPCは、Arc Pro B70を2枚搭載し、ローカルLLMの推論や大規模モデルの動作検証を主な用途としている。モデルの重みがVRAM内に収まる場合、推論中のPCIe通信量は比較的小さくなるため、PCIE1をGen5 x16からx8に変更しても、性能低下は限定的である可能性がある。また、T700をGen5 x4で使用すれば、大規模モデルの読み込み速度を改善できるほか、将来的にSSDオフロードを利用する際にも高速なストレージ帯域を確保できる。
+
+以上を踏まえると、**今回の構成では、B70のPCIe帯域を半減させてでも、T700をM2_2に配置してGen5 x4で使用する方針には十分な合理性がある。**
+
+> 参考資料：
+> 
+> - [ASRock Z790 Steel Legend WiFi 製品仕様](https://www.asrock.com/mb/Intel/Z790%20Steel%20Legend%20WiFi/index.jp.asp)
+> - [Intel Arc Pro B70 公式仕様](https://www.intel.com/content/www/us/en/products/sku/245797/intel-arc-pro-b70-graphics/specifications.html)
+> - [Crucial T700 公式製品資料（PDF）](https://br.crucial.com/content/dam/crucial/ssd-products/t700/flyers/product/b2c/crucial-t700-b2c-product-flyer-en.pdf)
+> - [DeepSeek: Conditional Memory via Scalable Lookup（Engram原論文）](https://arxiv.org/abs/2601.07372)
+
+:::
+
+## 電源容量
+
+今回の給電分担は次のとおりである。
+
+```text
+メイン電源：玄人志向1000W
+  ├─ マザーボード・CPU・SSD・メモリ・ファン
+  ├─ B70 1枚目
+  └─ B70 2枚目
+
+サブ電源：Corsair RM850e 850W
+  ├─ RTX 3060 Tiの補助電源
+  └─ RTX 3060 Ti用の給電式ライザー
+```
+
+B70 BlowerのTBPは330W、[i7-14700KFのMaximum Turbo Powerは253W](https://www.intel.com/content/www/us/en/products/sku/236789/intel-core-i7-processor-14700kf-33m-cache-up-to-5-60-ghz/specifications.html)である。これらを単純に足すと、メイン電源側だけで次の値になる。
+
+```text
+330W × 2 ＋ 253W ＝ 913W
+```
+
+この913Wは実測値ではなく公称に基づく参考値であるが、ピーク電流・電圧を考えるとある程度のバッファは見ておくべきである。今回は既存のRTX 3060 Ti (8 GB)を映像出力用に用いており、これを加えると 1000 W を優に超えるため電源ユニットは2台構成で運用することが望ましい。
+
+## スロット3のGPUの配線と給電
+
+### PCIe信号の接続
+
+```text
+マザーボードのPCIE3
+  ↓
+小型のPCIe x1アダプター
+  ↓ 付属の青いケーブル
+給電式ライザーのGPU用スロット
+  ↓
+RTX 3060 Ti
+```
+
+青いケーブルはUSB 3.0と同じ形状のコネクタを使っているが、今回の製品ではPCIe信号の延長用である。ThunderboltやUSB4経由のeGPUとは別の構成である。小型のx1アダプターは、長いPCIeスロットの一部だけを使う。スロットの大部分が空いて見えること自体は異常ではない。
+
+PCIe信号系統の配線図は以下のようになる。
+
+```mermaid
+flowchart TB
+    MB["ASRock Z790 Steel Legend WiFi<br/>マザーボード"]
+    SLOT["PCIeスロット<br/>x1アダプター装着"]
+    CABLE["青いUSB 3.0形状ケーブル<br/>PCIe信号伝送専用"]
+    RISER["PCIe x16ライザー基板<br/>Ver.009S"]
+    GPU["GeForce RTX 3060 Ti<br/>8GB VRAM"]
+
+    MB --> SLOT
+    SLOT --> CABLE
+    CABLE --> RISER
+    RISER -->|"PCIe x1接続"| GPU
+
+    classDef board fill:#f0eeff,stroke:#7771b7,color:#413c79
+    classDef cable fill:#dceeff,stroke:#317db9,color:#17476e
+    classDef gpu fill:#e6f4e9,stroke:#398354,color:#205631
+
+    class MB,SLOT,RISER board
+    class CABLE cable
+    class GPU gpu
+
+```
+
+### 電源連動アダプターの接続
+
+今回の4ピン入力型Add2PSU基板では、次の接続になる。端子仕様の異なる製品では、その製品の説明書に従う。
+
+| 接続元 | 接続先 | 役割 |
+|---|---|---|
+| メイン電源の適合するペリフェラル用ケーブル | Add2PSUの4ピン入力 | メイン電源が起動したことを検知 |
+| サブ電源の適合するATX 24ピンケーブル | Add2PSUの24ピン端子 | サブ電源の起動制御 |
+| サブ電源のPCIeケーブル | 3060 Ti本体の補助電源 | GPU本体への給電 |
+| サブ電源のPCIeケーブル | ライザーの指定電源入力 | GPUスロット側への給電 |
+
+Add2PSUに接続する4ピンは、ライザーの4ピン端子とは別物である。メイン電源のSATA/PATA出力から、その電源に適合するケーブルでペリフェラル4ピンを取り出して使う。マザーボード上のファン用4ピンには接続しない。
+
+3060 Tiは、補助電源だけでなくライザー側も同じサブ電源から給電する。ライザーに複数の6ピンや4ピン入力がある場合は、メーカーが指定する入力を使用する。代替入力として設計された端子なら1か所でよい（端子が余っているからといって全部に接続しない）。
+
+電源系統の配線図は以下のようになる。
+
+```mermaid
+
+flowchart TB
+    MAIN["玄人志向 1000W<br/>メイン電源"]
+    B70["Intel Arc Pro B70 × 2<br/>各32GB VRAM"]
+    ADD["Add2PSU<br/>電源連動アダプター"]
+    SUB["Corsair RM850e<br/>サブ電源 850W"]
+    RISER["PCIeライザー基板<br/>PCIe 6ピン給電"]
+    GPU["GeForce RTX 3060 Ti<br/>8ピン＋6ピン補助電源"]
+
+    MAIN ==>|"GPU補助電源"| B70
+    MAIN -.->|"Molex 4ピン：起動検知"| ADD
+    ADD -.->|"ATX 24ピン：起動制御"| SUB
+    SUB ==>|"PCIe 6ピン"| RISER
+    SUB ==>|"PCIe 8ピン＋6ピン"| GPU
+
+    classDef power fill:#e5f0ff,stroke:#447ab8,color:#173c6a
+    classDef gpu fill:#e6f4e9,stroke:#398354,color:#205631
+    classDef control fill:#fff1d9,stroke:#bc8126,color:#704708
+    class MAIN,SUB power
+    class B70,GPU gpu
+    class ADD control
+    class RISER power
+
+
+```
+
+図中の線の種類と意味は以下の通り。
+
+| 線の種類     | Mermaid記法 | 今回の図での意味         |
+| -------- | --------- | ---------------- |
+| &#x20;実線 | `-->`     | PCIe信号の伝送経路      |
+| 太い実線     | `==>`     | GPUなどへの電力供給経路    |
+| 点線       | `-.->`    | 電源連動・起動制御に関係する接続 |
+
+:::note warn 
+
+### 電源投入のタイミングは慎重に
+
+配線作業は、PCを終了し、**両方の電源ユニットのACケーブルを抜いてから**行う。基板の固定、各コネクタの差し込み、周囲への接触、ファンへのケーブル巻き込みがないことを確認する。
+
+起動時は両電源のAC接続と主電源スイッチを準備し、PC本体の電源ボタンでサブ電源も連動させる。PC起動後に、3枚目のGPUだけを後から通電させる手順にはしない。終了時も連動して停止するかを確認する。
+
+:::
+
+# BIOSの更新と設定
+
+ここからはPC内で手を動かす部分となる。
+
+今回、マザーボード「ASRock Z790 Steel Legend WiFi」のBIOSを9.03から22.02へ更新したが、これはIntel Arc Pro B70が正しく認識されなかったためである。
+
+更新には、[ASRock公式サイト](https://www.asrock.com/mb/Intel/Z790%20Steel%20Legend%20WiFi/bios.html)から取得したBIOSファイルと、FAT32形式のUSBメモリを使用した。BIOSのバージョンは、作業時点で公開されている最新版と注意事項を確認して選択する。
+
+## BIOS更新前の確認
+
+WindowsでBitLockerが有効な場合、BIOS更新後に回復キーを要求されることがある。管理者権限のPowerShellで暗号化状態を確認する。
+
+```powershell
+manage-bde -status C:
+```
+
+今回の環境では暗号化率0%、保護オフだったため、BitLockerの操作は不要だった。暗号化が有効な場合は、[Microsoft公式手順](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/manage-bde-protectors)に従い、回復キーを確保して保護を一時停止する。
+
+また、BIOS更新後にWindows HelloのPIN認証エラーが発生し、管理者権限を必要とするドライバーのインストールが進まなくなった。今回は別の管理者アカウントからインストールできたため、事前に管理者アカウントとパスワードによるサインイン手段を確認しておくとよい。
+
+## BIOS更新とUEFI設定
+
+BIOSファイルをZIPから展開してUSBメモリに保存し、UEFIの`Tool → Instant Flash`から更新する。使用するUSBメモリの形式などは[ASRock公式手順](https://www.asrock.com/support/BIOSIG.asp?cat=BIOS9)に従う。更新中は電源を切らず、起動順序などの既存設定を更新前に記録しておく。
+
+更新後、以下の項目を確認した。
+
+| 設定 | 推奨値 |
+|---|---|
+| Above 4G Decoding | Enabled |
+| C.A.M（Resizable BAR） | Enabled |
+| CSM | Disabled |
+| PCIe Link Speed | Auto |
+| Secure Boot | 原則として変更不要 |
+
+CSMはUEFIの`Boot`セクションで設定する。PCIeリンク速度は通常Autoとし、認識不良が発生した場合に限って該当スロットの速度を調整する。
+
+# Ubuntuのインストール
+
+https://ubuntu.com/download/desktop
+
+今回は、安全のためにWindows用SSDを物理的に取り外してから、Ubuntuを別のSSDへインストールした。これにより、Windows側のデータやEFIパーティションを誤って変更する危険を減らせる。
+
+> 1個のSSD内でパーティションを設けて2つのOSを併存させる運用も考えられるが、LLMなど大規模なモデルをダウンロードして使う用途の場合、1 TB程度のストレージの容量は心許ない。可能であれば2 TB以上の新しい SSD を別途用意することが望ましい。
+
+## Ubuntuのインストール手順
+
+下記の手順1，2はWindows側で作業する。
+
+1. [Ubuntu公式サイト](https://ubuntu.com/download/desktop)からISOイメージを取得する。
+2. [公式手順](https://ubuntu.com/desktop/docs/en/latest/how-to/create-a-bootable-usb-stick/)に従い、Rufusなどで起動用USBメモリを作成する。ISOファイルを通常コピーするだけでは起動用メディアにならない。
+3. Windows用SSDを取り外し、Ubuntu用SSDを装着する。
+4. USBメモリを挿して電源を入れ、`F11`を連打してBoot Menuを開く。
+5. `UEFI: USB…`を選択し、GRUBの`Try or Install Ubuntu`を実行する。
+6. インストーラーで「対話式インストール」を選択する。
+7. Ubuntu専用SSDを初期化する場合は「ディスクを削除してUbuntuをインストールする」を選ぶ。
+8. SSDの型番・容量を確認してインストールを実行する。
+
+**OSイメージファイルの書き込み時にはUSBメモリ内の既存データが消去されるため、対象ドライブを間違えないよう注意する。**
+
+暗号化、追加アプリケーション、サードパーティー製ドライバー、[Ubuntu Pro](https://ubuntu.com/pro)は用途に応じて選択すればよい。これらの選択だけでIntel GPU向けの計算環境が完成するわけではない。
+
+
+::: note warn
+### Ubuntuのインストールメディア作成（手順2における注意点）
+
+FAT32形式のUSBメモリでは、1ファイルあたりの最大サイズが4GiB未満に制限される。そのため、今回使用したUbuntuのISOファイル（約6.03GB）は、USBメモリに十分な空き容量があっても通常の方法ではコピーできない。
+
+![image.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/c50cfa7b-b08a-42c8-8d49-cbbd0d34fb8d.png)
+
+そこで、**Ubuntuのインストール用USBは、ISOファイルをコピーするのではなく、Rufusなどで起動可能なメディアとして書き込む必要がある。** 今回は[Rufus公式サイト](https://rufus.ie/ja/)からツールをダウンロードし、次の設定で起動用USBを作成した。
+
+1. 「デバイス」で対象のUSBメモリ（筆者のケースではKIOXIA製128GBのフラッシュメモリ）を選択する。
+2. 「ブートの種類」から`ubuntu-26.04.1-desktop-amd64.iso`を指定する。
+3. 「パーティション構成」を`GPT`、「ターゲットシステム」を`UEFI（非CSM）`に設定する。
+4. ファイルシステムはRufusの自動選択に従い、「スタート」で書き込みを開始する。
+
+![image.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/73dc5bfb-d197-45a9-abbc-ad2a69afa858.png)
+
+途中で以下のようなウィンドウが現れるが、そのまま「OK」を押してISOイメージモードでUSBメモリに書き込めばよい。
+
+![image.png](https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/0648b1e1-5d7b-45f0-813b-eedaf0527e67.png)
+
+繰り返しになるが、**書き込み時にはUSBメモリ内の既存データが消去されるため、対象ドライブを間違えないよう注意する。**
+
+:::
+
+
+インストール後、USBメモリを抜いてSSDからUbuntuを起動する。初回起動後にパッケージを更新する。
+
+```bash
+sudo apt update
+sudo apt upgrade
+```
+
+続いて、OS・カーネル・メモリ・SSDの情報を確認する。
+
+```bash
+cat /etc/os-release
+uname -r
+free -h
+lsblk -o NAME,SIZE,MODEL,FSTYPE,MOUNTPOINTS
+```
+
+`free -h`で表示されるメモリ容量は、単位の違いや予約領域によって公称128GBと一致しない場合がある。
+
+# Windows用SSDを戻してデュアルブートを構築する
+
+Ubuntuが正常に起動することを確認したら、シャットダウンする。
+
+```bash
+sudo poweroff
+```
+
+電源停止後、メイン・サブ両電源のACケーブルを抜き、Windows用SSDを再装着する。
+
+## WindowsとUbuntuの起動確認
+
+再起動時に`F11`を押し、Boot Menuから以下を個別に選択する。
+
+- `ubuntu`
+- `Windows Boot Manager`
+
+両方が正常に起動すれば、基本的なデュアルブート構成は完成である。Windows用SSDを取り外してUbuntuをインストールしたため、初期状態のGRUBにWindowsが表示されなくても異常ではない。
+
+## Windowsの高速スタートアップを無効にする
+
+UbuntuからWindowsのNTFS領域へアクセスする場合、Windowsが休止状態を残していると書き込み時に問題が生じることがある。そのため、高速スタートアップを無効にする。
+
+設定場所は以下のとおり。
+
+```text
+コントロールパネル
+→ 電源オプション
+→ 電源ボタンの動作を選択する
+→ 現在利用可能ではない設定を変更します
+→ 「高速スタートアップを有効にする」をオフ
+```
+
+設定には管理者権限が必要であるため、作業の際は管理者権限があるユーザーでログインすること。また、Windowsを休止状態にしたままUbuntuへ切り替える運用も避けること。
+
+::: note info
+
+### GRUBでOS選択メニューを10秒間表示する
+
+起動時に毎回`F11`を押さなくてもOSを選択できるよう、Ubuntu側のGRUBを設定する。
+
+まず、Windows用SSDを接続した状態でUbuntuを起動し、`os-prober`を導入する。
+
+```bash
+sudo apt update
+sudo apt install os-prober
+```
+
+GRUBの設定ファイルをバックアップして編集する。
+
+```bash
+sudo cp -a /etc/default/grub "/etc/default/grub.backup.$(date +%Y%m%d-%H%M%S)"
+sudo nano /etc/default/grub
+```
+
+以下の4項目を設定する。既存の設定がある場合は値を変更し、重複して追加しない。
+
+```ini
+GRUB_DEFAULT=0
+GRUB_TIMEOUT_STYLE=menu
+GRUB_TIMEOUT=10
+GRUB_DISABLE_OS_PROBER=false
+```
+
+`Ctrl + O`、`Enter`で保存し、`Ctrl + X`で終了する。
+
+Windowsの検出とGRUB設定の再生成を実行する。
+
+```bash
+sudo os-prober
+sudo update-grub
+```
+
+Windows Boot Managerが検出されたら、UEFIの起動優先順位で`ubuntu`を先頭に設定する。通常は起動時にGRUBメニューが10秒間表示され、操作しなければ先頭のOSが起動する。
+
+設定の詳細は[GNU GRUB公式マニュアル](https://www.gnu.org/software/grub/manual/grub/html_node/Simple-configuration.html)を参照する。
+
+> なお、UbuntuからUEFI設定画面へ直接移動する場合は、ファームウェアが対応していれば次のコマンドを利用できる。
+> ```bash
+> sudo systemctl reboot --firmware-setup
+> ```
+:::
+
+# Ubuntuで3枚のGPUを認識できているか確認する
+
+GPUの認識状態は、PCIeデバイスとして検出されているか、ドライバーが動作しているか、GPU計算を実行できるかに分けて確認する。
+
+## PCIeデバイスの認識
+
+まず`lspci`でGPUを一覧表示する。
+
+```bash
+lspci -nn | grep -Ei 'VGA|3D|Display'
+```
+
+今回の実機では、以下の3枚が検出された（表示を一部省略）。
+
+```text
+03:00.0 Intel Battlemage G31 [8086:e223]
+06:00.0 NVIDIA GeForce RTX 3060 Ti [10de:2489]
+0c:00.0 Intel Battlemage G31 [8086:e223]
+```
+
+これにより、Arc Pro B70×2とRTX 3060 Ti×1がPCIeデバイスとして認識されていることを確認できた。また、3060 Tiの映像出力も正常に動作した。
+
+NVIDIA製デバイスだけを表示する場合は、次を実行する。
+
+```bash
+lspci -nn -d 10de:
+```
+
+使用中のカーネルドライバーを確認する場合は、次を実行する。
+
+```bash
+lspci -nnk -d 10de:
+```
+
+::: note warn
+
+### nvtopにGPUが2枚しか表示されない場合
+
+今回、`lspci`では3枚が認識された一方、`nvtop`にはB70の2枚しか表示されなかった。また、`nvidia-smi`は「コマンドが見つかりません」と表示された。
+
+[nvtop](https://github.com/Syllo/nvtop)はIntelとNVIDIAの両方に対応しているが、NVIDIAの監視にはNVMLなどの管理ライブラリが必要になる。そのため、PCIeで認識されていても、ドライバー環境が整っていなければ表示されない場合がある。
+
+適切に認識させるにはNVIDIAドライバーをインストールする必要がある。
+:::
+
+### NVIDIAドライバーの導入
+
+[Ubuntu公式の導入手順](https://ubuntu.com/server/docs/how-to/graphics/install-nvidia-drivers/)に従い、対応ドライバーを確認する。
+
+```bash
+sudo apt update
+ubuntu-drivers list
+```
+
+対象GPUに対応するドライバーを確認してから導入する。
+
+```bash
+sudo ubuntu-drivers install
+```
+
+インストール完了後に再起動する。
+
+```bash
+sudo reboot
+```
+
+再起動後、以下を実行する。
+
+```bash
+nvidia-smi
+nvtop
+```
+
+`nvidia-smi`が正常に動作すれば、NVIDIAドライバーの管理機能を確認できる。`nvtop`コマンドの出力をまとめると以下のようになっており、RTX 3060 Tiが正しく認識されていた。
+
+| 項目        | RTX 3060 Ti | Arc Pro B70① | Arc Pro B70② |
+| --------- | ----------- | ------------ | ------------ |
+| Device ID | 0           | 1            | 2            |
+| PCIe世代    | Gen1        | Gen5         | Gen4         |
+| PCIeリンク幅  | x1          | x8           | x4           |
+| GPUクロック   | 210MHz      | 400MHz       | 400MHz       |
+| 温度        | 28°C        | 29°C         | 30°C         |
+| ファン       | 0%          | 164RPM       | 244RPM       |
+| VRAM使用量   | 0.829GiB    | 0.039GiB     | 0.039GiB     |
+| VRAM容量    | 8.000GiB    | 31.891GiB    | 31.891GiB    |
+| 消費電力      | 15W         | N/A          | N/A          |
+
+:::note info
+
+### Windows側のGPUドライバー
+
+Windowsでもデバイスマネージャーから3枚のGPUを確認する。ドライバーが未導入の場合は、各メーカーの公式サイトから対応するものをインストールする。
+
+- [Intel Arc Pro Graphicsドライバー](https://www.intel.com/content/www/us/en/download/741626/intel-arc-pro-graphics-windows.html)
+- [NVIDIA公式ドライバー](https://www.nvidia.com/Download/index.aspx)
+
+GPUドライバーは管理者権限で導入すれば、原則として同じWindows環境の全ユーザーに適用される。
+
+> Windows側のドライバーが別SSDのUbuntuにも適用されるわけではない。各OSごとに導入・更新が必要となる。
+
+:::
+
+# GPUが認識されない場合の確認事項
+
+今回、当初は3060 Tiが認識されなかった。調査中にサブ電源が通電していないことが判明し、給電と配線の確認後に再起動すると認識されるようになった。トラブル発生時には次の順序で確認するとよい。
+
+| 症状 | 確認すること |
+|---|---|
+| GPUに通電しない | 電源スイッチ、AC接続、Add2PSUの連動 |
+| ファンは回るが`lspci`に表示されない | GPU・ライザーへの給電、信号ケーブル、PCIe接続 |
+| `lspci`に表示されるが`nvidia-smi`が使えない | NVIDIAドライバーと管理ツール |
+| `nvidia-smi`は動くが`nvtop`に表示されない | nvtopの対応機能と表示設定 |
+| GPU追加後に起動できない | 電源容量、UEFI設定、PCIeリソース、接続スロット |
+
+ライザーの接触不良が疑われる場合は、両電源を完全に切り、ACケーブルを抜いてから挿し直す。必要であれば（面倒ではあるが）該当スロットのPCIeリンク速度を変更し、GPUをマザーボードへ直接接続した場合と比較する。
+
+# まとめ
+
+今回のデバイス増強とデュアルブート化によって、Ubuntu上で128GBのメモリとArc Pro B70×2、RTX 3060 Tiを活用できる環境が整った。[llama.cppのSYCL対応](https://github.com/ggml-org/llama.cpp/blob/master/docs/backend/SYCL.md)や、[XeStrata](https://qiita.com/h-nabata/items/2446e016df04e8349982)のようなIntel製GPUにも対応するランタイムの登場により、CUDAに依存しない推論環境も充実しつつある。GPUを計算資源として捉え、ハードウェアとソフトウェアの組み合わせで考えるなら、NVIDIA製GPU以外にも有力な選択肢が広がってきたと言えるのではないだろうか。
+
+今後、さらにパラメーター数の多いモデルをローカルで扱う際には、重みや推論に必要な作業領域をVRAMとRAMにどこまで保持できるかが、実用性を左右する。メモリ価格の高騰で増設の負担が大きくなるなか、容量を増やすだけでなく、重みの配置やデータ転送を工夫して手元の計算資源を有効に使う取り組みは、今後ますます重要になると思われる。

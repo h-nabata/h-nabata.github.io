@@ -1,8 +1,8 @@
 {
   "user": "h-nabata",
   "retrieved_at": "2026-10-02T20:35:35+09:00",
-  "article_count": 48,
-  "image_count": 96,
+  "article_count": 52,
+  "image_count": 109,
   "image_failures": [],
   "images": {
     "https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/02a4ef02-01f1-3c9c-11b8-14d45ab0ee17.gif": "/assets/qiita/images/30e7de70fd065a0ad88241cc.gif",
@@ -100,7 +100,22 @@
     "https://storage.googleapis.com/zenn-user-upload/0f4303886fe8-20230620.png": "/assets/qiita/images/f41fc73278984ec3f7e23e04.png",
     "https://storage.googleapis.com/zenn-user-upload/7badc461987b-20230620.png": "/assets/qiita/images/46aafd590691ca742d64efa7.png",
     "https://storage.googleapis.com/zenn-user-upload/86b0ab596880-20230620.png": "/assets/qiita/images/b52aadda3e3cadb576deb620.png",
-    "https://storage.googleapis.com/zenn-user-upload/d7f89442d72c-20230620.png": "/assets/qiita/images/b41726c760a1e7a9ca6e84fa.png"
+    "https://storage.googleapis.com/zenn-user-upload/d7f89442d72c-20230620.png": "/assets/qiita/images/b41726c760a1e7a9ca6e84fa.png",
+    "https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/0648b1e1-5d7b-45f0-813b-eedaf0527e67.png": "/assets/qiita/images/390c8f9b070b94bc43dfc560.png",
+    "https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/1459e4cb-7982-44c6-aacc-d3bde73860cb.png": "/assets/qiita/images/94661464903721741978e505.png",
+    "https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/4675d401-581e-47a9-8365-af400aa0e690.png": "/assets/qiita/images/ae98c003389ef028c1936ae9.png",
+    "https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/4b0f966f-31e9-4612-9f82-de21a2950c4a.png": "/assets/qiita/images/ebbc0cec5f6adec575b744dd.png",
+    "https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/646dcc64-a0dd-4de5-b3a8-4e7db0538209.png": "/assets/qiita/images/993dd394e9c5647738a5a49a.png",
+    "https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/73dc5bfb-d197-45a9-abbc-ad2a69afa858.png": "/assets/qiita/images/6bc6959aeeec0eedcd76d3ac.png",
+    "https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/7c952b03-fa1f-4c31-a018-d1c3de1f557e.png": "/assets/qiita/images/4f51868396e9e489fdf9861d.png",
+    "https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/a7baf9a9-9c89-4f81-9128-3e333f1d8d04.png": "/assets/qiita/images/75b730fa78bb089bcfe60873.png",
+    "https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/b2882a40-c97b-4c1a-aeb4-aadb832aea14.png": "/assets/qiita/images/9d759924f99e0b802a5d941b.png",
+    "https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/bf34e516-5118-494a-8d44-e2b34f0b9bfa.png": "/assets/qiita/images/c86be05759fcc727aabb0dd6.png",
+    "https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/c50cfa7b-b08a-42c8-8d49-cbbd0d34fb8d.png": "/assets/qiita/images/f0a76e2396da8ce2608bea4c.png",
+    "https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/e7d87895-3ad9-4d08-9d2d-9730e490fe39.png": "/assets/qiita/images/8c70b8e942b08863f0dd0f90.png",
+    "https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/fdb9d80d-c758-4f31-ae24-7b8e7fefb4cf.png": "/assets/qiita/images/5b2f186fb630a6ba819cad1c.png"
   },
-  "css_source": "https://cdn.qiita.com/assets/public/article-9a5a24d3d9214741b2b86875462ec853.min.css"
+  "css_source": "https://cdn.qiita.com/assets/public/article-9a5a24d3d9214741b2b86875462ec853.min.css",
+  "last_added_at": "2026-11-07T17:26:28+09:00",
+  "snapshot_note": "既存記事は以前の取得時点を保持し、新規記事のみlast_added_atに追加"
 }

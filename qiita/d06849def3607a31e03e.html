@@ -1,0 +1,827 @@
+---
+layout: "qiita-mirror"
+title: "【Linux】ローカルLLM用途のWindows／UbuntuデュアルブートPCを組む（Arc Pro B70×2＋RTX 3060 Ti）"
+qiita_id: "d06849def3607a31e03e"
+qiita_url: "https://qiita.com/h-nabata/items/d06849def3607a31e03e"
+qiita_created: "2026-10-25T21:19:17+09:00"
+qiita_updated: "2026-10-25T21:19:17+09:00"
+mirror_saved: "2026-11-07T17:26:28+09:00"
+mirror_category: "計算環境・Linux"
+mirror_tags: ["Ubuntu", "自作PC", "デュアルブート", "GPU", "ローカルLLM"]
+permalink: "/qiita/d06849def3607a31e03e.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<h1 data-sourcepos="1:1-1:14">
+<span id="はじめに" class="fragment"></span><a href="#%E3%81%AF%E3%81%98%E3%82%81%E3%81%AB"><i class="fa fa-link"></i></a>はじめに</h1>
+<p data-sourcepos="3:1-3:431">Windowsを使いながらLinux環境を利用するなら、WSLは便利な選択肢である。WSL環境であれば、OSを切り替えることなく、普段使いのWindowsアプリとLinuxの開発・計算ツールを併用できる。しかしながら、大量のメモリを必要とするGPU計算やローカルLLMの実験では、WindowsとLinuxで物理メモリを分け合うことが実用上の制約となる。</p>
+<blockquote data-sourcepos="5:1-5:340">
+<p data-sourcepos="5:3-5:340">WSL2のメモリ上限はデフォルトで搭載メモリの50%に設定されている。この上限は変更できるが、Windows本体やブラウザなどが使うメモリがゼロになるわけではない。Linux側へ割り当てる容量を増やす際にも、Windows側の動作に必要な余裕を残す必要がある。</p>
+</blockquote>
+<p data-sourcepos="7:1-7:441">そこで、<strong>Windows環境を残しつつUbuntuを直接起動するデュアルブート構成</strong>へと既存のPCを拡張した。OSの切り替えの際は再起動が必要になるものの、Ubuntuの使用中はWindows側の常駐処理にメモリを割く必要がなくなる。これにより、Linux自体が使用する分を除き、搭載したメモリを計算やファイルキャッシュに充てることができる。</p>
+<p data-sourcepos="9:1-9:77">併せて、今回はPCのパーツ・構成を次のように増強した。</p>
+<ul data-sourcepos="11:1-16:0">
+<li data-sourcepos="11:1-11:41"><strong>メインメモリ：64GB → 128GB</strong></li>
+<li data-sourcepos="12:1-12:44"><strong>GPU：Intel Arc Pro B70 32GB を追加</strong></li>
+<li data-sourcepos="13:1-13:67"><strong>ストレージ：Windowsとは別にUbuntu用のSSDを追加</strong></li>
+<li data-sourcepos="14:1-16:0"><strong>GPUの設置：RTX 3060 Tiを3枚目のGPUとしてPCIeライザーでケース外に配置</strong></li>
+</ul>
+<p data-sourcepos="17:1-17:96">本稿では、今回の構築で実施した作業に関して、以下の点をまとめる。</p>
+<ul data-sourcepos="19:1-24:0">
+<li data-sourcepos="19:1-19:59">用意するパーツと、増設前に確認する条件</li>
+<li data-sourcepos="20:1-20:51">GPU・電源・PCIeライザーの配置と配線</li>
+<li data-sourcepos="21:1-21:41">Ubuntuをインストールする手順</li>
+<li data-sourcepos="22:1-22:68">起動時にWindowsとUbuntuを選ぶOS選択メニューの設定</li>
+<li data-sourcepos="23:1-24:0">GPUが認識されない場合の確認方法と切り分け</li>
+</ul>
+<p data-sourcepos="25:1-25:107">本稿が、異種GPUの増設、デュアルブートPCを組む際の参考となれば幸いである。</p>
+<h1 data-sourcepos="27:1-27:29">
+<span id="構成と部品について" class="fragment"></span><a href="#%E6%A7%8B%E6%88%90%E3%81%A8%E9%83%A8%E5%93%81%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6"><i class="fa fa-link"></i></a>構成と部品について</h1>
+<h2 data-sourcepos="29:1-29:11">
+<span id="pc本体" class="fragment"></span><a href="#pc%E6%9C%AC%E4%BD%93"><i class="fa fa-link"></i></a>PC本体</h2>
+<table data-sourcepos="31:1-42:51">
+<thead>
+<tr data-sourcepos="31:1-31:43">
+<th data-sourcepos="31:2-31:15">パーツ類</th>
+<th data-sourcepos="31:17-31:33">今回の構成</th>
+<th data-sourcepos="31:35-31:42">備考</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="33:1-33:115">
+<td data-sourcepos="33:2-33:6">CPU</td>
+<td data-sourcepos="33:8-33:30">Intel Core i7-14700KF</td>
+<td data-sourcepos="33:32-33:114">内蔵GPUなし。ディスプレイはグラフィックボードに接続する</td>
+</tr>
+<tr data-sourcepos="34:1-34:118">
+<td data-sourcepos="34:2-34:21">マザーボード</td>
+<td data-sourcepos="34:23-34:53">ASRock Z790 Steel Legend WiFi</td>
+<td data-sourcepos="34:55-34:117">PCIeスロットのレーン数とM.2の排他制限に注意</td>
+</tr>
+<tr data-sourcepos="35:1-35:212">
+<td data-sourcepos="35:2-35:21">メインメモリ</td>
+<td data-sourcepos="35:23-35:42">DDR5、合計128GB</td>
+<td data-sourcepos="35:44-35:211">
+<a href="https://joshinweb.jp/peripheral/61330/0649528937810.html" rel="nofollow noopener" target="_blank">Crucial Pro 64GB Kit (32GBx2) DDR5-5600 UDIMM CP2K32G56C46U5</a>、既存の32GBx2に同じ型番を1組追加</td>
+</tr>
+<tr data-sourcepos="36:1-36:138">
+<td data-sourcepos="36:2-36:12">GPU 1・2</td>
+<td data-sourcepos="36:14-36:56">SPARKLE Intel Arc Pro B70 32GB Blower ×2</td>
+<td data-sourcepos="36:58-36:137">スロット1,2にマウント。各GPUの補助電源を個別に確保する</td>
+</tr>
+<tr data-sourcepos="37:1-37:189">
+<td data-sourcepos="37:2-37:8">GPU 3</td>
+<td data-sourcepos="37:10-37:34">GeForce RTX 3060 Ti 8GB</td>
+<td data-sourcepos="37:36-37:188">映像出力用。スロット3にライザーケーブルでGPUライザーにマウント。補助電源ユニットから給電（詳細は後述）</td>
+</tr>
+<tr data-sourcepos="38:1-38:140">
+<td data-sourcepos="38:2-38:18">メイン電源</td>
+<td data-sourcepos="38:20-38:88"><a href="https://link.amazon/B0hq7IEoS" rel="nofollow noopener" target="_blank">玄人志向1000W KRPW-GS1000W/90+</a></td>
+<td data-sourcepos="38:90-38:139">マザーボード、CPU、B70×2などに給電</td>
+</tr>
+<tr data-sourcepos="39:1-39:159">
+<td data-sourcepos="39:2-39:15">サブ電源</td>
+<td data-sourcepos="39:17-39:70"><a href="https://link.amazon/B03yufxxO" rel="nofollow noopener" target="_blank">Corsair RM850e 850W</a></td>
+<td data-sourcepos="39:72-39:158">3060 Tiとそのライザーに給電。世代・SKUで付属ケーブルが異なる</td>
+</tr>
+<tr data-sourcepos="40:1-40:117">
+<td data-sourcepos="40:2-40:16">Windows用SSD</td>
+<td data-sourcepos="40:18-40:85"><a href="https://link.amazon/B02giZWtW" rel="nofollow noopener" target="_blank">Crucial T700 2TB、CT2000T700SSD3</a></td>
+<td data-sourcepos="40:87-40:116">既存のWindows 11を維持</td>
+</tr>
+<tr data-sourcepos="41:1-41:119">
+<td data-sourcepos="41:2-41:15">Ubuntu用SSD</td>
+<td data-sourcepos="41:17-41:84"><a href="https://link.amazon/B02giZWtW" rel="nofollow noopener" target="_blank">Crucial T700 2TB、CT2000T700SSD3</a></td>
+<td data-sourcepos="41:86-41:118">Windows用とは別のNVMe SSD</td>
+</tr>
+<tr data-sourcepos="42:1-42:51">
+<td data-sourcepos="42:2-42:5">OS</td>
+<td data-sourcepos="42:7-42:35">Windows 11／Ubuntu Desktop</td>
+<td data-sourcepos="42:37-42:50">Ubuntu 26.04</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="44:1-44:419">B70 Blowerの型番はSBP70W-32Gで、<a href="https://www.aiuto-jp.co.jp/products/product_6061.php" rel="nofollow noopener" target="_blank">国内代理店の製品仕様</a>では補助電源が12V-2x6×1、TBPが330Wとなっている。B70二枚運用の場合、既存の電源ユニットの<a href="https://link.amazon/B0jddC39g" rel="nofollow noopener" target="_blank">12VHPWR 16ピン変換ケーブル</a>が余っていれば良いが、新たに2枚構成で組む場合は別途用意する必要がある。</p>
+<blockquote data-sourcepos="46:1-47:416">
+<p data-sourcepos="46:3-46:210">メモリは既存の型番に合わせているので古いものを調達している。新たに PC を組む場合はよりクロック数の高い製品を選んでも良い（ただし値は張る）。</p>
+<blockquote data-sourcepos="47:3-47:416">
+<p data-sourcepos="47:5-47:416">供給難が解消に向かうとされる2028年以降まで値下がりを待つという手もある。手元でモデルを動かす環境を急いで用意する必要はないが、現在出回っているモデルをローカルに保存しておけるだけのHDDくらいは用意しておきたい。（フル精度のオープンウェイトモデルを保存するなら8～16 TB程度は欲しい）</p>
+</blockquote>
+</blockquote>
+<blockquote data-sourcepos="49:1-50:167">
+<p data-sourcepos="49:3-49:465">B70はアイドリング時でも40 W程度の待機電力を消費するため、電力効率の面であまり優れていない点には留意する必要がある。購入した理由は、比較的安かったから（2026年10月上旬時点で24～27万円）、という点に尽きる。今後Intel系GPUでも効率的にGPU計算が可能なシステムが整ってくると考えられるので、決して高い買い物では無いように思う。</p>
+<blockquote data-sourcepos="50:3-50:167">
+<p data-sourcepos="50:5-50:167">ちなみに2026年10月下旬現在、B70は32万円以上に高騰している。今回のPCを現在の価格で組む場合には100万円以上を要する。</p>
+</blockquote>
+</blockquote>
+<h2 data-sourcepos="52:1-52:47">
+<span id="外付けgpuとosの導入に必要なもの" class="fragment"></span><a href="#%E5%A4%96%E4%BB%98%E3%81%91gpu%E3%81%A8os%E3%81%AE%E5%B0%8E%E5%85%A5%E3%81%AB%E5%BF%85%E8%A6%81%E3%81%AA%E3%82%82%E3%81%AE"><i class="fa fa-link"></i></a>外付けGPUとOSの導入に必要なもの</h2>
+<table data-sourcepos="54:1-62:118">
+<thead>
+<tr data-sourcepos="54:1-54:64">
+<th data-sourcepos="54:2-54:21">用意するもの</th>
+<th data-sourcepos="54:23-54:63">今回使用したもの・選定条件</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="56:1-56:252">
+<td data-sourcepos="56:2-56:43">給電式PCIeライザーカード一式</td>
+<td data-sourcepos="56:45-56:251">ここでは<a href="https://link.amazon/B0iV1uFDO" rel="nofollow noopener" target="_blank">サイバーワールドのVer.009S系</a>を利用する。マザーボード側のx1基板、GPUを挿すx16形状の基板、両者を結ぶケーブルが必要</td>
+</tr>
+<tr data-sourcepos="57:1-57:162">
+<td data-sourcepos="57:2-57:30">電源連動アダプター</td>
+<td data-sourcepos="57:32-57:161">
+<a href="https://link.amazon/B0d9jrv5h" rel="nofollow noopener" target="_blank">ペリフェラル4ピン入力のAdd2PSU型</a>。実際の端子構成と説明書を確認する</td>
+</tr>
+<tr data-sourcepos="58:1-58:144">
+<td data-sourcepos="58:2-58:33">GPU用スタンド／固定具</td>
+<td data-sourcepos="58:35-58:143">
+<a href="https://link.amazon/B0bKt5EIo" rel="nofollow noopener" target="_blank">長尾製作所NB-VGA-DP01</a>を用意。固定用ネジは付属している</td>
+</tr>
+<tr data-sourcepos="59:1-59:203">
+<td data-sourcepos="59:2-59:21">電源ケーブル</td>
+<td data-sourcepos="59:23-59:202">各電源に適合するATX、PCIe、ペリフェラル用ケーブルを確認する（電源ユニットなどに付属している場合もあるので、必要なら買う）</td>
+</tr>
+<tr data-sourcepos="60:1-60:227">
+<td data-sourcepos="60:2-60:36">書き込み可能なUSBメモリ</td>
+<td data-sourcepos="60:38-60:226">UbuntuのISOが収まる容量（16 GBもあれば十分）のUSB2系でよい。安いものだと<a href="https://link.amazon/B0gtF4vGC" rel="nofollow noopener" target="_blank">KIOXIA USBフラッシュメモリ 32GB USB2.0</a>など。</td>
+</tr>
+<tr data-sourcepos="61:1-61:255">
+<td data-sourcepos="61:2-61:18">Ubuntu専用SSD</td>
+<td data-sourcepos="61:20-61:254">保存するモデル・データ・環境の容量と余裕を見込む。ローカルLLM用途で色々なモデルを試すのであれば2 TB以上は必要。可能なら<a href="https://link.amazon/B0hcLESdL" rel="nofollow noopener" target="_blank">4 TB以上のSSD</a>が良い</td>
+</tr>
+<tr data-sourcepos="62:1-62:118">
+<td data-sourcepos="62:2-62:21">作業用の小物</td>
+<td data-sourcepos="62:23-62:117">適切なドライバー、固定ネジ、絶縁スペーサー、ケーブル固定具など</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="64:1-64:352"><a href="https://www.nagao-ss.co.jp/nb-vga-dp01.html" rel="nofollow noopener" target="_blank">NB-VGA-DP01</a>はメーカー上「ディスプレイ台」として販売されている。台にGPUを載せただけで、通電用のケースや絶縁対策が完成するわけではない。基板の裏面が金属に触れないようにし、GPUや電源の吸排気も妨げない配置にする。</p>
+<blockquote data-sourcepos="66:1-66:254">
+<p data-sourcepos="66:3-66:254">筆者の場合はPCケースの側面ガラス板を取り外して使用している。サーキュレーターの送風直当てで運用しており、スペースがあれば1スロット目のB70の上にヒートシンクを乗せても良い。</p>
+</blockquote>
+<blockquote data-sourcepos="68:1-68:305">
+<p data-sourcepos="68:3-68:305">電源連動アダプター（Add2PSU）の起動検知用であれば、ペリフェラル4ピン（Molex）方式でもSATA電源方式でも、基本的に問題はない。大抵の電源ユニットに対応ケーブルが付属しているのでペリフェラル4ピン方式を選べば良い。</p>
+</blockquote>
+<h2 data-sourcepos="70:1-70:24">
+<span id="デバイスの配置" class="fragment"></span><a href="#%E3%83%87%E3%83%90%E3%82%A4%E3%82%B9%E3%81%AE%E9%85%8D%E7%BD%AE"><i class="fa fa-link"></i></a>デバイスの配置</h2>
+<p data-sourcepos="72:1-72:150"><a href="https://www.asrock.com/mb/Intel/Z790%20Steel%20Legend%20WiFi/index.asp" rel="nofollow noopener" target="_blank">ASRockの公式仕様</a>で、Z790 Steel Legend WiFiの接続を確認する。</p>
+<table data-sourcepos="74:1-78:86">
+<thead>
+<tr data-sourcepos="74:1-74:61">
+<th data-sourcepos="74:2-74:15">スロット</th>
+<th data-sourcepos="74:17-74:36">電気的な接続</th>
+<th data-sourcepos="74:38-74:60">今回の割り当て</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="76:1-76:74">
+<td data-sourcepos="76:2-76:8">PCIE1</td>
+<td data-sourcepos="76:10-76:59">CPU直結、PCIe 5.0 x16（M2_2使用時はx8）</td>
+<td data-sourcepos="76:61-76:73">B70 1枚目</td>
+</tr>
+<tr data-sourcepos="77:1-77:64">
+<td data-sourcepos="77:2-77:8">PCIE2</td>
+<td data-sourcepos="77:10-77:49">チップセット経由、PCIe 4.0 x4</td>
+<td data-sourcepos="77:51-77:63">B70 2枚目</td>
+</tr>
+<tr data-sourcepos="78:1-78:86">
+<td data-sourcepos="78:2-78:8">PCIE3</td>
+<td data-sourcepos="78:10-78:49">チップセット経由、PCIe 3.0 x2</td>
+<td data-sourcepos="78:51-78:85">x1ライザーを介した3060 Ti</td>
+</tr>
+</tbody>
+</table>
+<blockquote data-sourcepos="80:1-80:411">
+<p data-sourcepos="80:3-80:411">PCIE3自体には2レーンあるが、今回のライザーはx1なので接続幅は最大x1になる。また、<a href="https://download.asrock.com/Manual/Z790%20Steel%20Legend%20WiFi.pdf" rel="nofollow noopener" target="_blank">マニュアルのブロック図</a>にある通りチップセット配下の機器はCPUへの上流接続を共有しており、3枚のGPUそれぞれに独立したCPU直結x16帯域が与えられる構成ではない。</p>
+</blockquote>
+<p data-sourcepos="82:1-82:247">このマザーボードでは、<strong>M2_1とM2_2を同時に使用できない</strong>。さらにM2_2にSSDを装着すると、PCIE1はx8動作になる。Windows用とUbuntu用のSSDを2枚装着するなら、たとえば次のいずれかにする。</p>
+<table data-sourcepos="84:1-87:92">
+<thead>
+<tr data-sourcepos="84:1-84:58">
+<th data-sourcepos="84:2-84:21">配置の考え方</th>
+<th data-sourcepos="84:23-84:29">SSD 1</th>
+<th data-sourcepos="84:31-84:37">SSD 2</th>
+<th data-sourcepos="84:39-84:57">PCIE1への影響</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="86:1-86:86">
+<td data-sourcepos="86:2-86:28">SSDのGen5接続を利用</td>
+<td data-sourcepos="86:30-86:35">M2_2</td>
+<td data-sourcepos="86:37-86:71">M2_3・M2_4・M2_5のいずれか</td>
+<td data-sourcepos="86:73-86:85">x8になる</td>
+</tr>
+<tr data-sourcepos="87:1-87:92">
+<td data-sourcepos="87:2-87:29">PCIE1のx16接続を維持</td>
+<td data-sourcepos="87:31-87:36">M2_1</td>
+<td data-sourcepos="87:38-87:72">M2_3・M2_4・M2_5のいずれか</td>
+<td data-sourcepos="87:74-87:91">M2_2を空ける</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="89:1-89:495">SSDからモデルの重みやEngramのデータを頻繁に読み出す場合、Ubuntu用のSSDはM2_2スロットに設置する方が有利と考えられる。M2_2はPCIe Gen5 x4に対応しており、Gen5対応SSDの読み出し性能を活用できるためである。ただし、M2_2を使用すると、GPUを接続するPCIE1のリンク幅がx16からx8に減少する。SSDからのデータ転送量とGPU側のPCIe通信量を比較して配置を決めることが望ましい。</p>
+<blockquote data-sourcepos="91:1-91:241">
+<p data-sourcepos="91:3-91:241">CPUオフロード時はまずRAMから読み出され、それでも不足している場合に SSD から読み出される。一般論としてはRAM容量が少ない場合はSSD側の帯域を優先した方が良いと思われる。</p>
+</blockquote>
+<div data-sourcepos="93:1-154:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<h3 data-sourcepos="95:1-95:43">
+<span id="転送速度から考えるssdの配置" class="fragment"></span><a href="#%E8%BB%A2%E9%80%81%E9%80%9F%E5%BA%A6%E3%81%8B%E3%82%89%E8%80%83%E3%81%88%E3%82%8Bssd%E3%81%AE%E9%85%8D%E7%BD%AE"><i class="fa fa-link"></i></a>転送速度から考えるSSDの配置</h3>
+<p data-sourcepos="97:1-97:385">今回使用したマザーボード「ASRock Z790 Steel Legend WiFi」には、PCIeレーンの割り当てに関する制約がある。M2_2スロットにSSDを装着すると、最上段のGPUスロット（PCIE1）がPCIe Gen5 x16からx8動作に切り替わる。一方、M2_2はPCIe Gen5 x4に対応しており、Crucial T700のような高速SSDの性能を活用できる。</p>
+<p data-sourcepos="99:1-99:169">そこで、<strong>GPU側の帯域を優先する構成と、SSD側の帯域を優先する構成では、どちらがLLM推論に適しているのか</strong>を考えてみる。</p>
+<hr data-sourcepos="101:1-102:0">
+<p data-sourcepos="103:1-103:85">PCIeの理論上の最大転送帯域（片方向）は、次のとおりである。</p>
+<table data-sourcepos="105:1-110:28">
+<thead>
+<tr data-sourcepos="105:1-105:31">
+<th data-sourcepos="105:2-105:15">接続規格</th>
+<th style="text-align: right" data-sourcepos="105:17-105:30">理論帯域</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="107:1-107:30">
+<td data-sourcepos="107:2-107:16">PCIe Gen5 x16</td>
+<td style="text-align: right" data-sourcepos="107:18-107:29">63.02 GB/s</td>
+</tr>
+<tr data-sourcepos="108:1-108:29">
+<td data-sourcepos="108:2-108:15">PCIe Gen5 x8</td>
+<td style="text-align: right" data-sourcepos="108:17-108:28">31.51 GB/s</td>
+</tr>
+<tr data-sourcepos="109:1-109:29">
+<td data-sourcepos="109:2-109:15">PCIe Gen5 x4</td>
+<td style="text-align: right" data-sourcepos="109:17-109:28">15.75 GB/s</td>
+</tr>
+<tr data-sourcepos="110:1-110:28">
+<td data-sourcepos="110:2-110:15">PCIe Gen4 x4</td>
+<td style="text-align: right" data-sourcepos="110:17-110:27">7.88 GB/s</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="112:1-112:243">今回使用するIntel Arc Pro B70はPCIe Gen5 x16に対応し、Crucial T700 2TB（CT2000T700SSD3）はPCIe Gen5 x4に対応している。T700の公称最大連続読み出し速度は12,400MB/s、書き込み速度は11,800MB/sである。</p>
+<p data-sourcepos="114:1-114:239">この仕様をもとに、次の2つの構成を比較すると以下のようになる。SSDをGen5接続にすることで、B70のPCIe帯域は半減する一方、T700の連続読み出し速度は約1.77倍になる計算である。</p>
+<table data-sourcepos="116:1-123:50">
+<thead>
+<tr data-sourcepos="116:1-116:66">
+<th data-sourcepos="116:2-116:9">項目</th>
+<th data-sourcepos="116:11-116:37">構成A：GPU帯域優先</th>
+<th data-sourcepos="116:39-116:65">構成B：SSD帯域優先</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="118:1-118:53">
+<td data-sourcepos="118:2-118:19">T700の接続先</td>
+<td data-sourcepos="118:21-118:45">M2_1またはM2_4など</td>
+<td data-sourcepos="118:47-118:52">M2_2</td>
+</tr>
+<tr data-sourcepos="119:1-119:39">
+<td data-sourcepos="119:2-119:18">SSD接続規格</td>
+<td data-sourcepos="119:20-119:28">Gen4 x4</td>
+<td data-sourcepos="119:30-119:38">Gen5 x4</td>
+</tr>
+<tr data-sourcepos="120:1-120:45">
+<td data-sourcepos="120:2-120:21">SSDの理論帯域</td>
+<td data-sourcepos="120:23-120:32">7.88GB/s</td>
+<td data-sourcepos="120:34-120:44">15.75GB/s</td>
+</tr>
+<tr data-sourcepos="121:1-121:81">
+<td data-sourcepos="121:2-121:34">T700の最大読み出し速度</td>
+<td data-sourcepos="121:36-121:57">約7GB/s（推定）</td>
+<td data-sourcepos="121:59-121:80">12.4GB/s（公称）</td>
+</tr>
+<tr data-sourcepos="122:1-122:48">
+<td data-sourcepos="122:2-122:26">B70（PCIE1）の接続</td>
+<td data-sourcepos="122:28-122:37">Gen5 x16</td>
+<td data-sourcepos="122:39-122:47">Gen5 x8</td>
+</tr>
+<tr data-sourcepos="123:1-123:50">
+<td data-sourcepos="123:2-123:25">B70の理論PCIe帯域</td>
+<td data-sourcepos="123:27-123:37">63.02GB/s</td>
+<td data-sourcepos="123:39-123:49">31.51GB/s</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="125:1-125:321">ここでSSDからモデルの重みを連続的に読み出す場合を考える。SSDが上記の速度を維持できると仮定すると、読み出しに必要な時間（理論値）は以下のようになる。例えば200GBのモデルデータであれば、理論上は約12.5秒の短縮が期待できる。</p>
+<table data-sourcepos="127:1-131:35">
+<thead>
+<tr data-sourcepos="127:1-127:79">
+<th data-sourcepos="127:2-127:27">読み出すデータ量</th>
+<th style="text-align: right" data-sourcepos="127:29-127:51">Gen4接続（7GB/s）</th>
+<th style="text-align: right" data-sourcepos="127:53-127:78">Gen5接続（12.4GB/s）</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="129:1-129:32">
+<td data-sourcepos="129:2-129:7">50GB</td>
+<td style="text-align: right" data-sourcepos="129:9-129:19">約7.1秒</td>
+<td style="text-align: right" data-sourcepos="129:21-129:31">約4.0秒</td>
+</tr>
+<tr data-sourcepos="130:1-130:34">
+<td data-sourcepos="130:2-130:8">100GB</td>
+<td style="text-align: right" data-sourcepos="130:10-130:21">約14.3秒</td>
+<td style="text-align: right" data-sourcepos="130:23-130:33">約8.1秒</td>
+</tr>
+<tr data-sourcepos="131:1-131:35">
+<td data-sourcepos="131:2-131:8">200GB</td>
+<td style="text-align: right" data-sourcepos="131:10-131:21">約28.6秒</td>
+<td style="text-align: right" data-sourcepos="131:23-131:34">約16.1秒</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="133:1-133:231">ここで考慮したいのは、SSDとGPUの帯域の大小関係である。T700の最大連続読み出し速度は12.4GB/sである。一方、B70をPCIe Gen5 x8で接続した場合でも、理論帯域は31.51GB/sとなる。</p>
+<p data-sourcepos="135:1-135:195">つまり、<strong>SSDから読み込んだモデルデータをGPUへ転送する処理だけを考えると、Gen5 x8のGPU接続帯域はT700の読み出し速度を十分に上回っている。</strong></p>
+<p data-sourcepos="137:1-137:297">DeepSeekが提案したEngramは、巨大な埋め込みテーブルを参照することで、言語モデルの計算量と記憶容量を分離する仕組みである。Engramのデータは、GPUのVRAMだけでなく、ホストRAMやSSDなどへ配置することも想定されている。</p>
+<p data-sourcepos="139:1-139:405">今回のPCには128GBのシステムメモリが搭載されているが、それを上回る規模のEngramを運用する場合、SSDへのオフロードが選択肢となる。Engramを利用するモデルだからといって必ずGen5 SSDが有利になるわけではないが、<strong>SSDオフロードを積極的に利用する構成では、M2_2のGen5 x4接続は合理的な選択となる。</strong></p>
+<hr data-sourcepos="141:1-142:0">
+<p data-sourcepos="143:1-143:564">今回のPCは、Arc Pro B70を2枚搭載し、ローカルLLMの推論や大規模モデルの動作検証を主な用途としている。モデルの重みがVRAM内に収まる場合、推論中のPCIe通信量は比較的小さくなるため、PCIE1をGen5 x16からx8に変更しても、性能低下は限定的である可能性がある。また、T700をGen5 x4で使用すれば、大規模モデルの読み込み速度を改善できるほか、将来的にSSDオフロードを利用する際にも高速なストレージ帯域を確保できる。</p>
+<p data-sourcepos="145:1-145:188">以上を踏まえると、<strong>今回の構成では、B70のPCIe帯域を半減させてでも、T700をM2_2に配置してGen5 x4で使用する方針には十分な合理性がある。</strong></p>
+<blockquote data-sourcepos="147:1-152:109">
+<p data-sourcepos="147:3-147:17">参考資料：</p>
+<ul data-sourcepos="149:3-152:109">
+<li data-sourcepos="149:3-149:123"><a href="https://www.asrock.com/mb/Intel/Z790%20Steel%20Legend%20WiFi/index.jp.asp" rel="nofollow noopener" target="_blank">ASRock Z790 Steel Legend WiFi 製品仕様</a></li>
+<li data-sourcepos="150:3-150:144"><a href="https://www.intel.com/content/www/us/en/products/sku/245797/intel-arc-pro-b70-graphics/specifications.html" rel="nofollow noopener" target="_blank">Intel Arc Pro B70 公式仕様</a></li>
+<li data-sourcepos="151:3-151:165"><a href="https://br.crucial.com/content/dam/crucial/ssd-products/t700/flyers/product/b2c/crucial-t700-b2c-product-flyer-en.pdf" rel="nofollow noopener" target="_blank">Crucial T700 公式製品資料（PDF）</a></li>
+<li data-sourcepos="152:3-152:109"><a href="https://arxiv.org/abs/2601.07372" rel="nofollow noopener" target="_blank">DeepSeek: Conditional Memory via Scalable Lookup（Engram原論文）</a></li>
+</ul>
+</blockquote>
+</div>
+</div>
+<h2 data-sourcepos="156:1-156:15">
+<span id="電源容量" class="fragment"></span><a href="#%E9%9B%BB%E6%BA%90%E5%AE%B9%E9%87%8F"><i class="fa fa-link"></i></a>電源容量</h2>
+<p data-sourcepos="158:1-158:51">今回の給電分担は次のとおりである。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="160:1-169:3"><div class="highlight"><pre><code>メイン電源：玄人志向1000W
+  ├─ マザーボード・CPU・SSD・メモリ・ファン
+  ├─ B70 1枚目
+  └─ B70 2枚目
+
+サブ電源：Corsair RM850e 850W
+  ├─ RTX 3060 Tiの補助電源
+  └─ RTX 3060 Ti用の給電式ライザー
+</code></pre></div></div>
+<p data-sourcepos="171:1-171:298">B70 BlowerのTBPは330W、<a href="https://www.intel.com/content/www/us/en/products/sku/236789/intel-core-i7-processor-14700kf-33m-cache-up-to-5-60-ghz/specifications.html" rel="nofollow noopener" target="_blank">i7-14700KFのMaximum Turbo Powerは253W</a>である。これらを単純に足すと、メイン電源側だけで次の値になる。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="173:1-175:3"><div class="highlight"><pre><code>330W × 2 ＋ 253W ＝ 913W
+</code></pre></div></div>
+<p data-sourcepos="177:1-177:373">この913Wは実測値ではなく公称に基づく参考値であるが、ピーク電流・電圧を考えるとある程度のバッファは見ておくべきである。今回は既存のRTX 3060 Ti (8 GB)を映像出力用に用いており、これを加えると 1000 W を優に超えるため電源ユニットは2台構成で運用することが望ましい。</p>
+<h2 data-sourcepos="179:1-179:40">
+<span id="スロット3のgpuの配線と給電" class="fragment"></span><a href="#%E3%82%B9%E3%83%AD%E3%83%83%E3%83%883%E3%81%AEgpu%E3%81%AE%E9%85%8D%E7%B7%9A%E3%81%A8%E7%B5%A6%E9%9B%BB"><i class="fa fa-link"></i></a>スロット3のGPUの配線と給電</h2>
+<h3 data-sourcepos="181:1-181:23">
+<span id="pcie信号の接続" class="fragment"></span><a href="#pcie%E4%BF%A1%E5%8F%B7%E3%81%AE%E6%8E%A5%E7%B6%9A"><i class="fa fa-link"></i></a>PCIe信号の接続</h3>
+<div class="code-frame" data-lang="text" data-sourcepos="183:1-191:3"><div class="highlight"><pre><code>マザーボードのPCIE3
+  ↓
+小型のPCIe x1アダプター
+  ↓ 付属の青いケーブル
+給電式ライザーのGPU用スロット
+  ↓
+RTX 3060 Ti
+</code></pre></div></div>
+<p data-sourcepos="193:1-193:360">青いケーブルはUSB 3.0と同じ形状のコネクタを使っているが、今回の製品ではPCIe信号の延長用である。ThunderboltやUSB4経由のeGPUとは別の構成である。小型のx1アダプターは、長いPCIeスロットの一部だけを使う。スロットの大部分が空いて見えること自体は異常ではない。</p>
+<p data-sourcepos="195:1-195:58">PCIe信号系統の配線図は以下のようになる。</p>
+<pre class="mermaid">flowchart TB
+ MB["ASRock Z790 Steel Legend WiFi&lt;br/&gt;マザーボード"]
+ SLOT["PCIeスロット&lt;br/&gt;x1アダプター装着"]
+ CABLE["青いUSB 3.0形状ケーブル&lt;br/&gt;PCIe信号伝送専用"]
+ RISER["PCIe x16ライザー基板&lt;br/&gt;Ver.009S"]
+ GPU["GeForce RTX 3060 Ti&lt;br/&gt;8GB VRAM"]
+
+ MB --&gt; SLOT
+ SLOT --&gt; CABLE
+ CABLE --&gt; RISER
+ RISER --&gt;|"PCIe x1接続"| GPU
+
+ classDef board fill:#f0eeff,stroke:#7771b7,color:#413c79
+ classDef cable fill:#dceeff,stroke:#317db9,color:#17476e
+ classDef gpu fill:#e6f4e9,stroke:#398354,color:#205631
+
+ class MB,SLOT,RISER board
+ class CABLE cable
+ class GPU gpu
+</pre>
+
+<h3 data-sourcepos="220:1-220:40">
+<span id="電源連動アダプターの接続" class="fragment"></span><a href="#%E9%9B%BB%E6%BA%90%E9%80%A3%E5%8B%95%E3%82%A2%E3%83%80%E3%83%97%E3%82%BF%E3%83%BC%E3%81%AE%E6%8E%A5%E7%B6%9A"><i class="fa fa-link"></i></a>電源連動アダプターの接続</h3>
+<p data-sourcepos="222:1-222:146">今回の4ピン入力型Add2PSU基板では、次の接続になる。端子仕様の異なる製品では、その製品の説明書に従う。</p>
+<table data-sourcepos="224:1-229:104">
+<thead>
+<tr data-sourcepos="224:1-224:34">
+<th data-sourcepos="224:2-224:12">接続元</th>
+<th data-sourcepos="224:14-224:24">接続先</th>
+<th data-sourcepos="224:26-224:33">役割</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="226:1-226:141">
+<td data-sourcepos="226:2-226:66">メイン電源の適合するペリフェラル用ケーブル</td>
+<td data-sourcepos="226:68-226:92">Add2PSUの4ピン入力</td>
+<td data-sourcepos="226:94-226:140">メイン電源が起動したことを検知</td>
+</tr>
+<tr data-sourcepos="227:1-227:112">
+<td data-sourcepos="227:2-227:54">サブ電源の適合するATX 24ピンケーブル</td>
+<td data-sourcepos="227:56-227:81">Add2PSUの24ピン端子</td>
+<td data-sourcepos="227:83-227:111">サブ電源の起動制御</td>
+</tr>
+<tr data-sourcepos="228:1-228:90">
+<td data-sourcepos="228:2-228:34">サブ電源のPCIeケーブル</td>
+<td data-sourcepos="228:36-228:65">3060 Ti本体の補助電源</td>
+<td data-sourcepos="228:67-228:89">GPU本体への給電</td>
+</tr>
+<tr data-sourcepos="229:1-229:104">
+<td data-sourcepos="229:2-229:34">サブ電源のPCIeケーブル</td>
+<td data-sourcepos="229:36-229:70">ライザーの指定電源入力</td>
+<td data-sourcepos="229:72-229:103">GPUスロット側への給電</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="231:1-231:290">Add2PSUに接続する4ピンは、ライザーの4ピン端子とは別物である。メイン電源のSATA/PATA出力から、その電源に適合するケーブルでペリフェラル4ピンを取り出して使う。マザーボード上のファン用4ピンには接続しない。</p>
+<p data-sourcepos="233:1-233:355">3060 Tiは、補助電源だけでなくライザー側も同じサブ電源から給電する。ライザーに複数の6ピンや4ピン入力がある場合は、メーカーが指定する入力を使用する。代替入力として設計された端子なら1か所でよい（端子が余っているからといって全部に接続しない）。</p>
+<p data-sourcepos="235:1-235:54">電源系統の配線図は以下のようになる。</p>
+<pre class="mermaid">
+flowchart TB
+ MAIN["玄人志向 1000W&lt;br/&gt;メイン電源"]
+ B70["Intel Arc Pro B70 × 2&lt;br/&gt;各32GB VRAM"]
+ ADD["Add2PSU&lt;br/&gt;電源連動アダプター"]
+ SUB["Corsair RM850e&lt;br/&gt;サブ電源 850W"]
+ RISER["PCIeライザー基板&lt;br/&gt;PCIe 6ピン給電"]
+ GPU["GeForce RTX 3060 Ti&lt;br/&gt;8ピン＋6ピン補助電源"]
+
+ MAIN ==&gt;|"GPU補助電源"| B70
+ MAIN -.-&gt;|"Molex 4ピン：起動検知"| ADD
+ ADD -.-&gt;|"ATX 24ピン：起動制御"| SUB
+ SUB ==&gt;|"PCIe 6ピン"| RISER
+ SUB ==&gt;|"PCIe 8ピン＋6ピン"| GPU
+
+ classDef power fill:#e5f0ff,stroke:#447ab8,color:#173c6a
+ classDef gpu fill:#e6f4e9,stroke:#398354,color:#205631
+ classDef control fill:#fff1d9,stroke:#bc8126,color:#704708
+ class MAIN,SUB power
+ class B70,GPU gpu
+ class ADD control
+ class RISER power
+
+</pre>
+
+<p data-sourcepos="264:1-264:51">図中の線の種類と意味は以下の通り。</p>
+<table data-sourcepos="266:1-270:79">
+<thead>
+<tr data-sourcepos="266:1-266:71">
+<th data-sourcepos="266:2-266:19">線の種類</th>
+<th data-sourcepos="266:21-266:35">Mermaid記法</th>
+<th data-sourcepos="266:37-266:70">今回の図での意味</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="268:1-268:61">
+<td data-sourcepos="268:2-268:15"> 実線</td>
+<td data-sourcepos="268:17-268:27"><code>--&gt;</code></td>
+<td data-sourcepos="268:29-268:60">PCIe信号の伝送経路</td>
+</tr>
+<tr data-sourcepos="269:1-269:71">
+<td data-sourcepos="269:2-269:19">太い実線</td>
+<td data-sourcepos="269:21-269:31"><code>==&gt;</code></td>
+<td data-sourcepos="269:33-269:70">GPUなどへの電力供給経路</td>
+</tr>
+<tr data-sourcepos="270:1-270:79">
+<td data-sourcepos="270:2-270:15">点線</td>
+<td data-sourcepos="270:17-270:27"><code>-.-&gt;</code></td>
+<td data-sourcepos="270:29-270:78">電源連動・起動制御に関係する接続</td>
+</tr>
+</tbody>
+</table>
+<div data-sourcepos="272:1-280:3" class="note warn">
+<span class="fa fa-fw fa-exclamation-circle"></span><div>
+<h3 data-sourcepos="274:1-274:46">
+<span id="電源投入のタイミングは慎重に" class="fragment"></span><a href="#%E9%9B%BB%E6%BA%90%E6%8A%95%E5%85%A5%E3%81%AE%E3%82%BF%E3%82%A4%E3%83%9F%E3%83%B3%E3%82%B0%E3%81%AF%E6%85%8E%E9%87%8D%E3%81%AB"><i class="fa fa-link"></i></a>電源投入のタイミングは慎重に</h3>
+<p data-sourcepos="276:1-276:254">配線作業は、PCを終了し、<strong>両方の電源ユニットのACケーブルを抜いてから</strong>行う。基板の固定、各コネクタの差し込み、周囲への接触、ファンへのケーブル巻き込みがないことを確認する。</p>
+<p data-sourcepos="278:1-278:277">起動時は両電源のAC接続と主電源スイッチを準備し、PC本体の電源ボタンでサブ電源も連動させる。PC起動後に、3枚目のGPUだけを後から通電させる手順にはしない。終了時も連動して停止するかを確認する。</p>
+</div>
+</div>
+<h1 data-sourcepos="282:1-282:24">
+<span id="biosの更新と設定" class="fragment"></span><a href="#bios%E3%81%AE%E6%9B%B4%E6%96%B0%E3%81%A8%E8%A8%AD%E5%AE%9A"><i class="fa fa-link"></i></a>BIOSの更新と設定</h1>
+<p data-sourcepos="284:1-284:56">ここからはPC内で手を動かす部分となる。</p>
+<p data-sourcepos="286:1-286:188">今回、マザーボード「ASRock Z790 Steel Legend WiFi」のBIOSを9.03から22.02へ更新したが、これはIntel Arc Pro B70が正しく認識されなかったためである。</p>
+<p data-sourcepos="288:1-288:312">更新には、<a href="https://www.asrock.com/mb/Intel/Z790%20Steel%20Legend%20WiFi/bios.html" rel="nofollow noopener" target="_blank">ASRock公式サイト</a>から取得したBIOSファイルと、FAT32形式のUSBメモリを使用した。BIOSのバージョンは、作業時点で公開されている最新版と注意事項を確認して選択する。</p>
+<h2 data-sourcepos="290:1-290:25">
+<span id="bios更新前の確認" class="fragment"></span><a href="#bios%E6%9B%B4%E6%96%B0%E5%89%8D%E3%81%AE%E7%A2%BA%E8%AA%8D"><i class="fa fa-link"></i></a>BIOS更新前の確認</h2>
+<p data-sourcepos="292:1-292:168">WindowsでBitLockerが有効な場合、BIOS更新後に回復キーを要求されることがある。管理者権限のPowerShellで暗号化状態を確認する。</p>
+<div class="code-frame" data-lang="powershell" data-sourcepos="294:1-296:3"><div class="highlight"><pre><code><span class="n">manage-bde</span><span class="w"> </span><span class="nt">-status</span><span class="w"> </span><span class="nx">C:</span><span class="w">
+</span></code></pre></div></div>
+<p data-sourcepos="298:1-298:336">今回の環境では暗号化率0%、保護オフだったため、BitLockerの操作は不要だった。暗号化が有効な場合は、<a href="https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/manage-bde-protectors" rel="nofollow noopener" target="_blank">Microsoft公式手順</a>に従い、回復キーを確保して保護を一時停止する。</p>
+<p data-sourcepos="300:1-300:365">また、BIOS更新後にWindows HelloのPIN認証エラーが発生し、管理者権限を必要とするドライバーのインストールが進まなくなった。今回は別の管理者アカウントからインストールできたため、事前に管理者アカウントとパスワードによるサインイン手段を確認しておくとよい。</p>
+<h2 data-sourcepos="302:1-302:26">
+<span id="bios更新とuefi設定" class="fragment"></span><a href="#bios%E6%9B%B4%E6%96%B0%E3%81%A8uefi%E8%A8%AD%E5%AE%9A"><i class="fa fa-link"></i></a>BIOS更新とUEFI設定</h2>
+<p data-sourcepos="304:1-304:348">BIOSファイルをZIPから展開してUSBメモリに保存し、UEFIの<code>Tool → Instant Flash</code>から更新する。使用するUSBメモリの形式などは<a href="https://www.asrock.com/support/BIOSIG.asp?cat=BIOS9" rel="nofollow noopener" target="_blank">ASRock公式手順</a>に従う。更新中は電源を切らず、起動順序などの既存設定を更新前に記録しておく。</p>
+<p data-sourcepos="306:1-306:45">更新後、以下の項目を確認した。</p>
+<table data-sourcepos="308:1-314:45">
+<thead>
+<tr data-sourcepos="308:1-308:22">
+<th data-sourcepos="308:2-308:9">設定</th>
+<th data-sourcepos="308:11-308:21">推奨値</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="310:1-310:31">
+<td data-sourcepos="310:2-310:20">Above 4G Decoding</td>
+<td data-sourcepos="310:22-310:30">Enabled</td>
+</tr>
+<tr data-sourcepos="311:1-311:38">
+<td data-sourcepos="311:2-311:27">C.A.M（Resizable BAR）</td>
+<td data-sourcepos="311:29-311:37">Enabled</td>
+</tr>
+<tr data-sourcepos="312:1-312:18">
+<td data-sourcepos="312:2-312:6">CSM</td>
+<td data-sourcepos="312:8-312:17">Disabled</td>
+</tr>
+<tr data-sourcepos="313:1-313:26">
+<td data-sourcepos="313:2-313:18">PCIe Link Speed</td>
+<td data-sourcepos="313:20-313:25">Auto</td>
+</tr>
+<tr data-sourcepos="314:1-314:45">
+<td data-sourcepos="314:2-314:14">Secure Boot</td>
+<td data-sourcepos="314:16-314:44">原則として変更不要</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="316:1-316:183">CSMはUEFIの<code>Boot</code>セクションで設定する。PCIeリンク速度は通常Autoとし、認識不良が発生した場合に限って該当スロットの速度を調整する。</p>
+<h1 data-sourcepos="318:1-318:29">
+<span id="ubuntuのインストール" class="fragment"></span><a href="#ubuntu%E3%81%AE%E3%82%A4%E3%83%B3%E3%82%B9%E3%83%88%E3%83%BC%E3%83%AB"><i class="fa fa-link"></i></a>Ubuntuのインストール</h1>
+<p data-sourcepos="320:1-320:35"><a href="https://ubuntu.com/download/desktop" class="mirror-link-card">https://ubuntu.com/download/desktop</a>
+</p>
+<p data-sourcepos="322:1-322:245">今回は、安全のためにWindows用SSDを物理的に取り外してから、Ubuntuを別のSSDへインストールした。これにより、Windows側のデータやEFIパーティションを誤って変更する危険を減らせる。</p>
+<blockquote data-sourcepos="324:1-324:334">
+<p data-sourcepos="324:3-324:334">1個のSSD内でパーティションを設けて2つのOSを併存させる運用も考えられるが、LLMなど大規模なモデルをダウンロードして使う用途の場合、1 TB程度のストレージの容量は心許ない。可能であれば2 TB以上の新しい SSD を別途用意することが望ましい。</p>
+</blockquote>
+<h2 data-sourcepos="326:1-326:36">
+<span id="ubuntuのインストール手順" class="fragment"></span><a href="#ubuntu%E3%81%AE%E3%82%A4%E3%83%B3%E3%82%B9%E3%83%88%E3%83%BC%E3%83%AB%E6%89%8B%E9%A0%86"><i class="fa fa-link"></i></a>Ubuntuのインストール手順</h2>
+<p data-sourcepos="328:1-328:51">下記の手順1，2はWindows側で作業する。</p>
+<ol data-sourcepos="330:1-338:0">
+<li data-sourcepos="330:1-330:102">
+<a href="https://ubuntu.com/download/desktop" rel="nofollow noopener" target="_blank">Ubuntu公式サイト</a>からISOイメージを取得する。</li>
+<li data-sourcepos="331:1-331:251">
+<a href="https://ubuntu.com/desktop/docs/en/latest/how-to/create-a-bootable-usb-stick/" rel="nofollow noopener" target="_blank">公式手順</a>に従い、Rufusなどで起動用USBメモリを作成する。ISOファイルを通常コピーするだけでは起動用メディアにならない。</li>
+<li data-sourcepos="332:1-332:64">Windows用SSDを取り外し、Ubuntu用SSDを装着する。</li>
+<li data-sourcepos="333:1-333:86">USBメモリを挿して電源を入れ、<code>F11</code>を連打してBoot Menuを開く。</li>
+<li data-sourcepos="334:1-334:80">
+<code>UEFI: USB…</code>を選択し、GRUBの<code>Try or Install Ubuntu</code>を実行する。</li>
+<li data-sourcepos="335:1-335:78">インストーラーで「対話式インストール」を選択する。</li>
+<li data-sourcepos="336:1-336:123">Ubuntu専用SSDを初期化する場合は「ディスクを削除してUbuntuをインストールする」を選ぶ。</li>
+<li data-sourcepos="337:1-338:0">SSDの型番・容量を確認してインストールを実行する。</li>
+</ol>
+<p data-sourcepos="339:1-339:171"><strong>OSイメージファイルの書き込み時にはUSBメモリ内の既存データが消去されるため、対象ドライブを間違えないよう注意する。</strong></p>
+<p data-sourcepos="341:1-341:264">暗号化、追加アプリケーション、サードパーティー製ドライバー、<a href="https://ubuntu.com/pro" rel="nofollow noopener" target="_blank">Ubuntu Pro</a>は用途に応じて選択すればよい。これらの選択だけでIntel GPU向けの計算環境が完成するわけではない。</p>
+<div data-sourcepos="344:1-366:3" class="note warn">
+<span class="fa fa-fw fa-exclamation-circle"></span><div>
+<h3 data-sourcepos="345:1-345:83">
+<span id="ubuntuのインストールメディア作成手順2における注意点" class="fragment"></span><a href="#ubuntu%E3%81%AE%E3%82%A4%E3%83%B3%E3%82%B9%E3%83%88%E3%83%BC%E3%83%AB%E3%83%A1%E3%83%87%E3%82%A3%E3%82%A2%E4%BD%9C%E6%88%90%E6%89%8B%E9%A0%862%E3%81%AB%E3%81%8A%E3%81%91%E3%82%8B%E6%B3%A8%E6%84%8F%E7%82%B9"><i class="fa fa-link"></i></a>Ubuntuのインストールメディア作成（手順2における注意点）</h3>
+<p data-sourcepos="347:1-347:283">FAT32形式のUSBメモリでは、1ファイルあたりの最大サイズが4GiB未満に制限される。そのため、今回使用したUbuntuのISOファイル（約6.03GB）は、USBメモリに十分な空き容量があっても通常の方法ではコピーできない。</p>
+<p data-sourcepos="349:1-349:121"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Fc50cfa7b-b08a-42c8-8d49-cbbd0d34fb8d.png?ixlib=rb-4.1.1&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=a8c3f4432fc73b99ade544b31b2df953" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/f0a76e2396da8ce2608bea4c.png" alt="image.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/c50cfa7b-b08a-42c8-8d49-cbbd0d34fb8d.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="351:1-351:327">そこで、<strong>Ubuntuのインストール用USBは、ISOファイルをコピーするのではなく、Rufusなどで起動可能なメディアとして書き込む必要がある。</strong> 今回は<a href="https://rufus.ie/ja/" rel="nofollow noopener" target="_blank">Rufus公式サイト</a>からツールをダウンロードし、次の設定で起動用USBを作成した。</p>
+<ol data-sourcepos="353:1-357:0">
+<li data-sourcepos="353:1-353:134">「デバイス」で対象のUSBメモリ（筆者のケースではKIOXIA製128GBのフラッシュメモリ）を選択する。</li>
+<li data-sourcepos="354:1-354:85">「ブートの種類」から<code>ubuntu-26.04.1-desktop-amd64.iso</code>を指定する。</li>
+<li data-sourcepos="355:1-355:119">「パーティション構成」を<code>GPT</code>、「ターゲットシステム」を<code>UEFI（非CSM）</code>に設定する。</li>
+<li data-sourcepos="356:1-357:0">ファイルシステムはRufusの自動選択に従い、「スタート」で書き込みを開始する。</li>
+</ol>
+<p data-sourcepos="358:1-358:121"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F73dc5bfb-d197-45a9-abbc-ad2a69afa858.png?ixlib=rb-4.1.1&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=cffee922eda37dec9ee4048d8ba31f8e" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/6bc6959aeeec0eedcd76d3ac.png" alt="image.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/73dc5bfb-d197-45a9-abbc-ad2a69afa858.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="360:1-360:158">途中で以下のようなウィンドウが現れるが、そのまま「OK」を押してISOイメージモードでUSBメモリに書き込めばよい。</p>
+<p data-sourcepos="362:1-362:121"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F0648b1e1-5d7b-45f0-813b-eedaf0527e67.png?ixlib=rb-4.1.1&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=388727cd0698b1c2862c5ed2ee7399f1" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/390c8f9b070b94bc43dfc560.png" alt="image.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/0648b1e1-5d7b-45f0-813b-eedaf0527e67.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="364:1-364:169">繰り返しになるが、<strong>書き込み時にはUSBメモリ内の既存データが消去されるため、対象ドライブを間違えないよう注意する。</strong></p>
+</div>
+</div>
+<p data-sourcepos="369:1-369:132">インストール後、USBメモリを抜いてSSDからUbuntuを起動する。初回起動後にパッケージを更新する。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="371:1-374:3"><div class="highlight"><pre><code><span class="nb">sudo </span>apt update
+<span class="nb">sudo </span>apt upgrade
+</code></pre></div></div>
+<p data-sourcepos="376:1-376:74">続いて、OS・カーネル・メモリ・SSDの情報を確認する。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="378:1-383:3"><div class="highlight"><pre><code><span class="nb">cat</span> /etc/os-release
+<span class="nb">uname</span> <span class="nt">-r</span>
+free <span class="nt">-h</span>
+lsblk <span class="nt">-o</span> NAME,SIZE,MODEL,FSTYPE,MOUNTPOINTS
+</code></pre></div></div>
+<p data-sourcepos="385:1-385:137"><code>free -h</code>で表示されるメモリ容量は、単位の違いや予約領域によって公称128GBと一致しない場合がある。</p>
+<h1 data-sourcepos="387:1-387:63">
+<span id="windows用ssdを戻してデュアルブートを構築する" class="fragment"></span><a href="#windows%E7%94%A8ssd%E3%82%92%E6%88%BB%E3%81%97%E3%81%A6%E3%83%87%E3%83%A5%E3%82%A2%E3%83%AB%E3%83%96%E3%83%BC%E3%83%88%E3%82%92%E6%A7%8B%E7%AF%89%E3%81%99%E3%82%8B"><i class="fa fa-link"></i></a>Windows用SSDを戻してデュアルブートを構築する</h1>
+<p data-sourcepos="389:1-389:87">Ubuntuが正常に起動することを確認したら、シャットダウンする。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="391:1-393:3"><div class="highlight"><pre><code><span class="nb">sudo </span>poweroff
+</code></pre></div></div>
+<p data-sourcepos="395:1-395:108">電源停止後、メイン・サブ両電源のACケーブルを抜き、Windows用SSDを再装着する。</p>
+<h2 data-sourcepos="397:1-397:34">
+<span id="windowsとubuntuの起動確認" class="fragment"></span><a href="#windows%E3%81%A8ubuntu%E3%81%AE%E8%B5%B7%E5%8B%95%E7%A2%BA%E8%AA%8D"><i class="fa fa-link"></i></a>WindowsとUbuntuの起動確認</h2>
+<p data-sourcepos="399:1-399:80">再起動時に<code>F11</code>を押し、Boot Menuから以下を個別に選択する。</p>
+<ul data-sourcepos="401:1-403:0">
+<li data-sourcepos="401:1-401:10"><code>ubuntu</code></li>
+<li data-sourcepos="402:1-403:0"><code>Windows Boot Manager</code></li>
+</ul>
+<p data-sourcepos="404:1-404:246">両方が正常に起動すれば、基本的なデュアルブート構成は完成である。Windows用SSDを取り外してUbuntuをインストールしたため、初期状態のGRUBにWindowsが表示されなくても異常ではない。</p>
+<h2 data-sourcepos="406:1-406:58">
+<span id="windowsの高速スタートアップを無効にする" class="fragment"></span><a href="#windows%E3%81%AE%E9%AB%98%E9%80%9F%E3%82%B9%E3%82%BF%E3%83%BC%E3%83%88%E3%82%A2%E3%83%83%E3%83%97%E3%82%92%E7%84%A1%E5%8A%B9%E3%81%AB%E3%81%99%E3%82%8B"><i class="fa fa-link"></i></a>Windowsの高速スタートアップを無効にする</h2>
+<p data-sourcepos="408:1-408:222">UbuntuからWindowsのNTFS領域へアクセスする場合、Windowsが休止状態を残していると書き込み時に問題が生じることがある。そのため、高速スタートアップを無効にする。</p>
+<p data-sourcepos="410:1-410:36">設定場所は以下のとおり。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="412:1-418:3"><div class="highlight"><pre><code>コントロールパネル
+→ 電源オプション
+→ 電源ボタンの動作を選択する
+→ 現在利用可能ではない設定を変更します
+→ 「高速スタートアップを有効にする」をオフ
+</code></pre></div></div>
+<p data-sourcepos="420:1-420:232">設定には管理者権限が必要であるため、作業の際は管理者権限があるユーザーでログインすること。また、Windowsを休止状態にしたままUbuntuへ切り替える運用も避けること。</p>
+<div data-sourcepos="422:1-468:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<h3 data-sourcepos="424:1-424:54">
+<span id="grubでos選択メニューを10秒間表示する" class="fragment"></span><a href="#grub%E3%81%A7os%E9%81%B8%E6%8A%9E%E3%83%A1%E3%83%8B%E3%83%A5%E3%83%BC%E3%82%9210%E7%A7%92%E9%96%93%E8%A1%A8%E7%A4%BA%E3%81%99%E3%82%8B"><i class="fa fa-link"></i></a>GRUBでOS選択メニューを10秒間表示する</h3>
+<p data-sourcepos="426:1-426:107">起動時に毎回<code>F11</code>を押さなくてもOSを選択できるよう、Ubuntu側のGRUBを設定する。</p>
+<p data-sourcepos="428:1-428:96">まず、Windows用SSDを接続した状態でUbuntuを起動し、<code>os-prober</code>を導入する。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="430:1-433:3"><div class="highlight"><pre><code><span class="nb">sudo </span>apt update
+<span class="nb">sudo </span>apt <span class="nb">install </span>os-prober
+</code></pre></div></div>
+<p data-sourcepos="435:1-435:67">GRUBの設定ファイルをバックアップして編集する。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="437:1-440:3"><div class="highlight"><pre><code><span class="nb">sudo cp</span> <span class="nt">-a</span> /etc/default/grub <span class="s2">"/etc/default/grub.backup.</span><span class="si">$(</span><span class="nb">date</span> +%Y%m%d-%H%M%S<span class="si">)</span><span class="s2">"</span>
+<span class="nb">sudo </span>nano /etc/default/grub
+</code></pre></div></div>
+<p data-sourcepos="442:1-442:115">以下の4項目を設定する。既存の設定がある場合は値を変更し、重複して追加しない。</p>
+<div class="code-frame" data-lang="ini" data-sourcepos="444:1-449:3"><div class="highlight"><pre><code><span class="py">GRUB_DEFAULT</span><span class="p">=</span><span class="s">0</span>
+<span class="py">GRUB_TIMEOUT_STYLE</span><span class="p">=</span><span class="s">menu</span>
+<span class="py">GRUB_TIMEOUT</span><span class="p">=</span><span class="s">10</span>
+<span class="py">GRUB_DISABLE_OS_PROBER</span><span class="p">=</span><span class="s">false</span>
+</code></pre></div></div>
+<p data-sourcepos="451:1-451:63"><code>Ctrl + O</code>、<code>Enter</code>で保存し、<code>Ctrl + X</code>で終了する。</p>
+<p data-sourcepos="453:1-453:59">Windowsの検出とGRUB設定の再生成を実行する。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="455:1-458:3"><div class="highlight"><pre><code><span class="nb">sudo </span>os-prober
+<span class="nb">sudo </span>update-grub
+</code></pre></div></div>
+<p data-sourcepos="460:1-460:220">Windows Boot Managerが検出されたら、UEFIの起動優先順位で<code>ubuntu</code>を先頭に設定する。通常は起動時にGRUBメニューが10秒間表示され、操作しなければ先頭のOSが起動する。</p>
+<p data-sourcepos="462:1-462:150">設定の詳細は<a href="https://www.gnu.org/software/grub/manual/grub/html_node/Simple-configuration.html" rel="nofollow noopener" target="_blank">GNU GRUB公式マニュアル</a>を参照する。</p>
+<blockquote data-sourcepos="464:1-467:5">
+<p data-sourcepos="464:3-464:156">なお、UbuntuからUEFI設定画面へ直接移動する場合は、ファームウェアが対応していれば次のコマンドを利用できる。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="465:3-467:5"><div class="highlight"><pre><code><span class="nb">sudo </span>systemctl reboot <span class="nt">--firmware-setup</span>
+</code></pre></div></div>
+</blockquote>
+</div>
+</div>
+<h1 data-sourcepos="470:1-470:60">
+<span id="ubuntuで3枚のgpuを認識できているか確認する" class="fragment"></span><a href="#ubuntu%E3%81%A73%E6%9E%9A%E3%81%AEgpu%E3%82%92%E8%AA%8D%E8%AD%98%E3%81%A7%E3%81%8D%E3%81%A6%E3%81%84%E3%82%8B%E3%81%8B%E7%A2%BA%E8%AA%8D%E3%81%99%E3%82%8B"><i class="fa fa-link"></i></a>Ubuntuで3枚のGPUを認識できているか確認する</h1>
+<p data-sourcepos="472:1-472:175">GPUの認識状態は、PCIeデバイスとして検出されているか、ドライバーが動作しているか、GPU計算を実行できるかに分けて確認する。</p>
+<h2 data-sourcepos="474:1-474:28">
+<span id="pcieデバイスの認識" class="fragment"></span><a href="#pcie%E3%83%87%E3%83%90%E3%82%A4%E3%82%B9%E3%81%AE%E8%AA%8D%E8%AD%98"><i class="fa fa-link"></i></a>PCIeデバイスの認識</h2>
+<p data-sourcepos="476:1-476:43">まず<code>lspci</code>でGPUを一覧表示する。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="478:1-480:3"><div class="highlight"><pre><code>lspci <span class="nt">-nn</span> | <span class="nb">grep</span> <span class="nt">-Ei</span> <span class="s1">'VGA|3D|Display'</span>
+</code></pre></div></div>
+<p data-sourcepos="482:1-482:85">今回の実機では、以下の3枚が検出された（表示を一部省略）。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="484:1-488:3"><div class="highlight"><pre><code>03:00.0 Intel Battlemage G31 [8086:e223]
+06:00.0 NVIDIA GeForce RTX 3060 Ti [10de:2489]
+0c:00.0 Intel Battlemage G31 [8086:e223]
+</code></pre></div></div>
+<p data-sourcepos="490:1-490:183">これにより、Arc Pro B70×2とRTX 3060 Ti×1がPCIeデバイスとして認識されていることを確認できた。また、3060 Tiの映像出力も正常に動作した。</p>
+<p data-sourcepos="492:1-492:75">NVIDIA製デバイスだけを表示する場合は、次を実行する。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="494:1-496:3"><div class="highlight"><pre><code>lspci <span class="nt">-nn</span> <span class="nt">-d</span> 10de:
+</code></pre></div></div>
+<p data-sourcepos="498:1-498:87">使用中のカーネルドライバーを確認する場合は、次を実行する。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="500:1-502:3"><div class="highlight"><pre><code>lspci <span class="nt">-nnk</span> <span class="nt">-d</span> 10de:
+</code></pre></div></div>
+<div data-sourcepos="504:1-513:3" class="note warn">
+<span class="fa fa-fw fa-exclamation-circle"></span><div>
+<h3 data-sourcepos="506:1-506:52">
+<span id="nvtopにgpuが2枚しか表示されない場合" class="fragment"></span><a href="#nvtop%E3%81%ABgpu%E3%81%8C2%E6%9E%9A%E3%81%97%E3%81%8B%E8%A1%A8%E7%A4%BA%E3%81%95%E3%82%8C%E3%81%AA%E3%81%84%E5%A0%B4%E5%90%88"><i class="fa fa-link"></i></a>nvtopにGPUが2枚しか表示されない場合</h3>
+<p data-sourcepos="508:1-508:196">今回、<code>lspci</code>では3枚が認識された一方、<code>nvtop</code>にはB70の2枚しか表示されなかった。また、<code>nvidia-smi</code>は「コマンドが見つかりません」と表示された。</p>
+<p data-sourcepos="510:1-510:301"><a href="https://github.com/Syllo/nvtop" rel="nofollow noopener" target="_blank">nvtop</a>はIntelとNVIDIAの両方に対応しているが、NVIDIAの監視にはNVMLなどの管理ライブラリが必要になる。そのため、PCIeで認識されていても、ドライバー環境が整っていなければ表示されない場合がある。</p>
+<p data-sourcepos="512:1-512:96">適切に認識させるにはNVIDIAドライバーをインストールする必要がある。</p>
+</div>
+</div>
+<h3 data-sourcepos="515:1-515:34">
+<span id="nvidiaドライバーの導入" class="fragment"></span><a href="#nvidia%E3%83%89%E3%83%A9%E3%82%A4%E3%83%90%E3%83%BC%E3%81%AE%E5%B0%8E%E5%85%A5"><i class="fa fa-link"></i></a>NVIDIAドライバーの導入</h3>
+<p data-sourcepos="517:1-517:152"><a href="https://ubuntu.com/server/docs/how-to/graphics/install-nvidia-drivers/" rel="nofollow noopener" target="_blank">Ubuntu公式の導入手順</a>に従い、対応ドライバーを確認する。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="519:1-522:3"><div class="highlight"><pre><code><span class="nb">sudo </span>apt update
+ubuntu-drivers list
+</code></pre></div></div>
+<p data-sourcepos="524:1-524:75">対象GPUに対応するドライバーを確認してから導入する。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="526:1-528:3"><div class="highlight"><pre><code><span class="nb">sudo </span>ubuntu-drivers <span class="nb">install</span>
+</code></pre></div></div>
+<p data-sourcepos="530:1-530:48">インストール完了後に再起動する。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="532:1-534:3"><div class="highlight"><pre><code><span class="nb">sudo </span>reboot
+</code></pre></div></div>
+<p data-sourcepos="536:1-536:39">再起動後、以下を実行する。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="538:1-541:3"><div class="highlight"><pre><code>nvidia-smi
+nvtop
+</code></pre></div></div>
+<p data-sourcepos="543:1-543:228"><code>nvidia-smi</code>が正常に動作すれば、NVIDIAドライバーの管理機能を確認できる。<code>nvtop</code>コマンドの出力をまとめると以下のようになっており、RTX 3060 Tiが正しく認識されていた。</p>
+<table data-sourcepos="545:1-555:65">
+<thead>
+<tr data-sourcepos="545:1-545:65">
+<th data-sourcepos="545:2-545:16">項目</th>
+<th data-sourcepos="545:18-545:30">RTX 3060 Ti</th>
+<th data-sourcepos="545:32-545:47">Arc Pro B70①</th>
+<th data-sourcepos="545:49-545:64">Arc Pro B70②</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="547:1-547:57">
+<td data-sourcepos="547:2-547:12">Device ID</td>
+<td data-sourcepos="547:14-547:26">0</td>
+<td data-sourcepos="547:28-547:41">1</td>
+<td data-sourcepos="547:43-547:56">2</td>
+</tr>
+<tr data-sourcepos="548:1-548:61">
+<td data-sourcepos="548:2-548:16">PCIe世代</td>
+<td data-sourcepos="548:18-548:30">Gen1</td>
+<td data-sourcepos="548:32-548:45">Gen5</td>
+<td data-sourcepos="548:47-548:60">Gen4</td>
+</tr>
+<tr data-sourcepos="549:1-549:65">
+<td data-sourcepos="549:2-549:20">PCIeリンク幅</td>
+<td data-sourcepos="549:22-549:34">x1</td>
+<td data-sourcepos="549:36-549:49">x8</td>
+<td data-sourcepos="549:51-549:64">x4</td>
+</tr>
+<tr data-sourcepos="550:1-550:65">
+<td data-sourcepos="550:2-550:20">GPUクロック</td>
+<td data-sourcepos="550:22-550:34">210MHz</td>
+<td data-sourcepos="550:36-550:49">400MHz</td>
+<td data-sourcepos="550:51-550:64">400MHz</td>
+</tr>
+<tr data-sourcepos="551:1-551:64">
+<td data-sourcepos="551:2-551:16">温度</td>
+<td data-sourcepos="551:18-551:31">28°C</td>
+<td data-sourcepos="551:33-551:47">29°C</td>
+<td data-sourcepos="551:49-551:63">30°C</td>
+</tr>
+<tr data-sourcepos="552:1-552:63">
+<td data-sourcepos="552:2-552:18">ファン</td>
+<td data-sourcepos="552:20-552:32">0%</td>
+<td data-sourcepos="552:34-552:47">164RPM</td>
+<td data-sourcepos="552:49-552:62">244RPM</td>
+</tr>
+<tr data-sourcepos="553:1-553:63">
+<td data-sourcepos="553:2-553:18">VRAM使用量</td>
+<td data-sourcepos="553:20-553:32">0.829GiB</td>
+<td data-sourcepos="553:34-553:47">0.039GiB</td>
+<td data-sourcepos="553:49-553:62">0.039GiB</td>
+</tr>
+<tr data-sourcepos="554:1-554:61">
+<td data-sourcepos="554:2-554:16">VRAM容量</td>
+<td data-sourcepos="554:18-554:30">8.000GiB</td>
+<td data-sourcepos="554:32-554:45">31.891GiB</td>
+<td data-sourcepos="554:47-554:60">31.891GiB</td>
+</tr>
+<tr data-sourcepos="555:1-555:65">
+<td data-sourcepos="555:2-555:20">消費電力</td>
+<td data-sourcepos="555:22-555:34">15W</td>
+<td data-sourcepos="555:36-555:49">N/A</td>
+<td data-sourcepos="555:51-555:64">N/A</td>
+</tr>
+</tbody>
+</table>
+<div data-sourcepos="557:1-570:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<h3 data-sourcepos="559:1-559:35">
+<span id="windows側のgpuドライバー" class="fragment"></span><a href="#windows%E5%81%B4%E3%81%AEgpu%E3%83%89%E3%83%A9%E3%82%A4%E3%83%90%E3%83%BC"><i class="fa fa-link"></i></a>Windows側のGPUドライバー</h3>
+<p data-sourcepos="561:1-561:206">Windowsでもデバイスマネージャーから3枚のGPUを確認する。ドライバーが未導入の場合は、各メーカーの公式サイトから対応するものをインストールする。</p>
+<ul data-sourcepos="563:1-565:0">
+<li data-sourcepos="563:1-563:134"><a href="https://www.intel.com/content/www/us/en/download/741626/intel-arc-pro-graphics-windows.html" rel="nofollow noopener" target="_blank">Intel Arc Pro Graphicsドライバー</a></li>
+<li data-sourcepos="564:1-565:0"><a href="https://www.nvidia.com/Download/index.aspx" rel="nofollow noopener" target="_blank">NVIDIA公式ドライバー</a></li>
+</ul>
+<p data-sourcepos="566:1-566:130">GPUドライバーは管理者権限で導入すれば、原則として同じWindows環境の全ユーザーに適用される。</p>
+<blockquote data-sourcepos="568:1-568:140">
+<p data-sourcepos="568:3-568:140">Windows側のドライバーが別SSDのUbuntuにも適用されるわけではない。各OSごとに導入・更新が必要となる。</p>
+</blockquote>
+</div>
+</div>
+<h1 data-sourcepos="572:1-572:47">
+<span id="gpuが認識されない場合の確認事項" class="fragment"></span><a href="#gpu%E3%81%8C%E8%AA%8D%E8%AD%98%E3%81%95%E3%82%8C%E3%81%AA%E3%81%84%E5%A0%B4%E5%90%88%E3%81%AE%E7%A2%BA%E8%AA%8D%E4%BA%8B%E9%A0%85"><i class="fa fa-link"></i></a>GPUが認識されない場合の確認事項</h1>
+<p data-sourcepos="574:1-574:274">今回、当初は3060 Tiが認識されなかった。調査中にサブ電源が通電していないことが判明し、給電と配線の確認後に再起動すると認識されるようになった。トラブル発生時には次の順序で確認するとよい。</p>
+<table data-sourcepos="576:1-582:105">
+<thead>
+<tr data-sourcepos="576:1-576:31">
+<th data-sourcepos="576:2-576:9">症状</th>
+<th data-sourcepos="576:11-576:30">確認すること</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="578:1-578:76">
+<td data-sourcepos="578:2-578:24">GPUに通電しない</td>
+<td data-sourcepos="578:26-578:75">電源スイッチ、AC接続、Add2PSUの連動</td>
+</tr>
+<tr data-sourcepos="579:1-579:120">
+<td data-sourcepos="579:2-579:52">ファンは回るが<code>lspci</code>に表示されない</td>
+<td data-sourcepos="579:54-579:119">GPU・ライザーへの給電、信号ケーブル、PCIe接続</td>
+</tr>
+<tr data-sourcepos="580:1-580:101">
+<td data-sourcepos="580:2-580:58">
+<code>lspci</code>に表示されるが<code>nvidia-smi</code>が使えない</td>
+<td data-sourcepos="580:60-580:100">NVIDIAドライバーと管理ツール</td>
+</tr>
+<tr data-sourcepos="581:1-581:94">
+<td data-sourcepos="581:2-581:55">
+<code>nvidia-smi</code>は動くが<code>nvtop</code>に表示されない</td>
+<td data-sourcepos="581:57-581:93">nvtopの対応機能と表示設定</td>
+</tr>
+<tr data-sourcepos="582:1-582:105">
+<td data-sourcepos="582:2-582:36">GPU追加後に起動できない</td>
+<td data-sourcepos="582:38-582:104">電源容量、UEFI設定、PCIeリソース、接続スロット</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="584:1-584:300">ライザーの接触不良が疑われる場合は、両電源を完全に切り、ACケーブルを抜いてから挿し直す。必要であれば（面倒ではあるが）該当スロットのPCIeリンク速度を変更し、GPUをマザーボードへ直接接続した場合と比較する。</p>
+<h1 data-sourcepos="586:1-586:11">
+<span id="まとめ" class="fragment"></span><a href="#%E3%81%BE%E3%81%A8%E3%82%81"><i class="fa fa-link"></i></a>まとめ</h1>
+<p data-sourcepos="588:1-588:692">今回のデバイス増強とデュアルブート化によって、Ubuntu上で128GBのメモリとArc Pro B70×2、RTX 3060 Tiを活用できる環境が整った。<a href="https://github.com/ggml-org/llama.cpp/blob/master/docs/backend/SYCL.md" rel="nofollow noopener" target="_blank">llama.cppのSYCL対応</a>や、<a href="/qiita/2446e016df04e8349982.html" id="reference-9e28483bb5c52a2f1bc9">XeStrata</a>のようなIntel製GPUにも対応するランタイムの登場により、CUDAに依存しない推論環境も充実しつつある。GPUを計算資源として捉え、ハードウェアとソフトウェアの組み合わせで考えるなら、NVIDIA製GPU以外にも有力な選択肢が広がってきたと言えるのではないだろうか。</p>
+<p data-sourcepos="590:1-590:472">今後、さらにパラメーター数の多いモデルをローカルで扱う際には、重みや推論に必要な作業領域をVRAMとRAMにどこまで保持できるかが、実用性を左右する。メモリ価格の高騰で増設の負担が大きくなるなか、容量を増やすだけでなく、重みの配置やデータ転送を工夫して手元の計算資源を有効に使う取り組みは、今後ますます重要になると思われる。</p>
+
+</div>
+{% endraw %}

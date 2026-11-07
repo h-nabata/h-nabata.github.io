@@ -1,6 +1,6 @@
 Qiita記事バックアップ
 
-items.json.gz: gzip圧縮。展開するとitems.jsonになります。 APIで取得した公開記事の原文Markdown・Qiita生成HTML・メタデータ。
+items.json.gz: gzip圧縮。展開するとitems.jsonになります。APIで取得した公開記事の原文Markdown・Qiita生成HTML・メタデータ。既存記事は以前の取得時点を保持し、新規記事は追加時点の内容を保存しています。
 <記事ID>.md.txt: 個別の原文Markdown。拡張子を.mdに変更して利用できます。
 manifest.json: 取得日時、記事数、画像URLとローカル保存先、取得に失敗した画像。
 qiita-article-original.css: 取得時のQiita記事CSS。
