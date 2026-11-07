@@ -1,0 +1,892 @@
+---
+layout: "qiita-mirror"
+title: "【機械学習ポテンシャル】llmlip.rsの動作をUMAで検証する（WSL2環境）"
+qiita_id: "11fe382619899ec26b97"
+qiita_url: "https://qiita.com/h-nabata/items/11fe382619899ec26b97"
+qiita_created: "2026-11-01T03:05:58+09:00"
+qiita_updated: "2026-11-01T03:05:58+09:00"
+mirror_saved: "2026-11-07T17:26:28+09:00"
+mirror_category: "LLM・生成AI"
+mirror_tags: ["Python", "CPU", "計算化学", "ニューラルネットワークポテンシャル", "機械学習ポテンシャル"]
+permalink: "/qiita/11fe382619899ec26b97.html"
+---
+{% raw %}
+<div class="it-MdContent co-Item_text">
+<h1 data-sourcepos="1:1-1:14">
+<span id="はじめに" class="fragment"></span><a href="#%E3%81%AF%E3%81%98%E3%82%81%E3%81%AB"><i class="fa fa-link"></i></a>はじめに</h1>
+<p data-sourcepos="3:1-3:318"><a href="https://github.com/mizukami-group/llmlip.rs" rel="nofollow noopener" target="_blank"><strong>llmlip.rs</strong></a>はGPUに依存せずCPUだけで機械学習原子間ポテンシャル（MLIP）を実行できるように設計された軽量なRust製の推論エンジンで、CPU上でMLIP推論を効率的に実行することを目指して開発されている。</p>
+<p data-sourcepos="5:1-5:378">CUDA、PyTorch、専用GPUを必要としないため、H100やB200といった高価なGPUに依存しない選択肢の一つとして位置付けられる。MACEやNequIPだけでなく、UMAやeSENなどの比較的新しい機械学習ポテンシャルにも対応が進められており、汎用的な実行基盤として開発が進められているようである。</p>
+<p data-sourcepos="7:1-7:300">公開版の検証はmacOSのArm64環境で実施されており、LinuxやWindowsでの動作はまだ検証されていない。そこで、本稿では llmlip.rs の動作をWSL環境で調べる。機械学習ポテンシャルには、Meta社FairChemチームが開発するUMAを利用する。</p>
+<hr data-sourcepos="9:1-10:0">
+<p data-sourcepos="11:1-11:77">マシンの構成は以下の通りだが、今回GPU 2は使用しない。</p>
+<table data-sourcepos="13:1-19:46">
+<thead>
+<tr data-sourcepos="13:1-13:56">
+<th data-sourcepos="13:2-13:16">計算資源</th>
+<th data-sourcepos="13:18-13:55">仕様</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="15:1-15:62">
+<td data-sourcepos="15:2-15:8">CPU</td>
+<td data-sourcepos="15:10-15:61">AMD Ryzen 7 5800X3D（8コア／16スレッド）</td>
+</tr>
+<tr data-sourcepos="16:1-16:48">
+<td data-sourcepos="16:2-16:8">GPU 1</td>
+<td data-sourcepos="16:10-16:47">NVIDIA GeForce RTX 5070 Ti（16GB）</td>
+</tr>
+<tr data-sourcepos="17:1-17:48">
+<td data-sourcepos="17:2-17:8">GPU 2</td>
+<td data-sourcepos="17:10-17:47">NVIDIA GeForce RTX 3070 Ti（8GB）</td>
+</tr>
+<tr data-sourcepos="18:1-18:50">
+<td data-sourcepos="18:2-18:14">メモリ</td>
+<td data-sourcepos="18:16-18:49">64GB</td>
+</tr>
+<tr data-sourcepos="19:1-19:46">
+<td data-sourcepos="19:2-19:8">OS</td>
+<td data-sourcepos="19:10-19:45">Windows 11＋WSL2 Ubuntu</td>
+</tr>
+</tbody>
+</table>
+<h1 data-sourcepos="22:1-22:20">
+<span id="llmliprsの導入" class="fragment"></span><a href="#llmliprs%E3%81%AE%E5%B0%8E%E5%85%A5"><i class="fa fa-link"></i></a>llmlip.rsの導入</h1>
+<p data-sourcepos="24:1-24:91">実行にはRust 1.89以上が必要となる。必要ならRustの導入から始める。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="26:1-43:3">
+<div class="code-lang"><span class="bold">Rustの導入</span></div>
+<div class="highlight"><pre><code><span class="nb">sudo </span>apt update
+<span class="nb">sudo </span>apt <span class="nb">install</span> <span class="nt">-y</span> <span class="se">\</span>
+    git curl build-essential pkg-config cmake <span class="se">\</span>
+    python3.12-venv
+
+<span class="c"># Rustのインストール（defaultを選択すればよい）</span>
+curl https://sh.rustup.rs <span class="nt">-sSf</span> | sh
+
+<span class="c"># 環境変数の反映</span>
+<span class="nb">source</span> <span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/.cargo/env"</span>
+
+<span class="c"># ツールチェーンを更新</span>
+rustup update stable
+
+rustc <span class="nt">--version</span>
+cargo <span class="nt">--version</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="45:1-45:81">記事執筆時点では以下のバージョンがインストールされる。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="46:1-49:3"><div class="highlight"><pre><code>rustc 1.99.1 (58cf8f9c3 2026-10-13)
+cargo 1.99.1 (5f94df478 2026-08-27)
+</code></pre></div></div>
+<h2 data-sourcepos="52:1-52:26">
+<span id="openblas版のビルド" class="fragment"></span><a href="#openblas%E7%89%88%E3%81%AE%E3%83%93%E3%83%AB%E3%83%89"><i class="fa fa-link"></i></a>OpenBLAS版のビルド</h2>
+<p data-sourcepos="54:1-54:256">OpenBLASによる行列演算高速化を取り入れるため、OpenBLASのフラグを有効化してビルドする。結果の項でも示すが、OpenBLASを有効化しない場合は計算効率が悪化し、計算時間が5倍以上に伸びる。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="56:1-59:3">
+<div class="code-lang"><span class="bold">OpenBLASのインストール（未導入の場合）</span></div>
+<div class="highlight"><pre><code><span class="nb">sudo </span>apt update
+<span class="nb">sudo </span>apt <span class="nb">install</span> <span class="nt">-y</span> libopenblas-dev pkg-config
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="sh" data-sourcepos="61:1-65:3">
+<div class="code-lang"><span class="bold">確認と結果</span></div>
+<div class="highlight"><pre><code><span class="nv">$ </span>ldconfig <span class="nt">-p</span> | <span class="nb">grep </span>openblas
+        libopenblas.so.0 <span class="o">(</span>libc6,x86-64<span class="o">)</span> <span class="o">=&gt;</span> /lib/x86_64-linux-gnu/libopenblas.so.0
+        libopenblas.so <span class="o">(</span>libc6,x86-64<span class="o">)</span> <span class="o">=&gt;</span> /lib/x86_64-linux-gnu/libopenblas.so
+</code></pre></div>
+</div>
+<p data-sourcepos="67:1-67:121">続いて、llmlip.rsを取得してビルドする。筆者の環境では3分程度でコンパイルが完了した。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="69:1-78:3">
+<div class="code-lang"><span class="bold">OpenBLAS版のビルド（CPU並列実行を有効化）</span></div>
+<div class="highlight"><pre><code>git clone https://github.com/mizukami-group/llmlip.rs.git
+<span class="nb">cd </span>llmlip.rs
+
+<span class="nv">RUSTFLAGS</span><span class="o">=</span><span class="s2">"-C target-cpu=native"</span> <span class="se">\</span>
+cargo build <span class="nt">--locked</span> <span class="nt">--release</span> <span class="se">\</span>
+    <span class="nt">-p</span> llmlip-cli <span class="se">\</span>
+    <span class="nt">--features</span> parallel,openblas <span class="se">\</span>
+    <span class="nt">--target-dir</span> target/native-openblas
+</code></pre></div>
+</div>
+<p data-sourcepos="80:1-80:121">コンパイル中、ソースコード内の未使用の関数についてwarningが出るが実用上問題は無い。</p>
+<blockquote data-sourcepos="82:1-83:222">
+<p data-sourcepos="82:3-83:222">ビルドを実行する前に <code>RUSTFLAGS="-C target-cpu=native"</code> として実行環境のCPU機能をコンパイラに認識させている（Ryzen 7 5800X3DなどではAVX2やFMAなどをより積極的に利用できる可能性があるため）。<br>
+しかし、既存の演算ライブラリにもSIMD最適化が含まれているため、必ずしも大幅に高速化するとは限らない。（筆者の環境では両者に全く違いが見られなかった）</p>
+</blockquote>
+<p data-sourcepos="87:1-87:60">ビルド後、問題なく実行できるか確認する。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="89:1-91:3">
+<div class="code-lang"><span class="bold">実行ファイルの確認</span></div>
+<div class="highlight"><pre><code>./target/native-openblas/release/llmlip <span class="nt">--help</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="93:1-93:51">以下のように出力されれば問題ない。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="95:1-111:3"><div class="highlight"><pre><code>Rust-native fixed-weight equivariant MLIP inference
+
+Usage: llmlip &lt;COMMAND&gt;
+
+Commands:
+  predict                   Predict energy and/or forces from an .e3rs model
+  finite-difference-forces  Check conservative forces against central finite differences
+  benchmark-predict         Benchmark repeated load-once predictions and emit JSON timing stats
+  batch-predict             Batch-predict energy/forces/stress <span class="k">for </span>all frames <span class="k">in </span>a multi-frame extXYZ
+  validate-model            Validate an .e3rs model without running prediction
+  pack-uma-tensors          Pack UMA tensor <span class="sb">`</span>.bin<span class="sb">`</span> files into a single-file <span class="sb">`</span>tensors.pack<span class="sb">`</span>
+  <span class="nb">help                      </span>Print this message or the <span class="nb">help </span>of the given subcommand<span class="o">(</span>s<span class="o">)</span>
+
+Options:
+  <span class="nt">-h</span>, <span class="nt">--help</span>  Print <span class="nb">help</span>
+</code></pre></div></div>
+<div data-sourcepos="113:1-145:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<h3 data-sourcepos="114:1-114:46">
+<span id="サンプルモデルで動作確認する" class="fragment"></span><a href="#%E3%82%B5%E3%83%B3%E3%83%97%E3%83%AB%E3%83%A2%E3%83%87%E3%83%AB%E3%81%A7%E5%8B%95%E4%BD%9C%E7%A2%BA%E8%AA%8D%E3%81%99%E3%82%8B"><i class="fa fa-link"></i></a>サンプルモデルで動作確認する</h3>
+<p data-sourcepos="116:1-116:111">リポジトリにはテスト用の合成ポテンシャル（<code>examples/model.e3rs</code>）が付属している。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="118:1-127:3"><div class="highlight"><pre><code>./target/native-openblas/release/llmlip validate-model <span class="se">\</span>
+    <span class="nt">--model</span> examples/model.e3rs
+
+./target/native-openblas/release/llmlip predict <span class="se">\</span>
+    <span class="nt">--model</span> examples/model.e3rs <span class="se">\</span>
+    <span class="nt">--structure</span> examples/input.extxyz <span class="se">\</span>
+    <span class="nt">--energy</span> <span class="nt">--forces</span> <span class="nt">--json</span>
+
+</code></pre></div></div>
+<p data-sourcepos="129:1-129:154">正常に動作すれば、エネルギーと各原子に働く力がJSON形式で出力される。続いて、ベンチマーク機能を確認する。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="131:1-139:3"><div class="highlight"><pre><code>./target/native-openblas/release/llmlip benchmark-predict <span class="se">\</span>
+    <span class="nt">--model</span> examples/model.e3rs <span class="se">\</span>
+    <span class="nt">--structure</span> examples/input.extxyz <span class="se">\</span>
+    <span class="nt">--energy</span> <span class="nt">--forces</span> <span class="se">\</span>
+    <span class="nt">--warmup</span> 5 <span class="se">\</span>
+    <span class="nt">--iterations</span> 100
+
+</code></pre></div></div>
+<p data-sourcepos="141:1-141:199">このコマンドには、平均・中央値・95パーセンタイルなどの統計を出力する機能が実装されている。環境変数が設定されていなければ <code>null</code> が返る。</p>
+<p data-sourcepos="143:1-143:153">問題なければ、ウォームアップを含めた105回の推論が実行され、エネルギー・原子間力の計算が正常に完了する。</p>
+</div>
+</div>
+<h1 data-sourcepos="148:1-148:20">
+<span id="uma-s-12の導入" class="fragment"></span><a href="#uma-s-12%E3%81%AE%E5%B0%8E%E5%85%A5"><i class="fa fa-link"></i></a>UMA-S-1.2の導入</h1>
+<p data-sourcepos="150:1-150:83">今回の実モデルには、過去に検証済みの<code>UMA-S-1.2</code>を採用する。</p>
+<p data-sourcepos="152:1-152:245">注意点として、llmlip.rsの本体には学習済みのモデル重みが同梱されていない点が挙げられる。PyTorch形式のチェックポイントを取得し、llmlip.rs専用の<code>.e3rs</code>形式へ変換する必要がある。</p>
+<h2 data-sourcepos="154:1-154:24">
+<span id="python環境の構築" class="fragment"></span><a href="#python%E7%92%B0%E5%A2%83%E3%81%AE%E6%A7%8B%E7%AF%89"><i class="fa fa-link"></i></a>Python環境の構築</h2>
+<p data-sourcepos="156:1-156:295">GPUを搭載していない環境の場合はCPU版のPyTorchをインストールする。GPU版PyTorchをインストールした場合でも、<code>device="cpu"</code>のようにCPUの利用を明示的に指定することが可能。今回はGPU版を利用して検証用の環境を用意する。</p>
+<div data-sourcepos="158:1-160:3" class="note warn">
+<span class="fa fa-fw fa-exclamation-circle"></span><div>
+<p data-sourcepos="159:1-159:295">llmlipは公式にはFairChem 2.20.0を参照バージョンとして固定しているため、PyTorchは2.8を導入するのが厳密なベンチマークとしては良いが、ここでは速度面が改善された最新のFairChem 2.25.0を導入し、PyTorch 2.13を導入している。</p>
+</div>
+</div>
+<div class="code-frame" data-lang="sh" data-sourcepos="162:1-182:3"><div class="highlight"><pre><code><span class="nb">cd</span> ~/llmlip.rs
+
+python3.12 <span class="nt">-m</span> venv .venv
+<span class="nb">source</span> .venv/bin/activate
+
+python <span class="nt">-m</span> pip <span class="nb">install</span> <span class="nt">--upgrade</span> pip
+
+<span class="c"># PyTorch GPU版</span>
+python <span class="nt">-m</span> pip <span class="nb">install</span> <span class="nt">--no-cache-dir</span> <span class="se">\</span>
+    <span class="nv">torch</span><span class="o">==</span>2.13.0 <span class="se">\</span>
+    <span class="nt">--index-url</span> https://download.pytorch.org/whl/cu130
+
+<span class="c"># UMA-S-1.2の変換元に対応するFairChem</span>
+python <span class="nt">-m</span> pip <span class="nb">install</span> <span class="nt">--no-cache-dir</span> <span class="se">\</span>
+    fairchem-core<span class="o">==</span>2.25.0 <span class="se">\</span>
+    huggingface_hub
+
+python <span class="nt">-m</span> pip check
+
+</code></pre></div></div>
+<p data-sourcepos="184:1-184:88">CPU版の場合はPyTorchのインストールコマンドを以下に差し替える。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="186:1-190:3">
+<div class="code-lang"><span class="bold">PyTorch CPU版</span></div>
+<div class="highlight"><pre><code>python <span class="nt">-m</span> pip <span class="nb">install</span> <span class="nt">--no-cache-dir</span> <span class="se">\</span>
+    <span class="nv">torch</span><span class="o">==</span>2.13.0 <span class="se">\</span>
+    <span class="nt">--index-url</span> https://download.pytorch.org/whl/cpu
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="sh" data-sourcepos="192:1-206:3">
+<div class="code-lang"><span class="bold">インストール結果の確認</span></div>
+<div class="highlight"><pre><code>python - <span class="o">&lt;&lt;</span><span class="sh">'</span><span class="no">PY</span><span class="sh">'
+import torch
+import importlib.metadata
+
+print("PyTorch:", torch.__version__)
+print("CUDA:", torch.version.cuda)
+print("FairChem:", importlib.metadata.version("fairchem-core"))
+print("CUDA available:", torch.cuda.is_available())
+
+if torch.cuda.is_available():
+    for i in range(torch.cuda.device_count()):
+        print(f"GPU {i}:", torch.cuda.get_device_name(i))
+</span><span class="no">PY
+</span></code></pre></div>
+</div>
+<p data-sourcepos="208:1-208:51">以下のように出力されれば問題ない。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="210:1-217:3"><div class="highlight"><pre><code>PyTorch: 2.13.0+cu130
+CUDA: 13.0
+FairChem: 2.25.0
+CUDA available: True
+GPU 0: NVIDIA GeForce RTX 5070 Ti
+GPU 1: NVIDIA GeForce RTX 3070 Ti
+</code></pre></div></div>
+<h2 data-sourcepos="219:1-219:42">
+<span id="pythonバインディングのビルド" class="fragment"></span><a href="#python%E3%83%90%E3%82%A4%E3%83%B3%E3%83%87%E3%82%A3%E3%83%B3%E3%82%B0%E3%81%AE%E3%83%93%E3%83%AB%E3%83%89"><i class="fa fa-link"></i></a>Pythonバインディングのビルド</h2>
+<p data-sourcepos="221:1-221:232">llmlip.rsには、PythonからRustの計算エンジンを直接呼び出すためのバインディングも実装されている。ASEと組み合わせて構造最適化や分子動力学計算を行う場合に利用できる。</p>
+<p data-sourcepos="223:1-223:187">Pythonバインディングは<code>maturin</code>を使用して構築する。今回はCLI版と同じく、OpenBLASによる行列演算の高速化とRayonによる並列化を有効にする。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="225:1-240:3"><div class="highlight"><pre><code><span class="nb">cd</span> ~/llmlip.rs
+
+<span class="c"># 既存のPython仮想環境を利用</span>
+<span class="nb">source</span> .venv/bin/activate
+
+<span class="c"># Python側の依存パッケージ（重複するものも含む）</span>
+python <span class="nt">-m</span> pip <span class="nb">install </span>maturin ase numpy
+
+<span class="c"># OpenBLAS対応Pythonバインディングのビルド</span>
+<span class="nv">RUSTFLAGS</span><span class="o">=</span><span class="s2">"-C target-cpu=native"</span> <span class="se">\</span>
+maturin develop <span class="nt">--release</span> <span class="nt">--locked</span> <span class="se">\</span>
+    <span class="nt">--manifest-path</span> crates/llmlip-py/Cargo.toml <span class="se">\</span>
+    <span class="nt">--features</span> parallel,openblas <span class="se">\</span>
+    <span class="nt">--target-dir</span> target/native-openblas
+</code></pre></div></div>
+<p data-sourcepos="242:1-242:209"><code>--target-dir</code>は既存のCLI版と同じディレクトリを指定している。コンパイルで生成されたファイルを再利用できる場合があり、ビルド時間の短縮につながる。</p>
+<p data-sourcepos="244:1-244:54">インストール後は次のように確認する。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="246:1-252:3"><div class="highlight"><pre><code>python - <span class="o">&lt;&lt;</span><span class="sh">'</span><span class="no">PY</span><span class="sh">'
+from llmlip.ase import LlmlipCalculator
+
+print("llmlip Python binding: OK")
+</span><span class="no">PY
+</span></code></pre></div></div>
+<p data-sourcepos="254:1-254:87">正常にインポートできれば、ASEから<code>LlmlipCalculator</code>を利用できる。</p>
+<div data-sourcepos="256:1-258:3" class="note warn">
+<span class="fa fa-fw fa-exclamation-circle"></span><div>
+<p data-sourcepos="257:1-257:231">condaとvenvを併用している環境では、<code>VIRTUAL_ENV</code>と<code>CONDA_PREFIX</code>の両方が設定されるとmaturin developがエラーになる場合がある。ビルド時には使用するPython環境を一つに統一する。</p>
+</div>
+</div>
+<h2 data-sourcepos="260:1-260:33">
+<span id="モデルのダウンロード" class="fragment"></span><a href="#%E3%83%A2%E3%83%87%E3%83%AB%E3%81%AE%E3%83%80%E3%82%A6%E3%83%B3%E3%83%AD%E3%83%BC%E3%83%89"><i class="fa fa-link"></i></a>モデルのダウンロード</h2>
+<p data-sourcepos="262:1-262:236">HuggingFaceのFairChemの公式リポジトリからダウンロード可能。UMAには新しいバージョンも公開されているが、今回のllmlip.rs用の変換ツールには <code>uma-s-1p2.pt</code> を選択する必要がある。</p>
+<p data-sourcepos="264:1-264:105">ダウンロードしたチェックポイントファイルは次のディレクトリに格納する。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="266:1-269:3"><div class="highlight"><pre><code><span class="nb">cd</span> ~/llmlip.rs
+<span class="nb">mkdir</span> <span class="nt">-p</span> weights/checkpoints
+</code></pre></div></div>
+<div data-sourcepos="271:1-298:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<h3 data-sourcepos="272:1-272:53">
+<span id="hugging-face-cliでダウンロードする場合" class="fragment"></span><a href="#hugging-face-cli%E3%81%A7%E3%83%80%E3%82%A6%E3%83%B3%E3%83%AD%E3%83%BC%E3%83%89%E3%81%99%E3%82%8B%E5%A0%B4%E5%90%88"><i class="fa fa-link"></i></a>Hugging Face CLIでダウンロードする場合</h3>
+<blockquote data-sourcepos="274:1-277:5">
+<p data-sourcepos="274:3-274:155">ログインしていない場合は認証が必要。事前にfacebook/UMAのページでモデルの利用条件に同意しておく必要がある。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="275:3-277:5"><div class="highlight"><pre><code>hf auth login
+</code></pre></div></div>
+</blockquote>
+<div class="code-frame" data-lang="sh" data-sourcepos="279:1-284:3"><div class="highlight"><pre><code>hf download facebook/UMA <span class="se">\</span>
+    checkpoints/uma-s-1p2.pt <span class="se">\</span>
+    <span class="nt">--revision</span> main <span class="se">\</span>
+    <span class="nt">--local-dir</span> <span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/llmlip.rs/weights"</span>
+</code></pre></div></div>
+<div class="code-frame" data-lang="sh" data-sourcepos="286:1-290:3">
+<div class="code-lang"><span class="bold">チェックサムの検証</span></div>
+<div class="highlight"><pre><code>python converters/convert.py verify <span class="se">\</span>
+    uma-s-1p2 <span class="se">\</span>
+    weights/checkpoints/uma-s-1p2.pt
+</code></pre></div>
+</div>
+<p data-sourcepos="292:1-292:33">以下の値であれば良い。</p>
+<div class="code-frame" data-lang="text" data-sourcepos="294:1-297:3"><div class="highlight"><pre><code>SHA256：ba5c0d912efa22dc238e5fb1b5b7f66ee2e68c48c1b95b7cfd7fe1da5938398b
+ファイルサイズ：2,333,393,167 bytes
+</code></pre></div></div>
+</div>
+</div>
+<div data-sourcepos="300:1-314:3" class="note warn">
+<span class="fa fa-fw fa-exclamation-circle"></span><div>
+<h3 data-sourcepos="301:1-301:58">
+<span id="利用するumaモデルのバージョンについて" class="fragment"></span><a href="#%E5%88%A9%E7%94%A8%E3%81%99%E3%82%8Buma%E3%83%A2%E3%83%87%E3%83%AB%E3%81%AE%E3%83%90%E3%83%BC%E3%82%B8%E3%83%A7%E3%83%B3%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6"><i class="fa fa-link"></i></a>利用するUMAモデルのバージョンについて</h3>
+<p data-sourcepos="302:1-302:338">FairChem公式では<code>uma-s-1p2</code>を指定した場合に、バグ修正版の<code>uma-s-1p2p1</code>が自動的に参照されるようになっているが、後者は現バージョンのスクリプトでは適切に変換できない。llmlip.rs用の変換スクリプト export_uma_state.py では次の定数が直接指定されている。</p>
+<div class="code-frame" data-lang="py" data-sourcepos="304:1-310:3"><div class="highlight"><pre><code><span class="n">MODEL_KEY</span> <span class="o">=</span> <span class="sh">"</span><span class="s">uma-s-1p2</span><span class="sh">"</span>
+<span class="n">STATE_SCHEMA</span> <span class="o">=</span> <span class="sh">"</span><span class="s">uma-s-1p2-state-dict-v1</span><span class="sh">"</span>
+<span class="n">FAIRCHEM_VERSION</span> <span class="o">=</span> <span class="sh">"</span><span class="s">2.20.0</span><span class="sh">"</span>
+<span class="n">CHECKPOINT_SHA256</span> <span class="o">=</span> <span class="sh">"</span><span class="s">ba5c0d912efa22dc238e5fb1b5b7f66ee2e68c48c1b95b7cfd7fe1da5938398b</span><span class="sh">"</span>
+<span class="n">CHECKPOINT_SIZE_BYTES</span> <span class="o">=</span> <span class="mi">2_333_393_167</span>
+</code></pre></div></div>
+<p data-sourcepos="311:1-311:414">変換開始時にはチェックポイントのファイルサイズとSHA256を検証しており、新モデルを既存のuma-s-1p2として変換しようとしても、チェックポイントの同一性検証で失敗する。Rust側のローダーもモデル識別子、テンソル構成、状態スキーマなどを検証しているため、現状は古い<code>uma-s-1p2</code>を使うのが無難である。</p>
+<blockquote data-sourcepos="313:1-313:84">
+<p data-sourcepos="313:3-313:84">今後の変換ツールとRustランタイムの対応拡張が期待される。</p>
+</blockquote>
+</div>
+</div>
+<div data-sourcepos="316:1-367:3" class="note warn">
+<span class="fa fa-fw fa-exclamation-circle"></span><div>
+<h3 data-sourcepos="317:1-317:60">
+<span id="warpがcudaドライバを読み込む経路について" class="fragment"></span><a href="#warp%E3%81%8Ccuda%E3%83%89%E3%83%A9%E3%82%A4%E3%83%90%E3%82%92%E8%AA%AD%E3%81%BF%E8%BE%BC%E3%82%80%E7%B5%8C%E8%B7%AF%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6"><i class="fa fa-link"></i></a>WarpがCUDAドライバを読み込む経路について</h3>
+<p data-sourcepos="319:1-319:209">WarpのGPU認識が失敗してGPUの利用でエラーが発生する場合がある。これはCUDAライブラリの参照先を環境変数に指定することで適切に読み込ませて解決可能。</p>
+<blockquote data-sourcepos="321:1-321:130">
+<p data-sourcepos="321:3-321:130">NVIDIA Warpは、NVIDIAが提供するGPUアクセラレーション対応のオープンソースPythonフレームワーク。</p>
+</blockquote>
+<div class="code-frame" data-lang="sh" data-sourcepos="323:1-338:3">
+<div class="code-lang"><span class="bold">環境変数とCUDAライブラリの参照先を確認</span></div>
+<div class="highlight"><pre><code><span class="c"># 正しいNVIDIAドライバのディレクトリ（末尾のIDは適切に書き換えること）</span>
+<span class="nv">DRV</span><span class="o">=</span><span class="s2">"/usr/lib/wsl/drivers/nv_dispig.inf_amd64_cc526ccc3287f5cd"</span>
+
+<span class="c"># 一時的なライブラリディレクトリ</span>
+<span class="nv">TMP</span><span class="o">=</span><span class="s2">"</span><span class="nv">$HOME</span><span class="s2">/.wsl-cuda-warp"</span>
+
+<span class="nb">mkdir</span> <span class="nt">-p</span> <span class="s2">"</span><span class="nv">$TMP</span><span class="s2">"</span>
+
+<span class="c"># 既存の無効なリンクを上書き</span>
+<span class="nb">ln</span> <span class="nt">-sfn</span> <span class="s2">"</span><span class="nv">$DRV</span><span class="s2">/libcuda.so.1.1"</span> <span class="s2">"</span><span class="nv">$TMP</span><span class="s2">/libcuda.so.1"</span>
+<span class="nb">ln</span> <span class="nt">-sfn</span> <span class="s2">"</span><span class="nv">$DRV</span><span class="s2">/libcuda.so.1.1"</span> <span class="s2">"</span><span class="nv">$TMP</span><span class="s2">/libcuda.so"</span>
+
+<span class="c"># リンク先を確認</span>
+<span class="nb">readlink</span> <span class="nt">-e</span> <span class="s2">"</span><span class="nv">$TMP</span><span class="s2">/libcuda.so.1"</span>
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="sh" data-sourcepos="340:1-348:3">
+<div class="code-lang"><span class="bold">Warpをテスト</span></div>
+<div class="highlight"><pre><code><span class="nv">LD_LIBRARY_PATH</span><span class="o">=</span><span class="s2">"</span><span class="nv">$TMP</span><span class="s2">:</span><span class="nv">$DRV</span><span class="s2">"</span> <span class="se">\</span>
+python - <span class="o">&lt;&lt;</span><span class="sh">'</span><span class="no">PY</span><span class="sh">'
+import warp as wp
+
+wp.init()
+print("CUDA devices:", wp.get_cuda_devices())
+</span><span class="no">PY
+</span></code></pre></div>
+</div>
+<p data-sourcepos="350:1-350:60">以下のように出れば正常に認識できている。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="352:1-364:3"><div class="highlight"><pre><code>Warp 1.18.0 initialized:
+   CUDA Toolkit 13.4, Driver 13.3
+   Devices:
+     <span class="s2">"cpu"</span>      : <span class="s2">"x86_64"</span>
+     <span class="s2">"cuda:0"</span>   : <span class="s2">"NVIDIA GeForce RTX 5070 Ti"</span> <span class="o">(</span>16 GiB, sm_120, mempool enabled<span class="o">)</span>
+     <span class="s2">"cuda:1"</span>   : <span class="s2">"NVIDIA GeForce RTX 3070 Ti"</span> <span class="o">(</span>8 GiB, sm_86, mempool enabled<span class="o">)</span>
+   CUDA peer access:
+     Not supported
+   Kernel cache:
+     /home/hogehoge/.cache/warp/1.18.0
+CUDA devices: <span class="o">[</span><span class="s1">'cuda:0'</span>, <span class="s1">'cuda:1'</span><span class="o">]</span>
+</code></pre></div></div>
+<blockquote data-sourcepos="366:1-366:116">
+<p data-sourcepos="366:3-366:116">このようにWarp 1.18.0のCUDA Toolkit 13.4とDriver 13.3の組み合わせでも正常に初期化できる。</p>
+</blockquote>
+</div>
+</div>
+<h2 data-sourcepos="369:1-369:42">
+<span id="llmliprs用の重みファイル変換" class="fragment"></span><a href="#llmliprs%E7%94%A8%E3%81%AE%E9%87%8D%E3%81%BF%E3%83%95%E3%82%A1%E3%82%A4%E3%83%AB%E5%A4%89%E6%8F%9B"><i class="fa fa-link"></i></a>llmlip.rs用の重みファイル変換</h2>
+<div class="code-frame" data-lang="sh" data-sourcepos="371:1-378:3">
+<div class="code-lang"><span class="bold">ptファイルを変換する</span></div>
+<div class="highlight"><pre><code><span class="nb">cd</span> ~/llmlip.rs
+
+python converters/convert.py convert uma-s-1p2 <span class="se">\</span>
+    <span class="nt">--checkpoint</span> weights/checkpoints/uma-s-1p2.pt <span class="se">\</span>
+    <span class="nt">--out</span> out/uma-s-1p2.e3rs <span class="se">\</span>
+    <span class="nt">--accept-license</span>
+</code></pre></div>
+</div>
+<p data-sourcepos="380:1-380:72">末尾に以下のような行が表示されれば成功している。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="382:1-385:3"><div class="highlight"><pre><code>model validation ok
+OK: wrote out/uma-s-1p2.e3rs <span class="o">(</span>validated with .../llmlip<span class="o">)</span>
+</code></pre></div></div>
+<h1 data-sourcepos="387:1-387:17">
+<span id="動作テスト" class="fragment"></span><a href="#%E5%8B%95%E4%BD%9C%E3%83%86%E3%82%B9%E3%83%88"><i class="fa fa-link"></i></a>動作テスト</h1>
+<p data-sourcepos="389:1-389:224">早速動作テストをしてみよう。周期系としてSi 64原子のバルク結晶、分子系として712原子のシクロパラフェニレンの構造最適化をテストする。（いずれもCPU上で評価）</p>
+<h2 data-sourcepos="391:1-391:13">
+<span id="1点計算" class="fragment"></span><a href="#1%E7%82%B9%E8%A8%88%E7%AE%97"><i class="fa fa-link"></i></a>1点計算</h2>
+<p data-sourcepos="393:1-393:132">まず、64原子のSi結晶を作成する。既存の.venvにASEが導入されているため、次のコマンドが使える。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="395:1-409:3">
+<div class="code-lang"><span class="bold">Si結晶の生成</span></div>
+<div class="highlight"><pre><code><span class="nb">cd</span> ~/llmlip.rs
+<span class="nb">mkdir</span> <span class="nt">-p</span> inputs results
+
+python - <span class="o">&lt;&lt;</span><span class="sh">'</span><span class="no">PY</span><span class="sh">'
+from ase.build import bulk
+from ase.io import write
+
+atoms = bulk("Si", "diamond", a=5.43, cubic=True)
+atoms = atoms.repeat((2, 2, 2))
+
+write("inputs/si64.extxyz", atoms)
+print("Atoms:", len(atoms))
+</span><span class="no">PY
+</span></code></pre></div>
+</div>
+<p data-sourcepos="411:1-411:121"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F4b0f966f-31e9-4612-9f82-de21a2950c4a.png?ixlib=rb-4.1.1&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=5029570b1eff182e18d03517b24958f3" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/ebbc0cec5f6adec575b744dd.png" alt="image.png" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/4b0f966f-31e9-4612-9f82-de21a2950c4a.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="413:1-413:77">続いて、変換したUMA-S-1.2でエネルギーとForceを計算する。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="415:1-422:3">
+<div class="code-lang"><span class="bold">エネルギーとForceの計算</span></div>
+<div class="highlight"><pre><code><span class="nv">RAYON_NUM_THREADS</span><span class="o">=</span>8 <span class="se">\</span>
+./target/native-openblas/release/llmlip predict <span class="se">\</span>
+    <span class="nt">--model</span> out/uma-s-1p2.e3rs <span class="se">\</span>
+    <span class="nt">--structure</span> inputs/si64.extxyz <span class="se">\</span>
+    <span class="nt">--energy</span> <span class="nt">--forces</span> <span class="nt">--json</span> <span class="se">\</span>
+    <span class="o">&gt;</span> results/uma_si64.json
+</code></pre></div>
+</div>
+<div class="code-frame" data-lang="sh" data-sourcepos="424:1-435:3">
+<div class="code-lang"><span class="bold">結果の確認</span></div>
+<div class="highlight"><pre><code>python - <span class="o">&lt;&lt;</span><span class="sh">'</span><span class="no">PY</span><span class="sh">'
+import json
+
+with open("results/uma_si64.json") as f:
+    result = json.load(f)
+
+print("Energy:", result["energy"], "eV")
+print("Force count:", len(result["forces"]))
+print("First force:", result["forces"][0])
+</span><span class="no">PY
+</span></code></pre></div>
+</div>
+<div class="code-frame" data-lang="sh" data-sourcepos="437:1-441:3">
+<div class="code-lang"><span class="bold">結果</span></div>
+<div class="highlight"><pre><code>Energy: <span class="nt">-346</span>.59921145117494 eV
+Force count: 64
+First force: <span class="o">[</span>3.712308238590367e-16, 2.8275992658421956e-16, 1.5612511283791264e-17]
+</code></pre></div>
+</div>
+<p data-sourcepos="443:1-443:42">計算は問題なく終了している。</p>
+<h2 data-sourcepos="445:1-445:18">
+<span id="構造最適化" class="fragment"></span><a href="#%E6%A7%8B%E9%80%A0%E6%9C%80%E9%81%A9%E5%8C%96"><i class="fa fa-link"></i></a>構造最適化</h2>
+<p data-sourcepos="447:1-447:204">最適化処理はllmlip.rs／FairChemともASEのLBFGSを使用した。特に、llmlip.rsではエネルギーとForceを同一構造で同時に要求するラッパーで重複評価を抑制した。</p>
+<table data-sourcepos="449:1-457:54">
+<thead>
+<tr data-sourcepos="449:1-449:19">
+<th data-sourcepos="449:2-449:9">項目</th>
+<th data-sourcepos="449:11-449:18">設定</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="451:1-451:50">
+<td data-sourcepos="451:2-451:23">Python / NumPy / ASE</td>
+<td data-sourcepos="451:25-451:49">3.12.7 / 2.4.6 / 3.29.0</td>
+</tr>
+<tr data-sourcepos="452:1-452:42">
+<td data-sourcepos="452:2-452:12">モデル</td>
+<td data-sourcepos="452:14-452:41">UMA-S-1.2（<code>uma-s-1p2</code>）</td>
+</tr>
+<tr data-sourcepos="453:1-453:49">
+<td data-sourcepos="453:2-453:11">FairChem</td>
+<td data-sourcepos="453:13-453:48">CPU、<code>inference_settings="batch"</code>
+</td>
+</tr>
+<tr data-sourcepos="454:1-454:71">
+<td data-sourcepos="454:2-454:12">llmlip.rs</td>
+<td data-sourcepos="454:14-454:70">
+<code>direct</code>、<code>float64</code>、OpenBLASリンクを確認済み</td>
+</tr>
+<tr data-sourcepos="455:1-455:53">
+<td data-sourcepos="455:2-455:28">Rust側のスレッド数</td>
+<td data-sourcepos="455:30-455:52"><code>RAYON_NUM_THREADS=8</code></td>
+</tr>
+<tr data-sourcepos="456:1-456:66">
+<td data-sourcepos="456:2-456:16">BLAS / OpenMP</td>
+<td data-sourcepos="456:18-456:65">
+<code>OPENBLAS_NUM_THREADS=1</code>、<code>OMP_NUM_THREADS=1</code>
+</td>
+</tr>
+<tr data-sourcepos="457:1-457:54">
+<td data-sourcepos="457:2-457:12">タスク</td>
+<td data-sourcepos="457:14-457:53">Si結晶：<code>omat</code>、分子系：<code>omol</code>
+</td>
+</tr>
+</tbody>
+</table>
+<h3 data-sourcepos="459:1-459:13">
+<span id="周期系" class="fragment"></span><a href="#%E5%91%A8%E6%9C%9F%E7%B3%BB"><i class="fa fa-link"></i></a>周期系</h3>
+<p data-sourcepos="461:1-461:91">disorderを含むSi結晶を初期構造として、構造最適化を実施してみる。</p>
+<p data-sourcepos="463:1-463:201">Si結晶の検証は次のコマンドで実行した。<code>validate_mlips.py</code>は今回の比較のために作成した検証スクリプトであり、llmlip.rs本体に付属するものではない。</p>
+<div class="code-frame" data-lang="bash" data-sourcepos="465:1-480:3"><div class="highlight"><pre><code><span class="nv">RAYON_NUM_THREADS</span><span class="o">=</span>8 <span class="se">\</span>
+<span class="nv">OPENBLAS_NUM_THREADS</span><span class="o">=</span>1 <span class="se">\</span>
+<span class="nv">OMP_NUM_THREADS</span><span class="o">=</span>1 <span class="se">\</span>
+<span class="nv">LLMLIP_UMA_F64_DIRECT_CONCAT_ROTATE_MIN_EDGES</span><span class="o">=</span>1000000 <span class="se">\</span>
+python validate_mlips.py si <span class="se">\</span>
+  <span class="nt">--engine</span> both <span class="se">\</span>
+  <span class="nt">--llmlip-backend</span> direct <span class="se">\</span>
+  <span class="nt">--model</span> out/uma-s-1p2.e3rs <span class="se">\</span>
+  <span class="nt">--fairchem-model</span> weights/checkpoints/uma-s-1p2.pt <span class="se">\</span>
+  <span class="nt">--fairchem-mode</span> batch <span class="se">\</span>
+  <span class="nt">--device</span> cpu <span class="se">\</span>
+  <span class="nt">--repeat</span> 2 <span class="nt">--sigma</span> 0.10 <span class="nt">--seed</span> 20261101 <span class="se">\</span>
+  <span class="nt">--fmax</span> 0.03 <span class="nt">--steps</span> 150 <span class="se">\</span>
+  <span class="nt">--out</span> results/si_local_ckpt
+</code></pre></div></div>
+<p data-sourcepos="482:1-482:263">ダイヤモンド構造Siのユニットセル（8原子、格子定数5.43 Å）を各方向に2倍し、64原子のスーパーセルを構築した。全方向に周期境界条件を設定し、<strong>セルを固定して原子位置だけを最適化</strong>した。</p>
+<p data-sourcepos="484:1-484:260">初期構造には各原子の直交座標に標準偏差0.10 Åの正規乱数変位を加え、全原子の平均変位を差し引いた。生成した構造の最短Si–Si距離は2.0164 Åだった。両エンジンには同じ初期構造を与えた。</p>
+<blockquote data-sourcepos="486:1-486:147">
+<p data-sourcepos="486:3-486:147">乱数生成にはNumPyの<code>default_rng</code>とシード<code>20261101</code>を使用しているため、同じ実装・設定で初期構造を再現可能。</p>
+</blockquote>
+<p data-sourcepos="488:1-488:135">LBFGSの最大ステップ変位は0.04 Å、収束判定は最大Force<code>fmax &lt; 0.03 eV/Å</code>、ステップ数の上限は150とした。</p>
+<table data-sourcepos="490:1-499:44">
+<thead>
+<tr data-sourcepos="490:1-490:37">
+<th data-sourcepos="490:2-490:9">項目</th>
+<th style="text-align: right" data-sourcepos="490:11-490:21">llmlip.rs</th>
+<th style="text-align: right" data-sourcepos="490:23-490:36">FairChem CPU</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="492:1-492:61">
+<td data-sourcepos="492:2-492:32">初期エネルギー（eV）</td>
+<td style="text-align: right" data-sourcepos="492:34-492:46">-333.724339</td>
+<td style="text-align: right" data-sourcepos="492:48-492:60">-333.724348</td>
+</tr>
+<tr data-sourcepos="493:1-493:52">
+<td data-sourcepos="493:2-493:31">初期最大Force（eV/Å）</td>
+<td style="text-align: right" data-sourcepos="493:33-493:41">6.43634</td>
+<td style="text-align: right" data-sourcepos="493:43-493:51">6.60262</td>
+</tr>
+<tr data-sourcepos="494:1-494:61">
+<td data-sourcepos="494:2-494:32">最終エネルギー（eV）</td>
+<td style="text-align: right" data-sourcepos="494:34-494:46">-346.597295</td>
+<td style="text-align: right" data-sourcepos="494:48-494:60">-346.597944</td>
+</tr>
+<tr data-sourcepos="495:1-495:60">
+<td data-sourcepos="495:2-495:35">エネルギー低下量（eV）</td>
+<td style="text-align: right" data-sourcepos="495:37-495:47">12.872956</td>
+<td style="text-align: right" data-sourcepos="495:49-495:59">12.873596</td>
+</tr>
+<tr data-sourcepos="496:1-496:52">
+<td data-sourcepos="496:2-496:31">最終最大Force（eV/Å）</td>
+<td style="text-align: right" data-sourcepos="496:33-496:41">0.02830</td>
+<td style="text-align: right" data-sourcepos="496:43-496:51">0.02262</td>
+</tr>
+<tr data-sourcepos="497:1-497:35">
+<td data-sourcepos="497:2-497:24">収束ステップ数</td>
+<td style="text-align: right" data-sourcepos="497:26-497:29">28</td>
+<td style="text-align: right" data-sourcepos="497:31-497:34">26</td>
+</tr>
+<tr data-sourcepos="498:1-498:52">
+<td data-sourcepos="498:2-498:41">エネルギー・Forceの評価回数</td>
+<td style="text-align: right" data-sourcepos="498:43-498:46">29</td>
+<td style="text-align: right" data-sourcepos="498:48-498:51">27</td>
+</tr>
+<tr data-sourcepos="499:1-499:44">
+<td data-sourcepos="499:2-499:27">最適化時間（秒）</td>
+<td style="text-align: right" data-sourcepos="499:29-499:35">52.65</td>
+<td style="text-align: right" data-sourcepos="499:37-499:43">42.51</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="501:1-501:144"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F646dcc64-a0dd-4de5-b3a8-4e7db0538209.png?ixlib=rb-4.1.1&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=c4b0e7e57c953b5f2465f73f05d00624" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/993dd394e9c5647738a5a49a.png" alt="Si結晶のエネルギー変化" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/646dcc64-a0dd-4de5-b3a8-4e7db0538209.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="503:1-503:136"><em>図1：64原子Si結晶の構造最適化に伴うエネルギー低下。各エンジンの初期エネルギーを基準とした。</em></p>
+<p data-sourcepos="505:1-505:143"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Ffdb9d80d-c758-4f31-ae24-7b8e7fefb4cf.png?ixlib=rb-4.1.1&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=9b6bc2d51b733f5514b494d27ae1c409" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/5b2f186fb630a6ba819cad1c.png" alt="Si結晶の最大Forceの推移" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/fdb9d80d-c758-4f31-ae24-7b8e7fefb4cf.png" loading="lazy" decoding="async"></a></p>
+<p data-sourcepos="507:1-507:156"><em>図2：Si結晶の最大Forceの推移。破線は収束基準の0.03 eV/Å。最大Forceは各エンジン自身が出力したForceから計算した。</em></p>
+<p data-sourcepos="509:1-509:266">両者はほぼ同じエネルギー低下を示し、最終的な原子位置のRMSDは周期境界を考慮して<strong>0.00392 Å</strong>だった。理論上の最適化構造を基準とするRMSDも、llmlip.rsが約0.00600 Å、FairChemが約0.00523 Åと近かった。</p>
+<p data-sourcepos="511:1-511:235">処理時間は今回の64原子Si系ではllmlip.rsがFairChemより<strong>約24%長かった</strong>。1ステップごとの計算時間はそれぞれ約1.82秒と約1.57秒となる（ログ出力などのオーバーヘッドを含む）。</p>
+<p data-sourcepos="513:1-513:261">同一のSi初期構造に対するエネルギー差は<code>E(llmlip.rs) − E(FairChem) = +0.00000918 eV</code>で、64原子全体としても極めて小さい。一方、全192成分のForceのRMSEは<strong>0.13196 eV/Å</strong>、最大成分誤差は0.41748 eV/Åだった。</p>
+<p data-sourcepos="515:1-515:143">さらに、Forceがエネルギーの負の座標微分と一致するかを確認した。座標成分を±0.01 Å変位させ、中心差分</p>
+<p data-sourcepos="517:1-519:2">$$<br>
+F_{i\alpha}^{\mathrm{FD}}=-\frac{E(R_{i\alpha}+h)-E(R_{i\alpha}-h)}{2h},\qquad h=0.01\ \mathrm{Å}<br>
+$$</p>
+<p data-sourcepos="521:1-521:162">から計算したForceを、エンジンが直接出力したForceと比較した。今回は初期構造の<strong>3つの座標成分を抽出して検証</strong>した。</p>
+<table data-sourcepos="523:1-527:40">
+<thead>
+<tr data-sourcepos="523:1-523:130">
+<th data-sourcepos="523:2-523:54">対象のForce成分（原子番号は0始まり）</th>
+<th style="text-align: right" data-sourcepos="523:56-523:92">llmlip.rsの絶対誤差（eV/Å）</th>
+<th style="text-align: right" data-sourcepos="523:94-523:129">FairChemの絶対誤差（eV/Å）</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="525:1-525:41">
+<td data-sourcepos="525:2-525:18">32番原子・x</td>
+<td style="text-align: right" data-sourcepos="525:20-525:29">0.297992</td>
+<td style="text-align: right" data-sourcepos="525:31-525:40">0.000454</td>
+</tr>
+<tr data-sourcepos="526:1-526:41">
+<td data-sourcepos="526:2-526:18">61番原子・x</td>
+<td style="text-align: right" data-sourcepos="526:20-526:29">0.123230</td>
+<td style="text-align: right" data-sourcepos="526:31-526:40">0.000244</td>
+</tr>
+<tr data-sourcepos="527:1-527:40">
+<td data-sourcepos="527:2-527:17">4番原子・x</td>
+<td style="text-align: right" data-sourcepos="527:19-527:28">0.066853</td>
+<td style="text-align: right" data-sourcepos="527:30-527:39">0.000035</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="529:1-529:281">判定閾値を0.005 eV/Åとすると、FairChemは3成分とも合格し、llmlip.rsは3成分とも不合格だった。少なくとも今回調べた成分について、llmlip.rsの解析的なForceとエネルギーの有限差分には明確な不整合が認められる。</p>
+<h3 data-sourcepos="532:1-532:13">
+<span id="分子系" class="fragment"></span><a href="#%E5%88%86%E5%AD%90%E7%B3%BB"><i class="fa fa-link"></i></a>分子系</h3>
+<p data-sourcepos="534:1-534:352">続いて、過去の記事「<a href="https://qiita.com/h-nabata/items/efb8c8ea0ccf5fccc1ab?utm_source=chatgpt.com" id="reference-c1b3c85934e9a56ca1e9">WSL-Ubuntu + RTX 5070 Ti で fairchem-core (UMA) をGPUで動かす</a>」でも扱ったC432H280からなる712原子の孤立分子系について検証した。タスクには<code>omol</code>を使用し、電荷0、スピン多重度1を指定した。</p>
+<p data-sourcepos="536:1-536:265"><strong>先に結論から述べると、llmlip.rsによる構造最適化は所定の収束基準に到達しなかった。</strong> そこで、両エンジンの計算結果を同一構造で比較するため、FairChemの最適化軌跡から代表構造を抽出した。</p>
+<p data-sourcepos="538:1-538:259">以前FairChem CPU版で実行した構造最適化のStep 0、50、100、150、200、250の<strong>同一座標</strong>をllmlip.rsで再評価し、エネルギーと全原子のForceを比較した（過去のトラジェクトリは276 stepで収束している）。</p>
+<table data-sourcepos="540:1-547:41">
+<thead>
+<tr data-sourcepos="540:1-540:120">
+<th style="text-align: right" data-sourcepos="540:2-540:24">FairChem軌跡のStep</th>
+<th style="text-align: right" data-sourcepos="540:26-540:53">エネルギー差（eV）</th>
+<th style="text-align: right" data-sourcepos="540:55-540:79">ForceのRMSE（eV/Å）</th>
+<th style="text-align: right" data-sourcepos="540:81-540:119">Forceの最大成分誤差（eV/Å）</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="542:1-542:39">
+<td style="text-align: right" data-sourcepos="542:2-542:4">0</td>
+<td style="text-align: right" data-sourcepos="542:6-542:16">-0.092494</td>
+<td style="text-align: right" data-sourcepos="542:18-542:27">0.202420</td>
+<td style="text-align: right" data-sourcepos="542:29-542:38">2.843234</td>
+</tr>
+<tr data-sourcepos="543:1-543:40">
+<td style="text-align: right" data-sourcepos="543:2-543:5">50</td>
+<td style="text-align: right" data-sourcepos="543:7-543:17">+0.039552</td>
+<td style="text-align: right" data-sourcepos="543:19-543:28">0.151500</td>
+<td style="text-align: right" data-sourcepos="543:30-543:39">0.709474</td>
+</tr>
+<tr data-sourcepos="544:1-544:41">
+<td style="text-align: right" data-sourcepos="544:2-544:6">100</td>
+<td style="text-align: right" data-sourcepos="544:8-544:18">+0.048411</td>
+<td style="text-align: right" data-sourcepos="544:20-544:29">0.149465</td>
+<td style="text-align: right" data-sourcepos="544:31-544:40">0.737573</td>
+</tr>
+<tr data-sourcepos="545:1-545:41">
+<td style="text-align: right" data-sourcepos="545:2-545:6">150</td>
+<td style="text-align: right" data-sourcepos="545:8-545:18">+0.061821</td>
+<td style="text-align: right" data-sourcepos="545:20-545:29">0.149018</td>
+<td style="text-align: right" data-sourcepos="545:31-545:40">0.810651</td>
+</tr>
+<tr data-sourcepos="546:1-546:41">
+<td style="text-align: right" data-sourcepos="546:2-546:6">200</td>
+<td style="text-align: right" data-sourcepos="546:8-546:18">+0.070669</td>
+<td style="text-align: right" data-sourcepos="546:20-546:29">0.149005</td>
+<td style="text-align: right" data-sourcepos="546:31-546:40">0.779318</td>
+</tr>
+<tr data-sourcepos="547:1-547:41">
+<td style="text-align: right" data-sourcepos="547:2-547:6">250</td>
+<td style="text-align: right" data-sourcepos="547:8-547:18">+0.073438</td>
+<td style="text-align: right" data-sourcepos="547:20-547:29">0.148404</td>
+<td style="text-align: right" data-sourcepos="547:31-547:40">0.768078</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="549:1-549:235">エネルギー差は、llmlip.rsからFairChemの値を引いたものである。712原子系全体に対するエネルギー差は0.1 eV以下に収まるが、ForceのRMSEは最終構造でも約0.148 eV/Å程度残っている。</p>
+<p data-sourcepos="551:1-552:123"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Fa7baf9a9-9c89-4f81-9128-3e333f1d8d04.png?ixlib=rb-4.1.1&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=34f1064a7bfb002ba1f7b41cbbb62c13" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/75b730fa78bb089bcfe60873.png" alt="712原子系のエネルギー差" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/a7baf9a9-9c89-4f81-9128-3e333f1d8d04.png" loading="lazy" decoding="async"></a><br>
+<em>図3：FairChemの同一構造に対するエネルギー差。0、50、100、150、200、250の6構造を採用した。</em></p>
+<p data-sourcepos="554:1-554:415">ForceのRMSEは、初期構造の0.20242 eV/ÅからStep 50で0.15150 eV/Åまで減少する。しかし、それ以降はStep 250に至っても0.14840 eV/Åであり、<strong>構造最適化の進行に対してForceの差が大きく改善していない</strong>。Step 250のForceのRMSEを元素別に求めると、C原子で約0.1701 eV/Å、H原子で約0.1066 eV/Åとなり、両元素で誤差が確認された。</p>
+<p data-sourcepos="556:1-557:161"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2F1459e4cb-7982-44c6-aacc-d3bde73860cb.png?ixlib=rb-4.1.1&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=6ae37fb0357a9c66f99cb659d9f0f740" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/94661464903721741978e505.png" alt="712原子系のForceのRMSE" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/1459e4cb-7982-44c6-aacc-d3bde73860cb.png" loading="lazy" decoding="async"></a><br>
+<em>図4：FairChemの同一構造に対して計算した、llmlip.rsとFairChemの原子間力のRMSE。全712原子の3方向のForce成分から算出した。</em></p>
+<p data-sourcepos="559:1-559:249">同一構造に対する最大のForceの推移も大きく異なった。FairChemではStep 50の0.19499 eV/ÅからStep 250の0.04910 eV/Åへ減少するのに対し、llmlip.rsではStep 50以降、約0.84～0.93 eV/Åの範囲で推移した。</p>
+<p data-sourcepos="561:1-562:163"><a href="https://qiita-user-contents.imgix.net/https%3A%2F%2Fqiita-image-store.s3.ap-northeast-1.amazonaws.com%2F0%2F697094%2Fe7d87895-3ad9-4d08-9d2d-9730e490fe39.png?ixlib=rb-4.1.1&amp;auto=format&amp;gif-q=60&amp;q=75&amp;s=b198c815b7619521bed3a8ef26760569" target="_blank" rel="nofollow noopener"><img src="/assets/qiita/images/8c70b8e942b08863f0dd0f90.png" alt="同一分子構造を評価した最大のForce" data-canonical-src="https://qiita-image-store.s3.ap-northeast-1.amazonaws.com/0/697094/e7d87895-3ad9-4d08-9d2d-9730e490fe39.png" loading="lazy" decoding="async"></a><br>
+<em>図5：各Stepの同一構造をそれぞれのエンジンで評価した最大Force。縦軸は対数表示で、破線は0.03 eV/Åの収束基準を示す。</em></p>
+<p data-sourcepos="564:1-564:289">分子系では、FairChemの軌跡上でForceが減少しても、llmlip.rsの評価では大きなForceが残っていた。遷移状態探索、振動解析、分子動力学（MD）など、Forceの正確さに依存する計算では、この不一致を解決する必要がある。</p>
+<blockquote data-sourcepos="566:1-566:220">
+<p data-sourcepos="566:3-566:220">llmlip.rsの実行時にはメモリを30 GB近くを使用する場面があった。数百以上の原子数からなる系を計算する場合は、それなりのメモリ容量が必要になると思われる。</p>
+</blockquote>
+<blockquote data-sourcepos="568:1-568:490">
+<p data-sourcepos="568:3-568:490">今回はFairChem 2.25.0を比較対象としたため、llmlip.rsの参照バージョンである2.20.0との実装差が結果に影響している可能性がある。ただし、llmlip.rs自身のエネルギーと力の有限差分検証でも不一致が確認されており、これはfairchem-coreのバージョン差だけでは説明できない。モデル変換処理やRust側の勾配計算経路に原因がある可能性があり、詳細な検証が必要である。</p>
+</blockquote>
+<h1 data-sourcepos="570:1-570:11">
+<span id="まとめ" class="fragment"></span><a href="#%E3%81%BE%E3%81%A8%E3%82%81"><i class="fa fa-link"></i></a>まとめ</h1>
+<p data-sourcepos="572:1-572:425"><strong>今回のUMA-S-1.2のCPU検証では、llmlip.rsはSi結晶の構造最適化を完了したものの、エネルギーと原子間力の数値的一致には未解決の課題がある</strong>ことが分かった。712原子からなる大きめの分子系では構造緩和後も大きなForceの誤差が残っており、今回ビルドした実行環境では構造最適化を収束させることができなかった。</p>
+<p data-sourcepos="574:1-574:352">計算速度については、64原子Si結晶の構造最適化において、llmlip.rsはFairChemのPyTorch CPU版より約24%長い時間を要した。一方、OpenBLASの導入によってllmlip.rs単体の推論速度が約5.1倍に向上するなど、実装やビルド設定によって性能が大きく改善することも確認できた。</p>
+<p data-sourcepos="576:1-576:328">llmlip.rsはリリースからまだ日が浅く、対応するMLIPや各モデルの計算精度については、今後も検証と改善が進むものと思われる。CPU環境で幅広いMLIPを実行できる仕組みは興味深く、機会があればMACE系のMLIPについても同様の検証を行ってみたい。</p>
+<h1 data-sourcepos="579:1-579:14">
+<span id="補足情報" class="fragment"></span><a href="#%E8%A3%9C%E8%B6%B3%E6%83%85%E5%A0%B1"><i class="fa fa-link"></i></a>補足情報</h1>
+<h2 data-sourcepos="581:1-581:44">
+<span id="計算時間の内訳openblas無し" class="fragment"></span><a href="#%E8%A8%88%E7%AE%97%E6%99%82%E9%96%93%E3%81%AE%E5%86%85%E8%A8%B3openblas%E7%84%A1%E3%81%97"><i class="fa fa-link"></i></a>計算時間の内訳（OpenBLAS無し）</h2>
+<p data-sourcepos="583:1-583:51">CPUベンチマークの計算時間を調べた。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="585:1-595:3">
+<div class="code-lang"><span class="bold">計算時間の測定（8並列、openblas無し）</span></div>
+<div class="highlight"><pre><code><span class="nv">RAYON_NUM_THREADS</span><span class="o">=</span>8 <span class="se">\</span>
+./target/native/release/llmlip benchmark-predict <span class="se">\</span>
+    <span class="nt">--model</span> out/uma-s-1p2.e3rs <span class="se">\</span>
+    <span class="nt">--structure</span> inputs/si64.extxyz <span class="se">\</span>
+    <span class="nt">--energy</span> <span class="nt">--forces</span> <span class="se">\</span>
+    <span class="nt">--warmup</span> 1 <span class="se">\</span>
+    <span class="nt">--iterations</span> 5 <span class="se">\</span>
+    <span class="nt">--profile-stages</span> <span class="se">\</span>
+    <span class="o">&gt;</span> results/uma_si64_profile.json
+</code></pre></div>
+</div>
+<p data-sourcepos="597:1-597:225">UMA-S-1.2でエネルギーと原子間力を1回計算するのに要した時間は、5回の中央値が10.27秒で合った。（モデル読込時間は5.69秒で、1点計算の時間とは分けて計測している）</p>
+<p data-sourcepos="599:1-599:186">計算時間の内訳を解析すると、推論時間の約76%がニューラルネットワークの順方向計算、約20%が原子間力の逆伝播計算に費やされていた。</p>
+<table data-sourcepos="601:1-608:32">
+<thead>
+<tr data-sourcepos="601:1-601:25">
+<th style="text-align: left" data-sourcepos="601:2-601:6">Stage</th>
+<th style="text-align: left" data-sourcepos="601:8-601:24">所要時間(秒)</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="603:1-603:35">
+<td style="text-align: left" data-sourcepos="603:2-603:28">SO(2)畳み込み・第1段</td>
+<td style="text-align: left" data-sourcepos="603:30-603:34">4.418</td>
+</tr>
+<tr data-sourcepos="604:1-604:18">
+<td style="text-align: left" data-sourcepos="604:2-604:11">Radial MLP</td>
+<td style="text-align: left" data-sourcepos="604:13-604:17">2.081</td>
+</tr>
+<tr data-sourcepos="605:1-605:35">
+<td style="text-align: left" data-sourcepos="605:2-605:28">SO(2)畳み込み・第2段</td>
+<td style="text-align: left" data-sourcepos="605:30-605:34">1.384</td>
+</tr>
+<tr data-sourcepos="606:1-606:32">
+<td style="text-align: left" data-sourcepos="606:2-606:25">SO(2)第1段の逆伝播</td>
+<td style="text-align: left" data-sourcepos="606:27-606:31">0.931</td>
+</tr>
+<tr data-sourcepos="607:1-607:30">
+<td style="text-align: left" data-sourcepos="607:2-607:23">Radial MLPの逆伝播</td>
+<td style="text-align: left" data-sourcepos="607:25-607:29">0.496</td>
+</tr>
+<tr data-sourcepos="608:1-608:32">
+<td style="text-align: left" data-sourcepos="608:2-608:25">SO(2)第2段の逆伝播</td>
+<td style="text-align: left" data-sourcepos="608:27-608:31">0.328</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="610:1-610:75">ボトルネックは明確にSO(2)畳み込みとRadial MLPであった。</p>
+<p data-sourcepos="612:1-612:703">また、CPU使用率が約10％と低いことも気になった。調べたところ、SO(2)畳み込みとゲート演算を統合した高速化経路（<code>so2_fused_conv1_gate_conv1/2</code>）が利用されていないことが分かった。<a href="https://github.com/mizukami-group/llmlip.rs/blob/main/crates/llmlip/src/model.rs" rel="nofollow noopener" target="_blank">llmlip.rsの実装</a>によると、UMAについて、FP64の融合演算経路は単一スレッドの場合や、OpenBLAS・MKLなどのバックエンドが有効な場合に選択できる設計となっている。今回のparallelのみのビルドでは、8スレッドを指定することで却って効率の低い演算経路が選択されている可能性がある。</p>
+<div data-sourcepos="614:1-632:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<h3 data-sourcepos="615:1-615:28">
+<span id="並列効率について" class="fragment"></span><a href="#%E4%B8%A6%E5%88%97%E5%8A%B9%E7%8E%87%E3%81%AB%E3%81%A4%E3%81%84%E3%81%A6"><i class="fa fa-link"></i></a>並列効率について</h3>
+<p data-sourcepos="617:1-617:155">1スレッドと8スレッドの比較を行ったところ、8スレッドでは1スレッドに対して約1.33倍の処理速度に留まっていた。</p>
+<table data-sourcepos="619:1-625:42">
+<thead>
+<tr data-sourcepos="619:1-619:36">
+<th style="text-align: left" data-sourcepos="619:2-619:7">指標</th>
+<th style="text-align: left" data-sourcepos="619:9-619:21">1スレッド</th>
+<th style="text-align: left" data-sourcepos="619:23-619:35">8スレッド</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="621:1-621:40">
+<td style="text-align: left" data-sourcepos="621:2-621:19">平均推論時間</td>
+<td style="text-align: left" data-sourcepos="621:21-621:29">13.664秒</td>
+<td style="text-align: left" data-sourcepos="621:31-621:39">10.230秒</td>
+</tr>
+<tr data-sourcepos="622:1-622:31">
+<td style="text-align: left" data-sourcepos="622:2-622:10">中央値</td>
+<td style="text-align: left" data-sourcepos="622:12-622:20">13.635秒</td>
+<td style="text-align: left" data-sourcepos="622:22-622:30">10.269秒</td>
+</tr>
+<tr data-sourcepos="623:1-623:34">
+<td style="text-align: left" data-sourcepos="623:2-623:13">最短時間</td>
+<td style="text-align: left" data-sourcepos="623:15-623:23">13.635秒</td>
+<td style="text-align: left" data-sourcepos="623:25-623:33">10.132秒</td>
+</tr>
+<tr data-sourcepos="624:1-624:42">
+<td style="text-align: left" data-sourcepos="624:2-624:22">モデル読込時間</td>
+<td style="text-align: left" data-sourcepos="624:24-624:32">11.594秒</td>
+<td style="text-align: left" data-sourcepos="624:34-624:41">5.686秒</td>
+</tr>
+<tr data-sourcepos="625:1-625:42">
+<td style="text-align: left" data-sourcepos="625:2-625:9">checksum</td>
+<td style="text-align: left" data-sourcepos="625:11-625:25">−1386.3968458</td>
+<td style="text-align: left" data-sourcepos="625:27-625:41">−1386.3968458</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="627:1-627:87">この場合のビルドには、少なくとも次の改善余地が考えられる。</p>
+<ul data-sourcepos="628:1-631:0">
+<li data-sourcepos="628:1-628:59">Radial MLPの行列演算をOpenBLASで高速化する。</li>
+<li data-sourcepos="629:1-629:67">融合SO(2)演算を複数スレッド実行でも利用する。</li>
+<li data-sourcepos="630:1-631:0">小規模な演算の並列化に伴うオーバーヘッドを減らす。</li>
+</ul>
+</div>
+</div>
+<h2 data-sourcepos="634:1-634:44">
+<span id="計算時間の内訳openblas有り" class="fragment"></span><a href="#%E8%A8%88%E7%AE%97%E6%99%82%E9%96%93%E3%81%AE%E5%86%85%E8%A8%B3openblas%E6%9C%89%E3%82%8A"><i class="fa fa-link"></i></a>計算時間の内訳（OpenBLAS有り）</h2>
+<p data-sourcepos="636:1-636:284">前節では、SO(2)畳み込みとRadial MLPが計算時間の大部分を占めていることが分かった。そこで、行列演算ライブラリのOpenBLASを導入してCPU推論の高速化を試みた。（導入手順の部分ではこちらをデフォルトで推奨）</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="638:1-649:3">
+<div class="code-lang"><span class="bold">計算時間の測定（8並列、OpenBLASあり）</span></div>
+<div class="highlight"><pre><code><span class="nv">RAYON_NUM_THREADS</span><span class="o">=</span>8 <span class="se">\</span>
+<span class="nv">OPENBLAS_NUM_THREADS</span><span class="o">=</span>1 <span class="se">\</span>
+<span class="nv">OMP_NUM_THREADS</span><span class="o">=</span>1 <span class="se">\</span>
+./target/native-openblas/release/llmlip benchmark-predict <span class="se">\</span>
+    <span class="nt">--model</span> out/uma-s-1p2.e3rs <span class="se">\</span>
+    <span class="nt">--structure</span> inputs/si64.extxyz <span class="se">\</span>
+    <span class="nt">--energy</span> <span class="nt">--forces</span> <span class="se">\</span>
+    <span class="nt">--warmup</span> 5 <span class="se">\</span>
+    <span class="nt">--iterations</span> 10 <span class="se">\</span>
+    <span class="o">&gt;</span> results/uma_si64_openblas.json
+</code></pre></div>
+</div>
+<blockquote data-sourcepos="651:1-651:283">
+<p data-sourcepos="651:3-651:283">先ほどと同じ64原子のSi結晶について、エネルギーと原子間力を計算した。今回はウォームアップ5回、計測10回とし、Rayonのスレッド数を1・4・8・16に変更して比較した。OpenBLAS自身のスレッド数は1に固定した。</p>
+</blockquote>
+<p data-sourcepos="653:1-653:471">8スレッドでの推論時間は、中央値で<strong>2.029秒</strong>となった。OpenBLASなしの約10.27秒と比較して、約5.1倍の高速化である。この改善には、OpenBLASによる行列積の高速化だけでなく、<a href="https://github.com/mizukami-group/llmlip.rs/blob/main/crates/llmlip/src/model.rs" rel="nofollow noopener" target="_blank">llmlip.rsの実装</a>でSO(2)畳み込みとゲート演算を統合した融合演算経路が選択されることも寄与していると考えられる。</p>
+<blockquote data-sourcepos="655:1-655:630">
+<p data-sourcepos="655:3-655:630">現行のllmlip.rsでは、SO(2)畳み込みとゲート演算を統合した融合演算経路が実装されている。ただし、FP64計算では、原則として単一スレッド実行時、またはOpenBLAS・MKLなどの対応バックエンドが有効で、融合演算用の重み行列が用意されている場合に選択される。OpenBLASなし・8スレッド実行では融合演算経路が無効だったが、OpenBLASの導入によって利用可能となった。したがって、今回の高速化には行列積の効率化と演算経路の切り替えがともに寄与したと考えられる。</p>
+</blockquote>
+<p data-sourcepos="657:1-657:96">次に、<code>--profile-stages</code>を追加し、各演算段階の計算時間を詳しく調べた。</p>
+<div class="code-frame" data-lang="sh" data-sourcepos="659:1-671:3">
+<div class="code-lang"><span class="bold">演算段階別のプロファイル取得</span></div>
+<div class="highlight"><pre><code><span class="nv">RAYON_NUM_THREADS</span><span class="o">=</span>8 <span class="se">\</span>
+<span class="nv">OPENBLAS_NUM_THREADS</span><span class="o">=</span>1 <span class="se">\</span>
+<span class="nv">OMP_NUM_THREADS</span><span class="o">=</span>1 <span class="se">\</span>
+./target/native-openblas/release/llmlip benchmark-predict <span class="se">\</span>
+    <span class="nt">--model</span> out/uma-s-1p2.e3rs <span class="se">\</span>
+    <span class="nt">--structure</span> inputs/si64.extxyz <span class="se">\</span>
+    <span class="nt">--energy</span> <span class="nt">--forces</span> <span class="se">\</span>
+    <span class="nt">--warmup</span> 5 <span class="se">\</span>
+    <span class="nt">--iterations</span> 10 <span class="se">\</span>
+    <span class="nt">--profile-stages</span> <span class="se">\</span>
+    <span class="o">&gt;</span> results/uma_si64_openblas_profile.json
+</code></pre></div>
+</div>
+<p data-sourcepos="673:1-673:254">プロファイルから求めた主要演算の所要時間は以下のとおりである。各数値はウォームアップを含む15回分の合計を15で割った平均値で、4つのネットワークブロックの処理を合算している。</p>
+<table data-sourcepos="675:1-680:34">
+<thead>
+<tr data-sourcepos="675:1-675:33">
+<th style="text-align: left" data-sourcepos="675:2-675:8">Stage</th>
+<th style="text-align: right" data-sourcepos="675:10-675:32">所要時間（秒）</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="677:1-677:41">
+<td style="text-align: left" data-sourcepos="677:2-677:32">SO(2)融合演算・順方向</td>
+<td style="text-align: right" data-sourcepos="677:34-677:40">0.762</td>
+</tr>
+<tr data-sourcepos="678:1-678:34">
+<td style="text-align: left" data-sourcepos="678:2-678:25">Radial MLP・順方向</td>
+<td style="text-align: right" data-sourcepos="678:27-678:33">0.190</td>
+</tr>
+<tr data-sourcepos="679:1-679:41">
+<td style="text-align: left" data-sourcepos="679:2-679:32">SO(2)融合演算・逆伝播</td>
+<td style="text-align: right" data-sourcepos="679:34-679:40">0.795</td>
+</tr>
+<tr data-sourcepos="680:1-680:34">
+<td style="text-align: left" data-sourcepos="680:2-680:25">Radial MLP・逆伝播</td>
+<td style="text-align: right" data-sourcepos="680:27-680:33">0.167</td>
+</tr>
+</tbody>
+</table>
+<p data-sourcepos="682:1-682:498">SO(2)融合演算は順方向と逆伝播を合わせて約1.56秒を占め、プロファイル付き推論時間の約69%に相当した。Radial MLPも約16%を占めている。OpenBLASによって大幅に高速化されたものの、SO(2)融合演算が依然として最大のボトルネックである。特に、原子間力を計算するための逆伝播の部分で演算の分割方法やBLASの呼び出し方法を改良すれば、さらに高速化できると考えられる。</p>
+<div data-sourcepos="684:1-700:3" class="note info">
+<span class="fa fa-fw fa-check-circle"></span><div>
+<h3 data-sourcepos="685:1-685:32">
+<span id="並列数とlibxsmmの比較" class="fragment"></span><a href="#%E4%B8%A6%E5%88%97%E6%95%B0%E3%81%A8libxsmm%E3%81%AE%E6%AF%94%E8%BC%83"><i class="fa fa-link"></i></a>並列数とLIBXSMMの比較</h3>
+<p data-sourcepos="687:1-687:114">さらに、小規模行列積に特化したLIBXSMMをOpenBLASと併用した場合についても比較した。</p>
+<table data-sourcepos="689:1-694:28">
+<thead>
+<tr data-sourcepos="689:1-689:51">
+<th style="text-align: left" data-sourcepos="689:2-689:18">スレッド数</th>
+<th style="text-align: right" data-sourcepos="689:20-689:29">OpenBLAS</th>
+<th style="text-align: right" data-sourcepos="689:31-689:50">OpenBLAS＋LIBXSMM</th>
+</tr>
+</thead>
+<tbody>
+<tr data-sourcepos="691:1-691:27">
+<td style="text-align: left" data-sourcepos="691:2-691:4">1</td>
+<td style="text-align: right" data-sourcepos="691:6-691:15">2.838秒</td>
+<td style="text-align: right" data-sourcepos="691:17-691:26">2.979秒</td>
+</tr>
+<tr data-sourcepos="692:1-692:27">
+<td style="text-align: left" data-sourcepos="692:2-692:4">4</td>
+<td style="text-align: right" data-sourcepos="692:6-692:15">2.084秒</td>
+<td style="text-align: right" data-sourcepos="692:17-692:26">2.205秒</td>
+</tr>
+<tr data-sourcepos="693:1-693:31">
+<td style="text-align: left" data-sourcepos="693:2-693:4">8</td>
+<td style="text-align: right" data-sourcepos="693:6-693:19"><strong>2.029秒</strong></td>
+<td style="text-align: right" data-sourcepos="693:21-693:30">2.061秒</td>
+</tr>
+<tr data-sourcepos="694:1-694:28">
+<td style="text-align: left" data-sourcepos="694:2-694:5">16</td>
+<td style="text-align: right" data-sourcepos="694:7-694:16">2.099秒</td>
+<td style="text-align: right" data-sourcepos="694:18-694:27">2.119秒</td>
+</tr>
+</tbody>
+</table>
+<blockquote data-sourcepos="696:1-696:134">
+<p data-sourcepos="696:3-696:134">いずれもウォームアップ5回、計測10回の中央値であり、詳細プロファイルの計測処理は含まない。</p>
+</blockquote>
+<p data-sourcepos="698:1-698:520">今回の条件では、OpenBLAS単独・8スレッドが最速だった。4スレッドと8スレッドの差は小さく、16スレッドでは逆に処理時間が増加した。また、LIBXSMMの併用による高速化は確認できなかった。8スレッドではOpenBLAS単独版より約1.6%遅かったが、差が小さいため、測定環境の変動も考慮する必要がある。今回の64原子Si結晶に対しては、OpenBLAS＋Rayon 8スレッドを採用するのが妥当なようである。</p>
+</div>
+</div>
+
+</div>
+{% endraw %}
