@@ -1,0 +1,94 @@
+---
+layout: default
+title: ChemCraft Tips - Nabata's personal page
+extra_head: |
+  <link rel="stylesheet" href="/assets/grrm-tips.css?v=1">
+  <style>
+    .chemcraft-cell { max-width: 663px; }
+    .chemcraft-cell figcaption { margin-top: .6rem; font-size: .9em; color: #526570; }
+  </style>
+---
+<div class="top-wrapper">
+  <div class="container">
+    <h1>ChemCraft Tips</h1>
+    <p>分子モデリングソフト「ChemCraft」の利用方法など</p>
+  </div>
+</div>
+
+<main class="grrm-tips" id="chemcraft-tips">
+  <header class="grrm-intro">
+    <p class="grrm-breadcrumb"><a href="/toc.html">目次</a> / ChemCraft Tips</p>
+    <p class="grrm-source"><a href="https://sites.google.com/view/nabatas-page/top/chemcraft-tips">Google Sites版「ChemCraft Tips」</a>から移植しました。本文には元ページ掲載当時の利用環境に関する記述を含みます。</p>
+    <p><strong>【注意・免責】</strong><br>研究室内部向けの内容が多い点にご注意ください（このページは作りかけです）。</p>
+    <p>公式Website：<a href="https://www.chemcraftprog.com/">Chemcraft</a></p>
+    <p>※ ChemCraftのライセンスは有償ですが、<a href="https://www.chemcraftprog.com/download.html">試用版</a>が提供されています。理論研では分子構造の作成に専らChemCraftを利用しています（多分）。</p>
+  </header>
+
+  <nav class="grrm-toc" aria-label="ページ内目次">
+    <h2>目次</h2>
+    <ol>
+      <li><a href="#structures">立体構造の可視化</a></li>
+      <li><a href="#fragments">ユーザー定義のモチーフ構造を追加する</a></li>
+      <li><a href="#dipole">双極子モーメントの可視化</a></li>
+      <li><a href="#orbitals">MO（分子軌道）の可視化</a></li>
+      <li><a href="#unit-cell">単位格子（Unit Cell）の可視化</a></li>
+    </ol>
+  </nav>
+
+  <section aria-labelledby="structures">
+    <span id="h.9evoupw3mfar"></span>
+    <h2 id="structures">立体構造の可視化</h2>
+    <p>GRRMプログラムの計算結果<code>xxx.log</code>から各ITR（イタレーション）の3次元座標を取得し、XYZ形式の構造を順に並べると、ChemCraftでコマ送り表示できます。</p>
+  </section>
+
+  <section aria-labelledby="fragments">
+    <span id="h.6xlsqoe1kp6z"></span>
+    <h2 id="fragments">ユーザー定義のモチーフ構造を追加する</h2>
+    <p>ユーザーが定義したモチーフ構造を追加できます。手順は以下のとおりです。</p>
+    <ol>
+      <li>追加したい構造を選択した状態にします。moleculeでない場合は、ダミー原子<code>X</code>も含めます。</li>
+      <li><code>Edit</code> → <code>Add selected fragment to database</code>を選び、分かりやすい名前を付けて<code>OK</code>を押します。</li>
+    </ol>
+    <p>これにより、頻繁に利用する系の構造をいちいち組み立てる必要がなくなります。</p>
+    <p>参考：<a href="https://www.chemcraftprog.com/help/workwithmolfrag.html">Working with molecular fragments（公式ヘルプ）</a></p>
+  </section>
+
+  <section aria-labelledby="dipole">
+    <span id="h.3erhcre8fpva"></span>
+    <h2 id="dipole">双極子モーメントの可視化</h2>
+    <p>GRRMからGaussianを利用した計算で得られる<code>xxx_MO.rrm</code>（分子軌道などの情報を含むバイナリ形式のチェックポイントファイル）を、<code>formchk</code>でformatted checkpointファイル（<code>.fchk</code>）に変換します。</p>
+    <pre><code>formchk xxx_MO.rrm xxx_MO.fchk</code></pre>
+    <p>変換した<code>.fchk</code>ファイルをChemCraftで開き、左下の<code>Show dipole moment</code>にチェックを入れると、双極子モーメントに対応するベクトルが表示されます。表示できない場合は、そもそも双極子モーメントが計算されていない可能性があります。</p>
+    <p class="grrm-source"><code>formchk</code>はバイナリ形式のチェックポイントファイルをテキスト形式に変換するGaussianのユーティリティです。参考：<a href="https://gaussian.com/wp-content/uploads/dl/remote.pdf">Gaussian公式資料（PDF）</a>。</p>
+  </section>
+
+  <section aria-labelledby="orbitals">
+    <span id="h.l42e5j85zxs4"></span>
+    <h2 id="orbitals">MO（分子軌道）の可視化</h2>
+    <p>双極子モーメントの表示と同様に、Gaussianのバイナリ形式のチェックポイントファイル<code>xxx_MO.rrm</code>を、<code>formchk</code>で<code>.fchk</code>ファイルに変換しておきます。</p>
+    <ol>
+      <li><code>.fchk</code>ファイルをChemCraftで開き、<code>Tools</code> → <code>Orbitals</code> → <code>Render ...</code>をクリックします。</li>
+      <li>可視化したい軌道の番号にチェックを入れ、<code>OK</code>をクリックします。</li>
+      <li>左下の<code>Show ...</code>をクリックします。表示スタイルは<code>styles</code>で変更できます。</li>
+    </ol>
+  </section>
+
+  <section aria-labelledby="unit-cell">
+    <span id="h.lqik10i12ey2"></span>
+    <h2 id="unit-cell">単位格子（Unit Cell）の可視化</h2>
+    <p><code>Tools</code> → <code>Crystallography tools</code> → <code>Build cells from Cartesian coordinates</code>を選ぶと、入力ウィンドウが開きます。</p>
+    <p><code>Enter unit cell parameters (a, b, etc.)</code>または<code>Enter lattice vectors</code>を選び、各パラメータを入力します。後者の場合は<code>Paste</code>ボタンでExcelのデータをそのまま貼り付けられるので、GRRMのデータなど、XYZ形式で座標を扱っている場合は便利かもしれません。</p>
+    <p>格子の枠線を表示するには、ChemCraft画面左下の<code>Crystallography tools</code>から<code>Show crystal cell</code>を選びます。下図のような格子が表示されます。</p>
+    <figure class="chemcraft-cell">
+      <a href="/assets/chemcraft-tips/unit-cell.png">
+        <img src="/assets/chemcraft-tips/unit-cell.png" width="663" height="358" alt="ChemCraftで表示した結晶構造と、ピンク色の線で示した単位格子の枠" loading="lazy">
+      </a>
+      <figcaption>ChemCraftで単位格子の枠線を表示した例。</figcaption>
+    </figure>
+    <p>このほかにも、セルパラメータやスーパーセルを表示する機能、あるTV（格子ベクトル）の方向にセルを伸ばして（縮めて）中身も増やす（減らす）機能など、さまざまな便利機能があります。試してみましょう。</p>
+  </section>
+
+  <footer class="grrm-back">
+    <p><a href="/toc.html">目次に戻る</a></p>
+  </footer>
+</main>
