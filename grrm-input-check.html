@@ -30,8 +30,7 @@ extra_head: |
     {% for sample in site.data.grrm_input_samples %}
     <template id="grrm-sample-{{ forloop.index }}">
       <p class="tool-hint">{{ sample.note | escape }} <a href="{{ sample.source | escape }}">GRRM17マニュアル（{{ sample.label | escape }}）</a></p>
-      <pre tabindex="0" aria-label="{{ sample.label | escape }}のサンプル入力"><code>{% for line in sample.lines %}{{ line | escape }}{% unless forloop.last %}
-{% endunless %}{% endfor %}</code></pre>
+      <pre tabindex="0" aria-label="{{ sample.label | escape }}のサンプル入力"><code>{% for line in sample.lines %}{{ line | escape }}{% unless forloop.last %}&#10;{% endunless %}{% endfor %}</code></pre>
     </template>
     {% endfor %}
   </section>

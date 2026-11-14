@@ -1,4 +1,6 @@
 const assert = require("node:assert/strict");
+const {readFileSync} = require("node:fs");
+const path = require("node:path");
 const {test} = require("node:test");
 const check = require("../assets/grrm-input-check.js");
 const samples = require("../_data/grrm_input_samples.json");
@@ -6,6 +8,12 @@ const samples = require("../_data/grrm_input_samples.json");
 const water = "O 0 0 0\nH .758 0 .504\nH -.758 0 .504";
 const input = (route, geometry = water) => route + "\n\n0 1\n" + geometry;
 const problems = text => check(text).filter(issue => issue.severity !== "info");
+
+test("sample templates encode line separators for GitHub Pages", () => {
+  const page = readFileSync(path.join(__dirname, "../grrm-input-check.html"), "utf8");
+  // GitHub Pages stripped the literal newlines emitted between sample lines.
+  assert.match(page, /<code>[^<]*\{% unless forloop\.last %\}&#10;\{% endunless %\}[^<]*<\/code>/);
+});
 
 test("all published GRRM samples read their geometry without warnings", () => {
   assert.ok(samples.length > 1);
