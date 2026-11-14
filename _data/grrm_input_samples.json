@@ -1,0 +1,154 @@
+[
+  {
+    "label": "MIN",
+    "note": "水の構造最適化。Gaussian連携時のメモリとプロセッサ数はGauMemとGauProcで指定します。",
+    "source": "https://afir.sci.hokudai.ac.jp/manual/grrm17/conventional-calculations/grrm17_10.html",
+    "lines": [
+      "# MIN/B3LYP/6-31G(d)",
+      "",
+      "0 1",
+      "O  0.000  0.000  0.000",
+      "H  0.758  0.000  0.504",
+      "H -0.758  0.000  0.504",
+      "Options",
+      "GauMem = 200",
+      "GauProc = 4"
+    ]
+  },
+  {
+    "label": "FREQ",
+    "note": "ホルムアルデヒドの調和振動解析。実計算では同じ計算レベルで最適化した座標を使います。",
+    "source": "https://afir.sci.hokudai.ac.jp/manual/grrm17/conventional-calculations/grrm17_11.html",
+    "lines": [
+      "# FREQ/MP2/6-31G",
+      "",
+      "0 1",
+      "C  0.000  0.000  0.000",
+      "O  0.000  0.000  1.258",
+      "H  0.934  0.000 -0.582",
+      "H -0.934  0.000 -0.582",
+      "Options",
+      "Temperature = 298.15",
+      "Pressure = 1.0"
+    ]
+  },
+  {
+    "label": "SADDLE",
+    "note": "ホルムアルデヒドの異性化に対する遷移状態最適化。初期座標はマニュアルの最適化結果を丸めた近似構造です。",
+    "source": "https://afir.sci.hokudai.ac.jp/manual/grrm17/conventional-calculations/grrm17_13.html",
+    "lines": [
+      "# SADDLE/MP2/6-31G",
+      "",
+      "0 1",
+      "C  0.000  0.000  0.000",
+      "O  0.000  0.000  1.378",
+      "H  1.020  0.000 -0.442",
+      "H -1.039  0.000  0.832"
+    ]
+  },
+  {
+    "label": "SC-AFIR",
+    "note": "ホルムアルデヒドからの反応経路探索。フラグメントはGRRMが生成し、GAMMAはkJ/molで指定します。",
+    "source": "https://afir.sci.hokudai.ac.jp/manual/grrm17/path-search-by-artificial-force-induced-reaction-method/grrm17_34.html",
+    "lines": [
+      "# SC-AFIR/B3LYP/6-31G(d)",
+      "",
+      "0 1",
+      "C  0.000  0.000  0.000",
+      "O  0.000  0.000  1.258",
+      "H  0.934  0.000 -0.582",
+      "H -0.934  0.000 -0.582",
+      "Options",
+      "Add Interaction",
+      "GAMMA = 200",
+      "END"
+    ]
+  },
+  {
+    "label": "MC-AFIR",
+    "note": "ホルムアルデヒドとビニルアルコールの反応探索。座標末尾の整数はランダム配置する分子の区分です。人工力を加える原子団はFragm.で別途指定します。NSample = 10はAFIR経路10本で打ち切る例です。",
+    "source": "https://afir.sci.hokudai.ac.jp/manual/grrm17/path-search-by-artificial-force-induced-reaction-method/grrm17_33.html",
+    "lines": [
+      "# MC-AFIR/B3LYP/6-31G",
+      "",
+      "0 1",
+      "C  0.000  0.000  0.000  1",
+      "O  0.000  0.000  1.258  1",
+      "H  0.934  0.000 -0.582  1",
+      "H -0.934  0.000 -0.582  1",
+      "C  4.000  0.000  0.000  2",
+      "C  5.340  0.000  0.000  2",
+      "O  3.330  1.180  0.000  2",
+      "H  3.460 -0.935  0.000  2",
+      "H  5.880 -0.935  0.000  2",
+      "H  5.880  0.935  0.000  2",
+      "H  2.380  1.040  0.000  2",
+      "Options",
+      "NSample = 10",
+      "Add Interaction",
+      "Fragm.1 = 1,2",
+      "Fragm.2 = 5-7,11",
+      "1 2",
+      "GAMMA = 200",
+      "END"
+    ]
+  },
+  {
+    "label": "DS-AFIR",
+    "note": "組成が同じ2つの構造を結ぶ経路探索。上段のホルムアルデヒドとReactantの下の構造で原子の順序をそろえます。",
+    "source": "https://afir.sci.hokudai.ac.jp/manual/grrm17/path-search-by-artificial-force-induced-reaction-method/grrm17_39.html",
+    "lines": [
+      "# DS-AFIR/B3LYP/D95V(d)",
+      "",
+      "0 1",
+      "C  0.000  0.000  0.000",
+      "O  0.000  0.000  1.213",
+      "H  0.942  0.000 -0.591",
+      "H -0.942  0.000 -0.591",
+      "Reactant",
+      "C  0.000  0.000  0.000",
+      "O  0.000  0.000  1.471",
+      "H  0.816  0.000  2.042",
+      "H -0.816 -0.001  2.042"
+    ]
+  },
+  {
+    "label": "LUP",
+    "note": "MC-AFIRで得た経路の最適化。実計算では、作業ディレクトリにある経路ログの名前を.logなしで%infileに指定し、原子数と順序をログに合わせます。aldol_mc_EQ0は参照名の例です。",
+    "source": "https://afir.sci.hokudai.ac.jp/manual/grrm17/conventional-calculations/grrm17_15.html",
+    "lines": [
+      "%infile=aldol_mc_EQ0",
+      "# LUP/B3LYP/6-31G",
+      "",
+      "0 1",
+      "C  0.000  0.000  0.000",
+      "O  0.000  0.000  1.258",
+      "H  0.934  0.000 -0.582",
+      "H -0.934  0.000 -0.582",
+      "C  4.000  0.000  0.000",
+      "C  5.340  0.000  0.000",
+      "O  3.330  1.180  0.000",
+      "H  3.460 -0.935  0.000",
+      "H  5.880 -0.935  0.000",
+      "H  5.880  0.935  0.000",
+      "H  2.380  1.040  0.000"
+    ]
+  },
+  {
+    "label": "MIN（SIESTA）",
+    "note": "%linkでSIESTAを指定する水の構造最適化。実計算には同じジョブ名のSIESTA用.inpテンプレートと、使用する元素の擬ポテンシャルが必要です。",
+    "source": "https://afir.sci.hokudai.ac.jp/manual/grrm17/interfaces-with-electronic-structure-calculation-programs/grrm17_47.html",
+    "lines": [
+      "%link=siesta-3.1",
+      "# MIN",
+      "",
+      "0 1",
+      "O  0.000  0.000  0.000",
+      "H  0.758  0.000  0.504",
+      "H -0.758  0.000  0.504",
+      "Options",
+      "NoFC",
+      "SiestaProc = 2"
+    ]
+  }
+]

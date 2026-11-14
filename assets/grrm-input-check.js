@@ -350,7 +350,54 @@
   const clearButton = document.getElementById("grrm-check-clear");
   const status = document.getElementById("grrm-check-status");
   const results = document.getElementById("grrm-check-results");
+  const samplePreview = document.getElementById("grrm-sample-preview");
+  const sampleContent = document.getElementById("grrm-sample-content");
+  const sampleLoad = document.getElementById("grrm-sample-load");
+  const sampleClose = document.getElementById("grrm-sample-close");
   if (!runButton || !textInput) return;
+  let activeSample = null;
+  let inputVersion = 0;
+
+  function hideResults() {
+    results.replaceChildren();
+    results.hidden = true;
+  }
+
+  function replaceInput(value, message) {
+    inputVersion++;
+    textInput.value = value;
+    hideResults();
+    status.textContent = message;
+  }
+
+  for (const button of document.querySelectorAll("[data-grrm-sample]")) {
+    button.addEventListener("click", () => {
+      const template = document.getElementById("grrm-sample-" + button.dataset.grrmSample);
+      activeSample?.setAttribute("aria-pressed", "false");
+      activeSample = button;
+      button.setAttribute("aria-pressed", "true");
+      sampleContent.replaceChildren(template.content.cloneNode(true));
+      samplePreview.hidden = false;
+      status.textContent = button.textContent + "のサンプルを表示しました。";
+    });
+  }
+
+  sampleClose?.addEventListener("click", () => {
+    samplePreview.hidden = true;
+    activeSample.setAttribute("aria-pressed", "false");
+    activeSample.focus();
+    activeSample = null;
+    status.textContent = "サンプルを閉じました。";
+  });
+
+  sampleLoad?.addEventListener("click", () => {
+    const sampleText = sampleContent.querySelector("code").textContent;
+    if (textInput.value.trim() && textInput.value.trimEnd() !== sampleText &&
+      !window.confirm("入力欄の内容をサンプルに置き換えますか？")) return;
+    if (fileInput) fileInput.value = "";
+    replaceInput(sampleText + "\n", activeSample.textContent + "のサンプルを入力欄に読み込みました。");
+    textInput.focus();
+  });
 
   function show(issues) {
     results.replaceChildren();
@@ -378,10 +425,23 @@
   }
 
   fileInput?.addEventListener("change", async () => {
-    const file=fileInput.files?.[0];
-    if(!file) return;
-    textInput.value=await file.text();
-    status.textContent=file.name+" を読み込みました。内容はこの端末内で処理されます。";
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    const version = ++inputVersion;
+    try {
+      const value = await file.text();
+      if (version !== inputVersion) return;
+      replaceInput(value, file.name + " を読み込みました。内容はこの端末内で処理されます。");
+    } catch {
+      if (version === inputVersion) status.textContent = "ファイルを読み込めませんでした。";
+    }
+  });
+  textInput.addEventListener("input", () => {
+    inputVersion++;
+    if (!results.hidden) {
+      hideResults();
+      status.textContent = "入力が変更されました。";
+    }
   });
   runButton.addEventListener("click",()=>{
     const issues=check(textInput.value);
@@ -389,10 +449,7 @@
     status.textContent="静的チェックが完了しました。";
   });
   clearButton?.addEventListener("click",()=>{
-    textInput.value="";
-    if(fileInput) fileInput.value="";
-    results.replaceChildren();
-    results.hidden=true;
-    status.textContent="入力をクリアしました。";
+    if (fileInput) fileInput.value = "";
+    replaceInput("", "入力をクリアしました。");
   });
 })();
