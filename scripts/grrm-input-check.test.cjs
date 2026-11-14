@@ -1,10 +1,20 @@
 const assert = require("node:assert/strict");
 const {test} = require("node:test");
 const check = require("../assets/grrm-input-check.js");
+const samples = require("../_data/grrm_input_samples.json");
 
 const water = "O 0 0 0\nH .758 0 .504\nH -.758 0 .504";
 const input = (route, geometry = water) => route + "\n\n0 1\n" + geometry;
 const problems = text => check(text).filter(issue => issue.severity !== "info");
+
+test("all published GRRM samples read their geometry without warnings", () => {
+  assert.ok(samples.length > 1);
+  for (const sample of samples) {
+    const issues = check(sample.lines.join("\n"));
+    assert.deepEqual(issues.filter(issue => issue.severity !== "info"), [], sample.label);
+    assert.ok(issues.some(issue => issue.title === "座標ブロックを読み取りました"), sample.label);
+  }
+});
 
 test("GRRM MIN accepts Cartesian geometry with no title and Gaussian settings in Options", () => {
   const text = input("# MIN/B3LYP/6-31G(d)") + "\nOptions\nGauMem=200\nGauProc=4";

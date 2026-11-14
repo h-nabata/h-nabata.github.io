@@ -1,8 +1,9 @@
 ---
 layout: default
 title: GRRM入力チェック機能
+description: GRRMの入力ファイルをブラウザー内でチェックできます。MIN、SC-AFIR、MC-AFIR、LUPなどの入力サンプルも確認できます。
 extra_head: |
-  <link rel="stylesheet" href="/assets/grrm-tools.css?v=2">
+  <link rel="stylesheet" href="/assets/grrm-tools.css?v=3">
 ---
 <div class="top-wrapper">
   <div class="container">
@@ -14,6 +15,26 @@ extra_head: |
   <nav class="tool-breadcrumb" aria-label="パンくずリスト"><a href="{{ "/toc.html" | relative_url }}">目次</a> / <a href="{{ "/grrm-tips.html" | relative_url }}">GRRM Tips</a> / GRRM入力チェック機能</nav>
   <h2>入力ファイルを確認</h2>
   <p>GRRMに渡す入力ファイルを確認します。先頭の%指令、ジョブタイプ、電荷・多重度、直交座標、Optionsの書式をチェックします。</p>
+  <section class="tool-notes grrm-samples" aria-labelledby="grrm-samples-heading">
+    <h3 id="grrm-samples-heading">入力サンプル</h3>
+    <div class="tool-actions" role="group" aria-label="ジョブ別のサンプル">
+      {% for sample in site.data.grrm_input_samples %}
+      <button type="button" class="tool-button" data-grrm-sample="{{ forloop.index }}" aria-controls="grrm-sample-preview" aria-pressed="false">{{ sample.label | escape }}</button>
+      {% endfor %}
+    </div>
+    <div id="grrm-sample-preview" hidden>
+      <div id="grrm-sample-content"></div>
+      <button type="button" class="tool-button" id="grrm-sample-load">入力欄に読み込む</button>
+      <button type="button" class="tool-button" id="grrm-sample-close">サンプルを閉じる</button>
+    </div>
+    {% for sample in site.data.grrm_input_samples %}
+    <template id="grrm-sample-{{ forloop.index }}">
+      <p class="tool-hint">{{ sample.note | escape }} <a href="{{ sample.source | escape }}">GRRM17マニュアル（{{ sample.label | escape }}）</a></p>
+      <pre tabindex="0" aria-label="{{ sample.label | escape }}のサンプル入力"><code>{% for line in sample.lines %}{{ line | escape }}{% unless forloop.last %}
+{% endunless %}{% endfor %}</code></pre>
+    </template>
+    {% endfor %}
+  </section>
   <label class="tool-label" for="grrm-input-file">ファイルを選択（.com / .inp / .txt）</label>
   <input id="grrm-input-file" type="file" accept=".com,.inp,.txt,text/plain">
   <label class="tool-label" for="grrm-input-text">または入力テキストを貼り付け</label>
@@ -34,4 +55,4 @@ extra_head: |
     <p><a href="https://afir.sci.hokudai.ac.jp/manual/grrm17/grrm17_12.html">GRRM17マニュアルの基本書式</a>・<a href="https://afir.sci.hokudai.ac.jp/manual/grrm17/grrm17_51.html">GRRMの指令とオプション</a></p>
   </details>
 </main>
-<script defer src="{{ "/assets/grrm-input-check.js" | relative_url }}?v=6"></script>
+<script defer src="{{ "/assets/grrm-input-check.js" | relative_url }}?v=7"></script>
