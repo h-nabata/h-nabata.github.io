@@ -4,14 +4,46 @@
     "note": "水の構造最適化。Gaussian連携時のメモリとプロセッサ数はGauMemとGauProcで指定します。",
     "source": "https://afir.sci.hokudai.ac.jp/manual/grrm17/conventional-calculations/grrm17_10.html",
     "lines": [
-      "# MIN/B3LYP/6-31G(d)",
+      "# MIN/wB97XD/6-31G(d)",
       "",
       "0 1",
       "O  0.000  0.000  0.000",
       "H  0.758  0.000  0.504",
       "H -0.758  0.000  0.504",
       "Options",
-      "GauMem = 200",
+      "GauMem = 800",
+      "GauProc = 4"
+    ]
+  },
+  {
+    "label": "AFIRMIN",
+    "note": "人工力を課したポテンシャル面（AFIR関数）上での最適化。",
+    "source": "https://afir.sci.hokudai.ac.jp/manual/grrm17/path-search-by-artificial-force-induced-reaction-method/grrm17_32.html",
+    "lines": [
+      "# MIN/B3LYP/6-31G",
+      "",
+      "0 1",
+      "C  2.213 -0.881 -2.514",
+      "O  2.809 -0.813 -1.448",
+      "H  2.747 -1.167 -3.431",
+      "H  1.138 -0.661 -2.585",
+      "N  1.923 -3.026 -1.769",
+      "H  2.408 -3.288 -0.913",
+      "H  2.465 -3.430 -2.529",
+      "H  1.043 -3.537 -1.755",
+      "Options",
+      "AddInteraction",
+      "GAMMA = 200.0",
+      "Fragm.1 = 1",
+      "Fragm.2 = 2",
+      "Fragm.3 = 5",
+      "Fragm.4 = 6",
+      "1 2",
+      "3 4",
+      "END",
+      "NOFC",
+      "KeepIntFiles",
+      "GauMem = 800",
       "GauProc = 4"
     ]
   },
@@ -20,7 +52,7 @@
     "note": "ホルムアルデヒドの調和振動解析。実計算では同じ計算レベルで最適化した座標を使います。",
     "source": "https://afir.sci.hokudai.ac.jp/manual/grrm17/conventional-calculations/grrm17_11.html",
     "lines": [
-      "# FREQ/MP2/6-31G",
+      "# FREQ/MP2/6-31G(d)",
       "",
       "0 1",
       "C  0.000  0.000  0.000",
@@ -28,6 +60,8 @@
       "H  0.934  0.000 -0.582",
       "H -0.934  0.000 -0.582",
       "Options",
+      "GauMem = 2000",
+      "GauProc = 8",
       "Temperature = 298.15",
       "Pressure = 1.0"
     ]
@@ -37,31 +71,52 @@
     "note": "ホルムアルデヒドの異性化に対する遷移状態最適化。初期座標はマニュアルの最適化結果を丸めた近似構造です。",
     "source": "https://afir.sci.hokudai.ac.jp/manual/grrm17/conventional-calculations/grrm17_13.html",
     "lines": [
-      "# SADDLE/MP2/6-31G",
+      "# SADDLE/M062X/6-31+G(d)",
       "",
       "0 1",
       "C  0.000  0.000  0.000",
       "O  0.000  0.000  1.378",
       "H  1.020  0.000 -0.442",
-      "H -1.039  0.000  0.832"
+      "H -1.039  0.000  0.832",
+      "Options",
+      "GauMem = 2000",
+      "GauProc = 8"
     ]
   },
   {
     "label": "SC-AFIR",
-    "note": "ホルムアルデヒドからの反応経路探索。フラグメントはGRRMが生成し、GAMMAはkJ/molで指定します。",
+    "note": "ホルムアルデヒドと硫酸分子の反応経路探索。フラグメントはGRRMが生成し、GAMMAはkJ/molの単位で指定します。",
     "source": "https://afir.sci.hokudai.ac.jp/manual/grrm17/path-search-by-artificial-force-induced-reaction-method/grrm17_34.html",
     "lines": [
       "# SC-AFIR/B3LYP/6-31G(d)",
       "",
       "0 1",
-      "C  0.000  0.000  0.000",
-      "O  0.000  0.000  1.258",
-      "H  0.934  0.000 -0.582",
-      "H -0.934  0.000 -0.582",
+      "C  2.213 -0.881 -2.514",
+      "O  2.809 -0.813 -1.448",
+      "H  2.747 -1.167 -3.431",
+      "H  1.138 -0.661 -2.585",
+      "S  0.139 -0.244  0.945",
+      "O -0.340  0.676  1.959",
+      "O -0.436 -0.276 -0.396",
+      "O  1.716 -0.053  0.844",
+      "H  2.078 -0.363 -0.051",
+      "O -0.023 -1.709  1.627",
+      "H  0.129 -2.417  0.968",
       "Options",
-      "Add Interaction",
-      "GAMMA = 200",
-      "END"
+      "AddInteraction",
+      "GAMMA = 200.0",
+      "Target = 1-4,8-11",
+      "END",
+      "AddUniversalForce = 50.0",
+      "UniversalForceTarget = 1-4,8-11",
+      "ReadBareEnergy",
+      "END",
+      "NOFC",
+      "KeepLUPPath",
+      "EQOnly",
+      "STOPPath=100",
+      "GauMem = 1000",
+      "GauProc = 4"
     ]
   },
   {
@@ -69,7 +124,7 @@
     "note": "ホルムアルデヒドとビニルアルコールの反応探索。座標末尾の整数はランダム配置する分子の区分です。人工力を加える原子団はFragm.で別途指定します。NSample = 10はAFIR経路10本で打ち切る例です。",
     "source": "https://afir.sci.hokudai.ac.jp/manual/grrm17/path-search-by-artificial-force-induced-reaction-method/grrm17_33.html",
     "lines": [
-      "# MC-AFIR/B3LYP/6-31G",
+      "# MC-AFIR/B3LYP/6-31G*",
       "",
       "0 1",
       "C  0.000  0.000  0.000  1",
@@ -90,7 +145,10 @@
       "Fragm.2 = 5-7,11",
       "1 2",
       "GAMMA = 200",
-      "END"
+      "END",
+      "NOFC",
+      "GauMem = 1000",
+      "GauProc = 4"
     ]
   },
   {
@@ -109,16 +167,22 @@
       "C  0.000  0.000  0.000",
       "O  0.000  0.000  1.471",
       "H  0.816  0.000  2.042",
-      "H -0.816 -0.001  2.042"
+      "H -0.816 -0.001  2.042",
+      "Options",
+      "NOFC",
+      "SaddleFC",
+      "EigenCheck",
+      "GauMem = 1000",
+      "GauProc = 4"
     ]
   },
   {
     "label": "LUP",
-    "note": "MC-AFIRで得た経路の最適化。実計算では、作業ディレクトリにある経路ログの名前を.logなしで%infileに指定し、原子数と順序をログに合わせます。aldol_mc_EQ0は参照名の例です。",
+    "note": "MC-AFIRで得た経路の最適化。実計算では、作業ディレクトリにある経路ログの名前を.logなしで%infileに指定し、原子数と順序をinfile先のログに合わせます。aldol_mc_PT0は参照するファイル名の例です。",
     "source": "https://afir.sci.hokudai.ac.jp/manual/grrm17/conventional-calculations/grrm17_15.html",
     "lines": [
-      "%infile=aldol_mc_EQ0",
-      "# LUP/B3LYP/6-31G",
+      "%infile=aldol_mc_PT0",
+      "# LUP/wB97XD/6-31G*",
       "",
       "0 1",
       "C  0.000  0.000  0.000",
@@ -131,7 +195,13 @@
       "H  3.460 -0.935  0.000",
       "H  5.880 -0.935  0.000",
       "H  5.880  0.935  0.000",
-      "H  2.380  1.040  0.000"
+      "H  2.380  1.040  0.000",
+      "Options",
+      "NOFC",
+      "SaddleFC",
+      "EigenCheck",
+      "GauMem = 1000",
+      "GauProc = 4"
     ]
   },
   {
@@ -147,7 +217,7 @@
       "H  0.758  0.000  0.504",
       "H -0.758  0.000  0.504",
       "Options",
-      "NoFC",
+      "NOFC",
       "SiestaProc = 2"
     ]
   }
