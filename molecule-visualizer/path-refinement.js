@@ -31,17 +31,18 @@
       }
     });return out;
   }
-  let source=null,guard=null,pathMode='cineb';
+  let source=null,guard=null,pathMode='cineb',sourceSymmetry;
   function count(){
     const from=Number($('refineFrom').value),to=Number($('refineTo').value),each=Number($('refineEach').value),n=source?.length||0;
     const valid=[from,to,each].every(Number.isInteger)&&from>=1&&to<=n&&from<to&&each>=1&&n+(to-from)*each<=100;
     $('refineMessage').textContent=valid?`${n} → ${n+(to-from)*each}ノード（${(to-from)*each}ノード追加）`:'区間と追加数を確認してください。合計100ノードまでです。';
     $('refineApply').disabled=$('refineNEB').disabled=!valid;
   }
-  function open(frames=null,mode='cineb'){
+  function open(frames=null,mode='cineb',pathSymmetry){
     if(!['neb','cineb','lup'].includes(mode))throw Error('未対応の経路計算です。');pathMode=mode;
     if(MV.EngineUI.isBusy()||MV.AFIRUI?.isBusy?.())throw Error('実行中の計算を一時停止または終了してください。');
     if(/未適用|編集中/.test($('xyzEditStatus').textContent))throw Error('座標欄の未適用の編集を先に解決してください。');
+    sourceSymmetry=pathSymmetry;
     source=frames||MV.EngineUI.frames(MV.App.getState(),'all');
     if(source.length<3)throw Error('先に3ノード以上の経路を読み込むか、経路計算の結果を取得してください。');
     guard=fingerprint(MV.App.getState());$('refineNEB').textContent=`補間して${MV.EngineUI.modeLabel(pathMode)}再開の設定へ`;
@@ -56,7 +57,7 @@
       const out=refine(source,Number($('refineFrom').value)-1,Number($('refineTo').value)-1,Number($('refineEach').value));
       const next=MV.Model.createState(out[0]);next.metadata.trajectory=out;next.metadata.frameIndex=0;next.viewSettings={...MV.App.getState().viewSettings};
       MV.Studio.stop();MV.EnergyProfile.reset();MV.App.change('insert path nodes',()=>next,true);$('dataReset').click();$('refineDialog').close();
-      if(toNEB)MV.EngineUI.prepareNEB(pathMode);
+      if(toNEB)MV.EngineUI.prepareNEB(pathMode,sourceSymmetry);
       MV.App.setStatus(`${out.length}ノードへ補間しました。既存ノードと端点は保持しています。「戻す」で元の経路に戻せます。`);
     }catch(e){$('refineMessage').textContent=e.message;}
   }

@@ -6,7 +6,7 @@
  const clone=x=>JSON.parse(JSON.stringify(x));
  function message(text){$('workflowMessage').textContent=text;}
  function button(text,fn){const b=document.createElement('button');b.className='mv-btn';b.type='button';b.textContent=text;b.onclick=fn;return b;}
- function choose(){const type=$('workflowRecipe').value,recipe=recipes[type];$('workflowSteps').textContent=recipe.name;M.EngineUI.prepareSingle(type==='conformers'?'optimize':recipe.steps[0]);$('workflowConformers').hidden=type!=='conformers';}
+ function choose(){const type=$('workflowRecipe').value,recipe=recipes[type];$('workflowSteps').textContent=recipe.name;if(['cineb','lup'].includes(recipe.steps[0]))M.EngineUI.prepareMethod(recipe.steps[0]);else M.EngineUI.prepareSingle(type==='conformers'?'optimize':recipe.steps[0]);$('workflowConformers').hidden=type!=='conformers';}
  function fingerprint(s){return JSON.stringify([s.atoms,s.bonds,s.metadata]);}
  function stageConditions(){return {tsMethod:$('engineTSMethod').value,trustRadius:Number($('engineTrust').value),vibrations:{delta:Number($('engineVibrationDelta').value),nfree:Number($('engineVibrationNfree').value),imaginaryThreshold:Number($('engineVibrationThreshold').value)},irc:{direction:'both',stepSize:Number($('ircStepSize').value),relaxEndpoints:true}};}
  function stageInput(base,mode,images,conditions){
@@ -16,7 +16,7 @@
   if(mode==='vibrations')data.vibrations=clone(conditions.vibrations);
   if(mode==='vibrations'&&base.thermochemistry)data.thermochemistry=clone(base.thermochemistry);
   if(mode==='irc')data.irc=clone(conditions.irc);
-  if(['cineb','lup'].includes(mode))for(const key of ['endpointMode','spring','climbAfter','optimizer','lup','adaptiveNEB','pathSplit','nodeIds'])if(base[key]!=null)data[key]=clone(base[key]);
+  if(['cineb','lup'].includes(mode))for(const key of ['pathSymmetry','endpointMode','spring','climbAfter','optimizer','lup','adaptiveNEB','pathSplit','nodeIds'])if(base[key]!=null)data[key]=clone(base[key]);
   return data;
  }
  function frames(data,base){return data.images.map(p=>{const s=M.Model.createState(M.Periodic.snapshot(base));s.atoms.forEach((a,i)=>{[a.x,a.y,a.z]=p[i];});s.metadata.cell=data.cell||null;return M.Periodic.snapshot(s);});}
@@ -87,7 +87,7 @@
   }catch(e){if(active&&record){record.status=active.cancelled?'cancelled':'stopped';record.error=e.message;M.Activity?.update(active,recipe.name,active.cancelled?'cancelled':'interrupted',e.message);}message(e.message);}
   finally{active=null;$('workflowRun').disabled=false;$('workflowCancel').disabled=true;$('workflowSaveResults').disabled=!record;M.OptimizationUI.sync();}
  }
- function renderResults(){const out=$('workflowResults');out.replaceChildren();results.forEach((j,i)=>out.append(button(`${i+1}: ${j.data.mode} · ${j.result.converged?'収束':j.result.reason}`,()=>{M.EngineUI.showResult(j.result,j);M.EngineUI.showSettings();})));
+ function renderResults(){const out=$('workflowResults');out.replaceChildren();results.forEach((j,i)=>out.append(button(`${i+1}: ${j.data.mode} · ${j.result.converged?(j.data.pathSymmetry?'鏡映拘束下で収束':'収束'):j.result.reason}`,()=>{M.EngineUI.showResult(j.result,j);M.EngineUI.showSettings();})));
   if(record?.clusters){out.append(document.createElement('hr'));for(const i of record.clusters.representatives)out.append(button(`代表配座 ${i+1}`,()=>{const j=results[i];M.EngineUI.showResult(j.result,j);M.EngineUI.showSettings();}));}
  }
  async function cancel(){if(!active)return;active.cancelled=true;if(active.worker){active.worker.terminate();active.rejectGeneration?.(Error('配座生成を中止しました。'));}if(active.jobId)try{await M.EngineUI.request(active.connection,`/api/jobs/${active.jobId}/cancel`,{});}catch(e){message(e.message);}message('中止処理中です。');}

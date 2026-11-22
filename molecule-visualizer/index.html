@@ -19,8 +19,8 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./group-constraints.js?v=model-f-48"></script>
 <script defer src="./group-constraints-ui.js?v=studio-54"></script>
 <script defer src="./optimization.js?v=model-f-48"></script>
-<script defer src="./optimization-ui.js?v=studio-54"></script>
-<script defer src="./workflow-ui.js?v=studio-54"></script>
+<script defer src="./optimization-ui.js?v=path-symmetry-56"></script>
+<script defer src="./workflow-ui.js?v=path-symmetry-55"></script>
 <link rel="stylesheet" href="./optimization.css?v=model-f-48">
 <script defer src="./renderer3dmol.js?v=model-f-48"></script>
 <script defer src="./ui.js?v=studio-54"></script>
@@ -44,11 +44,11 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./llmlip-ui.js?v=dsafir-relax-52"></script>
 <link rel="stylesheet" href="./activity.css?v=studio-54">
 <script defer src="./activity-ui.js?v=studio-54"></script>
-<link rel="stylesheet" href="./calculation-panel.css?v=studio-54">
-<script defer src="./calculation-panel.js?v=studio-54"></script>
-<script defer src="./engine-ui.js?v=studio-54"></script>
+<link rel="stylesheet" href="./calculation-panel.css?v=path-symmetry-55">
+<script defer src="./calculation-panel.js?v=path-symmetry-55"></script>
+<script defer src="./engine-ui.js?v=path-symmetry-56"></script>
 <script defer src="./vibration-ui.js?v=constraints-34"></script>
-<script defer src="./path-refinement.js?v=dsafir-relax-52"></script>
+<script defer src="./path-refinement.js?v=path-symmetry-55"></script>
 <script defer src="./afir.js?v=17"></script>
 <script defer src="./afir-search.js?v=16"></script>
 <script defer src="./afir-runner.js?v=llmlip-49"></script>
@@ -610,6 +610,21 @@ H -0.3 1.0 0"></textarea>
     <label>反応物と生成物の端点<select id="engineEndpointMode" aria-describedby="engineEndpointHelp"><option value="relax">両端を極小構造へ緩和</option><option value="fixed">入力座標に固定</option></select></label>
     <p class="mv-small" id="engineEndpointHelp"></p>
   </section>
+  <section id="enginePathSymmetry" hidden>
+    <label class="mv-check"><input type="checkbox" id="engineMirror" aria-controls="engineMirrorFields">入力経路の鏡映対称性を保つ</label>
+    <div id="engineMirrorFields" hidden>
+      <label for="engineMirrorPairs">鏡映で入れ替わる原子番号の組</label>
+      <input id="engineMirrorPairs" type="text" placeholder="1-4, 2-3" spellcheck="false" aria-describedby="engineMirrorHelp">
+      <p class="mv-small" id="engineMirrorHelp">対称面を挟んで対応する同じ元素の原子を、1から始まる番号で指定します。対に含めない原子は面上に置きます。全ノードを共通の座標系にそろえてください。非周期分子が対象です。</p>
+      <p class="mv-small"><a href="./examples/butadiene-disrotatory.xyz" download>ブタジエン逆旋環化の入力例（XYZ）</a>の組は <code>1-4, 2-3, 5-9, 6-10, 7-8</code> です。他のファイルを使う場合は原子の並び順に合わせて指定してください。</p>
+      <p class="mv-small">対称性を保つ力の成分で収束を判定します。経路の極大が一次鞍点かどうかは、拘束を外してTS最適化と振動解析で確認してください。自動手順でもTS最適化以降は拘束を外します。</p>
+      <details id="engineMirrorOptions" class="mv-calc-disclosure"><summary id="engineMirrorOptionsLabel">初期座標の補正上限（0.05 Å）</summary>
+        <label>1原子あたりの最大補正量 (Å)<input id="engineMirrorLimit" type="number" min="0" max="2" step="any" value="0.05" aria-describedby="engineMirrorLimitHelp"></label>
+        <p class="mv-small" id="engineMirrorLimitHelp">初期座標を鏡映対称にそろえてから緩和します。既定の上限は0.05 Åです。非対称な入力から新しい対称経路を作成したい場合は、原子の対応を確認して上限を引き上げてください（最大2 Å）。結果を適用するまでは、作業中の構造列を保持します。固定端点の座標は補正せず、端点の許容誤差は常に10⁻⁶ Åです。</p>
+      </details>
+      <p class="mv-small" id="engineMirrorCapability" role="status"></p>
+    </div>
+  </section>
   <fieldset id="engineModelSettings" hidden><legend>ポテンシャル・溶媒</legend>
     <div id="engineUMAFields"><div class="mv-grid"><label id="engineUMADeviceLabel">UMAの実行デバイス<select id="engineUMADevice"></select></label>
       <label class="mv-check"><input id="engineAnySolv" type="checkbox">AnySolvで溶媒補正する</label></div>
@@ -689,7 +704,7 @@ H -0.3 1.0 0"></textarea>
     <label>接続トークン<input id="engineToken" type="password" autocomplete="off" spellcheck="false"></label>
   </div><div class="mv-row"><button class="mv-btn" id="engineConnect">接続を確認</button><span id="engineConnected" class="mv-small">未接続</span></div></fieldset>
   <details class="mv-engine-setup"><summary>初回のセットアップ：tblite / g-xTB / UMA / llmlip.rsを選ぶ</summary>
-    <p><a href="./local-engine/bridge.py?v=1.18.0" download>bridge.pyをダウンロード</a>し、使いたいエンジンの手順で起動してください。tblite / g-xTBはPython 3.10以上、UMA / llmlip.rsはPython 3.12の専用環境を推奨します。</p>
+    <p><a href="./local-engine/bridge.py?v=1.19.0" download>bridge.pyをダウンロード</a>し、使いたいエンジンの手順で起動してください。tblite / g-xTBはPython 3.10以上、UMA / llmlip.rsはPython 3.12の専用環境を推奨します。</p>
     <ul>
       <li><strong>tblite</strong>：GFN2-xTB（既定）、GFN1-xTB、IPEA1-xTBを利用します。このアプリでは非周期系と固定セルの周期系に対応します。</li>
       <li><strong>g-xTB</strong>：公式のg-xTB対応実行ファイルを別途用意します。このアプリでは非周期系に対応します。tbliteのPythonパッケージは不要です。</li>
@@ -773,6 +788,9 @@ python bridge.py --engine uma --uma-device cuda:0 --anysolv --anysolv-model mode
   <section id="enginePaneResults" class="mv-calc-pane" role="tabpanel" aria-labelledby="engineTabResults" tabindex="0" hidden>
   <p id="engineResultsEmpty">計算結果はここに表示されます。</p>
   <section id="engineResult" hidden><h3>計算結果</h3><p id="engineResultSummary" class="mv-small"></p>
+    <aside id="enginePathWarning" hidden aria-labelledby="enginePathWarningTitle"><strong id="enginePathWarningTitle">エネルギー変化と力の整合性を確認してください</strong>
+      <p id="enginePathWarningDetail"></p>
+    </aside>
     <button class="mv-btn" id="engineProfile">エネルギープロファイルと構造を見る</button>
     <div class="mv-row"><button class="mv-btn primary" id="engineApply" disabled>結果を構造へ適用</button><button class="mv-btn" id="engineXYZ">構造列を保存・抽出</button><button class="mv-btn" id="engineDownload" disabled>エネルギー・力・履歴をJSON保存</button></div>
 

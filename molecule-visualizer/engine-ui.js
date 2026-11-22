@@ -5,6 +5,7 @@
   let connection=null,job=null,result=null;
   let settingsMode=null,restoredInputFingerprint=null,lastSettingsSource=null,pendingMethod=null;
   const pathModes=['perpendicular','neb','cineb','lup'],climbingModes=['cineb','lup'];
+  const mirrorModes=['neb','cineb','lup'];
   const modeSettings=new Map(),relaxFields=['engineSteps','engineFmax','engineMove','engineSpring','engineClimb','engineEndpointMode'];
   const fingerprint=s=>JSON.stringify([s.atoms,s.bonds,s.metadata]);
   const dirty=()=>/未適用|編集中/.test($('xyzEditStatus').textContent);
@@ -46,6 +47,42 @@
     if(value==='fixed'&&!info.pathEndpointModes)return {};
     throw Error('両端を緩和するにはbridge.py 1.18.0以降へ更新して再接続してください。旧版で実行する場合は「入力座標に固定」を選択してください。');
   }
+  function syncMirror(){
+    const available=mirrorModes.includes($('engineMode').value);
+    $('enginePathSymmetry').hidden=!available;
+    $('engineMirrorFields').hidden=!$('engineMirror').checked;
+    const limit=$('engineMirrorLimit').value;
+    $('engineMirrorOptionsLabel').textContent='初期座標の補正上限'+(limit?`（${limit} Å）`:'');
+    $('engineMirrorCapability').textContent=available&&connection&&!connection.info.pathSymmetryTypes?.includes('mirror')?
+      'この接続は鏡映拘束に対応していません。bridge.pyを更新して再接続してください。':'';
+  }
+  function restoreMirror(spec){
+    if(spec&&spec.type!=='mirror')throw Error('保存されている経路の対称性条件に対応していません。');
+    $('engineMirror').checked=!!spec;
+    $('engineMirrorLimit').value=spec?.maxInitialCorrection??.05;
+    $('engineMirrorOptions').open=spec?.maxInitialCorrection!=null&&spec.maxInitialCorrection!==.05;
+    $('engineMirrorPairs').value=spec?spec.pairs.map(([a,b])=>`${a+1}-${b+1}`).join(', '):'';
+    syncMirror();MV.CalculationPanel?.sync();
+  }
+  function mirrorInput(data,info){
+    if(!mirrorModes.includes(data.mode)||!$('engineMirror').checked)return;
+    if(!info.pathSymmetryTypes?.includes('mirror'))throw Error('鏡映拘束にはbridge.py 1.19.0以降が必要です。更新して再接続してください。');
+    if(data.cell?.pbc.some(Boolean))throw Error('経路の鏡映拘束は非周期分子用です。');
+    const text=$('engineMirrorPairs').value.normalize('NFKC').trim().replace(/\s*[-‐‑–−]\s*/gu,'-');
+    const used=new Set();
+    const pairs=text.split(/[,、\s]+/u).map(pair=>{
+      if(!/^\d+-\d+$/u.test(pair))throw Error('鏡映で入れ替わる原子を「1-4, 2-3」の形式で指定してください。');
+      const [a,b]=pair.split('-').map(n=>Number(n)-1);
+      if(a<0||b<0||a>=data.symbols.length||b>=data.symbols.length)throw Error('鏡映の原子番号が入力構造の範囲外です。');
+      if(a===b||used.has(a)||used.has(b))throw Error('鏡映の原子番号が重複しています。各原子は1組だけに指定してください。');
+      if(data.symbols[a]!==data.symbols[b])throw Error('鏡映で入れ替わる原子の元素が異なります。原子番号を確認してください。');
+      used.add(a);used.add(b);return [a,b];
+    });
+    const rawLimit=$('engineMirrorLimit').value,limit=Number(rawLimit);
+    if(!rawLimit.trim()||!Number.isFinite(limit)||limit<0||limit>2)throw Error('初期座標の補正上限は0〜2 Åの数値で指定してください。');
+    data.pathSymmetry={type:'mirror',pairs};
+    if(limit!==.05)data.pathSymmetry.maxInitialCorrection=limit;
+  }
   function endpointDescription(mode,value){
     if(!climbingModes.includes(mode)||value==='fixed')return '両端点を入力座標に固定します。';
     return '両端点を選んだポテンシャル面の力で極小構造へ緩和します。';
@@ -73,7 +110,7 @@
     $('engineSteps').max=mode==='dsafir'?9999:10000;
     $('engineDSAFIRSettings').hidden=mode!=='dsafir';
     if(mode==='dsafir')syncEndpoints();
-    syncEndpointMode();
+    syncEndpointMode();syncMirror();
     $('engineVibrationOptions').hidden=!['optimize','ts','vibrations'].includes(mode);$('engineVibrationCheckLabel').hidden=mode==='vibrations';$('enginePause').hidden=!['neb','cineb','lup'].includes(mode);$('enginePause').textContent=modeText[mode]+'を一時停止してノード追加';
     MV.ResearchUI?.settings(mode);MV.ModelFUI?.sync();
     $('engineModeHelp').textContent={dsafir:'反応物と生成物を選び、系全体の電荷とスピン多重度を確認してください。指定した2構造から両側の探索点が出会うまで経路をたどります。',lup:'ばねを使わず、経路に直交する緩和と弧長に沿った再分布を交互に行います。CI開始後は最高点を登らせます。GRRM独自のLUP実装とは異なります。',irc:'TS候補から質量重み付きIRCを追跡し、到達した構造を比較します。',scan:'内部座標を固定し、各点で残りの自由度を最適化します。',batch:'複数構造を同じ条件で、1構造ずつ独立に最適化します。人工力や経路のばねは加えません。',evaluate:'指定構造のエネルギーと力を計算します。',optimize:'現在の構造を極小化します。人工力は「AFIR法の設定を開く」で指定してください。',ts:'Sellaで一次鞍点を探索します。経路の結果表からTS候補を選べます。人工力・ばねは加えません。',vibrations:'現在の構造でASEの有限差分振動解析を行います。未収束構造も解析できます。',perpendicular:'端点を固定し、経路の接線に直交する力で緩和します。',neb:'端点を固定して経路を緩和します。一時停止してノードを追加できます。',cineb:'CI開始後は最高エネルギーの内部ノードを登らせます。一時停止してノードを追加できます。'}[mode];
@@ -182,7 +219,7 @@
       if(all.some(f=>JSON.stringify(f.atoms.map(MV.Geometry.atomicMass))!==JSON.stringify(group.masses)))throw Error('重心拘束には全構造で同じ元素・原子順序・原子質量が必要です。');
       data.groupConstraints=group;all.forEach(f=>MV.GroupConstraints.attach(f,group));
     }
-    MV.OptimizationUI?.input(data,state,connection.info);validateEngineInput(data,connection.info);
+    MV.OptimizationUI?.input(data,state,connection.info);mirrorInput(data,connection.info);validateEngineInput(data,connection.info);
     if(mode==='dsafir'||connection.info.vibrations)data.atomIds=all[0].atoms.map(a=>a.id);
     if(data.maxSteps>(connection.info.maxSteps??1000))throw Error('指定したステップ数に対応するため、bridge.pyを更新・再起動して再接続してください。');
     if(climbingModes.includes(mode)&&data.climbAfter>=data.maxSteps)throw Error('CI開始ステップを最大ステップ数より小さくしてください。');
@@ -231,7 +268,7 @@
   }
   function connectionDetails(){
     MV.Activity?.connect(connection);
-    syncEndpointMode();MV.CalculationPanel?.sync();
+    syncEndpointMode();syncMirror();MV.CalculationPanel?.sync();
     const u=connection?.info.uma;
     $('engineUMADetails').hidden=!u;
     $('engineMultiplicity').max=u?'100':'101';
@@ -250,7 +287,7 @@
     if(job)return;connection=null;connectionDetails();$('engineRun').disabled=true;$('engineConnect').disabled=true;
     try{
       const c={url:endpoint($('engineURL').value),token:$('engineToken').value.trim()};if(!c.token)throw Error('サービス起動時に表示されるTokenを入力してください。');
-      c.info=await request(c,'/api/info');if(!['1.0.0','1.1.0','1.1.1','1.1.2','1.2.0','1.3.0','1.4.0','1.5.0','1.6.0','1.7.0','1.8.0','1.9.0','1.10.0','1.11.0','1.12.0','1.13.0','1.14.0','1.15.0','1.16.0','1.17.0','1.18.0','2.0.0'].includes(c.info.version)||!Array.isArray(c.info.modes))throw Error('サービスのバージョンが一致しません。最新のbridge.pyを使用してください。');if($('engineChoice').value!=='auto'&&$('engineChoice').value!==c.info.engine)throw Error('選択したエンジンと接続先が一致しません。対応する--engineでbridgeを起動してください。');connection=c;$('engineChoice').value=c.info.engine;connectionDetails();MV.JobHistoryUI?.connected();
+      c.info=await request(c,'/api/info');if(!['1.0.0','1.1.0','1.1.1','1.1.2','1.2.0','1.3.0','1.4.0','1.5.0','1.6.0','1.7.0','1.8.0','1.9.0','1.10.0','1.11.0','1.12.0','1.13.0','1.14.0','1.15.0','1.16.0','1.17.0','1.18.0','1.19.0','2.0.0'].includes(c.info.version)||!Array.isArray(c.info.modes))throw Error('サービスのバージョンが一致しません。最新のbridge.pyを使用してください。');if($('engineChoice').value!=='auto'&&$('engineChoice').value!==c.info.engine)throw Error('選択したエンジンと接続先が一致しません。対応する--engineでbridgeを起動してください。');connection=c;$('engineChoice').value=c.info.engine;connectionDetails();MV.JobHistoryUI?.connected();
       $('engineConnected').textContent=`接続済み: ${c.info.engine} / ${c.info.method} · ${c.info.engineVersion} · ${c.info.llmlip?'周期条件は選択モデルによる':c.info.periodic?'固定セル周期系対応':'非周期系'} · Sella ${c.info.sellaVersion||'未導入'}`;message(c.info.llmlip?'llmlip.rs（CPU・β版）へ接続しました。登録モデル・対応元素・headと計算精度を確認してください。':c.info.uma?'サービスに接続しました。モデルは計算実行時に読み込みます。電荷とスピン多重度を確認してください。':'接続しました。電荷と多重度を確認して計算を実行してください。');
       MV.CalculationPanel?.show('setup',true);
     }catch(error){$('engineConnected').textContent='未接続';message(error.message);}finally{$('engineConnect').disabled=false;busy(false);MV.AFIRUI?.sync();}
@@ -276,6 +313,20 @@
   function canApplyDSPath(r){
     return r.dsafir.connected&&r.images.length<=200&&r.images.length*r.symbols.length<=100000;
   }
+  function validateSymmetryResult(r,data){
+    const spec=data.pathSymmetry;
+    if(!spec&&!r.pathSymmetry)return;
+    if(!spec||r.pathSymmetry?.type!==spec.type||
+       (r.pathSymmetry.maxInitialCorrection??.05)!==(spec.maxInitialCorrection??.05)||
+       JSON.stringify(r.pathSymmetry.pairs)!==JSON.stringify(spec.pairs))
+      throw Error('結果の鏡映条件が入力と一致しません。');
+    const d=r.diagnostics,correction=r.initialSymmetryCorrection;
+    if(correction!=null&&(!Number.isFinite(correction)||correction<0||correction>(spec.maxInitialCorrection??.05)+1e-10))
+      throw Error('初期座標に加えた補正量が指定の上限と一致しません。');
+    if(!Number.isFinite(d?.symmetryResidual)||d.symmetryResidual<0||d.symmetryResidual>1e-6+1e-10||
+       !Number.isFinite(d.symmetryRemovedFmax)||d.symmetryRemovedFmax<0)
+      throw Error('鏡映残差または対称性を破る力の値が不正です。');
+  }
   function validateClimbingResult(r,data){
     const mode=data.endpointMode??'fixed';
     if((r.endpointMode??'fixed')!==mode||(data.endpointMode&&r.endpointMode!==mode))throw Error('経路計算の端点条件が入力と一致しません。');
@@ -285,8 +336,13 @@
        (ci!=null&&(!Number.isInteger(ci)||ci<1||ci>=r.images.length-1||
          !Number.isFinite(d.climbingPhysicalFmax)||d.climbingPhysicalFmax<0||typeof d.climbingBracketed!=='boolean')))
       throw Error('両端点または登坂ノードの力の情報が不正です。');
-    if(r.converged&&(ci==null||!d.climbingBracketed||d.climbingPhysicalFmax>data.fmax||
-      (mode==='relax'&&endpoints.some(f=>f>data.fmax))||r.effectiveFmax>data.fmax))
+    const allowedCI=data.pathSymmetry?d.climbingAllowedFmax:d.climbingPhysicalFmax;
+    const allowedEnds=data.pathSymmetry?d.endpointAllowedFmax:endpoints;
+    if(data.pathSymmetry&&(!Array.isArray(allowedEnds)||allowedEnds.length!==2||
+       !allowedEnds.every(f=>Number.isFinite(f)&&f>=0)||(ci!=null&&(!Number.isFinite(allowedCI)||allowedCI<0))))
+      throw Error('鏡映拘束下の端点または登坂ノードの力が不正です。');
+    if(r.converged&&(ci==null||!d.climbingBracketed||allowedCI>data.fmax||
+      (mode==='relax'&&allowedEnds.some(f=>f>data.fmax))||r.effectiveFmax>data.fmax))
       throw Error('登坂ノードまたは経路の収束条件と結果が一致しません。');
   }
   function validateResult(r,j){
@@ -294,6 +350,7 @@
     MV.Constraints?.validateResult(r,j.data);MV.GroupConstraints?.validateResult(r,j.data);
     if(!r||r.mode!==j.data.mode||JSON.stringify(r.symbols)!==JSON.stringify(j.data.symbols)||(!j.data.cellOptimization||j.data.cellOptimization.mode==='fixed')&&JSON.stringify(r.cell)!==JSON.stringify(j.data.cell)||!Array.isArray(r.images)||!r.images.length||r.images.length>40001||(!['irc','scan','afir','dsafir'].includes(j.data.mode)&&!j.data.adaptiveNEB?.enabled&&r.images.length!==j.frames.length)||r.energies?.length!==r.images.length||r.units?.energy!=='eV'||r.units?.length!=='angstrom')throw Error('結果の元素・セル・構造数・単位が入力と一致しません。');
     if(!r.images.every(p=>Array.isArray(p)&&p.length===j.data.symbols.length&&p.every(v=>Array.isArray(v)&&v.length===3&&v.every(x=>Number.isFinite(x)&&Math.abs(x)<=10000)))||!r.energies.every(Number.isFinite)||(j.data.mode!=='dsafir'&&!Number.isFinite(r.effectiveFmax))||!Array.isArray(r.imageFmax)||r.imageFmax.length!==r.images.length||!r.imageFmax.every(Number.isFinite))throw Error('計算結果に不正な座標・エネルギー・力が含まれます。');
+    validateSymmetryResult(r,j.data);
     if(j.data.mode==='dsafir')validateDSPath(r,j);
     if(climbingModes.includes(j.data.mode))validateClimbingResult(r,j.data);
     if(pathModes.includes(j.data.mode)&&j.data.endpointMode!=='relax')for(const [i,k] of [[0,0],[r.images.length-1,j.data.images.length-1]])if(JSON.stringify(r.images[i])!==JSON.stringify(j.data.images[k]))throw Error('端点座標が変更された結果は適用できません。');
@@ -320,9 +377,20 @@
       !valid?`端点を含む3〜${maximum}ノードを指定してください。`:
       `全${r.images.length}構造から${count.value}ノードを使用します。両端点と物理エネルギーの最高点を残し、経路に沿った累積変位と極大点を考慮して選びます。${endpointDescription(mode,$('dsafirRelaxEndpoints').value)}${potentialNote}`;
   }
+  function showPathWarning(r){
+    const w=r.pathConsistencyWarning,box=$('enginePathWarning');
+    box.hidden=!w;
+    if(!w)return;
+    const index=Array.isArray(r.nodeIds)?r.nodeIds.indexOf(w.nodeId):-1;
+    const node=index>=0?'ノード'+(index+1):'ノードID '+w.nodeId;
+    const energy=value=>Number.isFinite(value)?value.toPrecision(4)+' eV':'不明';
+    const displacement=Number.isFinite(w.maxDisplacementAngstrom)?w.maxDisplacementAngstrom.toPrecision(3)+' Å':'不明';
+    $('enginePathWarningDetail').textContent=`ステップ${w.step}の${node}では、原子の変位は最大${displacement}でした。エネルギー変化は${energy(w.energyChangeEV)}、移動前後の力から予測した変化は${energy(w.predictedEnergyChangeEV)}で、差の絶対値は${energy(w.errorEV)}です。経路や障壁を解釈する前に、この前後の構造でエネルギーと力を再評価してください。`;
+  }
   function showResult(r,j){
     validateResult(r,j);if(r.vibrations?.status==='completed')MV.VibrationUI.validate(r.vibrations,r.symbols,r.images[0]);result={...j,result:r};$('engineResult').hidden=false;$('engineApply').disabled=false;$('engineDownload').disabled=false;
     const ds=r.mode==='dsafir'?r.dsafir:null;
+    showPathWarning(r);
     const incomplete=ds&&!ds.connected;
     if(ds){
       $('dsafirRelaxMode').value='cineb';$('dsafirRelaxPotential').value='source';$('dsafirRelaxEndpoints').value='relax';
@@ -332,8 +400,15 @@
     $('engineXYZ').disabled=!!incomplete;
     $('engineApply').disabled=!!ds&&!canApplyDSPath(r);
     $('engineResultForceLabel').textContent=ds?'物理力 (eV/Å)':'有効力 (eV/Å)';
-    const reason=r.mode==='vibrations'?(r.vibrations?.status==='completed'?'振動解析完了':'振動解析未完了（構造評価は完了）'):{connected:'経路接続',no_resolved_peak:'経路方向の極大を確認できず終了（未収束）',interrupted:'サービス停止（途中結果）',converged:'収束',step_limit:'ステップ上限（未収束）',evaluated:'評価完了',cancelled:'中止（途中結果）',failed:'計算失敗（途中結果）'}[r.reason]||r.reason;
+    const reason=r.mode==='vibrations'?(r.vibrations?.status==='completed'?'振動解析完了':'振動解析未完了（構造評価は完了）'):{connected:'経路接続',no_resolved_peak:'経路方向の極大を確認できず終了（未収束）',interrupted:'サービス停止（途中結果）',converged:r.pathSymmetry?'鏡映拘束下で収束':'収束',step_limit:'ステップ上限（未収束）',evaluated:'評価完了',cancelled:'中止（途中結果）',failed:'計算失敗（途中結果）'}[r.reason]||r.reason;
     $('engineResultSummary').textContent=`${modeText[r.mode]}${j.data.modelF?" · "+MV.ModelF.label(j.data.modelF):""}${j.data.solvation?" · AnySolv / "+j.data.solvation.solvent:""} · ${reason} · ${r.steps}ステップ · ${r.evaluations}回の評価${ds?` · 探索点間距離 ${ds.gap.toFixed(4)} Å（接続基準 ${ds.threshold} Å）`:` · 最大有効力 ${r.effectiveFmax.toPrecision(4)} eV/Å`}${j.data.fixedAtoms?.length?'（可動原子のみ） · 固定 '+j.data.fixedAtoms.length+'原子':''}`+(r.maxTangentialStep!=null?` · 接線方向の最大更新 ${r.maxTangentialStep.toExponential(2)} Å`:'');
+    if(r.pathSymmetry){
+      const d=r.diagnostics;
+      $('engineResultSummary').textContent+=' · 鏡映拘束下の経路 · 鏡映残差 '+d.symmetryResidual.toExponential(2)+' Å · 対称性を破る力の最大値 '+d.symmetryRemovedFmax.toPrecision(4)+' eV/Å';
+      if(Number.isFinite(r.initialSymmetryCorrection))$('engineResultSummary').textContent+=' · 初期座標の最大補正量 '+r.initialSymmetryCorrection.toPrecision(4)+' Å';
+      if(d.endpointAllowedFmax&&j.data.endpointMode==='relax')$('engineResultSummary').textContent+=' · 端点の対称性を保つ力 A '+d.endpointAllowedFmax[0].toPrecision(4)+' / B '+d.endpointAllowedFmax[1].toPrecision(4)+' eV/Å';
+      if(Number.isFinite(d.climbingAllowedFmax))$('engineResultSummary').textContent+=' · 登坂ノードの対称性を保つ力 '+d.climbingAllowedFmax.toPrecision(4)+' eV/Å';
+    }
     if(climbingModes.includes(r.mode)){
       const d=r.diagnostics||{}, endpoints=d.endpointPhysicalFmax;
       const parts=[j.data.endpointMode==='relax'?'両端緩和':'両端固定'];
@@ -346,8 +421,8 @@
       for(const value of [ds?`${i+1} · ${i<=ds.joinIndex?'A側':'B側'}`:i+1,energy.toFixed(8),(energy-r.energies[0]).toFixed(6),fixed&&!ds?'端点固定':r.imageFmax[i].toPrecision(4)]){const td=document.createElement('td');td.textContent=value;if(tr.children.length===1&&r.energyComponents)td.title=`UMA ${r.energyComponents.uma[i].toFixed(8)} + 溶媒補正 ${r.energyComponents.solvation[i].toFixed(8)} eV`;tr.append(td);}
       const td=document.createElement('td');td.textContent=i===r.climbingImage?(r.diagnostics?.climbingBracketed===false?'CI（極大未確認） ':'CI '):endpoint&&!ds?(i===0?'反応物端点 ':'生成物端点 '):peak?'極大候補 ':'';
       if(!incomplete){
-        const button=document.createElement('button');button.className='mv-btn';button.textContent='TS入力';
-        button.setAttribute('aria-label',`構造${i+1}をTS入力にする`);
+        const button=document.createElement('button');button.className='mv-btn';button.textContent=r.pathSymmetry?'拘束を外してTS入力':'TS入力';
+        button.setAttribute('aria-label',`構造${i+1}を${r.pathSymmetry?'拘束を外して':''}TS入力にする`);
         button.addEventListener('click',()=>{if(apply(i))prepareSingle('ts');});td.append(button);
       }
       tr.append(td);body.append(tr);
@@ -368,13 +443,13 @@
         (canApplyDSPath(r)?'':'経路全体の適用には構造が多いため、「構造列を保存・抽出」でノードを選んでください。'));
       return;
     }
-    message((r.reason==='no_resolved_peak'?'経路方向の極大を確認できませんでした。経路の分解能と物理エネルギーを確認してください。':r.vibrations&&r.vibrations.status!=='completed'?'振動解析は未完了です。構造の結果は保持しています。':r.reason==='failed'?'計算に失敗しました。'+(r.error||''):r.reason==='cancelled'?'計算を中止しました。':'計算が完了しました。')+' 結果を確認し、構造列の保存・抽出または「結果を構造へ適用」で反映できます。'+(j.data.mode==='optimize'&&!r.trajectory?' 旧bridgeのため最終構造のみです。全ステップの保存にはbridge.pyを更新・再接続して再計算してください。':''));
+    message((r.reason==='no_resolved_peak'?'経路方向の極大を確認できませんでした。経路の分解能と物理エネルギーを確認してください。':r.vibrations&&r.vibrations.status!=='completed'?'振動解析は未完了です。構造の結果は保持しています。':r.reason==='failed'?'計算に失敗しました。'+(r.error||''):r.reason==='cancelled'?'計算を中止しました。':'計算が完了しました。')+(r.pathConsistencyWarning?' エネルギー変化が力からの予測を大きく外れました。':'')+' 結果を確認し、構造列の保存・抽出または「結果を構造へ適用」で反映できます。'+(j.data.mode==='optimize'&&!r.trajectory?' 旧bridgeのため最終構造のみです。全ステップの保存にはbridge.pyを更新・再接続して再計算してください。':''));
   }
   function resultSource(r,j){
     if(r.mode==='dsafir'&&!r.dsafir.connected)throw Error('探索点が未接続のため、経路全体の取り込みはできません。途中結果はJSONで保存できます。');
     const t=r.trajectory||r;
     return {prepareRelaxation:r.mode==='dsafir'?(mode,indices)=>prepareDSRelaxation(r,mode,indices):null,
-      title:modeText[j.data.mode],name:j.original.metadata.title,kind:j.data.mode,dsafir:r.dsafir,atomIds:j.data.mode==='dsafir'?r.atomIds:undefined,symbols:r.symbols,cell:r.cell,cells:t.cells,images:t.images,energies:t.energies,biasEnergies:t.biasEnergies,modelF:j.data.modelF,surfaceComponents:t.surfaceComponents,
+      title:modeText[j.data.mode]+(j.data.pathSymmetry?' · 鏡映拘束':''),name:j.original.metadata.title,kind:j.data.mode,dsafir:r.dsafir,atomIds:j.data.mode==='dsafir'?r.atomIds:undefined,symbols:r.symbols,cell:r.cell,cells:t.cells,images:t.images,energies:t.energies,biasEnergies:t.biasEnergies,modelF:j.data.modelF,surfaceComponents:t.surfaceComponents,
       charge:j.data.charge,multiplicity:j.data.multiplicity,engine:r.engine,method:r.method,base:i=>{const base=baseFrame(j,r.trajectory?0:i);if(!r.nodeIds||r.trajectory)return base;const f=MV.Periodic.snapshot(MV.Model.createState(base));f.metadata.pathNodeId=r.nodeIds[i];return f;},
       stepNumbers:j.data.mode==='optimize'&&!r.trajectory?[r.steps]:null,
       notice:j.data.mode==='optimize'&&!r.trajectory?'旧bridgeの結果には最終構造しかありません。全ステップの保存にはbridge.pyを更新・再接続して再計算してください。':''};
@@ -387,7 +462,7 @@
     const legend=ds?(r.step!=null?'A側・B側の最新の探索点における物理エネルギー。':
       separated?`構造${ds.joinIndex+1}と${ds.joinIndex+2}の間は未接続です。各側で実際に評価した物理エネルギーを表示しています。`:
       '反応物Aから生成物Bまで、評価した構造の順に物理エネルギーを表示しています。') : undefined;
-    MV.EnergyProfile.set({title:modeText[j.data.mode]+(j.data.modelF?' · '+MV.ModelF.label(j.data.modelF):'')+(j.data.solvation?' · '+j.data.solvation.solvent:'')+' · エネルギープロファイル'+label+(r.step!=null?' · ステップ '+r.step:''),kind:history?'optimize':j.data.mode==='afir'?'afir':j.data.mode==='evaluate'?'evaluate':'path',focusIndex:(history||j.data.mode==='afir')?t.images.length-1:Math.floor((r.images.length-1)/2),energies:t.energies,biasEnergies:t.biasEnergies,legend,breakAfter:separated?ds.joinIndex:undefined,nodeIds:r.nodeIds,positions:i=>t.images[i],base:i=>{const f=MV.Model.createState(baseFrame(j,history?0:i));f.metadata.cell=t.cells?.[i]||r.cell||j.data.cell;MV.ModelF?.attach(f,j.data,t,i);return MV.Periodic.snapshot(f);},details:showJobDetails,exportXYZ:r.step==null&&!separated?()=>exportXYZ(r,j):null},follow);
+    MV.EnergyProfile.set({title:modeText[j.data.mode]+(j.data.pathSymmetry?' · 鏡映拘束':'')+(j.data.modelF?' · '+MV.ModelF.label(j.data.modelF):'')+(j.data.solvation?' · '+j.data.solvation.solvent:'')+' · エネルギープロファイル'+label+(r.step!=null?' · ステップ '+r.step:''),kind:history?'optimize':j.data.mode==='afir'?'afir':j.data.mode==='evaluate'?'evaluate':'path',focusIndex:(history||j.data.mode==='afir')?t.images.length-1:Math.floor((r.images.length-1)/2),energies:t.energies,biasEnergies:t.biasEnergies,legend,breakAfter:separated?ds.joinIndex:undefined,nodeIds:r.nodeIds,positions:i=>t.images[i],base:i=>{const f=MV.Model.createState(baseFrame(j,history?0:i));f.metadata.cell=t.cells?.[i]||r.cell||j.data.cell;MV.ModelF?.attach(f,j.data,t,i);return MV.Periodic.snapshot(f);},details:showJobDetails,exportXYZ:r.step==null&&!separated?()=>exportXYZ(r,j):null},follow);
   }
   async function run(){
     if(MV.WorkflowUI?.isBusy()){message('計算手順の終了または中止を待ってください。');return;}
@@ -399,13 +474,19 @@
       j={...input(),connection:{...connection},cancelRequested:false,livePreview:$('engineLive').checked};
       if(j.livePreview&&!connection.info.livePreview)throw Error('ライブ表示を使うにはbridge.pyを更新・再接続してください。');
       if(j.livePreview)j.data.livePreview=true;
-      MV.VibrationUI.hide();MV.EnergyProfile.reset();MV.DiagnosticsUI?.reset();clearResult();job=j;MV.CalculationPanel?.beginJob(j.data.mode);busy(true);message('ローカル計算を開始しています…');
+      MV.VibrationUI.hide();MV.EnergyProfile.reset();MV.DiagnosticsUI?.reset();clearResult();job=j;MV.CalculationPanel?.beginJob(j.data.mode,j.data.pathSymmetry);busy(true);message('ローカル計算を開始しています…');
       if(j.livePreview)MV.EnergyProfile.begin(cancel,showJobDetails);
       else MV.CalculationPanel?.show('results',true);
       const created=await request(j.connection,'/api/jobs',j.data);if(!/^[a-f0-9]{32}$/.test(created.id))throw Error('不正な計算IDです。');j.id=created.id;if(pendingMethod!=='dsafir')pendingMethod=null;if(j.livePreview){$('engineDialog').close();MV.EnergyProfile.reveal();}
       if(j.cancelRequested)await request(j.connection,`/api/jobs/${j.id}/cancel`,{});
       await watch(j);
-    }catch(error){MV.EnergyProfile.restore();message(error.message+(j?.id?' 接続が途切れた場合、計算はローカル側で継続している可能性があります。サービスをCtrl+Cで停止できます。':''));}
+    }catch(error){
+      MV.EnergyProfile.restore();
+      if(j?.data.pathSymmetry&&!j.id){
+        $('engineMirrorOptions').open=true;
+        MV.CalculationPanel?.show('setup',true);
+      }
+      message(error.message+(j?.id?' 接続が途切れた場合、計算はローカル側で継続している可能性があります。サービスをCtrl+Cで停止できます。':''));}
     finally{if(job===j){job=null;MV.EnergyProfile.finish();busy(false);if(j.pauseRequested&&result)refineResult();}}
   }
   async function watch(j){
@@ -430,8 +511,8 @@
           }
         }
         const p=state.progress||{};MV.DiagnosticsUI?.update(p,j);
-        const pathStatus=climbingModes.includes(j.data.mode)?' · '+(j.data.endpointMode==='relax'?'両端緩和':'両端固定')+
-          (Number.isInteger(p.climbingImage)?' · 登坂ノード '+(p.climbingImage+1):''):'';
+        const pathStatus=(state.preview?.pathConsistencyWarning?' · エネルギー変化と力からの予測に大きな差':'')+(j.data.pathSymmetry?' · 鏡映拘束':'')+(climbingModes.includes(j.data.mode)?' · '+(j.data.endpointMode==='relax'?'両端緩和':'両端固定')+
+          (Number.isInteger(p.climbingImage)?' · 登坂ノード '+(p.climbingImage+1):''):'');
         message(state.status==='queued'?'実行待ちです。履歴・キューから順番と状態を確認できます。':p.phase==='loading_model'?(j.connection.info.llmlip?'llmlip.rsのローカルモデルを読み込み中…':'UMAモデルを読み込み中（初回はダウンロードを含みます）…'):j.data.mode==='dsafir'&&Number.isFinite(p.gap)?`DS-AFIR · ${p.side==='reactant'?'A側':p.side==='product'?'B側':'両端点'}を評価 · ステップ ${p.step} / ${j.data.maxSteps} · 探索点間距離 ${p.gap.toFixed(4)} Å`+(j.cancelRequested?' · 中止処理中':''):p.phase==='vibrations'?`振動解析中: 力の評価 ${p.vibrationDone??0} / ${p.vibrationTotal??'?'}（構造最適化とは別の処理）`+(j.cancelRequested?' · 中止処理中':''):`計算中: ステップ ${p.step??0} / ${j.data.maxSteps} · 構造 ${p.image??0}/${p.images??j.frames.length}`+pathStatus+(p.fmax!=null?` · 最大有効力 ${p.fmax.toPrecision(4)} eV/Å`:'')+(j.cancelRequested?' · 中止処理中':''));
         await new Promise(resolve=>setTimeout(resolve,600));
       }
@@ -492,7 +573,7 @@
     const s=MV.Model.createState(f);s.atoms.forEach((a,i)=>{[a.x,a.y,a.z]=r.images[k][i];});
     s.metadata.cell=r.cells?.[k]||r.cell||null;s.metadata.totalCharge=j.data.charge;s.metadata.multiplicity=j.data.multiplicity;if(r.nodeIds)s.metadata.pathNodeId=r.nodeIds[k];
     delete s.metadata.afirCalculation;
-    s.metadata.externalCalculation={...(j.data.llmlip?{llmlip:r.provenance.llmlip}:{}),...(j.data.solvation?{solvation:j.data.solvation,umaDevice:j.data.umaDevice}:{}),fixedAtoms:j.data.fixedAtoms||[],engine:r.engine,method:r.method,energyEV:r.energies[k],mode:r.mode,converged:r.converged,reason:r.reason,steps:r.steps,...(r.endpointMode?{endpointMode:r.endpointMode}:{}),...(ds?{physicalFmax:r.imageFmax[k],dsafir:{...r.dsafir},pathFrame:k}:{effectiveFmax:r.imageFmax[k]}),charge:j.data.charge,multiplicity:j.data.multiplicity};
+    s.metadata.externalCalculation={...(j.data.llmlip?{llmlip:r.provenance.llmlip}:{}),...(j.data.solvation?{solvation:j.data.solvation,umaDevice:j.data.umaDevice}:{}),fixedAtoms:j.data.fixedAtoms||[],engine:r.engine,method:r.method,energyEV:r.energies[k],mode:r.mode,converged:r.converged,reason:r.reason,steps:r.steps,...(r.endpointMode?{endpointMode:r.endpointMode}:{}),...(r.pathSymmetry?{pathSymmetry:r.pathSymmetry}:{}),...(ds?{physicalFmax:r.imageFmax[k],dsafir:{...r.dsafir},pathFrame:k}:{effectiveFmax:r.imageFmax[k]}),charge:j.data.charge,multiplicity:j.data.multiplicity};
     MV.ModelF?.attach(s,j.data,r,k);if(r.mode!=='evaluate')MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);
   }
   function apply(targetIndex){
@@ -508,7 +589,7 @@
         next=MV.Model.createState(updated[0]);next.metadata.trajectory=MV.Model.shareTrajectory(j.original.metadata.trajectory);next.metadata.frameIndex=j.original.metadata.frameIndex||0;next.metadata.trajectory[next.metadata.frameIndex]=updated[0];
       }else{const index=ds?0:Number.isInteger(targetIndex)?targetIndex:j.scope==='all'?j.original.metadata.frameIndex||0:0;next=MV.Model.createState(updated[index]||updated[0]);if(updated.length>1){next.metadata.trajectory=updated;next.metadata.frameIndex=index;}}
       if(j.original.metadata.measurements)next.metadata.measurements=JSON.parse(JSON.stringify(j.original.metadata.measurements));
-      next.viewSettings={...j.original.viewSettings};app().change('external engine result',()=>next,true);$('dataReset').click();if(ds)j.appliedFingerprint=fingerprint(app().getState());$('engineApply').disabled=true;if(next.metadata.trajectory&&updated.length>1)MV.EnergyProfile.bindTrajectory(next.metadata.trajectory);$('engineDialog').close();app().setStatus(`${modeText[r.mode]}の結果を反映しました（${ds?'経路接続':r.reason==='converged'?'収束':r.reason==='evaluated'?'評価済み':r.reason==='cancelled'?'未収束・中止':r.reason==='failed'?'未収束・計算失敗':r.reason==='no_resolved_peak'?'未収束・経路上の極大を確認できず':'未収束・ステップ上限'}）。「戻す」で計算前へ戻れます。`);
+      next.viewSettings={...j.original.viewSettings};app().change('external engine result',()=>next,true);$('dataReset').click();if(ds)j.appliedFingerprint=fingerprint(app().getState());$('engineApply').disabled=true;if(next.metadata.trajectory&&updated.length>1)MV.EnergyProfile.bindTrajectory(next.metadata.trajectory);$('engineDialog').close();app().setStatus(`${modeText[r.mode]}の結果を反映しました（${ds?'経路接続':r.reason==='converged'?(r.pathSymmetry?'鏡映拘束下で収束':'収束'):r.reason==='evaluated'?'評価済み':r.reason==='cancelled'?'未収束・中止':r.reason==='failed'?'未収束・計算失敗':r.reason==='no_resolved_peak'?'未収束・経路上の極大を確認できず':'未収束・ステップ上限'}）。「戻す」で計算前へ戻れます。`);
       return true;
     }catch(error){message(error.message);return false;}
   }
@@ -538,10 +619,11 @@
     if(job){message('実行中の計算が終わるまでお待ちください。');showSettings();return;}
     open();$('engineMode').value='batch';chooseMode();
   }
-  function prepareNEB(mode='cineb'){
+  function prepareNEB(mode='cineb',pathSymmetry){
     if(!['neb','cineb','lup'].includes(mode))throw Error('未対応の経路計算です。');
     if(job)throw Error('実行中の計算を終了してください。');
     clearResult();open();$('engineMode').value=mode;$('engineScope').value='all';chooseMode();
+    if(pathSymmetry!==undefined)restoreMirror(pathSymmetry);
     message(`構造列を${modeText[mode]}入力に設定しました。電荷・多重度と緩和条件を確認して実行してください。AFIRの人工力は加えません。`);
   }
   function relaxationPotential(j,mode,info){
@@ -622,7 +704,7 @@
     MV.Studio.stop();MV.EnergyProfile.reset();
     app().change('prepare DS-AFIR path relaxation',()=>next,true);$('dataReset').click();
     if($('trajectoryDialog').open)$('trajectoryDialog').close();
-    prepareNEB(mode);
+    prepareNEB(mode,null);
     if(climbingModes.includes(mode)){$('engineEndpointMode').value=endpoints;syncEndpointMode();}
     $('engineCharge').value=j.data.charge;$('engineMultiplicity').value=j.data.multiplicity;
     restorePotential(target);
@@ -643,7 +725,7 @@
       if(dirty()||fingerprint(app().getState())!==j.fingerprint)throw Error('計算後に入力が変更されています。結果JSONを保存するか、再計算してください。');
       validateResult(j.result,j);
       const frames=j.result.images.map((_,k)=>{const f=baseFrame(j,k);const s=MV.Model.createState(f);s.atoms.forEach((a,i)=>{[a.x,a.y,a.z]=j.result.images[k][i];});s.metadata.totalCharge=j.data.charge;s.metadata.multiplicity=j.data.multiplicity;if(j.result.nodeIds)s.metadata.pathNodeId=j.result.nodeIds[k];delete s.metadata.externalCalculation;delete s.metadata.afirCalculation;MV.ModelF?.attach(s,j.data);MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);});
-      $('engineDialog').close();MV.PathRefinement.open(frames,['lup','neb'].includes(j.data.mode)?j.data.mode:'cineb');
+      $('engineDialog').close();MV.PathRefinement.open(frames,['lup','neb'].includes(j.data.mode)?j.data.mode:'cineb',j.data.pathSymmetry||null);
     }catch(e){message(e.message);}
   }
   function framesFromData(data){
@@ -665,7 +747,7 @@
     if(climbingModes.includes(mode)){$('engineEndpointMode').value=data.endpointMode??'fixed';syncEndpointMode();}
     if(data.optimizer&&!['lup','dsafir'].includes(data.mode))$(data.mode==='ts'?'engineTSMethod':'engineOptimizer').value=data.optimizer;
     $('engineVibrationCheck').checked=!!data.vibrations;if(data.vibrations)for(const [key,id] of Object.entries({delta:'engineVibrationDelta',nfree:'engineVibrationNfree',imaginaryThreshold:'engineVibrationThreshold'}))$(id).value=data.vibrations[key];
-    restorePotential(data);MV.ResearchUI?.restore(data);MV.OptimizationUI?.restore(data);
+    restoreMirror(data.pathSymmetry);restorePotential(data);MV.ResearchUI?.restore(data);MV.OptimizationUI?.restore(data);
   }
   function contextForSaved(saved){
     if(!saved?.data||!Array.isArray(saved.data.symbols)||!Array.isArray(saved.data.images))throw Error('保存された入力構造がありません。');
@@ -676,7 +758,7 @@
     if(job||MV.AFIRUI?.isBusy?.())throw Error('実行中の計算の追跡を終了してから、履歴を開いてください。');
     const j=contextForSaved(saved);MV.EnergyProfile.reset();restoreInput(saved.data);clearResult();restoredInputFingerprint=null;
     if(inputOnly){app().change('restore saved calculation input',()=>j.original,true);$('dataReset').click();restoredInputFingerprint=fingerprint(app().getState());if(saved.data.mode==='dsafir'){syncEndpoints();$('dsafirStart').value=0;$('dsafirEnd').value=1;}message(saved.data.mode==='afir'?'AFIRの保存入力を復元しました。人工力を含む再計算は履歴の「保存構造から再開」を使用してください。':'保存された入力構造と計算条件を復元しました。');}
-    else if(saved.result){showResult(saved.result,j);if(saved.data.mode!=='dsafir')message('保存済みの結果を開きました。構造への適用・構造列の保存ができます。');}
+    else if(saved.result){showResult(saved.result,j);if(saved.data.mode!=='dsafir')message('保存済みの結果を開きました。'+(saved.result.pathConsistencyWarning?' エネルギー変化と力に関する注意を確認してください。':'')+' 構造への適用・構造列の保存ができます。');}
     else message('結果はまだ保存されていません。実行中の計算は履歴から追跡できます。');
     $('jobHistoryDialog').close();showSettings();MV.CalculationPanel?.show(inputOnly?'setup':saved.result?'results':'setup',true);return j;
   }
@@ -701,7 +783,7 @@
   async function watchSaved(saved){
     if(revealTrackedProgress(saved.id))return;
     const j=contextForSaved(saved);j.livePreview=$('engineLive').checked;j.cancelRequested=false;
-    restoreInput(saved.data);clearResult();MV.EnergyProfile.reset();job=j;MV.CalculationPanel?.beginJob(j.data.mode);busy(true);MV.DiagnosticsUI?.reset();
+    restoreInput(saved.data);clearResult();MV.EnergyProfile.reset();job=j;MV.CalculationPanel?.beginJob(j.data.mode,j.data.pathSymmetry);busy(true);MV.DiagnosticsUI?.reset();
     message(modeText[j.data.mode]+'の進捗を取得しています。');
     if(j.livePreview){MV.EnergyProfile.begin(cancel,showJobDetails);MV.EnergyProfile.reveal();}
     $('jobHistoryDialog').close();showSettings();MV.CalculationPanel?.show('results',true);
@@ -712,7 +794,7 @@
     const a=segment.start,b=segment.end;if(!Number.isInteger(a)||!Number.isInteger(b)||a<0||b>=j.result.images.length||b<=a)throw Error('分割区間が不正です。');
     const frames=j.result.images.slice(a,b+1).map((positions,k)=>{const f=MV.Model.createState(baseFrame(j,a+k));f.atoms.forEach((atom,i)=>{[atom.x,atom.y,atom.z]=positions[i];});delete f.metadata.externalCalculation;delete f.metadata.afirCalculation;f.metadata.totalCharge=j.data.charge;f.metadata.multiplicity=j.data.multiplicity;f.metadata.pathNodeId=j.result.nodeIds?.[a+k];MV.ModelF?.attach(f,j.data);MV.Bonding.refreshInferredBonds(f);return MV.Periodic.snapshot(f);});
     if(frames.length===2){const f=MV.Model.createState(frames[0]);f.atoms.forEach((atom,i)=>{for(const axis of ['x','y','z'])atom[axis]=(frames[0].atoms[i][axis]+frames[1].atoms[i][axis])/2;});delete f.metadata.pathNodeId;frames.splice(1,0,MV.Periodic.snapshot(f));}
-    const mode=j.data.mode==='lup'?'lup':'cineb',next=MV.Model.createState(frames[0]);next.metadata.trajectory=frames;next.metadata.frameIndex=0;app().change('select path segment',()=>next,true);$('dataReset').click();prepareNEB(mode);message(segment.needsEndpointOptimization?`この区間の端点には未収束の谷が含まれます。「両端を極小構造へ緩和」を選ぶと、端点も${modeText[mode]}で同時に緩和できます。`:`分割した区間を${modeText[mode]}入力にしました。計算条件を確認してください。`);
+    const mode=j.data.mode==='lup'?'lup':'cineb',next=MV.Model.createState(frames[0]);next.metadata.trajectory=frames;next.metadata.frameIndex=0;app().change('select path segment',()=>next,true);$('dataReset').click();prepareNEB(mode,j.data.pathSymmetry||null);message(segment.needsEndpointOptimization?`この区間の端点には未収束の谷が含まれます。「両端を極小構造へ緩和」を選ぶと、端点も${modeText[mode]}で同時に緩和できます。`:`分割した区間を${modeText[mode]}入力にしました。計算条件を確認してください。`);
   }
   function init(){
     if(location.hostname==='127.0.0.1'||location.hostname==='localhost')$('engineURL').value=location.origin;
@@ -727,6 +809,8 @@
     $('dsafirRelaxCount').addEventListener('input',syncDSRelaxation);
     for(const id of ['dsafirRelaxPotential','dsafirRelaxMode','dsafirRelaxEndpoints'])$(id).addEventListener('change',syncDSRelaxation);
     $('engineEndpointMode').addEventListener('change',syncEndpointMode);
+    $('engineMirror').addEventListener('change',syncMirror);
+    $('engineMirrorLimit').addEventListener('input',syncMirror);
     $('dsafirRelaxPrepare').addEventListener('click',()=>{
       try{prepareDSRelaxation(result?.result,$('dsafirRelaxMode').value);}
       catch(error){message(error.message);$('dsafirRelaxHelp').textContent=error.message;}

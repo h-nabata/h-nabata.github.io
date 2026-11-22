@@ -69,6 +69,46 @@ class Redistribution(unittest.TestCase):
         periodic = source+np.array([2.,0,0])
         np.testing.assert_allclose(b.lup_redistribute(periodic),b.lup_redistribute(source)+[2.,0,0])
 
+    def test_limited_zero_force_redistribution_follows_each_corner(self):
+        # With no force the string may only slide along the incoming polyline.
+        # Node 1 crosses the first turn and node 2 approaches the second turn.
+        images = np.array([[0,0,0], [.005,0,0], [.015,0,0], [.015,.3,0],
+                           [.5,.3,0], [1.,.3,0]])[:, None, :]
+        data = {**path(), 'images':images.tolist(), 'nodeIds':[str(i) for i in range(len(images))],
+                'maxSteps':1, 'climbAfter':1, 'maxMove':.035}
+        result = b.relax(data, lambda i,p: (0., np.zeros_like(p)))
+        positions = np.array(result['images'])[:,0]
+        np.testing.assert_allclose(positions[1:3,0], .015, atol=1e-14)
+        self.assertGreater(positions[1,1], 0.)
+        self.assertLess(positions[1,1], positions[2,1])
+        np.testing.assert_allclose(positions[3:,1], .3, atol=1e-14)
+        self.assertLessEqual(b.force_max(positions-images[:,0]), .035+1e-14)
+        np.testing.assert_array_equal(positions[[0,-1]], images[[0,-1],0])
+
+    def test_partial_physical_and_spacing_update_uses_the_intermediate_band(self):
+        # Different atoms dominate the lengths of successive intervals. The
+        # nodes must stay ordered on the partially advanced band in full 3N.
+        images = np.zeros((7,2,3))
+        images[:,0,0] = [0,.03,.06,.12,.3,.5,1.]
+        images[:,1,1] = [2,2,2,2.1,2.8,3,3]
+        displacement = np.zeros_like(images)
+        displacement[:,:,2] = np.array([.02,-.03,.01,.02,-.015,.01,.03])[:,None]
+        next_images, fraction, moved = b.lup_bounded_update(images,displacement,3,True,.04,None)
+        self.assertGreater(moved,0.)
+        self.assertLess(fraction,1.)
+        self.assertLessEqual(b.force_max(next_images-images),.04+1e-14)
+        advanced = images+fraction*displacement
+        np.testing.assert_array_equal(next_images[[0,3,-1]],advanced[[0,3,-1]])
+        # Atom 0's strictly increasing x gives the segment index and the barycentric
+        # weight independently of the string implementation.
+        xs = next_images[:,0,0]
+        self.assertTrue(np.all(np.diff(xs)>0))
+        for i in range(1,len(xs)-1):
+            right = np.searchsorted(advanced[:,0,0], xs[i])
+            a, z = advanced[right-1], advanced[right]
+            w = (xs[i]-a[0,0])/(z[0,0]-a[0,0])
+            np.testing.assert_allclose(next_images[i],a+w*(z-a),atol=1e-14)
+
     def test_collision_checks_include_periodic_images_and_degenerate_bands(self):
         collision = np.array([[[0.,0.,0.],[2.,.01,0.]],[[.1,0.,0.],[2.1,.02,0.]],[[.2,0.,0.],[2.2,.01,0.]]])
         cell={'vectors':[[2.,0,0],[0,2.,0],[0,0,2.]],'pbc':[True,True,True]}
