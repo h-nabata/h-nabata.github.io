@@ -12,7 +12,7 @@ async function boot(version='1.9.0'){
  const document={getElementById:id=>nodes.get(id),createElement:()=>new Element()},window={document};
  const info={version,engine:'tblite',method:'GFN2-xTB',engineVersion:'fixture',modes:['evaluate','optimize','cineb','lup'],lup:true,pathOptimizers:{cineb:['fire'],lup:['fire','lbfgs']},maxImages:100,maxSteps:10000,vibrations:true,adaptiveNEB:true,pathSplit:true};
  const ctx=vm.createContext({window,document,location:{hostname:'example.test'},URL,AbortController,setTimeout,clearTimeout,console,fetch:async()=>({ok:true,json:async()=>info})});
- for(const f of ['model','optimization','bonding','geometry','io','molfile','periodic','constraints','research-ui','engine-ui','path-refinement'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../'+f+'.js'),'utf8'),ctx,{filename:f+'.js'});
+ for(const f of ['model','optimization','bonding','geometry','io','molfile','periodic','constraints','structure-analysis','trajectory','research-ui','engine-ui','path-refinement'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../'+f+'.js'),'utf8'),ctx,{filename:f+'.js'});
  const M=window.MoleculeVisualizer;let state=M.Model.createState({atoms:[{id:'o',element:'O',x:0,y:0,z:0},{id:'h1',element:'H',x:.96,y:0,z:0},{id:'h2',element:'H',x:-.24,y:.93,z:0}]});
  state.metadata.pathNodeId='n0';state.metadata.trajectory=[0,.1,.2].map((shift,i)=>{const f=M.Periodic.snapshot(state);f.atoms[1].x+=shift;f.metadata.pathNodeId='n'+i;return f;});state.metadata.frameIndex=0;
  M.App={getState:()=>state,getDisplayedState:()=>state,useDisplayedStructure(){},freezeDisplayedStructure(){},change(_label,fn){state=fn(state)||state;}};M.EnergyProfile={reset(){}};M.Studio={stop(){}};M.App.setStatus=()=>{};
@@ -48,4 +48,193 @@ test('manual node insertion keeps LUP mode and existing node identities',async()
  const refined=M.PathRefinement.refine(frames,0,2,1);assert.equal(refined.length,5);assert.equal(JSON.stringify([refined[0],refined[2],refined[4]].map(f=>f.metadata.pathNodeId)),'["n0","n1","n2"]');assert.equal(new Set(refined.map(f=>f.metadata.pathNodeId)).size,5);
  M.PathRefinement.init();M.PathRefinement.open(frames,'lup');assert.match(nodes.get('refineNEB').textContent,/LUP系/);await nodes.get('refineNEB').click();assert.equal(nodes.get('engineMode').value,'lup');assert.equal(M.App.getState().metadata.trajectory.length,5);assert.equal(new Set(M.EngineUI.input().data.nodeIds).size,5);
  M.PathRefinement.open();assert.match(nodes.get('refineNEB').textContent,/CI-NEB/);
+});
+
+test('DS-AFIR submits the two selected endpoints and current fields, preserves their order across reopen and restore',async()=>{
+ const {M,nodes,info}=await boot('1.17.0');
+ info.modes.push('dsafir');
+ M.EngineUI.prepareMethod('dsafir');
+ assert.equal(nodes.get('dsafirStart').value,'0');
+ assert.equal(nodes.get('dsafirEnd').value,'2');
+ for(const [id,value] of Object.entries({dsafirStart:2,dsafirEnd:1,engineSteps:82,dsafirDelta:.85,dsafirStep:.035,dsafirThreshold:.11}))nodes.get(id).value=value;
+ M.EngineUI.open();
+ const {data}=M.EngineUI.input(),frames=M.App.getState().metadata.trajectory;
+ assert.equal(data.mode,'dsafir');assert.equal(data.maxSteps,82);
+ assert.equal(JSON.stringify(data.dsafir),JSON.stringify({delta:.85,stepSize:.035,threshold:.11}));
+ assert.deepEqual(Array.from(data.images,image=>image[1][0]),[frames[2].atoms[1].x,frames[1].atoms[1].x]);
+ assert.equal(data.spring,undefined);assert.equal(data.maxMove,undefined);
+ M.EngineUI.restoreJob({id:'c'.repeat(32),data},true);
+ M.EngineUI.open();assert.equal(nodes.get('dsafirStart').value,'0');assert.equal(nodes.get('dsafirEnd').value,'1');
+ assert.equal(JSON.stringify(M.EngineUI.input().data),JSON.stringify(data));
+ nodes.get('dsafirEnd').value='0';assert.throws(()=>M.EngineUI.input(),/異なる構造/);
+ nodes.get('dsafirEnd').value='1';nodes.get('dsafirDelta').value='';assert.throws(()=>M.EngineUI.input(),/0.0001/);
+ nodes.get('dsafirDelta').value=1;info.modes=info.modes.filter(m=>m!=='dsafir');assert.throws(()=>M.EngineUI.input(),/bridge/);
+});
+
+test('DS-AFIR profiles separate unfinished branches, validate the measured gap and retain the atom identity of A',async()=>{
+ const {M,info}=await boot('1.17.0');info.modes.push('dsafir');
+ M.EngineUI.prepareMethod('dsafir');
+ const j=M.EngineUI.input(),d=j.data,images=JSON.parse(JSON.stringify(d.images));
+ const gap=Math.sqrt(images[0].reduce((sum,a,i)=>sum+a.reduce((v,x,k)=>v+(x-images[1][i][k])**2,0),0));
+ const dsafir={...d.dsafir,joinIndex:0,connected:false,gap};
+ const r={mode:'dsafir',converged:false,reason:'step_limit',symbols:d.symbols,atomIds:d.atomIds,cell:d.cell,images,energies:[0,1],imageFmax:[.01,.02],steps:0,dsafir,units:{energy:'eV',length:'angstrom'}};
+ let view;M.EnergyProfile.set=next=>{view=next;};
+ M.EngineUI.validateResult(r,j);M.EngineUI.showProfile(r,j);
+ assert.equal(view.breakAfter,0);assert.equal(view.exportXYZ,null);assert.match(view.legend,/未接続/);
+ assert.throws(()=>M.EngineUI.resultSource(r,j),/未接続/);
+ assert.throws(()=>M.EngineUI.validateResult({...r,dsafir:{...dsafir,gap:gap+.01}},j),/距離/);
+ d.dsafir.threshold=gap+.01;r.dsafir={...dsafir,threshold:d.dsafir.threshold,connected:true};r.reason='connected';r.converged=true;
+ M.EngineUI.validateResult(r,j);M.EngineUI.showProfile(r,j);assert.equal(view.breakAfter,undefined);assert.equal(typeof view.exportXYZ,'function');
+ const source=M.EngineUI.resultSource(r,j);
+ assert.equal(source.base(1),j.frames[0]);assert.deepEqual(source.atomIds,d.atomIds);
+});
+
+test('choosing DS-AFIR before importing the endpoints keeps the selected method',async()=>{
+ const {M,nodes}=await boot('1.17.0'),original=M.App.getState(),frames=original.metadata.trajectory;
+ M.App.change('single structure',()=>M.Model.createState(frames[0]));
+ M.EngineUI.prepareMethod('dsafir');assert.equal(nodes.get('dsafirEnd').disabled,true);
+ M.App.change('open both endpoints',()=>original);M.EngineUI.open();
+ assert.equal(nodes.get('engineMode').value,'dsafir');assert.equal(nodes.get('dsafirEnd').disabled,false);
+ assert.equal(nodes.get('dsafirEnd').value,'2');
+});
+
+test('plot sampling keeps the last point of A and the first of B in different segments',()=>{
+ const window={MoleculeVisualizer:{}},ctx=vm.createContext({window});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../energy-profile.js'),'utf8'),ctx);
+ const values=Array.from({length:2500},(_,i)=>Math.sin(i*.01));
+ const [left,right]=window.MoleculeVisualizer.EnergyProfile.sampleSegments(values,923);
+ assert.equal(left[0],0);assert.equal(left.at(-1),923);assert.equal(right[0],924);assert.equal(right.at(-1),2499);
+ assert.ok(left.length+right.length<1000);
+});
+
+async function connectedDSPath(){
+ const setup=await boot('1.17.0'),{M,nodes,info}=setup;
+ info.modes.push('dsafir','neb');
+ M.EnergyProfile.set=()=>{};
+ M.ResearchUI.showResult=()=>{};
+ M.EngineUI.prepareMethod('dsafir');
+ nodes.get('engineCharge').value='1';
+ nodes.get('engineMultiplicity').value='2';
+ const j=M.EngineUI.input(),d=j.data;
+ const images=Array.from({length:12},(_,i)=>d.images[0].map((xyz,a)=>xyz.map((v,k)=>v+(d.images[1][a][k]-v)*i/11)));
+ const energies=[0,.1,.3,1.4,.3,0,.14,.3,.8,.35,.2,0],gap=images[6][1][0]-images[5][1][0];
+ const r={mode:'dsafir',engine:info.engine,method:info.method,converged:true,reason:'connected',
+   dsafir:{...d.dsafir,gap,joinIndex:5,connected:true},symbols:d.symbols,atomIds:d.atomIds,
+   images,cell:null,steps:10,evaluations:12,energies,imageFmax:images.map(()=>.01),
+   units:{length:'angstrom',energy:'eV'}};
+ M.EngineUI.showResult(r,j);
+ return {...setup,r,j};
+}
+
+test('connected DS-AFIR result stages the selected path solver, original electronic conditions and only evaluated nodes',async()=>{
+ const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
+ const modeOptions=html.match(/<select\b[^>]*id="engineMode"[^>]*>([\s\S]*?)<\/select>/)[1];
+ for(const mode of ['cineb','neb','lup']){
+  assert.ok(modeOptions.includes('value="'+mode+'"'),'solver must exist in the real HTML select');
+  const {M,nodes,r}=await connectedDSPath();
+  assert.equal(nodes.get('dsafirRelaxation').hidden,false);
+  assert.equal(nodes.get('dsafirRelaxCount').value,'12');
+  nodes.get('dsafirRelaxMode').value=mode;
+  nodes.get('dsafirRelaxCount').value='5';
+  nodes.get('engineCharge').value='0';nodes.get('engineMultiplicity').value='1';
+  await nodes.get('dsafirRelaxPrepare').click();
+  assert.equal(nodes.get('engineMode').value,mode,nodes.get('dsafirRelaxHelp').textContent);
+  assert.equal(nodes.get('engineScope').value,'all');
+  const job=M.EngineUI.input(),d=job.data,indices=job.frames.map(f=>f.metadata.externalCalculation.pathFrame);
+  assert.equal(d.charge,1);assert.equal(d.multiplicity,2);
+  assert.deepEqual(Array.from(d.atomIds),['o','h1','h2']);
+  assert.equal(d.images.length,5);assert.equal(indices[0],0);assert.equal(indices.at(-1),11);
+  assert.ok(indices.includes(3));
+  assert.equal(JSON.stringify(d.images),JSON.stringify(indices.map(i=>r.images[i])));
+  assert.equal(d.dsafir,undefined);assert.equal(d.afir,undefined);
+ }
+});
+
+test('DS-AFIR handoff rejects stale coordinates, incompatible surfaces and a completed path without internal nodes',async()=>{
+ const {M,nodes,info,j,r}=await connectedDSPath(),before=M.App.getState();
+ nodes.get('xyzEditStatus').textContent='編集中';
+ await nodes.get('dsafirRelaxPrepare').click();
+ assert.match(nodes.get('dsafirRelaxHelp').textContent,/入力が変更/);assert.equal(M.App.getState(),before);
+ nodes.get('xyzEditStatus').textContent='';
+ info.method='GFN1-xTB';await nodes.get('dsafirRelaxPrepare').click();
+ assert.match(nodes.get('dsafirRelaxHelp').textContent,/同じ計算エンジン/);assert.equal(M.App.getState(),before);
+ info.method=r.method;
+ const gap=before.metadata.trajectory[2].atoms[1].x-before.metadata.trajectory[0].atoms[1].x;
+ j.data.dsafir.threshold=gap+.001;
+ M.EngineUI.showResult({...r,images:j.data.images,energies:[0,.04],imageFmax:[.01,.01],steps:0,
+   evaluations:2,dsafir:{...j.data.dsafir,joinIndex:0,gap,connected:true}},j);
+ assert.ok(nodes.get('dsafirRelaxPrepare').disabled);assert.match(nodes.get('dsafirRelaxHelp').textContent,/中間構造/);
+ M.EngineUI.showResult({...r,images:j.data.images,energies:[0,.04],imageFmax:[.01,.01],steps:0,
+   converged:false,reason:'step_limit',dsafir:{...j.data.dsafir,threshold:.12,joinIndex:0,gap,connected:false}},
+   {...j,data:{...j.data,dsafir:{...j.data.dsafir,threshold:.12}}});
+ assert.ok(nodes.get('dsafirRelaxPrepare').disabled);assert.match(nodes.get('dsafirRelaxHelp').textContent,/未接続/);
+});
+
+test('DS-AFIR to LUP restores the source solvent and device even if a different draft was selected',async()=>{
+ const {M,nodes,r,j,info}=await connectedDSPath();
+ info.engine='uma';info.uma={model:'fixture-uma',precision:'float64'};
+ info.devices=[{id:'cpu'},{id:'cuda:0'}];info.anysolv={enabled:true,models:['model_compact'],solvents:['water','acetone']};
+ const solvation={model:'model_compact',solvent:'acetone',device:'cpu'};
+ Object.assign(j.data,{umaDevice:'cuda:0',solvation});
+ Object.assign(r,{engine:'uma',method:'fixture-uma with solvent',provenance:{
+   uma:{model:'fixture-uma',device:'cuda:0',inference:{base_precision_dtype:'float64'}},
+   anysolv:{...solvation}},energyComponents:{uma:r.energies.slice(),solvation:r.energies.map(()=>0)}});
+ M.EngineUI.showResult(r,j);
+ nodes.get('engineAnySolv').checked=false;nodes.get('engineSolvent').value='water';nodes.get('engineUMADevice').value='cpu';
+ nodes.get('dsafirRelaxMode').value='lup';await nodes.get('dsafirRelaxPrepare').click();
+ const data=M.EngineUI.input().data;
+ assert.equal(data.mode,'lup');assert.equal(data.umaDevice,'cuda:0');
+ assert.equal(JSON.stringify(data.solvation),JSON.stringify(solvation));
+});
+
+test('explicitly switching PES re-evaluates the same geometries, charge and spin with current solvent settings',async()=>{
+ const {M,nodes,r,info}=await connectedDSPath(),before=M.App.getState();
+ info.engine='uma';info.uma={model:'fixture-uma',precision:'float64',device:'cpu'};
+ info.anysolv={enabled:true,models:['model_compact'],solvents:['water']};info.devices=[{id:'cpu'}];
+ nodes.get('engineUMADevice').value='cpu';nodes.get('engineAnySolv').checked=true;
+ nodes.get('engineAnySolvModel').value='model_compact';nodes.get('engineAnySolvDevice').value='cpu';nodes.get('engineSolvent').value='water';
+ await nodes.get('dsafirRelaxPrepare').click();
+ assert.match(nodes.get('dsafirRelaxHelp').textContent,/同じ計算エンジン/);assert.equal(M.App.getState(),before);
+ nodes.get('dsafirRelaxPotential').value='current';await nodes.get('dsafirRelaxPrepare').click();
+ const {data,frames}=M.EngineUI.input();
+ assert.equal(data.mode,'cineb');assert.equal(data.charge,1);assert.equal(data.multiplicity,2);
+ assert.deepEqual(Array.from(data.atomIds),['o','h1','h2']);assert.equal(JSON.stringify(data.images),JSON.stringify(r.images));
+ assert.equal(data.solvation.solvent,'water');assert.equal(data.solvation.model,'model_compact');assert.equal(data.umaDevice,'cpu');
+ for(const [k,frame] of frames.entries()){
+   assert.equal(frame.metadata.externalCalculation,undefined);assert.equal(frame.metadata.trajectoryExtraction.sourceMethod,r.method);
+   assert.equal(frame.metadata.trajectoryExtraction.sourceFrame,k);
+ }
+});
+
+test('same UMA and solvent support a recovered result when its previous GPU is unavailable',async()=>{
+ const {M,nodes,r,j,info}=await connectedDSPath();
+ info.engine='uma';info.uma={model:'fixture-uma',precision:'float64',device:'cpu'};
+ info.devices=[{id:'cpu'}];info.anysolv={enabled:true,models:['model_compact'],solvents:['acetone'],device:'cpu'};
+ const solvation={model:'model_compact',solvent:'acetone',device:'cuda:1'};
+ Object.assign(j.data,{umaDevice:'cuda:1',solvation});
+ Object.assign(r,{engine:'uma',method:'fixture-uma + acetone',provenance:{
+   uma:{model:'fixture-uma',device:'cuda:1',inference:{base_precision_dtype:'float64'}},
+   anysolv:{...solvation,checkpointSHA256:'a'.repeat(64)}},
+   energyComponents:{uma:r.energies.slice(),solvation:r.energies.map(()=>0)}});
+ M.EngineUI.restoreJob({id:'a'.repeat(32),data:j.data,result:r});
+ info.anysolv.checkpointSHA256={model_compact:'b'.repeat(64)};
+ await nodes.get('dsafirRelaxPrepare').click();assert.match(nodes.get('dsafirRelaxHelp').textContent,/同じ計算エンジン/);
+ info.anysolv.checkpointSHA256.model_compact=r.provenance.anysolv.checkpointSHA256;
+ await nodes.get('dsafirRelaxPrepare').click();
+ assert.match(nodes.get('engineMessage').textContent,/cuda:1 → cpu/);
+ const data=M.EngineUI.input().data;
+ assert.equal(data.umaDevice,'cpu');assert.equal(data.solvation.device,'cpu');assert.equal(data.solvation.solvent,'acetone');
+});
+
+test('clamps an implicit llmlip thread count from result provenance to the new service budget',async()=>{
+ const {M,nodes,r,j,info}=await connectedDSPath();
+ const sha='e'.repeat(64),selection={model:'fixture',head:'omol',dtype:'float64'};
+ info.engine='llmlip';info.llmlip={models:[{id:'fixture',sha256:sha,available:true,architecture:'uma-v1',heads:['omol'],dtypes:['float64'],species:['H','O']}],threads:6,workers:2};
+ j.data.llmlip=selection;r.engine='llmlip';r.provenance={llmlip:{...selection,modelSHA256:sha,threads:8,device:'cpu',backend:'direct'}};
+ let staged;
+ vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../llmlip-ui.js'),'utf8'),{window:{MoleculeVisualizer:M}});
+ Object.assign(M.LLMLIPUI,{summary:()=>'',restore(data){staged=data.llmlip;}});
+ M.EngineUI.showResult(r,j);
+ await nodes.get('dsafirRelaxPrepare').click();
+ assert.equal(staged.threads,6);assert.equal(staged.model,'fixture');assert.match(nodes.get('engineMessage').textContent,/8 → 6スレッド/);
 });

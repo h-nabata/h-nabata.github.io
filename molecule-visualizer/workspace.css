@@ -1,0 +1,124 @@
+/* Keep the molecule in view while the user chooses inputs and a calculation. */
+.mv-app {
+  --workspace-navy: #193b4d;
+  --workspace-teal: #0c6a70;
+  font-family: "Inter", "Noto Sans JP", system-ui, sans-serif;
+}
+.mv-app .mv-brand-mark { color: #d9fbef; background: var(--workspace-navy); }
+.mv-app .mv-document { margin-bottom: .65rem; }
+.mv-app .mv-workflow-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .4rem;
+  padding: .55rem .75rem;
+  color: #fff;
+  background: var(--workspace-navy);
+  border: 1px solid var(--workspace-navy);
+  border-radius: .7rem .7rem 0 0;
+}
+.mv-workflow-bar > .mv-btn,
+.mv-command-menu > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: .65rem;
+  box-sizing: border-box;
+  min-height: 2.4rem;
+  margin: 0;
+  padding: .4rem .85rem;
+  border: 1px solid #68838f;
+  border-radius: .4rem;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: .88rem;
+  font-weight: 600;
+  line-height: 1.35;
+  cursor: pointer;
+}
+.mv-app .mv-workflow-bar > .mv-btn { background: transparent; color: #fff; border-color: #68838f; font-size: .88rem; }
+.mv-command-menu > summary { list-style: none; }
+.mv-command-menu > summary::-webkit-details-marker { display: none; }
+.mv-command-menu > summary::after {
+  content: '';
+  display: inline-block;
+  width: .42rem;
+  height: .42rem;
+  transform: translateY(-.06rem) rotate(45deg);
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+}
+.mv-command-menu[open] > summary::after { transform: translateY(.1rem) rotate(225deg); }
+.mv-app .mv-workflow-bar > .mv-btn:hover:enabled,
+.mv-command-menu > summary:hover,
+.mv-command-menu[open] > summary { background: #305361; }
+#workspaceMethodChooser > summary { background: #c9f5e6; border-color: #c9f5e6; color: #123e40; }
+#workspaceMethodChooser[open] > summary, #workspaceMethodChooser > summary:hover { background: #acedd9; }
+.mv-app #btnJobHistory { margin-inline-start: auto; }
+.mv-app #cancelAdvanced:disabled { display: none; }
+.mv-app #cancelAdvanced:enabled { color: #fff4dc; border-color: #c4a476; }
+.mv-command-sheet {
+  position: absolute;
+  z-index: 50;
+  inset: calc(100% + .25rem) 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
+  gap: .9rem;
+  max-height: min(65vh, 35rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 1rem;
+  color: var(--ink);
+  border: 1px solid #b6ccd0;
+  border-radius: .7rem;
+  background: #fff;
+  box-shadow: 0 10px 30px #193b4d30;
+}
+.mv-command-sheet section { min-width: 0; }
+.mv-command-sheet h2 {
+  margin: 0 0 .35rem;
+  padding: .2rem .45rem .5rem;
+  border-bottom: 1px solid #d7e4e7;
+  font-size: .89rem;
+  color: #526d79;
+}
+.mv-app .mv-command-sheet .mv-btn {
+  display: block;
+  width: 100%;
+  margin: .1rem 0 0;
+  padding: .5rem .45rem;
+  border: 1px solid transparent;
+  text-align: start;
+  background: #fff;
+  color: var(--ink);
+  font-size: .94rem;
+  box-shadow: none;
+}
+.mv-app .mv-command-sheet .mv-btn:is(:hover,:focus-visible) { background: #edf7f4; color: #114e50; }
+.mv-command-sheet small { display: block; font-size: .8rem; line-height: 1.5; font-weight: 400; color: #4c6473; }
+.mv-app .mv-activity { border-top: 0; border-radius: 0 0 .7rem .7rem; }
+.mv-app #engineDialog { scroll-padding: 1rem; }
+.mv-app #engineDialog > h2 { font-size: 1.25rem; color: var(--workspace-navy); }
+.mv-app #engineDialog fieldset { min-width: 0; }
+.mv-app #engineDialog label, .mv-app #engineDialog legend, .mv-app #engineDialog summary { font-size: .9rem; }
+.mv-app #engineDialog legend { font-weight: 700; color: #264c5a; }
+.mv-app #engineSettings { padding: .8rem; background: #fff; }
+.mv-app #engineDialog .mv-engine-basics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+.mv-app #engineDialog .mv-engine-basics label:first-child { grid-column: 1 / -1; }
+.mv-app #engineDialog .mv-grid > label { min-width: 0; }
+.mv-app #engineDialog .mv-grid :is(input:not([type=checkbox]),select) { box-sizing: border-box; width: 100%; }
+.mv-app #engineDialog .mv-method-help { margin: .75rem 0; padding: .6rem .75rem; border-inline-start: 3px solid #4c9b93; background: #eef7f4; color: #2a524f; font-size: .88rem; }
+.mv-app #engineDialog .mv-method-help:empty { display: none; }
+.mv-app #engineDSAFIRSettings { margin: .75rem 0; padding: .8rem; border: 1px solid #c8dbda; border-radius: .5rem; }
+.mv-app #engineDSAFIRSettings > h3 { margin-top: 0; }
+.mv-app #engineDialog .mv-dialog-actions { display: flex; flex-wrap: wrap; }
+.mv-app #engineDialog .mv-dialog-actions .mv-btn { min-height: 2.4rem; font-size: .88rem; }
+.mv-app #engineClose { margin-inline-start: auto; }
+@media (max-width: 650px) {
+  .mv-app .mv-workflow-bar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: .5rem; }
+  .mv-workflow-bar > .mv-btn, .mv-command-menu > summary { justify-content: center; width: 100%; min-height: 2.55rem; }
+  .mv-app #btnJobHistory { margin-inline-start: 0; }
+  .mv-command-sheet { grid-template-columns: 1fr; gap: .7rem; padding: .65rem; }
+  .mv-app #engineDialog { box-sizing: border-box; max-width: 96vw; padding: 1rem; }
+}

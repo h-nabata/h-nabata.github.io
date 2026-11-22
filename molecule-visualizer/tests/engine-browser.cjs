@@ -1,3 +1,4 @@
+const {clickWorkspaceCommand} = require('./workspace-commands.cjs');
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{spawn}=require('node:child_process');
 (async()=>{
  const root=path.resolve(__dirname,'..'),engine=spawn(process.env.PYTHON||'python',[path.join(root,'local-engine/bridge.py'),'--engine','tblite','--port','8766','--allow-origin','http://127.0.0.1:8765','--site-dir',root],{env:{...process.env,OMP_NUM_THREADS:'1',OPENBLAS_NUM_THREADS:'1'}});
@@ -49,10 +50,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   const previewRequests=[],jobRequests=[];page.on('request',r=>{if(r.url().includes('?preview=1'))previewRequests.push(r.url());if(r.method()==='POST'&&r.url().endsWith('/api/jobs'))jobRequests.push(r.url());});
   assert.equal(await page.locator('#engineLive').isChecked(),true);assert.equal(await page.locator('#afirLive').isChecked(),true);
   // Keep explicit live-off coverage in the first calculation sequence.
-  await page.click('#btnAFIR');await page.uncheck('#afirLive');await page.click('#afirClose');
+  await clickWorkspaceCommand(page, '#btnAFIR');await page.uncheck('#afirLive');await page.click('#afirClose');
   await page.click('#btnExternalEngine');await page.uncheck('#engineLive');await page.fill('#engineURL','http://127.0.0.1:8766');await page.fill('#engineToken','incorrect');await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineMessage').textContent.includes('トークンが一致'));
   await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
-  assert.equal(await page.locator('#engineMode option[value=neb]').count(),0);
+  await page.selectOption('#engineMode','neb');
+  assert.equal(await page.locator('#engineMode').inputValue(),'neb');
   await page.selectOption('#engineMode','cineb');
   assert.deepEqual(await page.locator('#engineSteps,#engineFmax,#engineMove,#engineSpring,#engineClimb').evaluateAll(es=>es.map(e=>e.value)),['100','0.05','0.03','1','5']);
   await page.fill('#engineFmax','0.02');await page.selectOption('#engineMode','ts');assert.equal(await page.locator('#engineFmax').inputValue(),'0.05');

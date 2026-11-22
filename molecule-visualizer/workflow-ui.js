@@ -20,7 +20,7 @@
   return data;
  }
  function frames(data,base){return data.images.map(p=>{const s=M.Model.createState(M.Periodic.snapshot(base));s.atoms.forEach((a,i)=>{[a.x,a.y,a.z]=p[i];});s.metadata.cell=data.cell||null;return M.Periodic.snapshot(s);});}
- async function job(data,context,label){if(active.cancelled)throw Error('計算手順を中止しました。');const c=active.connection,j={...context,data,frames:frames(data,context.original),connection:c,scope:data.images.length>1?'all':'current'};
+ async function job(data,context,label){if(active.cancelled)throw Error('計算手順を中止しました。');const c=active.connection,j={...context,data,activityLabel:'計算手順 · '+label,frames:frames(data,context.original),connection:c,scope:data.images.length>1?'all':'current'};
   const created=await M.EngineUI.request(c,'/api/jobs',data);if(!/^[a-f0-9]{32}$/.test(created.id))throw Error('不正な計算IDです。');active.jobId=created.id;j.id=created.id;record.jobs.push({id:created.id,label,data:clone(data)});
   if(active.cancelled)await M.EngineUI.request(c,`/api/jobs/${created.id}/cancel`,{});
   for(;;){const state=await M.EngineUI.pollJob(j,false);message(`${label} · ${state.status} · ステップ ${state.progress?.step??0}`);
@@ -57,7 +57,8 @@
    if(kind==='conformers'){
     const count=Number($('workflowCount').value),seed=Number($('workflowSeed').value),threshold=Number($('workflowRmsd').value);
     if(!Number.isInteger(count)||count<1||count>20||!Number.isInteger(seed)||seed<0||seed>4294967295||!Number.isFinite(threshold)||threshold<0||threshold>10)throw Error('配座数・乱数シード・RMSD閾値を確認してください。');
-    record.generation={count,seed,mode:'torsion',rings:true,ringAngle:30};const generated=await generate(context.original,record.generation);record.generationMessage=generated.message;
+    M.Activity?.update(active,'計算手順 · 配座生成','running','ブラウザ');
+    record.generation={count,seed,mode:'torsion',rings:true,ringAngle:30};const generated=await generate(context.original,record.generation);record.generationMessage=generated.message;M.Activity?.update(active,'計算手順 · 配座生成','completed','ブラウザ');
     const structures=generated.state.metadata.trajectory||[M.Periodic.snapshot(generated.state)],completed=[];
     for(const [i,frame] of structures.entries()){const d=stageInput(base,'optimize',[frame.atoms.map(a=>[a.x,a.y,a.z])],conditions);const j=await job(d,context,`配座 ${i+1}/${structures.length} MIN`);requireConvergence(j);completed.push(j);}
     if(active.cancelled)throw Error('計算手順を中止しました。');
@@ -74,8 +75,8 @@
     }
     if(last)M.EngineUI.showResult(last.result,last);message('計算手順が完了しました。各結果を確認して構造へ適用できます。');
    }
-   record.status='completed';
-  }catch(e){if(record){record.status=active?.cancelled?'cancelled':'stopped';record.error=e.message;}message(e.message);}
+   record.status='completed';M.Activity?.update(active,recipe.name,'completed');
+  }catch(e){if(active&&record){record.status=active.cancelled?'cancelled':'stopped';record.error=e.message;M.Activity?.update(active,recipe.name,active.cancelled?'cancelled':'interrupted',e.message);}message(e.message);}
   finally{active=null;$('workflowRun').disabled=false;$('workflowCancel').disabled=true;$('workflowSaveResults').disabled=!record;M.OptimizationUI.sync();}
  }
  function renderResults(){const out=$('workflowResults');out.replaceChildren();results.forEach((j,i)=>out.append(button(`${i+1}: ${j.data.mode} · ${j.result.converged?'収束':j.result.reason}`,()=>{M.EngineUI.showResult(j.result,j);M.EngineUI.showSettings();})));
@@ -83,7 +84,7 @@
  }
  async function cancel(){if(!active)return;active.cancelled=true;if(active.worker){active.worker.terminate();active.rejectGeneration?.(Error('配座生成を中止しました。'));}if(active.jobId)try{await M.EngineUI.request(active.connection,`/api/jobs/${active.jobId}/cancel`,{});}catch(e){message(e.message);}message('中止処理中です。');}
  function init(){const section=document.createElement('details');section.className='mv-help';section.id='workflowPanel';section.innerHTML='<summary>計算手順をまとめて実行</summary><label>手順<select id="workflowRecipe"></select></label><p id="workflowSteps" class="mv-small"></p><div id="workflowConformers" hidden class="mv-grid"><label>配座数<input id="workflowCount" type="number" value="5" min="1" max="20"></label><label>乱数シード<input id="workflowSeed" type="number" value="1" min="0"></label><label>重複判定RMSD (Å)<input id="workflowRmsd" type="number" value="0.1" step="0.01"></label></div><div class="mv-row"><input id="workflowName" maxlength="80" placeholder="保存する手順名" aria-label="保存する手順名"><button id="workflowSave" class="mv-btn">手順を保存</button><select id="workflowSaved" aria-label="保存済み手順"></select><button id="workflowLoad" class="mv-btn">復元</button></div><p class="mv-small">各段階は現在の電荷・多重度・エンジンと、下の収束条件で計算します。未収束・計算失敗・振動条件の不一致で停止します。振動解析の前には十分厳しい力の閾値（例: 0.0001 eV/Å）を指定してください。自動実行中はページを開いておいてください。ページを閉じた場合も投入済みジョブは履歴に残り、後続ジョブは自動投入されません。</p><div class="mv-row"><button class="mv-btn primary" id="workflowRun">手順全体を開始</button><button class="mv-btn" id="workflowCancel" disabled>手順を中止</button><button class="mv-btn" id="workflowSaveResults" disabled>手順・結果JSONを保存</button></div><p id="workflowMessage" role="status"></p><div id="workflowResults" class="mv-row"></div>';
-  $('engineDialog').querySelector('h2').after(section);for(const [id,r] of Object.entries(recipes)){const o=document.createElement('option');o.value=id;o.textContent=r.name;$('workflowRecipe').append(o);}$('workflowSteps').textContent=recipes.minimum.name;
+  $('engineSavedSettings').append(section);for(const [id,r] of Object.entries(recipes)){const o=document.createElement('option');o.value=id;o.textContent=r.name;$('workflowRecipe').append(o);}$('workflowSteps').textContent=recipes.minimum.name;
   $('workflowRecipe').onchange=choose;$('workflowRun').onclick=run;$('workflowCancel').onclick=cancel;
   function refresh(){const select=$('workflowSaved');select.replaceChildren();for(const name of Object.keys(M.App.getState().metadata.workflowRecipes||{})){const o=document.createElement('option');o.value=name;o.textContent=name;select.append(o);}}
   for(const event of ['pointerdown','focus'])$('workflowSaved').addEventListener(event,refresh);

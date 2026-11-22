@@ -69,11 +69,28 @@
   function extract(source,count,method='index',options={},cumulative){
     validate(source);
     const picked=indices(source.images,count,method,cumulative);
-    if(source.kind!=='afir')return {indices:picked};
+    if(!['afir','dsafir'].includes(source.kind))return {indices:picked};
     const features=energyFeatures(source,options);
     if(count<features.minimum)throw Error(`AFIRの両端点と最高エネルギー構造を残すには${features.minimum}ノード以上が必要です。`);
     const anchors=new Set([0,source.images.length-1,features.highest]);
     if(options.preservePeaks!==false)for(const p of features.peaks){if(anchors.size>=count)break;anchors.add(p.index);}
+    if(options.preserveValleys&&anchors.size<count){
+      // Two sampled peaks need their intervening minimum to remain distinct.
+      const summits=[...new Set([features.highest,...features.peaks.map(p=>p.index)])]
+        .filter(i=>i>0&&i<source.energies.length-1&&anchors.has(i)).sort((a,b)=>a-b);
+      const valleys=[];
+      for(let i=1;i<summits.length;i++){
+        const left=summits[i-1],right=summits[i];
+        let bottom=left;
+        for(let j=left+1;j<right;j++)if(source.energies[j]<source.energies[bottom])bottom=j;
+        const depth=Math.min(source.energies[left],source.energies[right])-source.energies[bottom];
+        if(depth>0)valleys.push({index:bottom,depth});
+      }
+      for(const valley of valleys.sort((a,b)=>b.depth-a.depth)){
+        if(anchors.size>=count)break;
+        anchors.add(valley.index);
+      }
+    }
     // Retain the uniform targets where possible, replacing the nearest unprotected ones.
     const selected=new Set(picked),arc=method==='distance'?(cumulative||distances(source.images)):null;
     const metric=arc?.at(-1)>0?arc:source.images.map((_,i)=>i);
@@ -103,6 +120,7 @@
     if(!['all','index','distance'].includes(method))throw Error('抽出方法が不正です。');
     return selected.map((i,k)=>{
       let comment=`MoleculeStudio frame=${k+1}/${selected.length} source_frame=${i+1}/${source.images.length} selection=${method}`;
+      if(source.kind==='dsafir')comment+=' method=DS-AFIR';
       if(source.kind==='afir'||source.kind==='optimize')comment+=` step=${source.stepNumbers?.[i]??i}`;
       if(source.energies)comment+=` energy_eV=${source.energies[i].toPrecision(15)}`;
       if(source.modelF){const s=source.modelF;comment+=` modelF=amf surface=${s.surface} alpha_kJ_mol=${s.alphaKJMol} multiplicities="${s.multiplicities.join(' ')}"`;if(source.surfaceComponents)for(const key of ['state1EV','state2EV','gapEV','couplingEV','lowerEV','upperEV'])comment+=` ${key}=${source.surfaceComponents[key][i].toPrecision(15)}`;}

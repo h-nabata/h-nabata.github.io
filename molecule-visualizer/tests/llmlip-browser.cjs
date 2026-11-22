@@ -1,3 +1,4 @@
+const {clickWorkspaceCommand} = require('./workspace-commands.cjs');
 /* Native CPU bridge + browser lifecycle. LLMLIP_TEST_MODEL must contain H/O.
    The upstream synthetic fixture verifies transport, never chemical accuracy. */
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{spawn}=require('node:child_process');
@@ -11,7 +12,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   browser=await chromium.launch({headless:true});page=await browser.newPage({viewport:{width:1280,height:1000}});const errors=[],posted=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/api/jobs'))posted.push(r.postDataJSON());});
   await page.goto('http://127.0.0.1:8778/');await page.waitForSelector('canvas');
-  await page.click('#btnConstraints');const point=await page.evaluate(()=>{const p=MoleculeVisualizer.App.renderer().projectedAtoms.find(a=>a.index===1);return{x:p.x,y:p.y};});
+  await clickWorkspaceCommand(page, '#btnConstraints');const point=await page.evaluate(()=>{const p=MoleculeVisualizer.App.renderer().projectedAtoms.find(a=>a.index===1);return{x:p.x,y:p.y};});
   await page.locator('canvas').click({position:point});await page.click('#constraintAddSelected');assert.equal(await page.locator('#constraintAtoms').inputValue(),'1');
   await page.click('#btnExternalEngine');await page.fill('#engineURL','http://127.0.0.1:8778');await page.selectOption('#engineChoice','llmlip');await page.fill('#engineToken',token);await page.click('#engineConnect');
   await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));

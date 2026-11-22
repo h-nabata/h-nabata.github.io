@@ -5,7 +5,7 @@
   const colors=['#087e85','#b45420','#6a46a3','#2766a1','#b83a62','#477334','#597384','#8a621c'];
   const names={physical:'物理力',effective:'有効力',uma:'UMA',solvation:'溶媒補正',artificial:'AFIR人工力',spring:'ばね',perpendicular:'接線に直交する物理力',tangentRemoval:'接線成分の除去',climbingCorrection:'CIの補正',constraintCorrection:'拘束の補正'};
   function element(tag,attributes,text){const e=document.createElementNS(ns,tag);for(const [key,value] of Object.entries(attributes))e.setAttribute(key,String(value));if(text!=null)e.textContent=text;return e;}
-  function lineChart(id,series,unit,label,threshold){
+  function lineChart(id,series,unit,label,threshold,breakAfter){
     const svg=$(id);svg.replaceChildren();$(id+'Legend').replaceChildren();const valid=series.filter(s=>s.values.some(Number.isFinite));
     if(!valid.length){svg.append(element('text',{x:12,y:30,'font-size':12},'この指標はまだ取得されていません。'));return;}
     const count=Math.max(...valid.map(s=>s.values.length)),values=valid.flatMap(s=>s.values.filter(Number.isFinite));if(Number.isFinite(threshold))values.push(threshold);
@@ -14,8 +14,11 @@
     svg.append(element('line',{x1:54,y1:153,x2:534,y2:153,stroke:'#bcc8ce'}));
     valid.forEach((s,k)=>{
       let segment=[];const flush=()=>{if(segment.length){svg.append(element('polyline',{points:segment.map(i=>`${x(i)},${y(s.values[i])}`).join(' '),fill:'none',stroke:s.color||colors[k%colors.length],'stroke-width':2}));if(segment.length===1)svg.append(element('circle',{cx:x(segment[0]),cy:y(s.values[segment[0]]),r:3,fill:s.color||colors[k%colors.length]}));segment=[];}};
-      const indices=MV.EnergyProfile?.sample(s.values.map(v=>Number.isFinite(v)?v:0))||s.values.map((_,i)=>i);
-      for(const i of indices){if(Number.isFinite(s.values[i]))segment.push(i);else flush();}flush();
+      const segments=MV.EnergyProfile.sampleSegments(s.values.map(v=>Number.isFinite(v)?v:0),breakAfter);
+      for(const indices of segments){
+        for(const i of indices){if(Number.isFinite(s.values[i]))segment.push(i);else flush();}
+        flush();
+      }
     });
     if(Number.isFinite(threshold))svg.append(element('line',{x1:54,y1:y(threshold),x2:534,y2:y(threshold),stroke:'#a42a36','stroke-dasharray':'5 4'}));
     const legend=$(id+'Legend');legend.replaceChildren(...valid.map((s,k)=>{const span=document.createElement('span');span.textContent=s.name;span.style.color=s.color||colors[k%colors.length];return span;}));
@@ -24,13 +27,14 @@
     if(!initialized||$('diagnosticsPanel').hidden)return;
     const latest=rows.at(-1),forceSeries=[['fmax','最大有効力'],['rmsForce','RMS有効力'],['physicalFmax','最大物理力']].map(([key,name])=>({name,values:rows.map(p=>p[key])}));
     const keys=new Set(rows.flatMap(p=>Object.keys(p.components||{})));for(const key of keys)if(!['physical','effective'].includes(key))forceSeries.push({name:(names[key]||key)+'の最大値',values:rows.map(p=>p.components?.[key])});
-    lineChart('diagnosticsForces',forceSeries,'力 (eV/Å)','記録された計算ステップ →',context.data?.fmax);
+    lineChart('diagnosticsForces',forceSeries,'力 (eV/Å)','記録された計算ステップ →',context.data?.mode==='dsafir'?undefined:context.data?.fmax);
     const energyRows=$('diagnosticsEnergyAxis').value==='structures'&&result?core.energyRows(result):rows;
     const energySeries=[['energy','物理'],['uma','UMA'],['solvation','溶媒補正'],['bias','AFIR人工項'],['total','物理＋人工項']].map(([key,name])=>{const baseline=energyRows.find(r=>Number.isFinite(r[key]))?.[key];return {name,values:energyRows.map(r=>Number.isFinite(r[key])?r[key]-baseline:null)};});
-    lineChart('diagnosticsEnergy',energySeries,'各成分の始点との差 ΔE (eV)',$('diagnosticsEnergyAxis').value==='structures'?'結果の構造番号 →':'記録された計算ステップ →');
+    const ds=result?.dsafir,split=ds&&!ds.connected&&$('diagnosticsEnergyAxis').value==='structures'?ds.joinIndex:undefined;
+    lineChart('diagnosticsEnergy',energySeries,'各成分の始点との差 ΔE (eV)',$('diagnosticsEnergyAxis').value==='structures'?'結果の構造番号 →':'記録された計算ステップ →',undefined,split);
     const value=v=>Number.isFinite(v)?v.toPrecision(5):'—';
     $('diagnosticsSummary').textContent=latest?`記録 ${rows.length}件 · ステップ ${latest.step} · 最大有効力 ${value(latest.fmax)} eV/Å · RMS有効力 ${value(latest.rmsForce)} eV/Å · ΔE ${value(latest.energyChangeEV)} eV · 最大原子変位 ${value(latest.maxDisplacement)} Å`+(Number.isFinite(latest.redistributionResidual)?` · 再分布残差 ${value(latest.redistributionResidual)} Å`:'')+(Number.isFinite(latest.redistributionMove)?` · 再分布変位 ${value(latest.redistributionMove)} Å`:'')+(Number.isFinite(latest.cacheHits)?` · 評価の再利用 ${latest.cacheHits}件`:''):'計算の評価を待っています。';
-    $('diagnosticsNote').textContent='取得できた成分だけを表示します。経路計算のステップ別エネルギーは、そのステップで物理エネルギーが最大のノードです。力の最大値同士は加算できません。赤い破線は最大有効力の収束閾値です。';
+    $('diagnosticsNote').textContent=context.data?.mode==='dsafir'?'DS-AFIRの接続は探索点間距離で判定します。'+(ds&&!ds.connected?'両側の探索点は未接続です。':''):'取得できた成分だけを表示します。経路計算のステップ別エネルギーは、そのステップで物理エネルギーが最大のノードです。力の最大値同士は加算できません。赤い破線は最大有効力の収束閾値です。';
   }
   function reset(meta={}){restore();rows=[];result=null;context=meta;jobKey=meta.id||meta.jobId||null;if(initialized){$('diagnosticsVectors').hidden=true;$('diagnosticsEnergyAxis').value='steps';$('diagnosticsToggle').disabled=false;render();}}
   function update(progress,meta={}){

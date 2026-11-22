@@ -83,6 +83,7 @@
     if(result)$('afirApply').disabled=!!job||!!result.applied||fingerprint(s)!==result.fingerprint||dirty();
   }
   function toggle(value){if((value??!visible)&&!job){try{app().useDisplayedStructure();}catch(e){message(e.message);return;}}visible=value??!visible;$('afirPanel').hidden=!visible;document.querySelector('.mv-inspector').classList.toggle('mv-afir-active',visible);$('btnAFIR').setAttribute('aria-pressed',String(visible));
+    MV.Activity?.showMethod(visible?'AFIR-MIN':MV.EngineUI?.modeLabel?.($('engineMode').value));
     if(visible){if(!job)$('toolSelect').click();$('multiSelect').checked=true;app().getState().viewSettings.afirOverlay=true;sync();}
     else app().getState().viewSettings.afirOverlay=false;
     MV.EnergyProfile?.restore();app().renderer().renderState(app().getState(),true);

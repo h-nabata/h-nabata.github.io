@@ -37,6 +37,11 @@
     for(let a=0;a<values.length;a+=width){let lo=a,hi=a;for(let i=a+1;i<Math.min(a+width,values.length);i++){if(values[i]<values[lo])lo=i;if(values[i]>values[hi])hi=i;}ids.add(lo);ids.add(hi);}
     return [...ids].sort((a,b)=>a-b);
   }
+  function sampleSegments(values,breakAfter){
+    if(!Number.isInteger(breakAfter)||breakAfter<0||breakAfter>=values.length-1)return [sample(values)];
+    const split=breakAfter+1;
+    return [sample(values.slice(0,split)),sample(values.slice(split)).map(i=>i+split)];
+  }
   function set(next,follow=false){
     // A path index identifies the same bead at every step, unlike a history index.
     const keepNode=!!live&&data?.kind==='path'&&next.kind==='path';
@@ -51,11 +56,16 @@
     svg.append(element('text',{x:12,y:16,'font-size':12},next.kind==='batch'?'ΔE (eV) · 最低エネルギー基準':'ΔE (eV) · 各系列の始点基準'));
     svg.append(element('text',{x:12,y:34,'font-size':11},lo.toFixed(4)+' 〜 '+hi.toFixed(4)));
     relative.forEach((values,k)=>{
-      const ids=sample(values),points=ids.map(i=>[40+500*i/Math.max(1,values.length-1),144-(values[i]-lo)*100/span]);
-      svg.append(element('polyline',{points:points.map(p=>p.join(',')).join(' '),fill:'none',stroke:k?'#b45420':'#087e85','stroke-width':2}));
+      const xy=i=>[40+500*i/Math.max(1,values.length-1),144-(values[i]-lo)*100/span];
+      const segments=sampleSegments(values,next.breakAfter);
+      for(const segment of segments){
+        const points=segment.map(xy);
+        if(points.length===1&&values.length>100)svg.append(element('circle',{cx:points[0][0],cy:points[0][1],r:3,fill:'#087e85'}));
+        else svg.append(element('polyline',{points:points.map(p=>p.join(',')).join(' '),fill:'none',stroke:k?'#b45420':'#087e85','stroke-width':2}));
+      }
       // Every small-series point is focusable. The range always covers every frame.
-      if(values.length<=100)points.forEach(([x,y],p)=>{
-        const i=ids[p],dot=element('circle',{cx:x,cy:y,r:4,fill:k?'#b45420':'#087e85',tabindex:k?-1:0,role:'button','aria-label':(isStep(next)?'ステップ '+i:(next.labels?.[i]||'構造 '+(i+1)))+': ΔE '+values[i].toFixed(6)+' eV'});
+      if(values.length<=100)values.forEach((value,i)=>{
+        const [x,y]=xy(i),dot=element('circle',{cx:x,cy:y,r:4,fill:k?'#b45420':'#087e85',tabindex:k?-1:0,role:'button','aria-label':(isStep(next)?'ステップ '+i:(next.labels?.[i]||'構造 '+(i+1)))+': ΔE '+value.toFixed(6)+' eV'});
         const choose=()=>{if(!restoringFocus)chooseFrame(i);};dot.addEventListener('focus',choose);dot.addEventListener('click',choose);
         dot.addEventListener('keydown',e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();choose();}});svg.append(dot);
         if(keepFocus&&!k&&i===index)focusPoint=dot;
@@ -63,7 +73,7 @@
     });
     marker=element('line',{y1:36,y2:150,stroke:'#55646d','stroke-dasharray':'3 3'});svg.append(marker);
     svg.append(element('text',{x:380,y:175,'font-size':12},isStep(next)?'最適化ステップ →':next.kind==='batch'?'入力構造 →':'経路の構造番号 →'));
-    $('profileTitle').textContent=next.title;$('profileLegend').textContent=next.kind==='batch'?'各入力を独立に最適化した最終電子エネルギー。収束状態は結果表で確認してください。':next.biasEnergies?'緑：物理エネルギー　茶：物理エネルギー＋人工項。横軸は'+(isStep(next)?'探索ステップ':'構造番号')+'で、反応座標やTS検証結果ではありません。':(isStep(next)?'緑：物理エネルギー。横軸は最適化ステップです。':'緑：物理エネルギー。横軸は構造番号です（単一構造の評価では1点）。');
+    $('profileTitle').textContent=next.title;$('profileLegend').textContent=next.legend|| (next.kind==='batch'?'各入力を独立に最適化した最終電子エネルギー。収束状態は結果表で確認してください。':next.biasEnergies?'緑：物理エネルギー　茶：物理エネルギー＋人工項。横軸は'+(isStep(next)?'探索ステップ':'構造番号')+'で、反応座標やTS検証結果ではありません。':(isStep(next)?'緑：物理エネルギー。横軸は最適化ステップです。':'緑：物理エネルギー。横軸は構造番号です（単一構造の評価では1点）。'));
     $('profileXYZ').disabled=typeof next.exportXYZ!=='function';
     range=$('profileRange');range.max=next.energies.length-1;range.disabled=next.energies.length<2;
     // A response already in flight must also respect an explicit pause or hide.
@@ -103,6 +113,6 @@
     for(const type of ['keydown','dblclick'])canvas.addEventListener(type,e=>{if(active){e.preventDefault();e.stopImmediatePropagation();}},true);
     panel(false);
   }
-  MV.EnergyProfile={init,set,select,restore,pauseFollow,sync,begin,finish,reset,reveal,sample,following:()=>$('profileFollow').checked,
+  MV.EnergyProfile={init,set,select,restore,pauseFollow,sync,begin,finish,reset,reveal,sample,sampleSegments,following:()=>$('profileFollow').checked,
     onStateChange(){restore(false);pauseFollow();},bindTrajectory(frames){bound=frames;sync();}};
 })(window);

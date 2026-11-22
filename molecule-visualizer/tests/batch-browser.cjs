@@ -1,3 +1,4 @@
+const {clickWorkspaceCommand} = require('./workspace-commands.cjs');
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{spawn}=require('node:child_process');
 (async()=>{
  const root=path.resolve(__dirname,'..'),engine=spawn(process.env.PYTHON||'python',[path.join(root,'local-engine/bridge.py'),'--engine','tblite','--port','8766','--site-dir',root],{env:{...process.env,OMP_NUM_THREADS:'1',OPENBLAS_NUM_THREADS:'1'}});
@@ -9,7 +10,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.goto('http://127.0.0.1:8766/');await page.waitForSelector('canvas');
   const water=x=>`O 0 0 0\nH ${x} 0 0\nH -.24 .92 0`,text=water(1.1)+'\n\n'+water(1.3)+'\n--\n'+water(1.1);
   const original=await page.evaluate(()=>MoleculeVisualizer.IO.stateToProjectText(MoleculeVisualizer.App.getState()));
-  await page.click('#btnBatchOptimize');await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
+  await clickWorkspaceCommand(page, '#btnBatchOptimize');await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
   await page.uncheck('#engineLive');await page.fill('#batchText',text);await page.click('#batchCheck');assert.match(await page.locator('#batchInputSummary').textContent(),/3構造/);
   // No input blur before Run: exact conditions must be captured once for all jobs.
   await page.selectOption('#engineOptimizer','lbfgs');await page.fill('#engineFmax','0.0001');await page.fill('#engineMove','0.02');await page.fill('#engineSteps','3');await page.click('#engineRun');
@@ -30,7 +31,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.equal(await page.evaluate(()=>{const MV=MoleculeVisualizer,a=MV.IO.parseXYZToState(document.getElementById('dataText').value).atoms,b=MV.App.getDisplayedState().atoms;return a.every((v,i)=>['x','y','z'].every(k=>Math.abs(v[k]-b[i][k])<1e-8));}),true);
   await page.click('#profileDetails');await page.click('#batchApply');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.trajectory.length),3);
   // A valid multi-frame file can be loaded without changing the current model.
-  await page.click('#btnBatchOptimize');await page.locator('#batchFile').setInputFiles({name:'three.xyz',mimeType:'chemical/x-xyz',buffer:Buffer.from(xyz)});await page.waitForFunction(()=>document.getElementById('batchText').value.includes('energy_eV='));await page.click('#batchCheck');assert.match(await page.locator('#batchInputSummary').textContent(),/3構造/);
+  await clickWorkspaceCommand(page, '#btnBatchOptimize');await page.locator('#batchFile').setInputFiles({name:'three.xyz',mimeType:'chemical/x-xyz',buffer:Buffer.from(xyz)});await page.waitForFunction(()=>document.getElementById('batchText').value.includes('energy_eV='));await page.click('#batchCheck');assert.match(await page.locator('#batchInputSummary').textContent(),/3構造/);
   await page.selectOption('#batchSource','frames');await page.click('#batchCheck');assert.match(await page.locator('#batchInputSummary').textContent(),/3構造/);await page.selectOption('#batchSource','text');
   await page.fill('#batchText',water(.95)+'\n\nC 0 0 0');await page.click('#engineRun');assert.match(await page.locator('#engineMessage').textContent(),/元素順序/);assert.equal(requests.length,3);
   // UI fixtures isolate failure/cancellation behavior; the chemistry above uses tblite.
