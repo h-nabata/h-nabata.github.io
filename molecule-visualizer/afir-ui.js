@@ -160,5 +160,9 @@
     $('afirXYZ').addEventListener('click',()=>{if(result)exportXYZ(result.result,result);});
     sync();
   }
-  MV.AFIRUI={init,sync,toggle,download,isBusy:()=>!!job};
+  function showProgress(){
+    MV.PanelLayout.showInspector('afir');
+    $('afirStatus').focus();
+  }
+  MV.AFIRUI={init,sync,toggle,download,isBusy:()=>!!job,tracks:(id,url)=>!!job&&job.id===id&&job.connection?.url===url,showProgress};
 })(window);

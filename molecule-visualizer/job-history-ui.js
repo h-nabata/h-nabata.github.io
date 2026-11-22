@@ -42,9 +42,9 @@
     const cell = el('td'), group = el('div', null, 'job-actions');
     if (active(j.status)) {
       group.append(action('進捗を追跡', async () => {
-        if (MV.EngineUI.isBusy()) throw Error('追跡中のジョブの進捗は計算画面に表示されています。');
-        const full = await saved(j.id);
-        $('jobHistoryDialog').close();
+        if (MV.EngineUI.revealTrackedProgress(j.id)) return;
+        const selection = session, full = await saved(j.id);
+        if (selection !== session || !$('jobHistoryDialog').open) return;
         await MV.EngineUI.watchSaved(full);
       }), action('中止', async () => { await api('/api/jobs/'+j.id+'/cancel', {}); await refresh(); }));
     } else {

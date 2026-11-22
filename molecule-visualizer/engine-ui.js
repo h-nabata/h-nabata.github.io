@@ -76,7 +76,7 @@
     syncEndpointMode();
     $('engineVibrationOptions').hidden=!['optimize','ts','vibrations'].includes(mode);$('engineVibrationCheckLabel').hidden=mode==='vibrations';$('enginePause').hidden=!['neb','cineb','lup'].includes(mode);$('enginePause').textContent=modeText[mode]+'を一時停止してノード追加';
     MV.ResearchUI?.settings(mode);MV.ModelFUI?.sync();
-    $('engineModeHelp').textContent={dsafir:'同じ原子を含む2つの構造から、両側の探索点が出会うまで経路をたどります。中間構造やAFIR原子団の指定は不要です。',lup:'ばねを使わず、経路に直交する緩和と弧長に沿った再分布を交互に行います。CI開始後は最高点を登らせます。GRRM独自のLUP実装とは異なります。',irc:'TS候補から質量重み付きIRCを追跡し、到達した構造を比較します。',scan:'内部座標を固定し、各点で残りの自由度を最適化します。',batch:'複数構造を同じ条件で、1構造ずつ独立に最適化します。人工力や経路のばねは加えません。',evaluate:'指定構造のエネルギーと力を計算します。',optimize:'現在の構造を極小化します。人工力は「AFIR法の設定を開く」で指定してください。',ts:'Sellaで一次鞍点を探索します。経路の結果表からTS候補を選べます。人工力・ばねは加えません。',vibrations:'現在の構造でASEの有限差分振動解析を行います。未収束構造も解析できます。',perpendicular:'端点を固定し、経路の接線に直交する力で緩和します。',neb:'端点を固定して経路を緩和します。一時停止してノードを追加できます。',cineb:'CI開始後は最高エネルギーの内部ノードを登らせます。一時停止してノードを追加できます。'}[mode];
+    $('engineModeHelp').textContent={dsafir:'反応物と生成物を選び、系全体の電荷とスピン多重度を確認してください。指定した2構造から両側の探索点が出会うまで経路をたどります。',lup:'ばねを使わず、経路に直交する緩和と弧長に沿った再分布を交互に行います。CI開始後は最高点を登らせます。GRRM独自のLUP実装とは異なります。',irc:'TS候補から質量重み付きIRCを追跡し、到達した構造を比較します。',scan:'内部座標を固定し、各点で残りの自由度を最適化します。',batch:'複数構造を同じ条件で、1構造ずつ独立に最適化します。人工力や経路のばねは加えません。',evaluate:'指定構造のエネルギーと力を計算します。',optimize:'現在の構造を極小化します。人工力は「AFIR法の設定を開く」で指定してください。',ts:'Sellaで一次鞍点を探索します。経路の結果表からTS候補を選べます。人工力・ばねは加えません。',vibrations:'現在の構造でASEの有限差分振動解析を行います。未収束構造も解析できます。',perpendicular:'端点を固定し、経路の接線に直交する力で緩和します。',neb:'端点を固定して経路を緩和します。一時停止してノードを追加できます。',cineb:'CI開始後は最高エネルギーの内部ノードを登らせます。一時停止してノードを追加できます。'}[mode];
     MV.CalculationPanel?.sync();
   }
   function chooseMode(){
@@ -140,7 +140,7 @@
     const all=batchFrames||(mode==='dsafir'?endpointFrames(state):frames(state,$('engineScope').value));
     const symbols=all[0].atoms.map(a=>a.element),cell=all[0].metadata.cell||null;
     if(!symbols.length||symbols.length>500||all.length>(batchFrames?100:connection.info.maxImages||20))throw Error(`外部計算は1〜500原子、最大${connection.info.maxImages||20}構造です。必要に応じてbridge.pyを更新してください。`);
-    if(pathModes.includes(mode)&&all.length<3)throw Error('先に「反応経路」で端点を含む3〜100構造を生成するか、複数構造XYZなどを読み込んでください。');
+    if(pathModes.includes(mode)&&all.length<3)throw Error('両端を含む3〜100構造が必要です。「構造を準備」の「初期経路を作る」で生成するか、複数構造のXYZなどを読み込んでください。');
     for(const f of all){
       if(JSON.stringify(f.atoms.map(a=>a.element))!==JSON.stringify(symbols))throw Error('全フレームの元素とFile-orderを一致させてください。');
       if(JSON.stringify(f.metadata.cell||null)!==JSON.stringify(cell))throw Error('経路全体で同じセル・周期方向が必要です。可変セル計算には対応していません。');
@@ -533,7 +533,6 @@
       message('実行中の計算が終わってから設定を変更してください。');return;
     }
     $('engineMode').value=mode;chooseMode();
-    if(mode==='dsafir')message('反応物と生成物を選び、電荷と多重度を確認して実行してください。');
   }
   function prepareBatch(){
     if(job){message('実行中の計算が終わるまでお待ちください。');showSettings();return;}
@@ -636,7 +635,7 @@
     if(job){message('実行中の計算を終了してください。');showSettings();return;}
     try{app().useDisplayedStructure();}catch(e){message(e.message);showSettings();return;}
     clearResult();open();$('engineMode').value=mode;$('engineScope').value='current';chooseMode();
-    message(mode==='optimize'?'現在の構造を最適化入力にしました。重心拘束・原子固定・計算条件を確認して実行してください。':mode==='irc'?'現在の構造をIRC入力にしました。TS候補の収束と計算条件を確認してください。':mode==='scan'?'現在の構造をスキャンの出発点にしました。原子番号と座標の範囲を指定してください。':mode==='ts'?'現在表示中の構造をTS入力にしました。手法・電荷・多重度・振動解析の有無を確認して実行してください。':'現在の構造で振動解析します。未収束構造も対象にできます。');
+    $('engineModeHelp').textContent=mode==='optimize'?'現在の構造を最適化入力にしました。重心拘束・原子固定・計算条件を確認して実行してください。':mode==='irc'?'現在の構造をIRC入力にしました。TS候補の収束と計算条件を確認してください。':mode==='scan'?'現在の構造をスキャンの出発点にしました。原子番号と座標の範囲を指定してください。':mode==='ts'?'現在表示中の構造をTS入力にしました。手法・電荷・多重度・振動解析の有無を確認して実行してください。':'現在の構造で振動解析します。未収束構造も対象にできます。';
   }
   function refineResult(){
     try{
@@ -685,13 +684,27 @@
     if(!connection?.info.jobQueue&&!connection?.info.queue)throw Error('接続中のサーバーはキューに対応していません。');
     try{if($('engineMode').value==='batch')throw Error('実行中の計算がある場合、一括最適化は完了後に開始してください。');const j=input();j.data.livePreview=$('engineLive').checked;const created=await request(connection,'/api/jobs',j.data);message(`キューへ追加しました（${created.id.slice(0,8)}）。現在追跡している計算は継続します。`);MV.JobHistoryUI?.changed();return created;}catch(e){message(e.message);throw e;}
   }
+  function revealTrackedProgress(id){
+    const url=connection?.url;
+    if(job&&job.id===id&&job.connection.url===url){
+      $('jobHistoryDialog').close();showSettings();MV.CalculationPanel.show('results',true);
+      return true;
+    }
+    for(const owner of [MV.AFIRUI,MV.WorkflowUI]){
+      if(owner?.tracks?.(id,url)){
+        $('jobHistoryDialog').close();owner.showProgress();return true;
+      }
+    }
+    if(job||MV.AFIRUI?.isBusy()||MV.WorkflowUI?.isBusy())throw Error('別の計算を追跡中です。終了後にこのジョブを選択してください。');
+    return false;
+  }
   async function watchSaved(saved){
-    if(job||MV.AFIRUI?.isBusy?.())throw Error('別の計算を追跡中です。終了後に履歴から選択してください。');
+    if(revealTrackedProgress(saved.id))return;
     const j=contextForSaved(saved);j.livePreview=$('engineLive').checked;j.cancelRequested=false;
     restoreInput(saved.data);clearResult();MV.EnergyProfile.reset();job=j;MV.CalculationPanel?.beginJob(j.data.mode);busy(true);MV.DiagnosticsUI?.reset();
     message(modeText[j.data.mode]+'の進捗を取得しています。');
     if(j.livePreview){MV.EnergyProfile.begin(cancel,showJobDetails);MV.EnergyProfile.reveal();}
-    showSettings();MV.CalculationPanel?.show('results',true);
+    $('jobHistoryDialog').close();showSettings();MV.CalculationPanel?.show('results',true);
     try{await watch(j);}catch(e){message(e.message);}finally{if(job===j){job=null;busy(false);MV.EnergyProfile.finish();MV.JobHistoryUI?.changed();}}
   }
   function prepareSegment(segment){
@@ -722,5 +735,5 @@
     MV.LLMLIPUI?.init();MV.ModelFUI?.init();MV.ResearchUI?.init();MV.JobHistoryUI?.init();MV.DiagnosticsUI?.init();MV.StructureAnalysisUI?.init();MV.OptimizationUI?.init();MV.WorkflowUI?.init();
     MV.CalculationPanel?.init();settings();
   }
-  MV.EngineUI={syncEndpoints,modeLabel:mode=>modeText[mode],init,open,showSettings,apply,showResult,showProfile,resultSource,getResult:()=>result,modelInput,modelSummary,validateSolvationResult,syncModelBusy:()=>{const afirBusy=!!MV.AFIRUI?.isBusy?.(),queued=connection?.info.jobQueue||connection?.info.queue;$('engineModelSettings').disabled=(!!job||afirBusy)&&!queued;if(!job){$('engineRun').textContent=afirBusy&&queued?'現在の設定をキューへ追加':'計算を実行';$('engineRun').disabled=!connection||(afirBusy&&!queued);}},prepareMethod,prepareBatch,endpoint,pollJob,frames,validateResult,validateEngineInput,request,prepareNEB,prepareSingle,settings,input,restoreInput,restoreJob,watchSaved,prepareSegment,enqueueCurrent,baseFrame,isBusy:()=>!!job||!!MV.WorkflowUI?.isBusy(),getConnection:()=>connection?{...connection}:null};
+  MV.EngineUI={syncEndpoints,modeLabel:mode=>modeText[mode],init,open,showSettings,apply,showResult,showProfile,resultSource,getResult:()=>result,modelInput,modelSummary,validateSolvationResult,syncModelBusy:()=>{const afirBusy=!!MV.AFIRUI?.isBusy?.(),queued=connection?.info.jobQueue||connection?.info.queue;$('engineModelSettings').disabled=(!!job||afirBusy)&&!queued;if(!job){$('engineRun').textContent=afirBusy&&queued?'現在の設定をキューへ追加':'計算を実行';$('engineRun').disabled=!connection||(afirBusy&&!queued);}},prepareMethod,prepareBatch,endpoint,pollJob,frames,validateResult,validateEngineInput,request,prepareNEB,prepareSingle,settings,input,restoreInput,restoreJob,revealTrackedProgress,watchSaved,prepareSegment,enqueueCurrent,baseFrame,isBusy:()=>!!job||!!MV.WorkflowUI?.isBusy(),getConnection:()=>connection?{...connection}:null};
 })(window);

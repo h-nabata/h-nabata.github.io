@@ -13,7 +13,8 @@
     app.addEventListener('click', event => {
       const button = event.target.closest('button');
       const menu = button?.closest('.mv-command-menu, .mv-popover');
-      if (!menu?.open || button.disabled) return;
+      // A worker may disable its trigger before the click reaches this listener.
+      if (!menu?.open) return;
       if (button.dataset.engineMethod) {
         global.MoleculeVisualizer.EngineUI.prepareMethod(button.dataset.engineMethod);
       }

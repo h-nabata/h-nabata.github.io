@@ -106,15 +106,19 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.selectOption('#engineMode','evaluate');await page.uncheck('#engineLive');hold=true;
   await page.click('#engineRun');
   await page.waitForFunction(()=>document.querySelector('#activityJobs').dataset.state==='running');
+  const modalActivity=page.locator('#engineActivityStatus');
+  assert.ok(await modalActivity.isVisible());assert.match(await modalActivity.innerText(),/エネルギー・力の評価.*実行中/);
   const failing=[...jobs.values()].find(j=>j.status==='running');
   failing.status='error';failing.error='計算テスト用のエラー';delete failing.result;
   await page.waitForFunction(()=>!MoleculeVisualizer.EngineUI.isBusy());
+  assert.equal(await modalActivity.isVisible(),false);
   assert.equal(await page.locator('#activityJobs').getAttribute('data-state'),'error');
   assert.match(await page.locator('#activityJobs').innerText(),/エネルギー・力の評価.*失敗/);
   assert.match(await page.locator('#engineMessage').innerText(),/計算テスト用のエラー/);
   assert.equal(await page.locator('#engineApply').isVisible(),false);
   assert.equal(await page.evaluate(()=>MoleculeVisualizer.IO.stateToProjectText(MoleculeVisualizer.App.getState())),beforeError);
   await page.click('#engineClose');assert.ok(await page.locator('#activityJobs').isVisible());
+  await require('./tracked-job-history-browser.cjs')(browser);
   console.log('Research UI: LUP live/export/history, IRC, 2D scan, thermochemistry, constraints, adaptive nodes, persistent history and queue contract passed');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

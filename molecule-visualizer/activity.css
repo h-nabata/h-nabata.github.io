@@ -36,6 +36,8 @@
 .mv-activity-note { display: block; margin: .22rem 0 0 .94rem; font-size: .82rem; font-weight: 450; color: var(--muted); }
 .mv-activity-note:empty { display: none; }
 #activityConnection[data-state="connected"] { color: #09645e; }
+.mv-app #engineActivityStatus { margin: 0; max-height: 2.9em; overflow: auto; color: #24585a; font-size: .86rem; line-height: 1.45; font-weight: 600; }
+#engineDialog:not(:modal) #engineActivityStatus { display: none; }
 @media (max-width: 860px) {
   .mv-app .mv-activity { grid-template-columns: repeat(3,minmax(0,1fr)); row-gap: .65rem; }
   .mv-activity .mv-activity-primary { grid-column: 1 / -1; border-block-end: 1px solid var(--border); padding-bottom: .65rem; }

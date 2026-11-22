@@ -30,8 +30,15 @@
     const primary = current[0] || queued[0] || last;
     const queueOnly = !current.length && queued.length > 1;
     text('activityJobHeading', !records.length && last ? '直近の計算' : '計算状況');
-    const node = text('activityJobs', queueOnly ? queueSummary : primary ? describe(primary) : '実行中の計算はありません');
+    const headline = queueOnly ? queueSummary : primary ? describe(primary) : '実行中の計算はありません';
+    const node = text('activityJobs', headline);
     if (node) node.dataset.state = primary?.status || 'idle';
+    // A modal hides the live workspace region. Keep its visible copy short;
+    // engineMessage already announces progress inside the dialog.
+    const showInDialog = records.length > 0 || primary?.status === 'unknown';
+    const phase = queueOnly ? queueNames[0] : primary?.status === 'running' && primary.phaseLabel;
+    const panel = text('engineActivityStatus', showInDialog ? ['ジョブ', headline, phase].filter(Boolean).join(' · ') : '');
+    if (panel) panel.hidden = !showInDialog;
     text('activityJobDetail', queueOnly ? queueNames.join('、') : primary?.detail || '');
     text('activityConcurrent', current.length > 1 ?
       'ほかに ' + current.slice(1,3).map(describe).join('、') + (current.length > 3 ? ' ほか' + (current.length-3) + '件' : '') : '');
@@ -114,7 +121,11 @@
     if (status === 'unknown') details.push('履歴・キューで再確認');
     if (status === 'partial') details.push(state.result.vibrations?.status === 'failed' ? '振動解析が未完了' : '熱化学量の計算が未完了');
     if (status === 'error' && state.error) details.push(String(state.error).split('\n')[0].slice(0,100));
-    saveRecord(id, {label, status, detail:details.filter(Boolean).join(' · '), engine, surface,
+    const phaseLabel = status === 'running' && (p.phase === 'loading_model' ? 'モデル読込中' :
+      p.phase === 'dsafir' && p.side === 'reactant' ? '反応物側を探索' :
+      p.phase === 'dsafir' && p.side === 'product' ? '生成物側を探索' :
+      p.phase === 'vibrations' ? '振動解析中' : Number.isInteger(p.step) ? p.step + 'ステップ' : '');
+    saveRecord(id, {label, status, phaseLabel, detail:details.filter(Boolean).join(' · '), engine, surface,
       detached: detached ?? previous?.detached ?? true, context: context || previous?.context}, state.updatedAt || Date.now());
     if (!fromListing) { render(); schedule(); }
   }

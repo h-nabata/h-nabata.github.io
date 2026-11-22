@@ -259,12 +259,13 @@
   }
   async function copySelection(){
     const {fragment,text}=selectionCopy();
+    // Return keyboard shortcuts to the molecule before the clipboard request can yield.
+    renderer.canvas?.focus({preventScroll:true});
     try{
       if(!navigator.clipboard?.writeText)throw Error('clipboard unavailable');
       await navigator.clipboard.writeText(text);
       setStatus(`${fragment.atoms.length}原子と内部の結合をコピーしました。`);
     }catch(error){setStatus(`${fragment.atoms.length}原子をページ内にコピーしました。「原子団を貼付」で貼り付けられます（このページを閉じるまで）。`);}
-    finally{if(document.activeElement===byId('btnCopySelection'))renderer.canvas?.focus();}
   }
   function checkPaste(){
     if(xyzDirty)throw Error('未適用の座標編集があります。適用または破棄してから原子団を貼り付けてください。');

@@ -22,7 +22,7 @@ function workspace(request) {
     await new Promise(resolve=>setImmediate(resolve));
   }
   return {activity:MV.Activity, state:()=>element('activityJobs').dataset.state,
-    output:(id='activityJobs')=>element(id).textContent, timers, tick};
+    output:(id='activityJobs')=>element(id).textContent, hidden:id=>element(id).hidden, timers, tick};
 }
 
 test('changing editing tools or draft calculation leaves the executed method, engine, gap and queue intact', () => {
@@ -136,4 +136,21 @@ test('history completion and a partially failed analysis do not imply successful
     steps:37,vibrations:{status:'failed'}}});
   assert.equal(state(),'partial');
   assert.match(output('activityJobDetail'),/37ステップ · 振動解析が未完了/);
+});
+
+test('the modal footer keeps the submitted method and active phase while another method is being prepared', () => {
+  const {activity,output,hidden} = workspace();
+  const c = {info:{engine:'tblite'}};
+  activity.connect(c);
+  assert.equal(hidden('engineActivityStatus'),true);
+  activity.submitted(c,{id:'job',status:'queued'},'dsafir');
+  assert.match(output('engineActivityStatus'),/DS-AFIR · 待機中/);
+  activity.recordJob(c,{id:'job',status:'running',progress:{phase:'dsafir',side:'product'}},'dsafir');
+  activity.showMethod('MIN');
+  assert.equal(hidden('engineActivityStatus'),false);
+  assert.equal(output('engineActivityStatus'),'ジョブ · DS-AFIR · 実行中 · 生成物側を探索');
+  activity.recordJob(c,{id:'job',status:'unknown'},'dsafir');
+  assert.match(output('engineActivityStatus'),/DS-AFIR · 状態不明/);
+  activity.recordJob(c,{id:'job',status:'completed',result:{reason:'connected'}},'dsafir');
+  assert.equal(hidden('engineActivityStatus'),true);
 });

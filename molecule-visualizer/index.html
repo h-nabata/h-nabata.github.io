@@ -20,7 +20,7 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./group-constraints-ui.js?v=studio-54"></script>
 <script defer src="./optimization.js?v=model-f-48"></script>
 <script defer src="./optimization-ui.js?v=studio-54"></script>
-<script defer src="./workflow-ui.js?v=ci-endpoints-53"></script>
+<script defer src="./workflow-ui.js?v=studio-54"></script>
 <link rel="stylesheet" href="./optimization.css?v=model-f-48">
 <script defer src="./renderer3dmol.js?v=model-f-48"></script>
 <script defer src="./ui.js?v=studio-54"></script>
@@ -57,8 +57,8 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./panel-layout.js?v=studio-54"></script>
 <link rel="stylesheet" href="./workspace.css?v=studio-54">
 <script defer src="./workspace.js?v=studio-54"></script>
-<link rel="stylesheet" href="./method-finder.css?v=1">
-<script defer src="./method-finder.js?v=1"></script>
+<link rel="stylesheet" href="./method-finder.css?v=studio-54">
+<script defer src="./method-finder.js?v=studio-54"></script>
 <script defer src="./molecule-visualizer_main.js?v=group-centers-44"></script>
 
 <div class="mv-page-buffer" aria-hidden="true"></div>
@@ -281,7 +281,7 @@ title: 分子構造エディタ | Molecule Studio
         <div class="mv-row"><button class="mv-btn" id="afirCheck" disabled>人工項を確認</button><button class="mv-btn" id="afirExport" disabled>入力JSONを保存</button><button class="mv-btn" id="afirReset">AFIR設定を初期化</button></div>
         <div id="afirEngine"><button class="mv-btn" id="afirConnect">このPCの計算エンジンに接続</button><p id="afirConnectionStatus" class="mv-afir-note">未接続</p><p class="mv-afir-note">NEBと同じ接続を使用します。探索時だけ、このPCのlocalhostへ座標・電荷・スピンを渡します。外部サーバーへは送信しません。<a href="./local-engine/README.md" target="_blank" rel="noopener">導入手順</a></p></div>
         <div class="mv-row"><button class="mv-btn primary" id="afirRun" disabled>AFIR探索を開始</button><button class="mv-btn" id="afirCancel" disabled>中止</button></div>
-        <p id="afirStatus" class="mv-afir-status" role="status" aria-live="polite">描画エリアで最初の原子団を選択してください。</p>
+        <p id="afirStatus" class="mv-afir-status" role="status" tabindex="-1" aria-live="polite">描画エリアで最初の原子団を選択してください。</p>
         <label class="mv-check"><input id="afirLive" type="checkbox" checked>計算中のエネルギー・構造を表示</label><p class="mv-afir-note">表示は約0.6秒ごとに更新し、計算終了後は全ステップを選べます。</p>
         <section id="afirResult" hidden><h3>探索結果</h3><p id="afirResultSummary"></p><div id="afirModelFResult" hidden></div><button class="mv-btn" id="afirProfile">エネルギープロファイルと構造を見る</button><p class="mv-afir-note">緑: 物理エネルギー　茶: 人工項を加えたエネルギー。各系列の始点との差 (eV)。</p><div class="mv-row"><button class="mv-btn primary" id="afirApply">構造列を適用・再生</button><button class="mv-btn" id="afirXYZ">構造列を保存・抽出</button><button class="mv-btn" id="afirDownload">結果JSONを保存</button></div></section>
         <p class="mv-afir-note">得られるのは人工力下の探索軌跡です。TSや反応生成物の確定には、人工力を外した経路緩和・TS最適化・振動解析・接続確認が必要です。</p>
@@ -801,6 +801,7 @@ python bridge.py --engine uma --uma-device cuda:0 --anysolv --anysolv-model mode
   <footer class="mv-calc-foot">
     <p id="engineMessage" role="status" aria-live="polite"></p>
     <div class="mv-calc-context"><span id="enginePanelMethod"></span><span id="enginePanelConnection">未接続</span></div>
+    <p id="engineActivityStatus" hidden></p>
   <div class="mv-row mv-dialog-actions"><button class="mv-btn primary" type="button" id="enginePanelConnect">接続設定へ</button><button class="mv-btn" type="button" id="enginePanelReturn" hidden>計算条件へ</button><button class="mv-btn primary" id="engineRun" disabled>計算を実行</button><button class="mv-btn" id="engineCancel" disabled>計算を中止</button><button class="mv-btn" id="enginePause" hidden disabled>CI-NEBを一時停止してノード追加</button></div>
   </footer>
 </dialog>
