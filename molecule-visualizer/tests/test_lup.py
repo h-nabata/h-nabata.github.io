@@ -144,10 +144,10 @@ class LUPNumerics(unittest.TestCase):
     def test_identical_geometry_cache_never_repeats_evaluations(self):
         data=path();data.update(images=[[[x,0.,0.]] for x in (-1.,0.,1.)],nodeIds=['a','b','c'])
         calls=[]
-        def zero(i,p):
+        def calculate(i,p):
             calls.append((i,p.copy()))
-            return 0.,np.zeros_like(p)
-        result=b.relax(data,zero)
+            return well(i,p)
+        result=b.relax(data,calculate)
         self.assertTrue(result['converged'])
         self.assertEqual(result['steps'],data['climbAfter'])
         self.assertEqual(len(calls),3)

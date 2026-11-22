@@ -31,8 +31,8 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.selectOption('#engineMode','vibrations');await page.locator('#engineThermoSettings summary').click();await page.check('#thermoEnabled');let count=posted.length;await page.click('#engineRun');assert.equal(posted.length,count);assert.match(await page.locator('#engineMessage').textContent(),/熱化学/);await page.uncheck('#thermoEnabled');
   await page.click('#engineClose');await load([.85,1.3,2.0]);await page.waitForFunction(()=>MoleculeVisualizer.App.getState().metadata.trajectory?.length===3);await page.click('#btnExternalEngine');
   for(const [mode,surface] of [['cineb','lower'],['lup','upper']]){
-   await page.selectOption('#engineMode',mode);await page.selectOption('#modelFSurface',surface);await page.fill('#engineSteps','2');await page.fill('#engineClimb','0');await page.fill('#modelFAlpha','30');await page.click('#engineRun');await done();
-   const r=await page.evaluate(()=>MoleculeVisualizer.EngineUI.getResult().result);assert.equal(r.modelF.surface,surface);assert.deepEqual(r.images[0],posted.at(-1).images[0]);assert.deepEqual(r.images.at(-1),posted.at(-1).images.at(-1));assert.deepEqual(r.energies,r.surfaceComponents[surface+'EV']);
+   await page.selectOption('#engineMode',mode);await page.selectOption('#engineEndpointMode','fixed');await page.selectOption('#modelFSurface',surface);await page.fill('#engineSteps','2');await page.fill('#engineClimb','0');await page.fill('#modelFAlpha','30');await page.click('#engineRun');await done();
+   const r=await page.evaluate(()=>MoleculeVisualizer.EngineUI.getResult().result);assert.equal(r.modelF.surface,surface);assert.equal(r.endpointMode,'fixed');assert.deepEqual(r.images[0],posted.at(-1).images[0]);assert.deepEqual(r.images.at(-1),posted.at(-1).images.at(-1));assert.deepEqual(r.energies,r.surfaceComponents[surface+'EV']);
   }
   await page.click('#engineXYZ');const xyz=await download('#trajectorySaveAll');assert.match(xyz,/modelF=amf surface=upper/);assert.match(xyz,/couplingEV=/);await page.click('#trajectoryClose');
   // Reopen a real persisted job, then restart from its saved optimizer state.

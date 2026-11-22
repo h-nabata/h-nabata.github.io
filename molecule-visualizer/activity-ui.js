@@ -4,9 +4,9 @@
   const MV = global.MoleculeVisualizer;
   const active = new Map();
   const phases = {queued:'待機中', starting:'開始中', running:'実行中', stopping:'中止処理中',
-    completed:'完了', step_limit:'未収束（ステップ上限）', unconnected:'探索点が未接続（ステップ上限）',
+    completed:'完了', no_resolved_peak:'未収束（経路上の極大を確認できず）', step_limit:'未収束（ステップ上限）', unconnected:'探索点が未接続（ステップ上限）',
     cancelled:'中止', interrupted:'中断', error:'失敗', unknown:'状態不明'};
-  const terminal = new Set(['completed', 'step_limit', 'unconnected', 'cancelled', 'interrupted', 'error']);
+  const terminal = new Set(['completed', 'no_resolved_peak', 'step_limit', 'unconnected', 'cancelled', 'interrupted', 'error']);
   let last = null, connection = null, timer = null, listing = null;
 
   function text(id, value) {
@@ -61,6 +61,7 @@
     let status = state.status;
     if (status === 'running' && previous?.status === 'stopping') status = 'stopping';
     if (status === 'completed' && reason === 'step_limit') status = state.result?.dsafir ? 'unconnected' : 'step_limit';
+    if (status === 'completed' && reason === 'no_resolved_peak') status = reason;
     if (status === 'completed' && reason === 'failed') status = 'error';
     const engine = state.data || !previous ? engineDescription(c.info,state.data) : previous.engine;
     const surface = state.data ? state.data.modelF?.surface : previous?.surface;

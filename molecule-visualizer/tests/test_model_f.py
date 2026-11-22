@@ -277,11 +277,17 @@ class ModelF(unittest.TestCase):
     def test_long_path_component_cache_is_bounded_and_retains_reused_endpoints(self):
         d=self.data(mode='cineb',optimizer='fire',images=[[[-1,0,0]],[[0,.2,0]],[[1,0,0]]])
         c=self.toy(d);cache=b.ExactEvaluationCache(c,capacity=4);endpoint=np.array(d['images'][0])
+        fixed_endpoint=np.array(d['images'][-1])
+        fixed_energy=cache(2,fixed_endpoint)[0]
         for step in range(2500):
             e0=cache(0,endpoint)[0];p=np.array([[step*.0001,.2,0]]);e1=cache(1,p)[0]
+            # A fixed endpoint is evaluated only on step zero. Subsequent
+            # band checkpoints reuse its result without invoking the cache.
+            if step % 100 == 0:
+                c.annotate({'images':[endpoint,p,fixed_endpoint],'energies':[e0,e1,fixed_energy]})
         self.assertEqual(len(c.records),2048)
-        r={'images':[endpoint.tolist(),p.tolist()],'energies':[e0,e1]};c.annotate(r)
-        self.assertEqual(len(r['surfaceComponents']['gapEV']),2);self.assertEqual(cache.hits,2499)
+        r={'images':[endpoint,p,fixed_endpoint],'energies':[e0,e1,fixed_energy]};c.annotate(r)
+        self.assertEqual(len(r['surfaceComponents']['gapEV']),3);self.assertEqual(cache.hits,2499)
 
 
 if __name__=='__main__':unittest.main()

@@ -19,8 +19,8 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./group-constraints.js?v=model-f-48"></script>
 <script defer src="./group-constraints-ui.js?v=model-f-48"></script>
 <script defer src="./optimization.js?v=model-f-48"></script>
-<script defer src="./optimization-ui.js?v=dsafir-51"></script>
-<script defer src="./workflow-ui.js?v=dsafir-51"></script>
+<script defer src="./optimization-ui.js?v=ci-endpoints-53"></script>
+<script defer src="./workflow-ui.js?v=ci-endpoints-53"></script>
 <link rel="stylesheet" href="./optimization.css?v=model-f-48">
 <script defer src="./renderer3dmol.js?v=model-f-48"></script>
 <script defer src="./ui.js?v=dsafir-51"></script>
@@ -32,7 +32,7 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./energy-profile.js?v=dsafir-51"></script>
 <script defer src="./batch.js?v=batch-33"></script>
 <script defer src="./batch-ui.js?v=research-38"></script>
-<script defer src="./research-ui.js?v=dsafir-51"></script>
+<script defer src="./research-ui.js?v=ci-endpoints-53"></script>
 <script defer src="./job-history-ui.js?v=dsafir-51"></script>
 <script defer src="./structure-analysis.js?v=dsafir-52"></script>
 <script defer src="./structure-analysis-ui.js?v=efficiency-50"></script>
@@ -42,8 +42,8 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./model-f-ui.js?v=dsafir-51"></script>
 <script defer src="./llmlip-ui.js?v=dsafir-relax-52"></script>
 <link rel="stylesheet" href="./activity.css?v=1">
-<script defer src="./activity-ui.js?v=1"></script>
-<script defer src="./engine-ui.js?v=dsafir-relax-52"></script>
+<script defer src="./activity-ui.js?v=ci-endpoints-53"></script>
+<script defer src="./engine-ui.js?v=ci-endpoints-53"></script>
 <script defer src="./vibration-ui.js?v=constraints-34"></script>
 <script defer src="./path-refinement.js?v=dsafir-relax-52"></script>
 <script defer src="./afir.js?v=17"></script>
@@ -480,7 +480,7 @@ H 1.0 0 0
     <label>接続トークン<input id="engineToken" type="password" autocomplete="off" spellcheck="false"></label>
   </div><div class="mv-row"><button class="mv-btn" id="engineConnect">接続を確認</button><span id="engineConnected" class="mv-small">未接続</span></div></fieldset>
   <details class="mv-engine-setup"><summary>初回のセットアップ：tblite / g-xTB / UMA / llmlip.rsを選ぶ</summary>
-    <p><a href="./local-engine/bridge.py?v=1.17.0" download>bridge.pyをダウンロード</a>し、使いたいエンジンの手順で起動してください。tblite / g-xTBはPython 3.10以上、UMA / llmlip.rsはPython 3.12の専用環境を推奨します。</p>
+    <p><a href="./local-engine/bridge.py?v=1.18.0" download>bridge.pyをダウンロード</a>し、使いたいエンジンの手順で起動してください。tblite / g-xTBはPython 3.10以上、UMA / llmlip.rsはPython 3.12の専用環境を推奨します。</p>
     <ul>
       <li><strong>tblite</strong>：GFN2-xTB（既定）、GFN1-xTB、IPEA1-xTBを利用します。このアプリでは非周期系と固定セルの周期系に対応します。</li>
       <li><strong>g-xTB</strong>：公式のg-xTB対応実行ファイルを別途用意します。このアプリでは非周期系に対応します。tbliteのPythonパッケージは不要です。</li>
@@ -615,11 +615,15 @@ H -0.3 1.0 0"></textarea>
     <label id="engineClimbLabel">CIを開始するステップ<input id="engineClimb" type="number" min="0" max="500" step="1" value="5"></label>
   </div>
 
+  <section id="engineEndpointSettings" hidden>
+    <label>反応物と生成物の端点<select id="engineEndpointMode" aria-describedby="engineEndpointHelp"><option value="relax">両端を極小構造へ緩和</option><option value="fixed">入力座標に固定</option></select></label>
+    <p class="mv-small" id="engineEndpointHelp"></p>
+  </section>
   <section id="engineLUPSettings" hidden><h3>LUP系（CI-String）</h3><div class="mv-grid">
     <label>経路の更新アルゴリズム<select id="lupOptimizer"><option value="lbfgs">L-BFGS（既定）</option><option value="fire">FIRE</option></select></label>
     <label>弧長再分布の間隔（ステップ）<input id="lupRedistributeEvery" type="number" min="1" max="100" step="1" value="5"></label>
     <label>再分布残差の収束閾値 (Å)<input id="lupRedistributionTolerance" type="number" min="0" max="0.1" step="0.001" value="0.001" title="0.00001〜0.1 Å。上下ボタンは0.001刻み。より小さい値は直接入力できます。"></label>
-    </div><p class="mv-small">端点を固定し、CI開始後は最高点を基準に経路の両側を再分布します。有効力と再分布残差の両方が収束条件です。</p></section>
+    </div><p class="mv-small">CI開始後は登坂ノードの両側で構造を再分布します。有効力に加えて、等間隔からのずれと登坂ノードの物理力も収束判定に使います。</p></section>
   <section id="researchConstraints" hidden>
     <details id="internalConstraintsDetails"><summary>距離・角度・二面角の拘束</summary>
       <label class="mv-check"><input id="internalConstraintsEnabled" type="checkbox">内部座標の拘束を有効にする（MIN・AFIR-MIN・スキャン）</label>
@@ -672,9 +676,10 @@ H -0.3 1.0 0"></textarea>
   <section id="engineResult" hidden><h3>計算結果</h3><p id="engineResultSummary" class="mv-small"></p>
     <fieldset id="dsafirRelaxation" hidden>
       <legend>DS-AFIRの初期経路を緩和</legend>
-      <p class="mv-small">DS-AFIRで得た初期経路は一般にIRCとは異なります。両端の構造を固定し、中間構造を物理ポテンシャル面上で緩和します。</p>
+      <p class="mv-small">DS-AFIRで得た構造列を初期経路として、選んだポテンシャル面上で緩和します。</p>
       <div class="mv-grid"><label>緩和手法<select id="dsafirRelaxMode"><option value="cineb">CI-NEB（最高点を登らせる）</option><option value="lup">LUP系（CI-String）</option><option value="neb">NEB（通常のバンド緩和）</option></select></label>
         <label>端点を含むノード数<input id="dsafirRelaxCount" type="number" min="3" max="100" step="1"></label></div>
+      <label id="dsafirRelaxEndpointsLabel">緩和時の端点<select id="dsafirRelaxEndpoints"><option value="relax">両端を極小構造へ緩和</option><option value="fixed">DS-AFIRの端点に固定</option></select></label>
       <label>緩和で使うポテンシャル<select id="dsafirRelaxPotential"><option value="source">DS-AFIRと同じエンジン・モデルを使う</option><option value="current">現在の接続・モデル設定で再評価する</option></select></label>
       <p class="mv-small" id="dsafirRelaxHelp" role="status"></p>
       <button type="button" class="mv-btn primary" id="dsafirRelaxPrepare">この経路を取り込んで緩和条件を設定</button>
