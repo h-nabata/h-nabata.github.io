@@ -107,7 +107,10 @@ class NativeAFIR(unittest.TestCase):
             created=jobs.start(longer);deadline=time.monotonic()+30
             while time.monotonic()<deadline and not jobs.job['checkpoints'] and jobs.get(created['id'])['status']=='running':time.sleep(.03)
             self.assertTrue(jobs.job['checkpoints'])
-            with self.assertRaises(RuntimeError):jobs.start(longer)
+            queued=jobs.start(longer)
+            self.assertEqual(queued['status'],'queued')
+            self.assertEqual(jobs.cancel(queued['id'])['status'],'cancelled')
+            self.assertEqual(jobs.get(created['id'])['status'],'running')
             jobs.cancel(created['id']);jobs.job['thread'].join(timeout=10)
             state=jobs.get(created['id']);self.assertEqual(state['status'],'cancelled',state)
             self.assertEqual(state['result']['reason'],'cancelled');self.assertFalse(state['result']['converged'])

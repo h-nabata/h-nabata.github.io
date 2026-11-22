@@ -12,7 +12,7 @@ async function boot(version=currentBridgeVersion){
  for(const m of html.matchAll(/<select\b[^>]*id="([^"]+)"[^>]*>([\s\S]*?)<\/select>/g))nodes.get(m[1]).value=m[2].match(/<option\b[^>]*value="([^"]*)"/)?.[1]||'';
  const document={getElementById:id=>nodes.get(id),createElement:()=>new Element()},window={document};
  const info={version,engine:'tblite',method:'GFN2-xTB',engineVersion:'fixture',modes:['evaluate','optimize','cineb','lup'],lup:true,pathOptimizers:{cineb:['fire'],lup:['fire','lbfgs']},maxImages:100,maxSteps:10000,vibrations:true,adaptiveNEB:true,pathSplit:true};
- if(version===currentBridgeVersion)info.pathEndpointModes=['fixed','relax'];
+ if(version===currentBridgeVersion){info.pathEndpointModes=['fixed','relax'];info.pathSymmetryTypes=['mirror'];}
  const ctx=vm.createContext({window,document,location:{hostname:'example.test'},URL,AbortController,setTimeout,clearTimeout,console,fetch:async()=>({ok:true,json:async()=>info})});
  for(const f of ['model','optimization','bonding','geometry','io','molfile','periodic','constraints','structure-analysis','trajectory','research-ui','engine-ui','path-refinement'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../'+f+'.js'),'utf8'),ctx,{filename:f+'.js'});
  const M=window.MoleculeVisualizer;let state=M.Model.createState({atoms:[{id:'o',element:'O',x:0,y:0,z:0},{id:'h1',element:'H',x:.96,y:0,z:0},{id:'h2',element:'H',x:-.24,y:.93,z:0}]});
@@ -308,4 +308,90 @@ test('relaxed climbing results may move endpoints only when the saved policy all
  ])assert.throws(()=>M.EngineUI.validateResult({...result,diagnostics},j),/収束/);
  assert.throws(()=>M.EngineUI.validateResult({...result,endpointMode:'fixed'},j),/端点/);
  assert.throws(()=>M.EngineUI.validateResult({...result,endpointMode:'fixed'},{...j,data:{...d,endpointMode:'fixed'}}),/端点/);
+});
+
+test('path mirror pairs use displayed atom numbers and persist when restoring or refining a path',async()=>{
+ const {M,nodes,select}=await boot(),spec={type:'mirror',pairs:[[1,2]]};
+ for(const mode of ['neb','cineb','lup']){
+  select(mode);
+  assert.equal(nodes.get('enginePathSymmetry').hidden,false);
+  assert.equal(M.EngineUI.input().data.pathSymmetry,undefined);
+ }
+ nodes.get('engineMirror').checked=true;
+ nodes.get('engineMirrorPairs').value='２ － ３';
+ const {data,frames}=M.EngineUI.input();
+ assert.deepEqual(structuredClone(data.pathSymmetry),spec);
+ for(const mode of ['optimize','evaluate','perpendicular']){
+  select(mode);
+  assert.equal(nodes.get('enginePathSymmetry').hidden,true);
+  assert.equal(M.EngineUI.input().data.pathSymmetry,undefined);
+ }
+ M.EngineUI.restoreJob({id:'b'.repeat(32),data},true);
+ assert.equal(nodes.get('engineMirrorPairs').value,'2-3');
+ assert.equal(nodes.get('engineMirrorFields').hidden,false);
+ M.EngineUI.restoreInput({...data,pathSymmetry:undefined});
+ assert.equal(nodes.get('engineMirror').checked,false);
+ M.PathRefinement.init();
+ M.PathRefinement.open(frames,'lup',spec);
+ await nodes.get('refineNEB').click();
+ assert.deepEqual(structuredClone(M.EngineUI.input().data.pathSymmetry),spec);
+ M.EngineUI.prepareNEB('cineb',null);
+ assert.equal(M.EngineUI.input().data.pathSymmetry,undefined);
+});
+
+test('a requested reflection is rejected for invalid atom pairs and unsupported bridges',async()=>{
+ const {M,nodes,select,info}=await boot();
+ select('cineb');
+ nodes.get('engineMirror').checked=true;
+ for(const [value,reason] of [['',/形式/],['H2-H3',/形式/],['0-3',/範囲外/],['2-4',/範囲外/],
+                             ['2-2',/重複/],['2-3 3-2',/重複/],['1-3',/元素/]]){
+  nodes.get('engineMirrorPairs').value=value;
+  assert.throws(()=>M.EngineUI.input(),reason);
+ }
+ nodes.get('engineMirrorPairs').value='2-3';
+ delete info.pathSymmetryTypes;
+ M.EngineUI.settings();
+ assert.match(nodes.get('engineMirrorCapability').textContent,/更新/);
+ assert.throws(()=>M.EngineUI.input(),/1\.19\.0/);
+});
+
+test('mirror CI convergence checks allowed forces while retaining full-force diagnostics',async()=>{
+ const {M,nodes,select}=await boot();
+ select('cineb');
+ nodes.get('engineMirror').checked=true;
+ nodes.get('engineMirrorPairs').value='2-3';
+ const j=M.EngineUI.input(),d=j.data;
+ const result={mode:'cineb',endpointMode:'relax',pathSymmetry:d.pathSymmetry,symbols:d.symbols,cell:d.cell,
+  images:structuredClone(d.images),energies:[0,1,0],effectiveFmax:.01,imageFmax:[.01,.01,.01],
+  climbingImage:1,converged:true,units:{energy:'eV',length:'angstrom'},
+  diagnostics:{endpointPhysicalFmax:[.4,.5],climbingPhysicalFmax:.4,climbingBracketed:true,
+    endpointAllowedFmax:[.01,.01],climbingAllowedFmax:.01,symmetryRemovedFmax:.48,symmetryResidual:1e-9}};
+ M.EngineUI.validateResult(result,j);
+ assert.throws(()=>M.EngineUI.validateResult({...result,pathSymmetry:undefined},j),/鏡映条件/);
+ for(const [key,value] of [['symmetryResidual',.05],['symmetryRemovedFmax',undefined],['climbingAllowedFmax',.5],
+                           ['endpointAllowedFmax',[.1,.5]],['endpointAllowedFmax',undefined]]){
+  assert.throws(()=>M.EngineUI.validateResult({...result,diagnostics:{...result.diagnostics,[key]:value}},j),/鏡映|収束/);
+ }
+});
+
+test('energy/force inconsistency remains visible on saved paths and does not block their use',async()=>{
+ const {M,nodes,select}=await boot();
+ M.EnergyProfile.set=()=>{};
+ M.ResearchUI.showResult=()=>{};
+ select('neb');
+ const j=M.EngineUI.input(),d=j.data;
+ const r={mode:'neb',symbols:d.symbols,cell:d.cell,images:d.images,nodeIds:['n0','n1','n2'],
+  energies:[0,1,0],imageFmax:[0,.2,0],effectiveFmax:.2,reason:'step_limit',converged:false,
+  steps:4,evaluations:15,units:{energy:'eV',length:'angstrom'},
+  pathConsistencyWarning:{nodeId:'n1',step:3,maxDisplacementAngstrom:.035,
+   energyChangeEV:.45,predictedEnergyChangeEV:-.005,errorEV:.455}};
+ M.EngineUI.restoreJob({id:'a'.repeat(32),data:d,result:r});
+ assert.equal(nodes.get('enginePathWarning').hidden,false);
+ assert.match(nodes.get('enginePathWarningDetail').textContent,/ステップ3のノード2/);
+ assert.match(nodes.get('enginePathWarningDetail').textContent,/0.4550 eV/);
+ assert.match(nodes.get('enginePathWarningDetail').textContent,/0.0350 Å/);
+ assert.match(nodes.get('engineMessage').textContent,/エネルギー変化と力/);
+ assert.equal(nodes.get('engineApply').disabled,false);
+ M.EngineUI.showResult({...r,pathConsistencyWarning:undefined},j);
+ assert.equal(nodes.get('enginePathWarning').hidden,true);
 });

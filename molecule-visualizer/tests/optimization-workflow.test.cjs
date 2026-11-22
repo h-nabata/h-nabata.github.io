@@ -5,6 +5,7 @@ function setup(kind='reaction',options={}){
  const values={workflowRecipe:kind,engineTSMethod:'sella-prfo',engineTrust:'.04',engineVibrationDelta:'.01',engineVibrationNfree:'2',engineVibrationThreshold:'50',ircStepSize:'.1',workflowCount:'2',workflowSeed:'1',workflowRmsd:'.1'};for(const [id,value] of Object.entries(values))$(id).value=value;
  const clone=x=>JSON.parse(JSON.stringify(x)),p=[[0,0,0],[1,0,0]],original={atoms:p.map((v,i)=>({id:'a'+i,element:'H',x:v[0],y:0,z:0})),metadata:{}},data={mode:kind==='minimum'||kind==='conformers'?'optimize':kind==='string'?'lup':'cineb',symbols:['H','H'],atomIds:['a0','a1'],cell:null,images:['minimum','conformers'].includes(kind)?[p]:[p,p.map(v=>v.map(x=>x+.1)),p.map(v=>v.map(x=>x+.2))],charge:0,multiplicity:1,maxSteps:20,fmax:.01,maxMove:.04,optimizer:'fire',climbAfter:3,spring:.1};
  if(options.modelF)data.modelF=clone(options.modelF);
+ if(options.pathSymmetry)data.pathSymmetry=clone(options.pathSymmetry);
  const jobs=[],shown=[],connection={info:{modes:['optimize','vibrations','cineb','lup','ts','irc'],sellaVersion:'test',vibrations:true}};
  const M={Model:{createState:clone},Periodic:{snapshot:clone},App:{getState:()=>original},OptimizationUI:{sync(){}},StructureAnalysis:require('../structure-analysis.js'),EngineUI:{isBusy:()=>false,getConnection:()=>connection,input:()=>({data,original}),showSettings(){},showResult:(r,j)=>shown.push(j),validateResult:r=>{assert.ok(r.images.length);},request:async(_c,url,body)=>{if(url==='/api/jobs'){jobs.push(clone(body));return{id:jobs.length.toString(16).padStart(32,'0')};}return {};},pollJob:async j=>{
   if(options.onPoll)await options.onPoll(j,$,M);
@@ -24,4 +25,15 @@ test('wrong imaginary count and user cancellation stop subsequent workflow jobs'
 });
 test('conformer workflow minimizes each generated frame then keeps one identical representative',async()=>{
  const {M,jobs,$}=setup('conformers');await M.WorkflowUI.run();assert.deepEqual(jobs.map(j=>j.mode),['optimize','optimize']);assert.match($('workflowMessage').textContent,/2配座 → 1代表構造/);
+});
+
+test('a reaction workflow preserves the chosen path symmetry and releases it at the TS stage',async()=>{
+ const pathSymmetry={type:'mirror',pairs:[[0,1]]};
+ for(const kind of ['reaction','string']){
+  const {M,jobs}=setup(kind,{pathSymmetry});
+  await M.WorkflowUI.run();
+  assert.deepEqual(jobs[0].pathSymmetry,pathSymmetry);
+  assert.deepEqual(jobs.slice(1).map(j=>j.mode),['ts','vibrations','irc']);
+  assert.ok(jobs.slice(1).every(j=>!j.pathSymmetry));
+ }
 });

@@ -294,8 +294,38 @@ async function run() {
     assert.ok(reference && reference.energies.length === cross.energies.length);
     cross.energies.forEach((value,i) => assert.ok(Math.abs(value-reference.energies[i])<1e-5));
     assert.ok(Math.abs(otherSource.energies[0]-cross.energies[0])>1e-4);
+    await page.click('#engineClose');
+    await page.locator('#fileInput').setInputFiles(path.join(root, 'examples/butadiene-disrotatory.xyz'));
+    await page.waitForFunction(() => MoleculeVisualizer.App.getState().atoms.length === 10);
+    await page.click('#btnExternalEngine');
+    await openCalculationPane(page, 'setup');
+    await page.selectOption('#engineMode', 'lup');
+    await page.selectOption('#engineEndpointMode', 'relax');
+    const pairs = '1-4, 2-3, 5-9, 6-10, 7-8';
+    await page.check('#engineMirror');
+    assert.ok(await page.locator('#engineMirrorPairs').isVisible());
+    assert.match(await page.locator('#enginePanelMethod').innerText(), /鏡映拘束/);
+    await page.fill('#engineMirrorPairs', '1-5');
+    const beforeMirror = jobs.length;
+    await page.click('#engineRun');
+    assert.match(await page.locator('#engineMessage').innerText(), /元素/);
+    assert.equal(jobs.length, beforeMirror);
+    await page.fill('#engineMirrorPairs', pairs);
+    await openDetails(page, '#engineNumericOptions');
+    await page.fill('#engineSteps', '2');
+    await page.fill('#engineClimb', '0');
+    const mirrorReport = await submitAndRead(), mirror = mirrorReport.result;
+    const expected = {type:'mirror', pairs:[[0,3],[1,2],[4,8],[5,9],[6,7]]};
+    assert.deepEqual(jobs.at(-1).pathSymmetry, expected);
+    assert.deepEqual(mirror.pathSymmetry, expected);
+    assert.equal(mirror.mode, 'lup');
+    assert.equal(mirror.endpointMode, 'relax');
+    assert.ok(mirror.diagnostics.symmetryResidual < 1e-8);
+    assert.ok(mirror.diagnostics.symmetryRemovedFmax >= 0);
+    assert.match(await page.locator('#engineResultSummary').innerText(), /鏡映残差/);
+    assert.match(await page.locator('#enginePanelMethod').innerText(), /鏡映拘束/);
     assert.deepEqual(errors, []);
-    console.log('DS-AFIR: paths and data handoff, three explicit relaxations, and alternate GFN1 potential verified.');
+    console.log('DS-AFIR paths, three relaxation methods, alternate GFN1 potential, and mirror-constrained butadiene CI-string verified.');
   } finally {
     try { await browser?.close(); } finally { engine.kill(); alternateEngine?.kill(); }
   }

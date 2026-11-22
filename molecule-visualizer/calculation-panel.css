@@ -109,6 +109,15 @@
 .mv-app #engineDialog #engineCancel:disabled,
 .mv-app #engineDialog #enginePause:disabled { display: none; }
 .mv-app #engineDialog #engineResultSummary { margin-block: .4rem .75rem; font-variant-numeric: tabular-nums; }
+.mv-app #enginePathWarning {
+  padding: .65rem .85rem;
+  margin-block: .65rem;
+  border-inline-start: 3px solid #a35b10;
+  background: #fff6e7;
+  color: #613906;
+  border-radius: .2rem;
+}
+.mv-app #enginePathWarning p { margin: .3rem 0 0; font-size: .88rem; }
 .mv-app #engineDialog #engineEnergyDetails .mv-table-scroll { max-height: 24rem; overflow: auto; }
 .mv-app #engineDialog #enginePaneResults :is(h3,h4):first-child { margin-top: 0; }
 @media(min-width:1000px){
