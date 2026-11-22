@@ -76,15 +76,19 @@
   }
   function init(){
     ready=true;
+    // Camera, display and sizing controls may be used throughout playback.
+    // The two geometry actions in the view menu still pause on the displayed frame.
+    const viewControl=target=>target.closest('#viewportTools, #viewerResizeHandle, #btnFullScreen')&&
+      !target.closest('#btnCenterOrigin, #btnDataDock');
     document.querySelector('.mv-app').addEventListener('pointerdown',e=>{
-      if(!timer||e.target.closest('.mv-trajectory, .mv-display-controls, .mv-viewer-size, #viewerResizeHandle'))return;
+      if(!timer||viewControl(e.target)||e.target.closest('.mv-trajectory'))return;
       // The canvas has already classified this gesture before it bubbles here.
       // Camera gestures (including two-finger pan/zoom) may span several frames.
       if(e.target.closest('#viewer')&&(!app().renderer().pointer||['rotate','roll','pan'].includes(app().renderer().pointer.action)))return;
       stop();
     });
     document.querySelector('.mv-app').addEventListener('keydown',e=>{
-      if(!timer||e.target.closest('.mv-display-controls, .mv-viewer-size, #viewerResizeHandle'))return;
+      if(!timer||viewControl(e.target))return;
       if(e.target.closest('#viewer')&&(['Shift','Control','Alt','Meta'].includes(e.key)||e.key.toLowerCase()==='r'&&!e.ctrlKey&&!e.metaKey&&!e.altKey))return;
       stop();
     });
