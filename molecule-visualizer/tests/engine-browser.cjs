@@ -53,7 +53,8 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await clickWorkspaceCommand(page, '#btnAFIR');await page.uncheck('#afirLive');await page.click('#afirClose');
   await page.click('#btnExternalEngine');await page.uncheck('#engineLive');await page.fill('#engineURL','http://127.0.0.1:8766');await page.fill('#engineToken','incorrect');await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineMessage').textContent.includes('トークンが一致'));
   await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
-  assert.equal(await page.locator('#engineMode option[value=neb]').count(),0);
+  await page.selectOption('#engineMode','neb');
+  assert.equal(await page.locator('#engineMode').inputValue(),'neb');
   await page.selectOption('#engineMode','cineb');
   assert.deepEqual(await page.locator('#engineSteps,#engineFmax,#engineMove,#engineSpring,#engineClimb').evaluateAll(es=>es.map(e=>e.value)),['100','0.05','0.03','1','5']);
   await page.fill('#engineFmax','0.02');await page.selectOption('#engineMode','ts');assert.equal(await page.locator('#engineFmax').inputValue(),'0.05');
