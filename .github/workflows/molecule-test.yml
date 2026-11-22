@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   llmlip-native:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       LLMLIP_TEST_MODEL: ${{ github.workspace }}/.llmlip-upstream/examples/model.e3rs
@@ -76,7 +76,7 @@ jobs:
           OPENBLAS_NUM_THREADS: '1'
         run: python -m unittest test_anysolv.NativeAnySolv -v
   browser:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
