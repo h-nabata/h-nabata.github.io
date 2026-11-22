@@ -1,0 +1,42 @@
+#jobHistoryDialog {
+  width: min(50rem, calc(100% - 1.5rem));
+  padding: 0;
+  color: #1c3944;
+}
+#jobHistoryDialog > div { padding: 1.1rem 1.3rem; }
+#jobHistoryDialog [hidden] { display: none; }
+#jobHistoryDialog .job-history-header {
+  position: sticky; top: 0; z-index: 1; background: #fff;
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  border-bottom: 1px solid #d6e1e4; padding: 1rem 1.3rem;
+}
+#jobHistoryDialog h2 { margin: 0; padding: 0; border: 0; font-size: 1.2rem; }
+#jobHistoryDialog .job-history-filters, #jobHistoryDialog .job-actions {
+  display: flex; align-items: center; flex-wrap: wrap; gap: .5rem;
+}
+#jobHistoryDialog .job-history-filters { gap: .75rem 1rem; padding-bottom: 1rem; }
+#jobHistoryDialog .job-history-filters label { display: inline-flex; gap: .45rem; align-items: center; }
+#jobHistoryDialog #jobHistoryRefresh { margin-inline-start: auto; }
+#jobHistoryDialog table { width: 100%; border-collapse: collapse; }
+#jobHistoryDialog td, #jobHistoryDialog th { text-align: start; border: 0; padding: .7rem .45rem; }
+#jobHistoryDialog th { font-size: .83rem; color: #48636d; background: #eef4f5; }
+#jobHistoryDialog td { border-bottom: 1px solid #dbe5e7; }
+#jobHistoryDialog td:first-child { font-weight: 650; }
+#jobHistoryDialog td small { display: block; margin-top: .2rem; color: #48636d; font-size: .79rem; font-weight: 400; }
+#jobHistoryDialog .job-state { display: inline-block; border-radius: 5px; background: #edf2f4; padding: .23rem .48rem; }
+#jobHistoryDialog .job-active { background: #dff4ee; color: #115c52; }
+#jobHistoryDialog .job-error { background: #fbeae6; color: #813c2c; }
+#jobHistoryDialog .job-more { flex-basis: 100%; }
+#jobHistoryDialog summary { cursor: pointer; color: #325962; }
+#jobHistoryDialog .job-more[open] .mv-btn { margin: .35rem .25rem 0 0; }
+#jobRuntimeDetails { border-top: 1px solid #dbe5e7; margin-top: 1rem; padding-top: .8rem; }
+#jobHistoryMessage:not(:empty) { margin: .5rem 1.3rem 1rem; overflow-wrap: anywhere; }
+#jobHistoryStorage { overflow-wrap: anywhere; }
+@media(max-width: 640px) {
+  #jobHistoryDialog .job-history-filters { align-items: flex-start; }
+  #jobHistoryDialog table, #jobHistoryDialog tbody, #jobHistoryDialog tr { display: block; }
+  #jobHistoryDialog thead { display: none; }
+  #jobHistoryDialog tr { display: grid; grid-template-columns: 1fr auto; padding: .6rem 0; border-top: 1px solid #dbe5e7; }
+  #jobHistoryDialog td { border: none; padding: .3rem 0; }
+  #jobHistoryDialog td:last-child { grid-column: 1 / -1; }
+}

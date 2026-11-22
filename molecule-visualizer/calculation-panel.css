@@ -1,0 +1,127 @@
+/* A single scrollable page between the calculation stages and the primary action. */
+.mv-app #engineDialog.mv-calc-panel[open] {
+  display: grid;
+  grid-template-rows: auto auto minmax(0,1fr) auto;
+  padding: 0;
+  width: min(46rem,calc(100vw - 2rem));
+  height: min(48rem,calc(100dvh - 3rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: hidden;
+  color: #172c37;
+  background: #fff;
+  border: 1px solid #abc0c6;
+  border-radius: .9rem;
+}
+.mv-app #engineDialog .mv-calc-head {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  padding: .85rem 1.05rem .55rem;
+  margin: 0;
+}
+.mv-app #engineDialog .mv-calc-head h2 {
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  font-size: 1.22rem;
+  color: #152f3a;
+  line-height: 1.4;
+}
+.mv-app #engineDialog .mv-calc-head .mv-btn { min-height: 2.25rem; margin: 0; }
+.mv-app #engineDialog .mv-calc-tabs {
+  display: flex;
+  gap: .8rem;
+  padding-inline: 1.05rem;
+  border-bottom: 1px solid #ccdcde;
+}
+.mv-app #engineDialog .mv-calc-tabs button {
+  position: relative;
+  min-height: 2.55rem;
+  padding: .45rem .28rem;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: #405c69;
+  font: inherit;
+  font-size: .92rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mv-app #engineDialog .mv-calc-tabs button[aria-selected="true"] { border-bottom-color: #087770; color: #075e59; }
+.mv-app #engineDialog .mv-calc-tabs button[data-new-result="true"]::after {
+  content: ''; display: inline-block; width: .45rem; height: .45rem; margin-inline-start: .3rem;
+  border-radius: 50%; background: #118177;
+}
+.mv-app #engineDialog .mv-calc-pane {
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1rem 1.1rem;
+  scroll-padding-block: .7rem;
+}
+.mv-app #engineDialog [hidden] { display: none !important; }
+.mv-app #engineDialog .mv-calc-pane:focus-visible,
+.mv-app #engineDialog .mv-calc-tabs button:focus-visible { outline: 2px solid #087770; outline-offset: -2px; }
+.mv-app #engineDialog #engineSettings {
+  margin: 0 0 .8rem;
+  border: 0;
+  padding: 0;
+}
+.mv-app #engineDialog #engineSettings > legend { font-size: 1.02rem; padding: 0 0 .65rem; }
+.mv-app #engineDialog .mv-calc-input-summary { color: #496573; font-size: .88rem; }
+.mv-app #engineDialog .mv-calc-pane .mv-grid { gap: .65rem; }
+.mv-app #engineDialog .mv-calc-pane .mv-grid > label { align-content: start; }
+.mv-app #engineDialog .mv-engine-basics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.mv-app #engineDialog .mv-engine-basics label:nth-child(-n+2) { grid-column: 1/-1; }
+.mv-app #engineDialog .mv-calc-disclosure {
+  margin: .6rem 0;
+  padding: 0 .75rem;
+  border: 1px solid #d0dfe2;
+  border-radius: .5rem;
+  background: #fafcfc;
+}
+.mv-app #engineDialog .mv-calc-disclosure > summary { padding: .65rem 0; cursor: pointer; font-weight: 600; color: #294551; }
+.mv-app #engineDialog .mv-calc-disclosure[open] { padding-bottom: .65rem; }
+.mv-app #engineDialog .mv-calc-live { margin-top: .7rem; }
+.mv-app #engineDialog .mv-calc-foot {
+  display: grid;
+  gap: .45rem;
+  padding: .65rem 1.1rem .85rem;
+  border-top: 1px solid #c8d9dc;
+  background: #f4f8f8;
+}
+.mv-app #engineDialog .mv-calc-foot #engineMessage {
+  margin: 0;
+  max-height: 5.25rem;
+  overflow-y: auto;
+  line-height: 1.5;
+  color: #264753;
+  font-size: .89rem;
+  white-space: pre-wrap;
+}
+.mv-app #engineDialog #engineMessage:empty { display: none; }
+.mv-app #engineDialog .mv-calc-context { display: flex; gap: .35rem 1rem; flex-wrap: wrap; align-items: baseline; justify-content: space-between; font-size: .85rem; }
+.mv-app #engineDialog #enginePanelConnection { color: #6a5551; }
+.mv-app #engineDialog #enginePanelConnection[data-connected="true"] { color: #076451; }
+.mv-app #engineDialog .mv-calc-foot .mv-dialog-actions { position: static; margin: 0; padding: 0; background: transparent; border: 0; justify-content: flex-end; gap: .45rem; }
+.mv-app #engineDialog #engineCancel:disabled,
+.mv-app #engineDialog #enginePause:disabled { display: none; }
+.mv-app #engineDialog #engineResultSummary { margin-block: .4rem .75rem; font-variant-numeric: tabular-nums; }
+.mv-app #engineDialog #engineEnergyDetails .mv-table-scroll { max-height: 24rem; overflow: auto; }
+.mv-app #engineDialog #enginePaneResults :is(h3,h4):first-child { margin-top: 0; }
+@media(min-width:1000px){
+  .mv-app #engineDialog.mv-calc-panel[open]:not(:modal) { padding: 0; width: min(31rem,40vw); max-width: none; height: auto; max-height: none; overflow: hidden; }
+  .mv-app #engineDialog.mv-calc-panel[open]:not(:modal) .mv-engine-basics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media(max-width:600px){
+  .mv-app #engineDialog.mv-calc-panel[open] { width: calc(100vw - 1rem); max-width: none; height: min(48rem,calc(100dvh - 1rem)); max-height: calc(100dvh - 1rem); }
+  .mv-app #engineDialog .mv-calc-head,.mv-app #engineDialog .mv-calc-pane,.mv-app #engineDialog .mv-calc-foot { padding-inline: .8rem; }
+  .mv-app #engineDialog .mv-calc-tabs { padding-inline: .8rem; }
+  .mv-app #engineDialog .mv-calc-foot { padding-bottom: max(.65rem,env(safe-area-inset-bottom)); }
+}
+@media(max-height:500px){
+  .mv-app #engineDialog .mv-calc-head,.mv-app #engineDialog .mv-calc-foot { padding-block: .3rem; }
+  .mv-app #engineDialog .mv-calc-foot #engineMessage { max-height: 2.8rem; }
+}

@@ -72,30 +72,56 @@
     if(global.ResizeObserver){
       new global.ResizeObserver(sync).observe(shell);
       const layoutObserver=new global.ResizeObserver(fitAutomaticHeight);
-      document.querySelectorAll('.mv-page-buffer, .mv-app-header, .mv-document, .mv-stage-heading, .mv-stage-toolbar, .mv-calculation-controls, .mv-display-controls, .mv-trajectory, #optimizationState').forEach(element=>layoutObserver.observe(element));
+      document.querySelectorAll('.mv-page-buffer, .mv-app-header, .mv-document, .mv-stage-heading, .mv-stage-toolbar, .mv-calculation-controls, .mv-display-controls, .mv-trajectory, .mv-activity, #optimizationState').forEach(element=>layoutObserver.observe(element));
     }
     global.addEventListener('resize',fitAutomaticHeight);
     document.addEventListener('fullscreenchange',fitAutomaticHeight);
     fitAutomaticHeight();
     sync();
   }
-  function init(){
-    initViewerHeight();
-    document.querySelectorAll('[data-workspace-jump]').forEach(button=>{
-      button.addEventListener('click',()=>{
-        const kind=button.dataset.workspaceJump;
-        if(kind==='afir'){
-          const panel=document.getElementById('afirPanel');
-          if(panel.hidden)document.getElementById('btnAFIR').click();
-          if(!panel.hidden){panel.scrollIntoView({block:'nearest',behavior:'smooth'});document.getElementById('afirName').focus({preventScroll:true});}
-        }else{
-          if(kind==='editing'&&!document.getElementById('afirPanel').hidden)document.getElementById('afirClose').click();
-          const target=document.getElementById(kind==='coordinates'?'dataText':'tab-atoms');
-          if(kind==='editing')target.click();
-          target.scrollIntoView({block:'nearest',behavior:'smooth'});target.focus({preventScroll:true});
-        }
+  let lastInspector='coordinates';
+  function selectInspector(kind){
+    const tab=document.getElementById('inspector-tab-'+kind);
+    if(!tab)return;
+    for(const item of tab.parentElement.querySelectorAll('[role="tab"]')){
+      const selected=item===tab;
+      item.setAttribute('aria-selected',String(selected));
+      item.tabIndex=selected?0:-1;
+      document.getElementById(item.getAttribute('aria-controls')).hidden=!selected;
+    }
+    if(kind!=='afir')lastInspector=kind;
+  }
+  function afirVisibilityChanged(visible){
+    selectInspector(visible?'afir':lastInspector);
+  }
+  function showInspector(kind){
+    const afir=document.getElementById('afirPanel');
+    if(kind==='afir'){
+      if(afir.hidden)MV.AFIRUI.toggle(true);
+      else selectInspector('afir');
+      return;
+    }
+    if(!afir.hidden)MV.AFIRUI.toggle(false);
+    selectInspector(kind);
+  }
+  function initInspector(){
+    const tabs=[...document.querySelectorAll('[data-workspace-jump]')];
+    tabs.forEach((tab,index)=>{
+      tab.addEventListener('click',()=>showInspector(tab.dataset.workspaceJump));
+      tab.addEventListener('keydown',event=>{
+        const keys=['ArrowLeft','ArrowRight','Home','End'];
+        if(!keys.includes(event.key))return;
+        event.preventDefault();
+        const next=event.key==='Home'?0:event.key==='End'?tabs.length-1:
+          (index+(event.key==='ArrowRight'?1:-1)+tabs.length)%tabs.length;
+        tabs[next].focus();
+        tabs[next].click();
       });
     });
+  }
+  function init(){
+    initViewerHeight();
+    initInspector();
     document.querySelectorAll('.mv-scroll-panel').forEach(panel=>{
       panel.querySelectorAll('[data-panel-size]').forEach(button=>{
         button.addEventListener('click',()=>{
@@ -111,5 +137,5 @@
       });
     });
   }
-  MV.PanelLayout={init};
+  MV.PanelLayout={init,showInspector,afirVisibilityChanged};
 })(window);

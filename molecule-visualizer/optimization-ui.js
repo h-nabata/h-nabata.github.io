@@ -41,7 +41,10 @@
   }
   for(const item of c.coordinates){const td=[...$('constraintOverview').querySelectorAll('[data-coordinate-id]')].find(td=>td.dataset.coordinateId===item.id);if(td){const displayed=app().renderer().previewOnly?app().renderer().state:s,atoms=item.atomIds.map(id=>displayed.atoms.find(a=>a.id===id));let current='未定義';if(atoms.every(Boolean))try{current=measure(item.type,atoms).toFixed(4);}catch(_){}td.textContent=`${item.atomIds.map(id=>s.atoms.findIndex(a=>a.id===id)+1).join(', ')} · 現在 ${current} / 目標 ${item.value.toFixed(4)} ${item.type==='distance'?'Å':'°'}`;}}
   const state=app().renderer().previewOnly?'計算結果のプレビュー':/未適用|編集中/.test($('xyzEditStatus').textContent)?'座標を編集中・未適用':s.metadata.externalCalculation||s.metadata.afirCalculation?'適用済みの計算結果':'入力構造';
-  const connection=M.EngineUI.getConnection(),text=`${state} · ${s.atoms.length}原子 · ${connection?connection.info.engine+' / '+connection.info.method:'エンジン未接続'} · 電荷 ${$('engineCharge').value} · 多重度 ${$('engineMultiplicity').value} · 拘束 ${$('constraintOverview').querySelectorAll('input:checked').length}件`;
+  const activeConstraints=$('constraintOverview').querySelectorAll('input:checked').length;
+  const fields=$('afirPanel').hidden?'engine':'afir';
+  const text=state+` · 設定電荷 ${$(fields+'Charge').value} · 多重度 ${$(fields+'Multiplicity').value}`+
+    (activeConstraints?` · 拘束 ${activeConstraints}件`:'');
   if($('optimizationState').textContent!==text)$('optimizationState').textContent=text;
  }catch(e){message(e.message);}finally{restoring=false;syncing=false;}}
  function numeric(id,min,max){const x=Number($(id).value);if(!$(id).value.trim()||!Number.isFinite(x)||x<min||x>max)throw Error(`${$(id).closest('label').textContent}: ${min}〜${max}を指定してください。`);return x;}
@@ -74,7 +77,7 @@
  function build(){
   const panel=el('section',null,{class:'mv-panel',id:'optimizationPanel'});panel.innerHTML='<h2>最適化の拘束</h2><p class="mv-small">計算中に固定する条件です。計測値の固定表示とは独立しています。</p><p id="optimizationSelection" class="mv-small"></p><div class="mv-row"><button class="mv-btn" id="constraintFromSelection">現在値で固定</button><button class="mv-btn" id="scanFromSelection">選択座標をスキャン</button><button class="mv-btn" id="optimizationGroup">重心拘束を設定</button></div><div class="mv-row"><label><input type="checkbox" id="fixDirectionX">X</label><label><input type="checkbox" id="fixDirectionY">Y</label><label><input type="checkbox" id="fixDirectionZ" checked>Z</label><button class="mv-btn" id="fixDirections">選択原子の方向を固定</button><button class="mv-btn" id="rigidSelection">選択を剛体にする</button></div><div class="mv-table-scroll"><table><thead><tr><th>有効</th><th>拘束</th><th>対象・現在値 / 目標</th><th>操作</th></tr></thead><tbody id="constraintOverview"></tbody></table></div><p id="optimizationMessage" role="status" class="mv-small"></p>';
   $('groupConstraintPanel').before(panel);
-  const shortcut=el('button','拘束一覧',{class:'mv-btn',id:'btnConstraintOverview'});$('btnGroupConstraints').after(shortcut);shortcut.onclick=()=>{document.querySelector('[data-workspace-jump="coordinates"]')?.click();panel.scrollIntoView({block:'nearest'});};
+  const shortcut=el('button','拘束一覧',{class:'mv-btn',id:'btnConstraintOverview'});$('btnGroupConstraints').after(shortcut);shortcut.onclick=()=>{M.PanelLayout?.showInspector('constraints');panel.scrollIntoView({block:'nearest'});};
   $('viewer').closest('.mv-viewer-shell').before(el('p','入力構造',{id:'optimizationState',class:'mv-optimization-state',role:'status'}));
   $('constraintFromSelection').onclick=safe(()=>addCoordinate(false));$('scanFromSelection').onclick=safe(()=>addCoordinate(true));$('optimizationGroup').onclick=()=>M.GroupConstraintUI.open();
   $('fixDirections').onclick=safe(()=>{const atoms=selected(),axes=['X','Y','Z'].map(k=>$('fixDirection'+k).checked);if(!atoms.length||!axes.some(Boolean))throw Error('原子と固定方向を選択してください。');change('direction constraints',c=>{for(const a of atoms){c.fixedComponents=c.fixedComponents.filter(x=>x.atomId!==a.id);c.fixedComponents.push({id:crypto.randomUUID(),atomId:a.id,axes,enabled:true});}});});

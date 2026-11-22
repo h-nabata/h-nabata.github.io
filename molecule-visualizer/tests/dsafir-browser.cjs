@@ -4,7 +4,7 @@ const { spawn } = require('node:child_process');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { clickWorkspaceCommand } = require('./workspace-commands.cjs');
+const { clickWorkspaceCommand, openDetails, openCalculationPane } = require('./workspace-commands.cjs');
 
 async function startupToken(engine) {
   let output = '', errors = '';
@@ -59,19 +59,43 @@ async function run() {
     });
     await page.locator('canvas').click({position:projected});
     assert.equal(await page.evaluate(() => MoleculeVisualizer.App.getState().selectedAtomIds.size), 1);
-    await clickWorkspaceCommand(page, '#btnDSAFIR');
+    const chooser = page.locator('#workspaceMethodChooser');
+    await chooser.locator('summary').click();
+    await page.selectOption('#methodInput', 'path');
+    await page.fill('#methodSearch', 'ＣＩ－Ｓｔｒｉｎｇ');
+    assert.equal(await chooser.locator('#methodCatalog button:visible').count(), 1);
+    assert.ok(await chooser.locator('[data-engine-method="lup"]').isVisible());
+    await page.fill('#methodSearch', 'no matching method');
+    assert.match(await page.locator('#methodFilterStatus').innerText(), /該当する手法がありません/);
+    await page.locator('#methodSearch').press('Escape');
+    await chooser.locator('summary').click();
+    assert.ok(await page.locator('#btnDSAFIR').isVisible() && await page.locator('#btnTS').isVisible());
+    await page.selectOption('#methodInput', 'endpoints');
+    assert.equal(await chooser.locator('#methodCatalog button:visible').count(), 1);
+    await page.locator('#methodSearch').press('Enter');
     assert.equal(await page.locator('#engineMode').inputValue(), 'dsafir');
+    assert.equal(jobs.length, 0);
+    assert.ok(await page.locator('#enginePanelConnect').isVisible());
+    assert.equal(await page.locator('#engineRun').isVisible(), false);
+    const setupTab = page.locator('#engineTabSetup');
+    await setupTab.press('End');
+    assert.ok(await page.locator('#engineResultsEmpty').isVisible());
+    await page.locator('#engineTabResults').press('Home');
+    assert.equal(await setupTab.getAttribute('aria-selected'), 'true');
+    await page.click('#enginePanelConnect');
     assert.equal(await page.locator('#dsafirEnd').inputValue(), '2');
     await page.fill('#engineURL', 'http://127.0.0.1:' + port);
     await page.fill('#engineToken', token);
     await page.click('#engineConnect');
     await page.waitForFunction(() => document.getElementById('engineConnected').textContent.includes('接続済み'));
     assert.equal(jobs.length, 0);
+    assert.equal(await setupTab.getAttribute('aria-selected'), 'true');
     await page.uncheck('#engineLive');
 
     await page.selectOption('#dsafirStart', '1');
     await page.selectOption('#dsafirEnd', '0');
     await page.locator('#engineDSAFIRSettings details > summary').click();
+    await openDetails(page, '#engineNumericOptions');
     await page.fill('#engineSteps', '1');
     await page.fill('#dsafirStep', '0.025');
     await page.fill('#dsafirThreshold', '0.05');
@@ -107,6 +131,7 @@ async function run() {
     await page.click('#profileDetails');
     assert.equal(await page.evaluate(() => MoleculeVisualizer.App.getState().metadata.trajectory.length), 3);
 
+    await openCalculationPane(page, 'setup');
     await page.fill('#engineSteps', '300');
     const report = await submitAndRead(), result = report.result;
     assert.equal(result.dsafir.connected, true);
@@ -131,6 +156,7 @@ async function run() {
     }
     await page.click('#trajectoryClose');
     await page.click('#btnExternalEngine');
+    await openCalculationPane(page, 'results');
     await page.click('#engineApply');
     const applied = await page.evaluate(() => {
       const state = MoleculeVisualizer.App.getState();
@@ -154,6 +180,7 @@ async function run() {
     await page.fill('#dsafirStep', '0.1');
     await page.fill('#dsafirThreshold', '0.12');
     for (const mode of ['cineb', 'lup', 'neb']) {
+      await openCalculationPane(page, 'setup');
       await page.selectOption('#engineMode', 'dsafir');
       // The previous result/transfer may have created a longer input trajectory.
       const endpoints = await page.locator('#dsafirEnd option').count();
@@ -163,8 +190,10 @@ async function run() {
       assert.equal(source.dsafir.connected, true);
       const submitted = jobs.length;
       // The actual DS job's charge/spin must survive intervening form edits.
+      await openCalculationPane(page, 'setup');
       await page.fill('#engineCharge', '1');
       await page.fill('#engineMultiplicity', '2');
+      await openCalculationPane(page, 'results');
       await page.selectOption('#dsafirRelaxMode', mode);
       if (mode !== 'neb') {
         assert.equal(await page.locator('#dsafirRelaxEndpoints').inputValue(), 'relax');
@@ -213,6 +242,7 @@ async function run() {
       assert.ok(Math.max(...relaxed.energies) < Math.max(...source.energies) - .04,
         'On this proton-transfer surface, relaxation lowers the initial high-energy path');
     }
+    await openCalculationPane(page, 'setup');
     await page.selectOption('#engineMode', 'dsafir');
     const otherSource = (await submitAndRead()).result;
     assert.equal(otherSource.dsafir.connected, true);
@@ -222,10 +252,12 @@ async function run() {
       '--port', '8777', '--allow-origin', url, '--no-history'
     ], {env: {...process.env, OMP_NUM_THREADS:'1', OPENBLAS_NUM_THREADS:'1'}});
     const altToken = await startupToken(alternateEngine);
+    await openCalculationPane(page, 'connection');
     await page.fill('#engineURL', alternateURL);
     await page.fill('#engineToken', altToken);
     await page.click('#engineConnect');
     await page.waitForFunction(() => document.getElementById('engineConnected').textContent.includes('GFN1-xTB'));
+    await openCalculationPane(page, 'results');
     const submissions = jobs.length;
     assert.equal(await page.locator('#dsafirRelaxPotential').inputValue(), 'source');
     await handoff.click();

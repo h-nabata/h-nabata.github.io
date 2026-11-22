@@ -1,4 +1,4 @@
-const {clickWorkspaceCommand} = require('./workspace-commands.cjs');
+const {clickWorkspaceCommand, openCalculationPane, openDetails} = require('./workspace-commands.cjs');
 /* Native CPU bridge + browser lifecycle. LLMLIP_TEST_MODEL must contain H/O.
    The upstream synthetic fixture verifies transport, never chemical accuracy. */
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{spawn}=require('node:child_process');
@@ -14,13 +14,14 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.goto('http://127.0.0.1:8778/');await page.waitForSelector('canvas');
   await clickWorkspaceCommand(page, '#btnConstraints');const point=await page.evaluate(()=>{const p=MoleculeVisualizer.App.renderer().projectedAtoms.find(a=>a.index===1);return{x:p.x,y:p.y};});
   await page.locator('canvas').click({position:point});await page.click('#constraintAddSelected');assert.equal(await page.locator('#constraintAtoms').inputValue(),'1');
-  await page.click('#btnExternalEngine');await page.fill('#engineURL','http://127.0.0.1:8778');await page.selectOption('#engineChoice','llmlip');await page.fill('#engineToken',token);await page.click('#engineConnect');
+  await page.click('#btnExternalEngine');await openCalculationPane(page, 'connection');await page.fill('#engineURL','http://127.0.0.1:8778');await page.selectOption('#engineChoice','llmlip');await page.fill('#engineToken',token);await page.click('#engineConnect');
   await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
+  await openCalculationPane(page, 'setup');
   assert.equal(await page.locator('#engineLLMLIPFields').isVisible(),true);assert.match(await page.locator('#engineLLMLIPFields').textContent(),/β版/);
   assert.equal(await page.locator('#engineUMAFields').isVisible(),false);assert.equal(await page.locator('#modelFEnabled').isDisabled(),true);
   // isDisabled() follows the enclosing label to its SELECT in Playwright 1.55.
   assert.equal(await page.locator('#engineLLMLIPModel option[value=unavailable]').evaluate(option=>option.disabled),true);
-  await page.uncheck('#engineLive');await page.selectOption('#engineMode','optimize');await page.fill('#engineSteps','2');await page.fill('#engineFmax','0.00001');await page.fill('#engineLLMLIPThreads','2');
+  await page.uncheck('#engineLive');await page.selectOption('#engineMode','optimize');await openDetails(page, '#engineNumericOptions');await page.fill('#engineSteps','2');await page.fill('#engineFmax','0.00001');await page.fill('#engineLLMLIPThreads','2');
   await page.evaluate(()=>{if(document.activeElement.id!=='engineLLMLIPThreads')throw Error('lost input focus');document.getElementById('engineRun').click();});
   const done=async()=>{await page.waitForFunction(()=>!MoleculeVisualizer.EngineUI.isBusy(),null,{timeout:60000});assert.equal(await page.locator('#engineResult').isVisible(),true,await page.locator('#engineMessage').textContent());};
   await done();assert.equal(posted.at(-1).llmlip.threads,2);assert.deepEqual(posted.at(-1).fixedAtoms,[0]);
@@ -31,17 +32,17 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.ok(!JSON.stringify(saved).includes(token));assert.ok(!JSON.stringify(saved).includes(model));
   await page.click('#engineApply');assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.getDisplayedState().atoms.map(a=>[a.x,a.y,a.z])),saved.result.images[0]);
   await page.click('#btnExport');const project=JSON.parse(await download('#btnSaveProject'));assert.deepEqual(project.metadata.externalCalculation.llmlip,saved.result.provenance.llmlip);await page.locator('#exportDialog [data-close]').click();
-  await page.click('#btnExternalEngine');await page.selectOption('#engineMode','evaluate');await page.selectOption('#engineLLMLIPModel','second');await page.fill('#engineLLMLIPThreads','4');
+  await page.click('#btnExternalEngine');await openCalculationPane(page, 'setup');await page.selectOption('#engineMode','evaluate');await page.selectOption('#engineLLMLIPModel','second');await page.fill('#engineLLMLIPThreads','4');
   const beforeSwitch=posted.length;await page.click('#engineRun');assert.equal(posted.length,beforeSwitch);assert.match(await page.locator('#engineMessage').textContent(),/原子固定/);
-  await page.click('#engineConstraints');await page.uncheck('#constraintEnabled');await page.click('#btnExternalEngine');await page.click('#engineRun');await done();
+  await openDetails(page, '#engineAdditionalOptions');await page.click('#engineConstraints');await page.uncheck('#constraintEnabled');await page.click('#btnExternalEngine');await openCalculationPane(page, 'setup');await page.click('#engineRun');await done();
   const second=JSON.parse(await download('#engineDownload'));assert.equal(second.result.provenance.llmlip.model,'second');assert.equal(second.result.provenance.llmlip.threads,4);
   // Reload the persisted first job through the same path used by history UI.
   await page.evaluate(async()=>{const M=MoleculeVisualizer,c=M.EngineUI.getConnection(),list=await M.EngineUI.request(c,'/api/jobs');const record=await M.EngineUI.request(c,'/api/jobs/'+list.jobs.find(j=>j.mode==='optimize').id);M.EngineUI.restoreJob(record);});
   assert.equal(await page.locator('#engineLLMLIPModel').inputValue(),'first');assert.equal(await page.locator('#engineLLMLIPThreads').inputValue(),'2');
-  await page.fill('#engineLLMLIPThreads','99');const count=posted.length;await page.click('#engineRun');assert.equal(posted.length,count);assert.match(await page.locator('#engineMessage').textContent(),/CPUスレッド/);
+  await openCalculationPane(page, 'setup');await page.fill('#engineLLMLIPThreads','99');const count=posted.length;await page.click('#engineRun');assert.equal(posted.length,count);assert.match(await page.locator('#engineMessage').textContent(),/CPUスレッド/);
   await page.fill('#engineLLMLIPThreads','2');fs.mkdirSync('test-artifacts',{recursive:true});await page.screenshot({path:'test-artifacts/llmlip-cpu.png'});
   await page.setViewportSize({width:390,height:844});await page.locator('#engineLLMLIPFields').scrollIntoViewIfNeeded();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:'test-artifacts/llmlip-mobile.png'});
-  await page.fill('#engineToken','changed');assert.equal(await page.locator('#engineLLMLIPFields').isVisible(),false);assert.equal(await page.locator('#engineRun').isDisabled(),true);
+  await openCalculationPane(page, 'connection');await page.fill('#engineToken','changed');await openCalculationPane(page, 'setup');assert.equal(await page.locator('#engineLLMLIPFields').isVisible(),false);assert.equal(await page.locator('#engineRun').isDisabled(),true);
   assert.deepEqual(errors,[]);console.log('llmlip native browser: selection, capabilities, focused threads, fixed MIN, model switch, apply/export/history, desktop/mobile passed.');
  }catch(error){if(page){fs.mkdirSync('test-artifacts',{recursive:true});await page.screenshot({path:'test-artifacts/llmlip-failure.png'}).catch(()=>{});}throw error;
  }finally{if(browser)await browser.close();engine.kill('SIGTERM');await new Promise(resolve=>engine.exitCode!==null?resolve():engine.once('exit',resolve));fs.rmSync(history,{recursive:true,force:true});}

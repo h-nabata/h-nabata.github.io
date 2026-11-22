@@ -1,4 +1,4 @@
-const {clickWorkspaceCommand} = require('./workspace-commands.cjs');
+const {clickWorkspaceCommand, openCalculationPane, openDetails, openInspector} = require('./workspace-commands.cjs');
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{spawn}=require('node:child_process');
 const C=require('../group-constraints.js');
 (async()=>{
@@ -23,8 +23,9 @@ const C=require('../group-constraints.js');
   await page.click('#groupConstraintClear');assert.equal(await page.locator('#groupConstraintRows > div').count(),0);
   await page.evaluate(project=>{const M=MoleculeVisualizer;M.App.change('reload project',()=>M.IO.parseProject(project),true);},project);
   assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.groupConstraints),saved);
-  await page.click('#groupConstraintOptimize');await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
-  await page.uncheck('#engineLive');await page.fill('#engineSteps','3');await page.fill('#engineFmax','0.00001');await page.selectOption('#engineOptimizer','lbfgs');await page.click('#engineRun');await done();
+  await page.click('#groupConstraintOptimize');await openCalculationPane(page, 'connection');await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
+  await openCalculationPane(page, 'setup');
+  await openDetails(page, '#engineNumericOptions');await page.uncheck('#engineLive');await page.fill('#engineSteps','3');await page.fill('#engineFmax','0.00001');await page.selectOption('#engineOptimizer','lbfgs');await page.click('#engineRun');await done();
   const report=JSON.parse(await download('#engineDownload'));assert.ok(!JSON.stringify(report).includes(token));
   assert.equal(requests.at(-1).groupConstraints.mode,'relative');assert.deepEqual(report.input.groupConstraints.groups,[[0,1,2],[3,4,5]]);assert.equal(report.input.groupConstraints.masses[0],18);
   C.validateResult(report.result,report.input);assert.notDeepEqual(report.result.images[0],report.input.images[0]);assert.ok(report.result.energies.every(Number.isFinite));
@@ -47,7 +48,7 @@ const C=require('../group-constraints.js');
   for(let i=0;i<afir.result.energies.length;i++)assert.ok(Math.abs(afir.result.biasedEnergies[i]-afir.result.energies[i]-afir.result.biasEnergies[i])<1e-10);
   await page.click('#afirApply');await page.evaluate(()=>MoleculeVisualizer.Studio.stop());
   // AFIR groups can be copied; registering a group does not alter AFIR definitions.
-  await page.click('#groupConstraintClear');await page.selectOption('#groupConstraintAFIR',{label:'Water A'});await page.click('#groupConstraintAddAFIR');
+  await openInspector(page, 'constraints');await page.click('#groupConstraintClear');await page.selectOption('#groupConstraintAFIR',{label:'Water A'});await page.click('#groupConstraintAddAFIR');
   assert.match(await page.locator('#groupConstraintRows').textContent(),/Water A/);
   const mass=report.input.groupConstraints.masses,batchXYZ=shift=>'6\nProperties=species:S:1:pos:R:3:mass:R:1\n'+report.input.symbols.map((s,i)=>s+' '+report.input.images[0][i].map((v,k)=>v+(k===0?shift:0)).join(' ')+' '+mass[i]).join('\n');
   await clickWorkspaceCommand(page, '#btnBatchOptimize');await page.fill('#batchText',batchXYZ(0)+'\n'+batchXYZ(2));await page.uncheck('#engineLive');await page.fill('#engineSteps','2');await page.click('#engineRun');
@@ -59,7 +60,7 @@ const C=require('../group-constraints.js');
   // Incompatible methods and old services are rejected before POST, never silently unconstrained.
   await page.click('#groupConstraintOptimize');const count=requests.length;await page.selectOption('#engineMode','evaluate');await page.click('#engineRun');assert.match(await page.locator('#engineMessage').textContent(),/重心拘束/);assert.equal(requests.length,count);
   await page.selectOption('#engineMode','optimize');await page.route('**/api/info',async route=>{const response=await route.fetch(),info=await response.json();delete info.groupConstraints;info.version='1.10.0';await route.fulfill({json:info});});
-  await page.click('#engineConnect');await page.waitForFunction(()=>!document.getElementById('engineConnect').disabled);await page.click('#engineRun');assert.match(await page.locator('#engineMessage').textContent(),/bridge.py/);assert.equal(requests.length,count);
+  await openCalculationPane(page, 'connection');await page.click('#engineConnect');await page.waitForFunction(()=>!document.getElementById('engineConnect').disabled);await openCalculationPane(page, 'setup');await page.click('#engineRun');assert.match(await page.locator('#engineMessage').textContent(),/bridge.py/);assert.equal(requests.length,count);
   await page.click('#engineClose');await page.setViewportSize({width:390,height:844});await page.locator('#groupConstraintPanel').scrollIntoViewIfNeeded();const sizes=await page.locator('#groupConstraintPanel').evaluate(e=>[e.clientWidth,e.scrollWidth]);assert.ok(sizes[1]<=sizes[0]+2);await page.screenshot({path:'test-artifacts/group-centers-mobile.png',fullPage:true});
   assert.deepEqual(errors,[]);console.log('Group centers: real tblite relative/single/absolute MIN, batch and AFIR, canvas registration, isotope mass, undo/redo, project and saved-job restoration, apply, AFIR copy, guards and mobile layout passed');
  }finally{if(browser)await browser.close();engine.kill('SIGINT');await new Promise(resolve=>{if(engine.exitCode!==null)return resolve();engine.on('exit',resolve);setTimeout(()=>{engine.kill('SIGKILL');resolve();},5000).unref();});}

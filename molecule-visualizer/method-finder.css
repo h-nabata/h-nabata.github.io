@@ -1,0 +1,79 @@
+#workspaceMethodChooser .mv-method-finder {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
+  max-height: min(68vh, 34rem);
+  max-height: min(68dvh, 34rem);
+}
+#workspaceMethodChooser .mv-method-filters {
+  display: grid;
+  grid-template-columns: minmax(11rem, .65fr) minmax(13rem, 1fr);
+  gap: .65rem;
+  padding: .75rem 1rem;
+  border-bottom: 1px solid #d7e4e7;
+  background: #f5f9fa;
+}
+#workspaceMethodChooser .mv-method-filters label {
+  display: grid;
+  gap: .2rem;
+  min-width: 0;
+  margin: 0;
+  color: #365464;
+  font-size: .77rem;
+  font-weight: 600;
+}
+#workspaceMethodChooser .mv-method-filters :is(input, select) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 2.35rem;
+  margin: 0;
+  padding: .35rem .5rem;
+  border: 1px solid #aabfc4;
+  border-radius: .4rem;
+  background-color: white;
+  color: #1b3947;
+  font: inherit;
+  font-size: .88rem;
+}
+#workspaceMethodChooser .mv-method-catalog {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 13.5rem), 1fr));
+  align-content: start;
+  gap: .8rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: .85rem 1rem;
+}
+#workspaceMethodChooser .mv-method-catalog h2 { line-height: 1.4; }
+#workspaceMethodChooser .mv-method-catalog .mv-btn {
+  min-height: 2.75rem;
+  line-height: 1.35;
+}
+#workspaceMethodChooser .mv-method-catalog small {
+  margin-top: .15rem;
+  text-wrap: pretty;
+}
+#workspaceMethodChooser .mv-method-status {
+  margin: 0;
+  padding: .45rem 1rem;
+  border-top: 1px solid #d7e4e7;
+  color: #365464;
+  font-size: .82rem;
+}
+#workspaceMethodChooser .mv-method-status:empty { padding: 0; border: 0; }
+#workspaceMethodChooser [hidden] { display: none !important; }
+@media (max-width: 650px) {
+  #workspaceMethodChooser .mv-method-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: .55rem .6rem;
+    gap: .45rem;
+  }
+  #workspaceMethodChooser .mv-method-catalog {
+    grid-template-columns: 1fr;
+    padding: .6rem;
+  }
+  #workspaceMethodChooser .mv-method-catalog .mv-btn { min-height: 2.75rem; }
+}

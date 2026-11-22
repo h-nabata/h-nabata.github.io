@@ -82,7 +82,8 @@
     MV.EngineUI?.syncModelBusy?.();$('afirLive').disabled=!!job;$('afirSettings').disabled=!!job;$('afirFragmentSettings').disabled=!!job;
     if(result)$('afirApply').disabled=!!job||!!result.applied||fingerprint(s)!==result.fingerprint||dirty();
   }
-  function toggle(value){if((value??!visible)&&!job){try{app().useDisplayedStructure();}catch(e){message(e.message);return;}}visible=value??!visible;$('afirPanel').hidden=!visible;document.querySelector('.mv-inspector').classList.toggle('mv-afir-active',visible);$('btnAFIR').setAttribute('aria-pressed',String(visible));
+  function toggle(value){if((value??!visible)&&!job){try{app().useDisplayedStructure();}catch(e){message(e.message);app().setStatus(e.message,true);return;}}visible=value??!visible;$('afirPanel').hidden=!visible;document.querySelector('.mv-inspector').classList.toggle('mv-afir-active',visible);$('btnAFIR').setAttribute('aria-pressed',String(visible));
+    MV.PanelLayout?.afirVisibilityChanged(visible);
     MV.Activity?.showMethod(visible?'AFIR-MIN':MV.EngineUI?.modeLabel?.($('engineMode').value));
     if(visible){if(!job)$('toolSelect').click();$('multiSelect').checked=true;app().getState().viewSettings.afirOverlay=true;sync();}
     else app().getState().viewSettings.afirOverlay=false;
@@ -144,7 +145,10 @@
   }
   function init(){
     ready=true;app().getState().viewSettings.afirOverlay=false;$('btnAFIR').addEventListener('click',()=>toggle());$('afirClose').addEventListener('click',()=>toggle(false));
-    $('afirConnect').addEventListener('click',()=>$('btnExternalEngine').click());
+    $('afirConnect').addEventListener('click',()=>{
+      MV.EngineUI.showSettings();
+      MV.CalculationPanel?.show('connection',true);
+    });
     $('afirReset').addEventListener('click',()=>safe(()=>{if(job)throw Error('計算を中止してから初期化してください。');app().change('reset AFIR settings',s=>{s.metadata.afir=MV.AFIR.defaults();});message('AFIR設定を初期化しました。「戻す」で復元できます。');}));
     for(const [id,f] of [['afirAddFragment',addFragment],['afirAddPair',addPair],['afirExport',exportFiles],['afirCheck',check],['afirApply',apply]])$(id).addEventListener('click',()=>safe(f));
     for(const id of ['afirA','afirB','afirMode','afirGamma'])$(id).addEventListener('change',()=>safe(pairHint));
@@ -156,5 +160,9 @@
     $('afirXYZ').addEventListener('click',()=>{if(result)exportXYZ(result.result,result);});
     sync();
   }
-  MV.AFIRUI={init,sync,toggle,download,isBusy:()=>!!job};
+  function showProgress(){
+    MV.PanelLayout.showInspector('afir');
+    $('afirStatus').focus();
+  }
+  MV.AFIRUI={init,sync,toggle,download,isBusy:()=>!!job,tracks:(id,url)=>!!job&&job.id===id&&job.connection?.url===url,showProgress};
 })(window);
