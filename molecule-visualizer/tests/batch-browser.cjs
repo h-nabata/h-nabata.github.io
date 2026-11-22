@@ -38,7 +38,16 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   // UI fixtures isolate failure/cancellation behavior; the chemistry above uses tblite.
   let fixtureCount=0,cancelCount=0,held=false,cancelled=false,fixtureInput;
   const id='f'.repeat(32);
-  await page.route('**/api/jobs',async route=>{fixtureInput=route.request().postDataJSON();fixtureCount++;await route.fulfill({json:{id}});});
+  await page.route('**/api/jobs',async route=>{
+   // Activity polls the same URL with GET while batch submissions use POST.
+   if(route.request().method()!=='POST')return route.continue();
+   fixtureInput=route.request().postDataJSON();fixtureCount++;await route.fulfill({json:{id}});
+  });
+  assert.ok(await page.evaluate(async()=>{
+   const engine=MoleculeVisualizer.EngineUI;
+   const history=await engine.request(engine.getConnection(),'/api/jobs');
+   return Array.isArray(history.jobs);
+  }));
   await page.route(new RegExp('/api/jobs/'+id+'(?:[/?].*)?$'),async route=>{
    if(route.request().url().endsWith('/cancel')){cancelCount++;cancelled=true;await route.fulfill({json:{}});return;}
    if(held){await route.fulfill({json:{status:cancelled?'cancelled':'running',progress:{step:0}}});return;}
