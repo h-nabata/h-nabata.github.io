@@ -70,7 +70,7 @@
   function validateResult(result,data){
     if(!data.llmlip)return;
     const p=result?.provenance?.llmlip;
-    if(result.engine!=='llmlip'||!p||['model','head','dtype','threads'].some(k=>p[k]!==data.llmlip[k])||p.device!=='cpu'||p.backend!=='direct'||!/^[a-f0-9]{64}$/.test(p.modelSHA256||''))throw Error('結果のllmlipモデル・計算条件が入力と一致しません。');
+    if(result.engine!=='llmlip'||!p||['model','head','dtype','threads'].some(k=>Object.hasOwn(data.llmlip,k)&&p[k]!==data.llmlip[k])||!Number.isInteger(p.threads)||p.threads<1||p.device!=='cpu'||p.backend!=='direct'||!/^[a-f0-9]{64}$/.test(p.modelSHA256||''))throw Error('結果のllmlipモデル・計算条件が入力と一致しません。');
   }
   function init(){
     $('engineLLMLIPModel').addEventListener('change',()=>sync(true));

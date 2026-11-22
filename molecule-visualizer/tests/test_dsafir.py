@@ -178,6 +178,45 @@ class DoubleSphere(unittest.TestCase):
             self.assertEqual(restored.jobs[restarted['id']]['data']['images'], data['images'])
 
     @unittest.skipUnless(importlib.util.find_spec('tblite'), 'native tblite required')
+    def test_malonaldehyde_path_relaxes_on_the_physical_surface(self):
+        from ase.io import read
+        example = Path(__file__).resolve().parents[1] / 'examples/malonaldehyde-proton-transfer.xyz'
+        a, b = read(example, index=':')
+        reactant_product = [a.positions.tolist(), b.positions.tolist()]
+        atoms = dict(symbols=a.get_chemical_symbols(), atomIds=[f'a{i}' for i in range(len(a))])
+
+        def calculate(mode, images, **settings):
+            data = bridge.validate(dict(**atoms, mode=mode, images=images, **settings), 'tblite')
+            with tempfile.TemporaryDirectory() as directory:
+                calculator = bridge.TBLiteEngine(data, CONFIG, directory)
+                cache = bridge.ExactEvaluationCache(calculator)
+                try:
+                    return bridge.calculate_job(data, cache, directory)
+                finally:
+                    cache.close()
+
+        initial = calculate('dsafir', reactant_product)
+        self.assertTrue(initial['dsafir']['connected'])
+        initial_barrier = max(initial['energies']) - initial['energies'][0]
+        # Transferring H is atom 9, between oxygen atoms 4 and 5.
+        for mode in ('cineb', 'lup'):
+            with self.subTest(mode=mode):
+                band = calculate(mode, initial['images'], maxSteps=150, fmax=.05,
+                                 maxMove=.03, spring=1., climbAfter=5)
+                self.assertTrue(band['converged'])
+                self.assertLessEqual(band['effectiveFmax'], .05)
+                energy = np.asarray(band['energies'])
+                self.assertLess(energy.max()-energy[0], initial_barrier-.05)
+                np.testing.assert_array_equal(np.asarray(band['images'])[[0, -1]],
+                                              np.asarray(initial['images'])[[0, -1]])
+                positions = np.asarray(band['images'])
+                oh = np.linalg.norm(positions[:, 3:5]-positions[:, 8:9], axis=2)
+                asymmetry = oh[:, 0]-oh[:, 1]
+                self.assertLess(asymmetry[0], -.5)
+                self.assertGreater(asymmetry[-1], .5)
+                self.assertLess(abs(asymmetry[energy.argmax()]), .18)
+
+    @unittest.skipUnless(importlib.util.find_spec('tblite'), 'native tblite required')
     def test_local_service_example_and_actual_ammonia_jobs(self):
         from ase.io import read
         root = Path(__file__).resolve().parents[1]

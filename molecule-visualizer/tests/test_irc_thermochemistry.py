@@ -7,6 +7,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 os.environ['OMP_NUM_THREADS'] = os.environ['OPENBLAS_NUM_THREADS'] = '1'
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/'local-engine'))
@@ -97,6 +98,35 @@ class IRCAndThermochemistry(unittest.TestCase):
         self.assertTrue(all(row['diagnostics']['rmsForce'] <= row['fmax']+1e-12 for row in result['history']))
         self.assertEqual(result['diagnostics']['forceMeaning'], 'physical-force-not-irc-update')
         self.assertEqual(set(result['forceComponents']), {'physical'})
+
+    @unittest.skipUnless(importlib.util.find_spec('sella'), 'optional Sella not installed')
+    def test_both_irc_branches_start_from_one_saddle_mode(self):
+        from sella import IRC
+        original_irun = IRC.irun
+        starts = []
+
+        def record_irun(optimizer, *args, **kwargs):
+            new_diagonalization = optimizer.v0ts is None
+            steps = original_irun(optimizer, *args, **kwargs)
+            starts.append((kwargs['direction'], new_diagonalization, optimizer.d1.copy()))
+            return steps
+
+        for direction in ('both', 'forward', 'reverse'):
+            starts.clear()
+            data = irc_input(direction=direction, relaxEndpoints=False)
+            data['maxSteps'] = 2
+            with self.subTest(direction=direction), patch.object(IRC, 'irun', record_irun):
+                result = b.irc_calculation(data, saddle, None)
+                wanted = ['reverse', 'forward'] if direction == 'both' else [direction]
+                self.assertEqual([s[0] for s in starts], wanted)
+                self.assertEqual(sum(s[1] for s in starts), 1)
+                for branch in wanted:
+                    self.assertEqual(result['branches'][branch]['steps'], 2)
+                if direction == 'both':
+                    np.testing.assert_array_equal(starts[0][2], -starts[1][2])
+                    ts = result['tsIndex']
+                    path = np.asarray(result['images'])
+                    self.assertLess(np.vdot(path[ts-1]-path[ts], path[ts+1]-path[ts]), 0)
 
     @unittest.skipUnless(importlib.util.find_spec('sella'), 'optional Sella not installed')
     def test_irc_rejects_nonstationary_and_stationary_minimum(self):

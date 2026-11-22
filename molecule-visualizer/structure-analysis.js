@@ -48,6 +48,31 @@
     const deviations=reference.map((p,i)=>Math.hypot(...p.map((x,k)=>x-positions[mapping[i]][k])));
     return {positions,rotation,translation,quaternion:q,mapping,correspondence:kind,indices:indices.slice(),rmsd:Math.sqrt(indices.reduce((sum,i)=>sum+deviations[i]**2,0)/indices.length),allAtomRMSD:Math.sqrt(deviations.reduce((sum,x)=>sum+x*x,0)/n),maxDeviation:Math.max(...deviations),deviations};
   }
+  // A collinear path cannot change atom order without a collision. Axis
+  // reversal is a rigid rotation, so either common ordering is admissible.
+  function hasLinearOrderChange(a,b){
+    if(a.length<3||a.length!==b.length)return false;
+    function orderOnLine(points){
+      const origin=points[0];
+      const axis=points[1].map((x,k)=>x-origin[k]);
+      const length=Math.hypot(...axis);
+      if(length<1e-7)return null;
+      const [ux,uy,uz]=axis.map(x=>x/length);
+      const projection=[];
+      for(const point of points){
+        const x=point[0]-origin[0],y=point[1]-origin[1],z=point[2]-origin[2];
+        const t=x*ux+y*uy+z*uz;
+        if(Math.hypot(x-t*ux,y-t*uy,z-t*uz)>1e-7)return null;
+        projection.push(t);
+      }
+      const order=points.map((_,i)=>i).sort((i,j)=>projection[i]-projection[j]);
+      return order.some((id,i)=>i>0&&projection[id]-projection[order[i-1]]<1e-7)?null:order;
+    }
+    const left=orderOnLine(a);
+    if(!left)return false;
+    const right=orderOnLine(b);
+    return !!right&&!left.every((id,i)=>id===right[i])&&!left.every((id,i)=>id===right[right.length-1-i]);
+  }
   function deduplicate(images,options={}){
     if(!Array.isArray(images)||!images.length||images.length>500)throw Error('重複判定は1〜500構造にしてください。');
     const threshold=options.threshold??.1;if(!Number.isFinite(threshold)||threshold<0||threshold>10)throw Error('RMSD閾値は0〜10 Åにしてください。');
@@ -73,5 +98,5 @@
     clusters.sort((a,b)=>Math.min(...a.members)-Math.min(...b.members));
     return {clusters,representatives:clusters.map(c=>c.representative),threshold,selection:options.selection||'all',algorithm:'energy-ordered-leader',count:n};
   }
-  return {align,deduplicate};
+  return {align,deduplicate,hasLinearOrderChange};
 });

@@ -145,7 +145,7 @@ class Configuration(unittest.TestCase):
                 b.uma_packages(UMA)
 
     def test_info_exposes_configuration_without_loading_weights(self):
-        server=b.make_server(UMA,'test-token',0,['https://h-nabata.github.io'])
+        server=b.make_server({**UMA, 'anysolvHashes':{'model_compact':'f'*64}},'test-token',0,['https://h-nabata.github.io'])
         thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         try:
             with patch.object(b,'UMAEngine',side_effect=AssertionError('must not load')):
@@ -155,6 +155,7 @@ class Configuration(unittest.TestCase):
                 self.assertEqual(response.status,200)
                 self.assertEqual(info['uma']['task'],'omol')
                 self.assertEqual(info['uma']['precision'],'float64')
+                self.assertEqual(info['anysolv']['checkpointSHA256'],{'model_compact':'f'*64})
                 self.assertFalse(info['periodic'])
                 self.assertTrue(info['fixedAtoms'])
                 self.assertIn('ts',info['modes'])

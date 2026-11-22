@@ -83,6 +83,7 @@
       if(selected.length>200||selected.length*source.symbols.length>100000)throw Error('描画への反映は200フレーム・合計100000原子までです。ノード数を減らしてください。');
       if(toNEB&&(selected.length<3||selected.length>100||source.symbols.length>500))throw Error('CI-NEB入力は3〜100ノード・500原子までです。');
       if(toNEB&&source.cells&&selected.some(i=>JSON.stringify(source.cells[i])!==JSON.stringify(source.cells[selected[0]])))throw Error('CI-NEBには同じセルの構造列が必要です。可変セルの軌跡はXYZとして保存できます。');
+      if(toNEB&&source.prepareRelaxation){source.prepareRelaxation('cineb',selected);return;}
       const original=source,ids=selected.slice(),method=$('trajectoryMethod').value,settings=options();
       const frames=ids.map(i=>{
         const s=MV.Model.createState(original.base(i));

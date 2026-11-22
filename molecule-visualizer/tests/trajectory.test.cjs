@@ -85,3 +85,9 @@ test('AFIR maxima on endpoints, ties, stationary paths and 10001 frames preserve
  const r=T.extract(s,20,'distance');assert.equal(r.indices.length,20);assert.equal(energies[r.highest],Math.max(...energies));assert.ok(r.indices.includes(r.highest));
  assert.equal(T.extract(s,10001).indices.length,10001);
 });
+
+test('DS-AFIR relaxation retains the intermediate valley when a node budget accommodates both summits',()=>{
+ const energies=[0,.2,2,.3,.08,0,.3,1,.3,.1,0];
+ const source={kind:'dsafir',symbols:['H'],images:energies.map((_,i)=>[[i*.1,0,0]]),energies};
+ assert.deepEqual(T.extract(source,5,'distance',{window:1,preserveValleys:true}).indices,[0,2,5,7,10]);
+});

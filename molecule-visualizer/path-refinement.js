@@ -39,12 +39,12 @@
     $('refineApply').disabled=$('refineNEB').disabled=!valid;
   }
   function open(frames=null,mode='cineb'){
-    if(!['cineb','lup'].includes(mode))throw Error('未対応の経路計算です。');pathMode=mode;
+    if(!['neb','cineb','lup'].includes(mode))throw Error('未対応の経路計算です。');pathMode=mode;
     if(MV.EngineUI.isBusy()||MV.AFIRUI?.isBusy?.())throw Error('実行中の計算を一時停止または終了してください。');
     if(/未適用|編集中/.test($('xyzEditStatus').textContent))throw Error('座標欄の未適用の編集を先に解決してください。');
     source=frames||MV.EngineUI.frames(MV.App.getState(),'all');
     if(source.length<3)throw Error('先に3ノード以上の経路を読み込むか、経路計算の結果を取得してください。');
-    guard=fingerprint(MV.App.getState());$('refineNEB').textContent=`補間して${pathMode==='lup'?'LUP系':'CI-NEB'}再開の設定へ`;
+    guard=fingerprint(MV.App.getState());$('refineNEB').textContent=`補間して${MV.EngineUI.modeLabel(pathMode)}再開の設定へ`;
     $('refineSummary').textContent=`対象：${source.length}ノード · ${source[0].atoms.length}原子`;
     $('refineFrom').value=1;$('refineTo').value=source.length;$('refineEach').value=1;
     $('refineFrom').max=source.length-1;$('refineTo').max=source.length;count();$('refineDialog').showModal();

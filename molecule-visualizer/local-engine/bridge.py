@@ -2457,8 +2457,14 @@ def irc_calculation(data, calculate, directory, progress=lambda p: None):
         raise ValueError('IRC初期構造の最大力が収束閾値を超えています。先にTS最適化を収束させてください。')
     origin = dict(positions=initial.tolist(), energy=float(energy0), force=force0.tolist(), fmax=force_max(force0), phase='ts')
     branch_frames = {direction:[copy.deepcopy(origin)] for direction in directions}
-    branches, history, evaluations = {}, [], 1
-    active_atoms = None
+    branches, history = {}, []
+    atoms = ase_atoms(data, calculate)
+    # Preserve ASE masses; initialize a single Sella saddle mode for both
+    # branches. Calling irun again restores the TS Hessian and coordinates
+    # before applying the opposite sign to that same initial mode.
+    atoms.set_masses(atoms.get_masses())
+    optimizer = IRC(atoms, dx=settings['stepSize'], ninner_iter=50,
+                    keep_going=False, logfile=None, trajectory=None)
 
     def force_diagnostics(force):
         maximum = force_max(force)
@@ -2471,46 +2477,39 @@ def irc_calculation(data, calculate, directory, progress=lambda p: None):
         frames = reverse + forward[1:] if settings['direction'] == 'both' else (reverse if settings['direction'] == 'reverse' else forward)
         ts_index = len(reverse)-1 if settings['direction'] in ('both', 'reverse') else 0
         end_forces = [items[-1]['fmax'] for items in branch_frames.values()]
-        count = evaluations + (active_atoms.calc.evaluations if active_atoms is not None else 0)
         endpoints = sorted(set((0, len(frames)-1)))
         return dict(mode='irc', images=[f['positions'] for f in frames], energies=[f['energy'] for f in frames],
             forces=[f['force'] for f in frames], imageFmax=[f['fmax'] for f in frames],
-            effectiveFmax=max(end_forces), steps=sum(len(items)-1 for items in branch_frames.values()), evaluations=count,
+            effectiveFmax=max(end_forces), steps=sum(len(items)-1 for items in branch_frames.values()), evaluations=1+atoms.calc.evaluations,
             converged=reason == 'converged', reason=reason, climbingImage=None, tsIndex=ts_index,
             history=copy.deepcopy(history), branches=copy.deepcopy(branches), irc=settings, fixedAtoms=[],
             diagnostics=copy.deepcopy(history[-1]['diagnostics']) if history else force_diagnostics(force0),
             forceComponents={'physical':[frames[i]['force'] for i in endpoints]}, forceComponentImageIndices=endpoints,
             forceComponentNote='物理力のみ。IRCの質量重み付き経路追跡による更新方向ではありません。',
-            framePhases=[f['phase'] for f in frames], masses=active_atoms.get_masses().tolist() if active_atoms is not None else [],
+            framePhases=[f['phase'] for f in frames], masses=atoms.get_masses().tolist(),
             validation='irc-from-stationary-saddle-candidate-endpoint-identities-not-verified',
             units={'length':'angstrom', 'energy':'eV', 'force':'eV/angstrom', 'ircStep':'angstrom*sqrt(amu)'})
 
+    def checkpoint():
+        p = atoms.positions.tolist()
+        f, e = atoms.get_forces(), float(atoms.get_potential_energy())
+        if p == branch_frames[direction][-1]['positions']:
+            return
+        maximum = force_max(f)
+        previous = branch_frames[direction][-1]
+        diagnostics = force_diagnostics(f)
+        diagnostics.update(energyChangeEV=abs(e-previous['energy']),
+            maxDisplacement=force_max(np.asarray(p)-previous['positions']))
+        branch_frames[direction].append(dict(positions=p, energy=e, force=f.tolist(), fmax=maximum, phase=phase))
+        history.append(dict(step=len(history)+1, phase=phase, direction=direction,
+            fmax=maximum, energies=[e], evaluations=1+atoms.calc.evaluations, diagnostics=diagnostics))
+        partial = assembled()
+        progress({**history[-1], 'structureCheckpoint':partial,
+            **({'preview':dict(step=partial['steps'], images=partial['images'], energies=partial['energies'])} if data.get('livePreview') else {})})
+
+    optimizer.attach(checkpoint, interval=1)
     for direction in directions:
-        atoms = active_atoms = ase_atoms(data, calculate)
-        # Preserve ASE masses explicitly; Sella otherwise selects isotope masses.
-        atoms.set_masses(atoms.get_masses())
-        optimizer = IRC(atoms, dx=settings['stepSize'], ninner_iter=50,
-                        keep_going=False, logfile=None, trajectory=None)
         phase = 'irc'
-
-        def checkpoint():
-            p = atoms.positions.tolist()
-            f, e = atoms.get_forces(), float(atoms.get_potential_energy())
-            if p == branch_frames[direction][-1]['positions']:
-                return
-            maximum = force_max(f)
-            previous = branch_frames[direction][-1]
-            diagnostics = force_diagnostics(f)
-            diagnostics.update(energyChangeEV=abs(e-previous['energy']),
-                maxDisplacement=force_max(np.asarray(p)-previous['positions']))
-            branch_frames[direction].append(dict(positions=p, energy=e, force=f.tolist(), fmax=maximum, phase=phase))
-            history.append(dict(step=len(history)+1, phase=phase, direction=direction,
-                fmax=maximum, energies=[e], evaluations=evaluations+atoms.calc.evaluations, diagnostics=diagnostics))
-            partial = assembled()
-            progress({**history[-1], 'structureCheckpoint':partial,
-                **({'preview':dict(step=partial['steps'], images=partial['images'], energies=partial['energies'])} if data.get('livePreview') else {})})
-
-        optimizer.attach(checkpoint, interval=1)
         run = optimizer.irun(fmax=data['fmax'], fmax_inner=min(.01, data['fmax']), steps=data['maxSteps'], direction=direction)
         # Sella initializes its approximate Hessian before returning the iterator.
         # This detects an unsuitable minimum but is not a full frequency verification.
@@ -2523,7 +2522,7 @@ def irc_calculation(data, calculate, directory, progress=lambda p: None):
                 pass
         except RuntimeError as error:
             if type(error).__name__ == 'IRCInnerLoopConvergenceFailure':
-                raise ValueError('IRCの内部反復が収束しませんでした。直前までの経路を保持しています。IRCステップ幅を小さくしてTSから再実行してください。') from error
+                raise ValueError('IRCの内部反復が収束しませんでした。直前までの経路を保持しています。TSの収束と虚振動を確認し、IRCステップ幅を調整して再実行してください。') from error
             raise
         irc_steps = len(branch_frames[direction])-1
         # Endpoint minimization is separate from the IRC and clearly tagged.
@@ -2541,13 +2540,9 @@ def irc_calculation(data, calculate, directory, progress=lambda p: None):
             endpointConverged=endpoint_converged, endpointSteps=endpoint_steps,
             endpoint=copy.deepcopy(branch_frames[direction][-1]),
             endpointVerifiedMinimum=False)
-        evaluations += atoms.calc.evaluations
-        active_atoms = None
         progress({'phase':'irc', 'direction':direction, 'structureCheckpoint':assembled()})
     completed = all(branches[d]['converged'] for d in directions)
-    answer = assembled('converged' if completed else 'step_limit')
-    answer['masses'] = atoms.get_masses().tolist()
-    return answer
+    return assembled('converged' if completed else 'step_limit')
 
 
 def validate_thermochemistry_settings(data, normalized):
@@ -4364,12 +4359,14 @@ class Handler(BaseHTTPRequestHandler):
                 config = self.server.config
                 self.response(200, {'version': VERSION, 'engine': config['engine'],
                     'method': engine_method(config),
+                    **({'binarySHA256':config['binarySHA256']} if config.get('binarySHA256') else {}),
                     'periodic': config['engine'] == 'tblite', 'maxAtoms': 500, 'maxImages': 100,
                     **({'uma':{'model':config['umaModel'], 'task':'omol', 'device':config['umaDevice'],
                                'precision':config['umaPrecision'], 'tf32':False, 'compile':False, 'mergeMole':False},
                         'devices':config.get('devices', []),
                         'anysolv':{'enabled':bool(config.get('anysolv')), 'models':list(config.get('anysolvPaths', {})),
                                    'solvents':config.get('anysolvSolvents', []), 'model':config.get('anysolvModel'),
+                                   'checkpointSHA256':config.get('anysolvHashes', {}),
                                    'device':config.get('anysolvDevice'), 'precision':config['umaPrecision']},
                         'maxMultiplicity':100, 'maxAtomicNumber':83} if config['engine']=='uma' else {}),
                     'sellaVersion':sella_version(), 'vibrations':1, 'maxVibrationAtoms':200, 'pathCheckpoint':1, 'fixedAtoms':True,

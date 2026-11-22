@@ -31,7 +31,7 @@ async function run() {
     path.join(root, 'local-engine/bridge.py'), '--engine', 'tblite', '--port', String(port),
     '--allow-origin', url, '--no-history', '--site-dir', root,
   ], {env: {...process.env, OMP_NUM_THREADS:'1', OPENBLAS_NUM_THREADS:'1'}});
-  let browser;
+  let browser, alternateEngine;
   try {
     const token = await startupToken(engine);
     browser = await chromium.launch({headless:true});
@@ -97,6 +97,8 @@ async function run() {
     assert.equal(partial.result.dsafir.connected, false);
     assert.ok(partial.result.dsafir.gap > .05);
     assert.equal(await page.locator('#engineApply').isDisabled(), true);
+    const handoff = page.locator('#dsafirRelaxPrepare');
+    assert.ok(!await handoff.isVisible() || await handoff.isDisabled(), 'An incomplete DS-AFIR path cannot be relaxed as a connected band');
     assert.equal(await page.locator('#engineXYZ').isDisabled(), true);
     assert.equal(await page.locator('#engineEnergyRows button').count(), 0);
     assert.match(await page.locator('#engineResultSummary').textContent(), /ステップ上限/);
@@ -140,10 +142,117 @@ async function run() {
     await page.setViewportSize({width:390,height:844});
     await clickWorkspaceCommand(page, '#btnDSAFIR');
     assert.ok(await page.locator('#engineDialog').evaluate(el => el.scrollWidth <= el.clientWidth + 2));
+    await page.click('#engineClose');
+    await page.setViewportSize({width:1366,height:900});
+    const transferFile = path.join(root, 'examples/malonaldehyde-proton-transfer.xyz');
+    await page.locator('#fileInput').setInputFiles(transferFile);
+    await page.waitForFunction(() => MoleculeVisualizer.App.getState().atoms.length === 9);
+    await clickWorkspaceCommand(page, '#btnDSAFIR');
+    if (!await page.locator('#dsafirDelta').isVisible())
+      await page.locator('#engineDSAFIRSettings details > summary').click();
+    await page.fill('#dsafirDelta', '1.5');
+    await page.fill('#dsafirStep', '0.1');
+    await page.fill('#dsafirThreshold', '0.12');
+    for (const mode of ['cineb', 'lup', 'neb']) {
+      await page.selectOption('#engineMode', 'dsafir');
+      // The previous result/transfer may have created a longer input trajectory.
+      const endpoints = await page.locator('#dsafirEnd option').count();
+      await page.selectOption('#dsafirStart', '0');
+      await page.selectOption('#dsafirEnd', String(endpoints-1));
+      const source = (await submitAndRead()).result;
+      assert.equal(source.dsafir.connected, true);
+      const submitted = jobs.length;
+      // The actual DS job's charge/spin must survive intervening form edits.
+      await page.fill('#engineCharge', '1');
+      await page.fill('#engineMultiplicity', '2');
+      await page.selectOption('#dsafirRelaxMode', mode);
+      const nodes = mode === 'cineb' ? source.images.length : 10;
+      await page.fill('#dsafirRelaxCount', String(nodes));
+      await handoff.click();
+      assert.equal(await page.locator('#engineMode').inputValue(), mode);
+      assert.equal(await page.locator('#engineScope').inputValue(), 'all');
+      assert.equal(await page.locator('#engineCharge').inputValue(), String(source.charge));
+      assert.equal(await page.locator('#engineMultiplicity').inputValue(), String(source.multiplicity));
+      assert.equal(jobs.length, submitted, 'Preparing a band must not start the calculation');
+      const band = await page.evaluate(() => MoleculeVisualizer.App.getState().metadata.trajectory.map(f => ({
+        ids:f.atoms.map(a => a.id), xyz:f.atoms.map(a => [a.x,a.y,a.z])
+      })));
+      assert.equal(band.length, nodes);
+      for (const f of band) assert.deepEqual(f.ids, source.atomIds);
+      assert.deepEqual(band[0].xyz, source.images[0]);
+      assert.deepEqual(band.at(-1).xyz, source.images.at(-1));
+      const highest = source.energies.indexOf(Math.max(...source.energies));
+      assert.ok(band.some(f => JSON.stringify(f.xyz) === JSON.stringify(source.images[highest])),
+        'Subsampling must keep the highest-energy geometry');
+
+      const relaxed = (await submitAndRead()).result;
+      assert.equal(jobs.length, submitted+1);
+      assert.equal(jobs.at(-1).mode, mode);
+      assert.deepEqual(jobs.at(-1).images, band.map(f => f.xyz));
+      assert.equal(jobs.at(-1).dsafir, undefined);
+      assert.deepEqual(jobs.at(-1).atomIds, source.atomIds);
+      assert.deepEqual(relaxed.images[0], source.images[0]);
+      assert.deepEqual(relaxed.images.at(-1), source.images.at(-1));
+      assert.equal(relaxed.energies.length, nodes);
+      assert.equal(relaxed.mode, mode);
+      assert.equal(relaxed.converged, true, mode + ' should converge for proton transfer');
+      assert.ok(relaxed.effectiveFmax <= jobs.at(-1).fmax);
+      assert.ok(Math.max(...relaxed.energies) < Math.max(...source.energies) - .04,
+        'On this proton-transfer surface, relaxation lowers the initial high-energy path');
+    }
+    await page.selectOption('#engineMode', 'dsafir');
+    const otherSource = (await submitAndRead()).result;
+    assert.equal(otherSource.dsafir.connected, true);
+    const alternateURL = 'http://127.0.0.1:8777';
+    alternateEngine = spawn(process.env.PYTHON || 'python', [
+      path.join(root, 'local-engine/bridge.py'), '--engine', 'tblite', '--method', 'GFN1-xTB',
+      '--port', '8777', '--allow-origin', url, '--no-history'
+    ], {env: {...process.env, OMP_NUM_THREADS:'1', OPENBLAS_NUM_THREADS:'1'}});
+    const altToken = await startupToken(alternateEngine);
+    await page.fill('#engineURL', alternateURL);
+    await page.fill('#engineToken', altToken);
+    await page.click('#engineConnect');
+    await page.waitForFunction(() => document.getElementById('engineConnected').textContent.includes('GFN1-xTB'));
+    const submissions = jobs.length;
+    assert.equal(await page.locator('#dsafirRelaxPotential').inputValue(), 'source');
+    await handoff.click();
+    assert.match(await page.locator('#dsafirRelaxHelp').textContent(), /同じ計算エンジン・モデル/);
+    assert.equal(jobs.length, submissions);
+    await page.selectOption('#dsafirRelaxPotential', 'current');
+    await page.selectOption('#dsafirRelaxMode', 'neb');
+    await page.fill('#dsafirRelaxCount', '10');
+    await handoff.click();
+    assert.equal(await page.locator('#engineMode').inputValue(), 'neb');
+    assert.equal(jobs.length, submissions);
+    const crossReport = await submitAndRead(), cross = crossReport.result;
+    assert.equal(JSON.stringify(crossReport).includes(altToken), false);
+    assert.equal(cross.method, 'GFN1-xTB');
+    assert.deepEqual(cross.images[0], otherSource.images[0]);
+    assert.deepEqual(cross.images.at(-1), otherSource.images.at(-1));
+    // Verify the entire reported profile against fresh GFN1 single points.
+    const submittedEvaluation = await page.request.post(alternateURL + '/api/jobs', {
+      headers:{Authorization:'Bearer '+altToken}, data:{mode:'evaluate', symbols:cross.symbols,
+        charge:cross.charge, multiplicity:cross.multiplicity, images:cross.images}
+    });
+    assert.ok(submittedEvaluation.ok());
+    const evalId = (await submittedEvaluation.json()).id;
+    let reference;
+    for (let i = 0; i < 100; i++) {
+      const response = await page.request.get(alternateURL + '/api/jobs/' + evalId, {
+        headers:{Authorization:'Bearer '+altToken}
+      });
+      const state = await response.json();
+      if (state.status === 'completed') {reference = state.result; break;}
+      assert.ok(['queued','starting','running'].includes(state.status), state.error || state.status);
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    assert.ok(reference && reference.energies.length === cross.energies.length);
+    cross.energies.forEach((value,i) => assert.ok(Math.abs(value-reference.energies[i])<1e-5));
+    assert.ok(Math.abs(otherSource.energies[0]-cross.energies[0])>1e-4);
     assert.deepEqual(errors, []);
-    console.log('DS-AFIR: endpoint selection, focused settings, partial and joined paths, JSON, applied geometry/IDs, desktop/mobile controls passed.');
+    console.log('DS-AFIR: paths and data handoff, three explicit relaxations, and alternate GFN1 potential verified.');
   } finally {
-    try { await browser?.close(); } finally { engine.kill(); }
+    try { await browser?.close(); } finally { engine.kill(); alternateEngine?.kill(); }
   }
 }
 run().catch(error => {console.error(error); process.exitCode = 1;});

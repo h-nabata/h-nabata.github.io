@@ -36,3 +36,15 @@ test('invalid coordinates, identities, thresholds and mismatched frames are reje
  for(const pair of [[[],[]],[[[NaN,0,0]],[[0,0,0]]],[reference,[[0,0,0]]]])assert.throws(()=>A.align(...pair));
  assert.throws(()=>A.align(reference,moved,{indices:[0,0]}));assert.throws(()=>A.deduplicate([reference],{threshold:-1}));assert.throws(()=>A.deduplicate([reference],{energies:[0,1]}));
 });
+
+test('linear endpoints warn only for a change of order that requires atoms to pass each other',()=>{
+ const hcn=[[-1.05,0,0],[0,0,0],[1.14,0,0]];
+ const hnc=[[2.15,0,0],[0,0,0],[1.16,0,0]];
+ const rotate=p=>p.map(([x,y,z])=>[4+y,-2+z,7-x]);
+ assert.equal(A.hasLinearOrderChange(hcn,rotate(hnc)),true);
+ assert.equal(A.hasLinearOrderChange(hcn,rotate(hcn)),false);
+ assert.equal(A.hasLinearOrderChange(hcn,[[0,0,0],[0,-1.3,0],[0,-2.6,0]]),false);
+ assert.equal(A.hasLinearOrderChange(hcn,[[2.15,.001,0],[0,0,0],[1.16,0,0]]),false);
+ assert.equal(A.hasLinearOrderChange(hcn,[[2.15,0,0],[0,0,0],[0,0,0]]),false);
+ assert.equal(A.hasLinearOrderChange(hcn,hnc.slice(1)),false);
+});

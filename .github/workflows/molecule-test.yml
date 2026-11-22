@@ -31,7 +31,7 @@ jobs:
         id: llmlip-wheel
         with:
           path: .llmlip-wheels
-          key: llmlip-cpu-${{ runner.os }}-${{ runner.arch }}-py312-parallel-6bfb0418cc5aba0a13416fd783994fa82552cc34-v1
+          key: llmlip-cpu-ubuntu24.04-${{ runner.arch }}-py312-parallel-6bfb0418cc5aba0a13416fd783994fa82552cc34-v1
       - name: Install CPU adapter dependencies
         run: python -m pip install -r molecule-visualizer/local-engine/requirements.txt 'sella>=2.6,<3' 'maturin>=1.9,<2'
       - name: Build pinned CPU binding without PyTorch

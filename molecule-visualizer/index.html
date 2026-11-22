@@ -27,25 +27,25 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./studio.js?v=cell-remove-45"></script>
 <script defer src="./advanced.js?v=dsafir-51"></script>
 <script defer src="./generator-ui.js?v=dsafir-51"></script>
-<script defer src="./trajectory.js?v=dsafir-51"></script>
-<script defer src="./trajectory-ui.js?v=dsafir-51"></script>
+<script defer src="./trajectory.js?v=dsafir-relax-52"></script>
+<script defer src="./trajectory-ui.js?v=dsafir-relax-52"></script>
 <script defer src="./energy-profile.js?v=dsafir-51"></script>
 <script defer src="./batch.js?v=batch-33"></script>
 <script defer src="./batch-ui.js?v=research-38"></script>
 <script defer src="./research-ui.js?v=dsafir-51"></script>
 <script defer src="./job-history-ui.js?v=dsafir-51"></script>
-<script defer src="./structure-analysis.js?v=research-38"></script>
+<script defer src="./structure-analysis.js?v=dsafir-52"></script>
 <script defer src="./structure-analysis-ui.js?v=efficiency-50"></script>
 <script defer src="./diagnostics-ui.js?v=dsafir-51"></script>
 <link rel="stylesheet" href="./research.css?v=research-38">
 <script defer src="./model-f.js?v=model-f-48"></script>
 <script defer src="./model-f-ui.js?v=dsafir-51"></script>
-<script defer src="./llmlip-ui.js?v=llmlip-49"></script>
+<script defer src="./llmlip-ui.js?v=dsafir-relax-52"></script>
 <link rel="stylesheet" href="./activity.css?v=1">
 <script defer src="./activity-ui.js?v=1"></script>
-<script defer src="./engine-ui.js?v=dsafir-51"></script>
+<script defer src="./engine-ui.js?v=dsafir-relax-52"></script>
 <script defer src="./vibration-ui.js?v=constraints-34"></script>
-<script defer src="./path-refinement.js?v=lup-40"></script>
+<script defer src="./path-refinement.js?v=dsafir-relax-52"></script>
 <script defer src="./afir.js?v=17"></script>
 <script defer src="./afir-search.js?v=16"></script>
 <script defer src="./afir-runner.js?v=llmlip-49"></script>
@@ -93,6 +93,7 @@ title: 分子構造エディタ | Molecule Studio
           <button type="button" class="mv-btn" id="btnDSAFIR" data-engine-method="dsafir">DS-AFIR<small>反応物と生成物の2構造から探索</small></button>
           <button type="button" class="mv-btn" id="btnAFIR" aria-pressed="false" aria-controls="afirPanel">フラグメントAFIR<small>指定した原子団に人工力を加える</small></button>
           <button type="button" class="mv-btn" data-engine-method="cineb">CI-NEB<small>入力した経路を緩和して最高点を探索</small></button>
+          <button type="button" class="mv-btn" data-engine-method="neb">NEB<small>ばねで間隔を保ちながら経路を緩和</small></button>
           <button type="button" class="mv-btn" data-engine-method="lup">LUP系（CI-String）</button>
           <button type="button" class="mv-btn" data-engine-method="perpendicular">経路の直交緩和</button>
         </section>
@@ -561,7 +562,7 @@ python bridge.py --engine uma --uma-device cuda:0 --anysolv --anysolv-model mode
   <section id="engineUMADetails" hidden><h3>UMAの接続条件</h3><p id="engineUMASummary" class="mv-small"></p><p class="mv-small">分子用omol・非周期系。電荷と多重度は下の計算条件を使用します。接続確認だけではモデルの読み込みは行いません。</p></section>
   <fieldset id="engineSettings"><legend>手法と計算条件</legend>
   <div class="mv-grid mv-engine-basics">
-    <label>計算手法<select id="engineMode"><option value="evaluate">エネルギー・力を評価</option><optgroup label="単一構造の最適化（AFIR法を含む）"><option value="optimize">通常の単一構造最適化（人工力なし）</option><option value="ts">SellaによるTS最適化</option><option value="afir">AFIR法の設定を開く</option></optgroup><option value="irc">IRC（TSから両方向へ追跡）</option><option value="scan">拘束座標の緩和スキャン</option><option value="batch">複数構造を一括最適化・比較</option><option value="vibrations">振動解析のみ（現在の構造）</option><option value="dsafir">DS-AFIR（反応物・生成物から経路を探索）</option><option value="perpendicular">経路を直交方向のみ緩和</option><option value="cineb">CI-NEB（最高点を登らせる）</option><option value="lup">LUP系（CI-String・ばねなし）</option></select></label>
+    <label>計算手法<select id="engineMode"><option value="evaluate">エネルギー・力を評価</option><optgroup label="単一構造の最適化（AFIR法を含む）"><option value="optimize">通常の単一構造最適化（人工力なし）</option><option value="ts">SellaによるTS最適化</option><option value="afir">AFIR法の設定を開く</option></optgroup><option value="irc">IRC（TSから両方向へ追跡）</option><option value="scan">拘束座標の緩和スキャン</option><option value="batch">複数構造を一括最適化・比較</option><option value="vibrations">振動解析のみ（現在の構造）</option><option value="dsafir">DS-AFIR（反応物・生成物から経路を探索）</option><option value="perpendicular">経路を直交方向のみ緩和</option><option value="neb">NEB（通常のバンド緩和）</option><option value="cineb">CI-NEB（最高点を登らせる）</option><option value="lup">LUP系（CI-String・ばねなし）</option></select></label>
     <label>計算する構造<select id="engineScope"><option value="current">現在の構造</option><option value="all">全フレーム</option></select></label>
     <label>系全体の電荷<input id="engineCharge" type="number" min="-100" max="100" step="1" value="0"></label>
     <label>スピン多重度 (2S+1)<input id="engineMultiplicity" type="number" min="1" max="101" step="1" value="1"></label>
@@ -571,7 +572,7 @@ python bridge.py --engine uma --uma-device cuda:0 --anysolv --anysolv-model mode
     <h3 id="dsafirTitle">反応物と生成物</h3>
     <div class="mv-grid"><label>反応物 A<select id="dsafirStart"></select></label><label>生成物 B<select id="dsafirEnd"></select></label></div>
     <p class="mv-small" id="dsafirEndpointHelp"></p>
-    <p class="mv-small"><a href="./examples/ammonia-inversion.xyz" download>入力例をダウンロード（NH₃の反転・XYZ）</a> · <a href="./DS-AFIR.md" target="_blank" rel="noopener">計算条件と接続判定</a></p>
+    <p class="mv-small"><a href="./examples/ammonia-inversion.xyz" download>入力例をダウンロード（NH₃の反転・XYZ）</a> · <a href="./examples/malonaldehyde-proton-transfer.xyz" download>マロンアルデヒドのプロトン移動（XYZ）</a> · <a href="./DS-AFIR.md" target="_blank" rel="noopener">計算条件と接続判定</a></p>
     <details class="mv-help"><summary>DS-AFIRの探索条件</summary><div class="mv-grid">
       <label>経路方向の駆動力 δ (eV/Å)<input id="dsafirDelta" type="number" min="0.0001" max="50" step="any" value="1.5"></label>
       <label>全座標のステップ幅 (Å)<input id="dsafirStep" type="number" min="0.001" max="0.2" step="any" value="0.10"></label>
@@ -669,6 +670,15 @@ H -0.3 1.0 0"></textarea>
   <p id="engineMessage" role="status" aria-live="polite"></p>
 
   <section id="engineResult" hidden><h3>計算結果</h3><p id="engineResultSummary" class="mv-small"></p>
+    <fieldset id="dsafirRelaxation" hidden>
+      <legend>DS-AFIRの初期経路を緩和</legend>
+      <p class="mv-small">DS-AFIRで得た初期経路は一般にIRCとは異なります。両端の構造を固定し、中間構造を物理ポテンシャル面上で緩和します。</p>
+      <div class="mv-grid"><label>緩和手法<select id="dsafirRelaxMode"><option value="cineb">CI-NEB（最高点を登らせる）</option><option value="lup">LUP系（CI-String）</option><option value="neb">NEB（通常のバンド緩和）</option></select></label>
+        <label>端点を含むノード数<input id="dsafirRelaxCount" type="number" min="3" max="100" step="1"></label></div>
+      <label>緩和で使うポテンシャル<select id="dsafirRelaxPotential"><option value="source">DS-AFIRと同じエンジン・モデルを使う</option><option value="current">現在の接続・モデル設定で再評価する</option></select></label>
+      <p class="mv-small" id="dsafirRelaxHelp" role="status"></p>
+      <button type="button" class="mv-btn primary" id="dsafirRelaxPrepare">この経路を取り込んで緩和条件を設定</button>
+    </fieldset>
     <button class="mv-btn" id="engineProfile">エネルギープロファイルと構造を見る</button>
     <div class="mv-table-scroll"><table><thead><tr><th>構造</th><th>E (eV)</th><th>ΔE (eV)</th><th id="engineResultForceLabel">有効力 (eV/Å)</th><th>候補・操作</th></tr></thead><tbody id="engineEnergyRows"></tbody></table></div>
     <div id="researchResult"></div><div id="engineModelFResult" hidden></div>
