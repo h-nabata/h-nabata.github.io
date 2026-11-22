@@ -166,6 +166,10 @@ async function run() {
       await page.fill('#engineCharge', '1');
       await page.fill('#engineMultiplicity', '2');
       await page.selectOption('#dsafirRelaxMode', mode);
+      if (mode !== 'neb') {
+        assert.equal(await page.locator('#dsafirRelaxEndpoints').inputValue(), 'relax');
+        if (mode === 'lup') await page.selectOption('#dsafirRelaxEndpoints', 'fixed');
+      }
       const nodes = mode === 'cineb' ? source.images.length : 10;
       await page.fill('#dsafirRelaxCount', String(nodes));
       await handoff.click();
@@ -191,8 +195,17 @@ async function run() {
       assert.deepEqual(jobs.at(-1).images, band.map(f => f.xyz));
       assert.equal(jobs.at(-1).dsafir, undefined);
       assert.deepEqual(jobs.at(-1).atomIds, source.atomIds);
-      assert.deepEqual(relaxed.images[0], source.images[0]);
-      assert.deepEqual(relaxed.images.at(-1), source.images.at(-1));
+      if (mode === 'cineb') {
+        assert.equal(jobs.at(-1).endpointMode, 'relax');
+        assert.equal(relaxed.endpointMode, 'relax');
+        assert.ok(relaxed.diagnostics.endpointPhysicalFmax.every(f => f <= jobs.at(-1).fmax));
+        assert.ok(relaxed.diagnostics.climbingPhysicalFmax <= jobs.at(-1).fmax);
+        assert.equal(relaxed.diagnostics.climbingBracketed, true);
+      } else {
+        assert.equal(jobs.at(-1).endpointMode, mode === 'lup' ? 'fixed' : undefined);
+        assert.deepEqual(relaxed.images[0], source.images[0]);
+        assert.deepEqual(relaxed.images.at(-1), source.images.at(-1));
+      }
       assert.equal(relaxed.energies.length, nodes);
       assert.equal(relaxed.mode, mode);
       assert.equal(relaxed.converged, true, mode + ' should converge for proton transfer');

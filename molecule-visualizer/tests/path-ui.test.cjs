@@ -1,6 +1,7 @@
 // Exercise the real path form/request boundary without a browser or compute engine.
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
-async function boot(version='1.9.0'){
+const currentBridgeVersion=fs.readFileSync(path.join(__dirname,'../local-engine/bridge.py'),'utf8').match(/^VERSION = '([^']+)'/m)[1];
+async function boot(version=currentBridgeVersion){
  const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8'),nodes=new Map();
  class Element{
   constructor(id=''){this.id=id;this.value='';this.checked=false;this.hidden=false;this.disabled=false;this.children=[];this.events={};this.textContent='';this.firstChild={textContent:id};}
@@ -11,6 +12,7 @@ async function boot(version='1.9.0'){
  for(const m of html.matchAll(/<select\b[^>]*id="([^"]+)"[^>]*>([\s\S]*?)<\/select>/g))nodes.get(m[1]).value=m[2].match(/<option\b[^>]*value="([^"]*)"/)?.[1]||'';
  const document={getElementById:id=>nodes.get(id),createElement:()=>new Element()},window={document};
  const info={version,engine:'tblite',method:'GFN2-xTB',engineVersion:'fixture',modes:['evaluate','optimize','cineb','lup'],lup:true,pathOptimizers:{cineb:['fire'],lup:['fire','lbfgs']},maxImages:100,maxSteps:10000,vibrations:true,adaptiveNEB:true,pathSplit:true};
+ if(version===currentBridgeVersion)info.pathEndpointModes=['fixed','relax'];
  const ctx=vm.createContext({window,document,location:{hostname:'example.test'},URL,AbortController,setTimeout,clearTimeout,console,fetch:async()=>({ok:true,json:async()=>info})});
  for(const f of ['model','optimization','bonding','geometry','io','molfile','periodic','constraints','structure-analysis','trajectory','research-ui','engine-ui','path-refinement'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../'+f+'.js'),'utf8'),ctx,{filename:f+'.js'});
  const M=window.MoleculeVisualizer;let state=M.Model.createState({atoms:[{id:'o',element:'O',x:0,y:0,z:0},{id:'h1',element:'H',x:.96,y:0,z:0},{id:'h2',element:'H',x:-.24,y:.93,z:0}]});
@@ -35,7 +37,7 @@ test('LUP path form keeps CI-NEB defaults and sends current unsaved method setti
  select('cineb');assert.equal(nodes.get('engineSteps').value,'100');assert.equal(nodes.get('engineSpringLabel').hidden,false);assert.equal(nodes.get('engineLUPSettings').hidden,true);M.EngineUI.prepareNEB();assert.equal(nodes.get('engineMode').value,'cineb');
 });
 test('LUP refuses invalid redistribution, missing capability, too few images and mismatched endpoints',async()=>{
- const {M,nodes,info,select}=await boot();select('lup');nodes.get('lupRedistributeEvery').value='0';assert.throws(()=>M.EngineUI.input(),/1〜100/);nodes.get('lupRedistributeEvery').value='5';nodes.get('lupRedistributionTolerance').value='0';assert.throws(()=>M.EngineUI.input(),/0.00001/);nodes.get('lupRedistributionTolerance').value='.001';
+ const {M,nodes,info,select}=await boot('1.9.0');select('lup');nodes.get('engineEndpointMode').value='fixed';nodes.get('lupRedistributeEvery').value='0';assert.throws(()=>M.EngineUI.input(),/1〜100/);nodes.get('lupRedistributeEvery').value='5';nodes.get('lupRedistributionTolerance').value='0';assert.throws(()=>M.EngineUI.input(),/0.00001/);nodes.get('lupRedistributionTolerance').value='.001';
  const j=M.EngineUI.input(),r={mode:'lup',symbols:j.data.symbols,cell:j.data.cell,images:structuredClone(j.data.images),energies:[0,.2,0],effectiveFmax:.01,imageFmax:[0,.01,0],units:{energy:'eV',length:'angstrom'}};M.EngineUI.validateResult(r,j);r.images[0][0][0]+=.1;assert.throws(()=>M.EngineUI.validateResult(r,j),/端点/);
  info.modes=info.modes.filter(x=>x!=='lup');assert.throws(()=>M.EngineUI.input(),/LUP系/);info.modes.push('lup');info.pathOptimizers.lup=['fire'];nodes.get('lupOptimizer').value='lbfgs';assert.throws(()=>M.EngineUI.input(),/アルゴリズム/);nodes.get('lupOptimizer').value='fire';M.App.getState().metadata.trajectory.length=2;assert.throws(()=>M.EngineUI.input(),/3〜100/);
 });
@@ -108,7 +110,7 @@ test('plot sampling keeps the last point of A and the first of B in different se
 });
 
 async function connectedDSPath(){
- const setup=await boot('1.17.0'),{M,nodes,info}=setup;
+ const setup=await boot(),{M,nodes,info}=setup;
  info.modes.push('dsafir','neb');
  M.EnergyProfile.set=()=>{};
  M.ResearchUI.showResult=()=>{};
@@ -135,6 +137,8 @@ test('connected DS-AFIR result stages the selected path solver, original electro
   assert.equal(nodes.get('dsafirRelaxation').hidden,false);
   assert.equal(nodes.get('dsafirRelaxCount').value,'12');
   nodes.get('dsafirRelaxMode').value=mode;
+  assert.equal(nodes.get('dsafirRelaxEndpoints').value,'relax');
+  if(mode==='lup')nodes.get('dsafirRelaxEndpoints').value='fixed';
   nodes.get('dsafirRelaxCount').value='5';
   nodes.get('engineCharge').value='0';nodes.get('engineMultiplicity').value='1';
   await nodes.get('dsafirRelaxPrepare').click();
@@ -146,6 +150,7 @@ test('connected DS-AFIR result stages the selected path solver, original electro
   assert.equal(d.images.length,5);assert.equal(indices[0],0);assert.equal(indices.at(-1),11);
   assert.ok(indices.includes(3));
   assert.equal(JSON.stringify(d.images),JSON.stringify(indices.map(i=>r.images[i])));
+  assert.equal(d.endpointMode,{cineb:'relax',lup:'fixed',neb:undefined}[mode]);
   assert.equal(d.dsafir,undefined);assert.equal(d.afir,undefined);
  }
 });
@@ -237,4 +242,70 @@ test('clamps an implicit llmlip thread count from result provenance to the new s
  M.EngineUI.showResult(r,j);
  await nodes.get('dsafirRelaxPrepare').click();
  assert.equal(staged.threads,6);assert.equal(staged.model,'fixture');assert.match(nodes.get('engineMessage').textContent,/8 → 6スレッド/);
+});
+
+test('new climbing jobs request relaxed endpoints and fixed jobs reproduce the saved policy',async()=>{
+ const {M,nodes,select}=await boot();
+ for(const mode of ['cineb','lup']){
+  select(mode);
+  assert.equal(M.EngineUI.input().data.endpointMode,'relax');
+  nodes.get('engineEndpointMode').value='fixed';
+  const {data}=M.EngineUI.input();
+  assert.equal(data.endpointMode,'fixed');
+  nodes.get('engineEndpointMode').value='relax';
+  M.EngineUI.restoreJob({id:'f'.repeat(32),data},true);
+  assert.equal(M.EngineUI.input().data.endpointMode,'fixed');
+  // Unversioned historic inputs had fixed endpoints even on today's bridge.
+  delete data.endpointMode;
+  nodes.get('engineEndpointMode').value='relax';
+  M.EngineUI.restoreJob({id:'f'.repeat(32),data},true);
+  assert.equal(M.EngineUI.input().data.endpointMode,'fixed');
+ }
+ select('evaluate');
+ assert.equal(M.EngineUI.input().data.endpointMode,undefined);
+});
+
+test('an older bridge can only perform fixed-endpoint jobs',async()=>{
+ const {M,nodes,select}=await boot('1.17.0');
+ for(const mode of ['cineb','lup']){
+  select(mode);
+  nodes.get('engineEndpointMode').value='relax';
+  assert.throws(()=>M.EngineUI.input(), /bridge/);
+  nodes.get('engineEndpointMode').value='fixed';
+  assert.equal(M.EngineUI.input().data.endpointMode,undefined);
+ }
+});
+
+test('DS-AFIR rejects unsupported endpoint relaxation before changing the workspace',async()=>{
+ const {M,nodes,info}=await connectedDSPath(),before=M.App.getState();
+ delete info.pathEndpointModes;
+ nodes.get('dsafirRelaxMode').value='cineb';
+ nodes.get('dsafirRelaxEndpoints').value='relax';
+ await nodes.get('dsafirRelaxPrepare').click();
+ assert.match(nodes.get('dsafirRelaxHelp').textContent,/bridge/);
+ assert.equal(M.App.getState(),before);
+ nodes.get('dsafirRelaxEndpoints').value='fixed';
+ await nodes.get('dsafirRelaxPrepare').click();
+ assert.equal(nodes.get('engineMode').value,'cineb');
+ assert.equal(M.EngineUI.input().data.endpointMode,undefined);
+});
+
+test('relaxed climbing results may move endpoints only when the saved policy allows it',async()=>{
+ const {M,select}=await boot();
+ select('cineb');
+ const j=M.EngineUI.input(),d=j.data;
+ const result={mode:'cineb',endpointMode:'relax',symbols:d.symbols,cell:d.cell,
+  images:structuredClone(d.images),energies:[0,1,0],effectiveFmax:.01,imageFmax:[.01,.01,.01],
+  climbingImage:1,converged:true,units:{energy:'eV',length:'angstrom'},
+  diagnostics:{endpointPhysicalFmax:[.01,.01],climbingPhysicalFmax:.01,climbingBracketed:true}};
+ result.images[0][1][0]+=.03;
+ result.images.at(-1)[1][0]-=.02;
+ M.EngineUI.validateResult(result,j);
+ for(const diagnostics of [
+  {...result.diagnostics,endpointPhysicalFmax:[.01,.5]},
+  {...result.diagnostics,climbingPhysicalFmax:.5},
+  {...result.diagnostics,climbingBracketed:false}
+ ])assert.throws(()=>M.EngineUI.validateResult({...result,diagnostics},j),/収束/);
+ assert.throws(()=>M.EngineUI.validateResult({...result,endpointMode:'fixed'},j),/端点/);
+ assert.throws(()=>M.EngineUI.validateResult({...result,endpointMode:'fixed'},{...j,data:{...d,endpointMode:'fixed'}}),/端点/);
 });

@@ -243,7 +243,8 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   // Deterministic UI-only NEB checkpoints: keep polling after selecting a bead.
   // Numerical NEB behavior is exercised by the real calculations above.
   const fixtureId='00000000000000000000000000000001';let fixtureInput,phase=0,complete=false,cancelCalls=0;
-  const checkpoint=step=>({mode:'cineb',climbingImage:2,step,energies:[0,1+step,3+step,2+step,0],images:fixtureInput.images.map((image,i)=>image.map(p=>[p[0],p[1]+(i&&i<4?step*.02:0),p[2]]))});
+  const checkpoint=step=>({mode:'cineb',endpointMode:fixtureInput.endpointMode,climbingImage:2,
+    diagnostics:{endpointPhysicalFmax:[0,0],climbingPhysicalFmax:1,climbingBracketed:true},step,energies:[0,1+step,3+step,2+step,0],images:fixtureInput.images.map((image,i)=>image.map(p=>[p[0],p[1]+(i&&i<4?step*.02:0),p[2]]))});
   const createFixture=async route=>{fixtureInput=route.request().postDataJSON();await route.fulfill({json:{id:fixtureId}});};
   const fixtureURL=new RegExp('/api/jobs/'+fixtureId+'(?:[/?].*)?$');
   await page.route('**/api/jobs',createFixture);

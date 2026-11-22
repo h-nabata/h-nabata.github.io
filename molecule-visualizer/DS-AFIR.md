@@ -25,4 +25,6 @@ $$
 
 本実装は有効力の方向へ一次の最急降下ステップで進みます。GRRM17の実装では局所二次近似（LQA）で積分しています。接続距離は $\sqrt{\sum_i\lVert q_i-p_i\rVert^2}$ で判定するため、原子あたりのRMSDとは $\sqrt N$ 倍異なります。上限までに接続しなかった場合は、最後の先端間距離を確認できます。接続後の経路も近似経路であり、個々の山頂の検証にはTS最適化・振動解析・IRCを使います。
 
+接続した初期経路をCI-NEBまたはLUP系（CI-String）で緩和すると、両端点も選択したポテンシャル面上で最適化されます。元の反応物・生成物の座標を保つ場合は、緩和の計算設定で端点を固定してください。通常NEBでは端点を固定します。
+
 [Maeda et al., J. Comput. Chem. 39, 233–251, 式(6)–(10)](https://doi.org/10.1002/jcc.25106) · [開発元のDS-AFIRマニュアル](https://afir.sci.hokudai.ac.jp/manual/grrm17/path-search-by-artificial-force-induced-reaction-method/grrm17_39.html)

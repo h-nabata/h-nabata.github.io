@@ -16,7 +16,7 @@
   if(mode==='vibrations')data.vibrations=clone(conditions.vibrations);
   if(mode==='vibrations'&&base.thermochemistry)data.thermochemistry=clone(base.thermochemistry);
   if(mode==='irc')data.irc=clone(conditions.irc);
-  if(['cineb','lup'].includes(mode))for(const key of ['spring','climbAfter','optimizer','lup','adaptiveNEB','pathSplit','nodeIds'])if(base[key]!=null)data[key]=clone(base[key]);
+  if(['cineb','lup'].includes(mode))for(const key of ['endpointMode','spring','climbAfter','optimizer','lup','adaptiveNEB','pathSplit','nodeIds'])if(base[key]!=null)data[key]=clone(base[key]);
   return data;
  }
  function frames(data,base){return data.images.map(p=>{const s=M.Model.createState(M.Periodic.snapshot(base));s.atoms.forEach((a,i)=>{[a.x,a.y,a.z]=p[i];});s.metadata.cell=data.cell||null;return M.Periodic.snapshot(s);});}
@@ -71,7 +71,15 @@
       const v=j.result.vibrations,expected=recipe.steps.includes('ts')?1:0;
       if(v?.status!=='completed'||v.significantImaginaryCount!==expected)throw Error(`振動解析が条件（有意な虚振動${expected}本）を満たさないため停止しました。モードを確認してください。`);
      }else requireConvergence(j);
-     if(['cineb','lup'].includes(mode)){let highest=1;for(let i=2;i<j.result.images.length-1;i++)if(j.result.energies[i]>j.result.energies[highest])highest=i;images=[j.result.images[highest]];}else images=[j.result.images[0]];
+     if(['cineb','lup'].includes(mode)){
+      let seed=j.result.climbingImage;
+      if(!Number.isInteger(seed)||seed<1||seed>=j.result.images.length-1){
+       // Older results may store energies without an explicit climbing-image index.
+       if(j.data.endpointMode)throw Error('登坂ノードを特定できないため、TS最適化を停止しました。');
+       seed=1;for(let i=2;i<j.result.images.length-1;i++)if(j.result.energies[i]>j.result.energies[seed])seed=i;
+      }
+      images=[j.result.images[seed]];
+     }else images=[j.result.images[0]];
     }
     if(last)M.EngineUI.showResult(last.result,last);message('計算手順が完了しました。各結果を確認して構造へ適用できます。');
    }
