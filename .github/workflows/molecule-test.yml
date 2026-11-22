@@ -29,7 +29,11 @@ jobs:
           tar -xJf "$archive" xtb-6.7.1/bin/xtb
           echo "GXTB_TEST_BINARY=$RUNNER_TEMP/xtb-6.7.1/bin/xtb" >> "$GITHUB_ENV"
       - name: Check native gradients, AFIR, and mapped butadiene paths
-        run: python -m unittest -v test_engine.NativeGXTB test_afir_engine.NativeAFIR test_butadiene_path.ButadienePaths.test_gxtb_mapped_paths
+        run: >
+          python -m unittest -v
+          test_engine.NativeGXTB test_afir_engine.NativeAFIR
+          test_butadiene_path.ButadienePaths.test_gxtb_mapped_paths
+          test_butadiene_path.ButadienePaths.test_gxtb_explicitly_projects_asymmetric_string
       - name: Compare fresh and restarted electronic states at two nearby geometries
         run: python molecule-visualizer/scripts/probe_butadiene_gxtb.py
   llmlip-native:

@@ -52,6 +52,53 @@ def residual(frames):
 
 
 class MirrorPaths(unittest.TestCase):
+    def test_initial_projection_limit_is_explicit_and_retains_the_original_correction(self):
+        seed = request('cineb', [-1., -.5, 0., .5, 1.], odd=.42, livePreview=True)
+        with self.assertRaisesRegex(ValueError, r'最大0\.4.*上限は0\.05 Å'):
+            b.validate(seed, 'tblite')
+        enlarged = {**seed, 'pathSymmetry': {**MIRROR, 'maxInitialCorrection':.45}}
+        data = b.validate(enlarged, 'tblite')
+        self.assertEqual(data['images'], seed['images'])
+        events = []
+        result = b.relax(data, surface(), events.append)
+        projected = next(e['preview']['images'] for e in events if 'preview' in e)
+        actual = np.linalg.norm(np.array(projected) - seed['images'], axis=-1).max()
+        self.assertAlmostEqual(actual, .42)
+        self.assertEqual(result['initialSymmetryCorrection'], actual)
+        for event in events:
+            for key in ('preview', 'bandCheckpoint'):
+                if key in event:
+                    self.assertEqual(event[key]['initialSymmetryCorrection'], actual)
+        np.testing.assert_array_equal(np.array(result['images'])[[0, -1]], np.array(seed['images'])[[0, -1]])
+        self.assertEqual(result['pathSymmetry'], enlarged['pathSymmetry'])
+        resumed = b.relax({**data, 'images':result['images'], '_optimizerResume':result['optimizerState']}, surface())
+        self.assertEqual(resumed['initialSymmetryCorrection'], actual)
+
+        # The adjustable bound never permits altering fixed ends.
+        bad_end = copy.deepcopy(enlarged)
+        bad_end['images'][0][2] = (np.array(bad_end['images'][0][2]) + .03*ROTATION[:, 0]).tolist()
+        with self.assertRaisesRegex(ValueError, '固定端点.*1e-6'):
+            b.validate(bad_end, 'tblite')
+
+    def test_zero_limit_accepts_symmetric_coordinates_and_bounds_must_be_finite(self):
+        ideal = request('lup', [-1., 0., 1.])
+        for limit in (0., 2.):
+            spec = {**MIRROR, 'maxInitialCorrection':limit}
+            self.assertEqual(b.validate({**ideal, 'pathSymmetry':spec}, 'tblite')['pathSymmetry'], spec)
+        for limit in (-.01, 2.01, float('inf'), float('nan'), True, None, '0.2'):
+            with self.subTest(limit=limit), self.assertRaises(ValueError):
+                b.validate({**ideal, 'pathSymmetry':{**MIRROR, 'maxInitialCorrection':limit}}, 'tblite')
+        # Sub-tolerance imperfections in the untouched fixed ends are not
+        # counted towards the adjustable bound on actual coordinate changes.
+        frames = np.array(ideal['images'])
+        frames[0, :2] += 4e-7 * ROTATION[:, 0]
+        frames[-1, :2] -= 4e-7 * ROTATION[:, 0]
+        data = b.validate({**ideal, 'images':frames.tolist(), 'pathSymmetry':{**MIRROR, 'maxInitialCorrection':0.}}, 'tblite')
+        result = b.relax(data, surface())
+        self.assertLess(result['initialSymmetryCorrection'], 1e-13)
+        self.assertGreater(result['diagnostics']['symmetryResidual'], 3e-7)
+        np.testing.assert_array_equal(np.array(result['images'])[[0, -1]], frames[[0, -1]])
+
     def test_involution_and_merely_nearby_paths_are_validated(self):
         options = request('cineb', [-1., 0., 1.])
         self.assertEqual(b.validate(options, 'tblite')['pathSymmetry'], MIRROR)
@@ -172,6 +219,8 @@ class MirrorPaths(unittest.TestCase):
                    '_optimizerResume':state}
         resumed = b.relax(restart, potential)
         self.assertEqual(state['mirrorPlane'], resumed['optimizerState']['mirrorPlane'])
+        self.assertGreater(short['initialSymmetryCorrection'], .001)
+        self.assertEqual(short['initialSymmetryCorrection'], resumed['initialSymmetryCorrection'])
         np.testing.assert_allclose(resumed['images'], reference['images'], atol=2e-12, rtol=0.)
         mismatch = copy.deepcopy(restart)
         del mismatch['pathSymmetry']
@@ -210,6 +259,15 @@ class MirrorPaths(unittest.TestCase):
             continued = b.calculate_job(resumed['data'], calculate, directory)
             self.assertLess(residual(continued['images']), 2e-12)
             self.assertEqual(continued['nodeIds'], result['nodeIds'])
+            self.assertEqual(continued['initialSymmetryCorrection'], result['initialSymmetryCorrection'])
+            pending = next(s['bandCheckpoint'] for s in states if 'bandCheckpoint' in s and 'optimizerState' not in s['bandCheckpoint'])
+            job.update(status='interrupted', bandCheckpoint=pending)
+            jobs._recover_partial(job)
+            with patch.object(jobs, '_launch_next'):
+                geometry_restart = jobs.resume(record['id'])
+            self.assertEqual(geometry_restart['resumeKind'], 'geometry')
+            continued = b.calculate_job(geometry_restart['data'], calculate, directory)
+            self.assertEqual(continued['initialSymmetryCorrection'], result['initialSymmetryCorrection'])
 
 
 if __name__ == '__main__':

@@ -130,12 +130,15 @@ def first_event(trace, kind):
     return None
 
 
-def run(mode, case, *, engine, distortion, steps, endpoint_mode, workers=1, twist=0., source=EXAMPLE, max_move=.03, climb_after=5, pre_relax=False):
+def run(mode, case, *, engine, distortion, steps, endpoint_mode, workers=1, twist=0., source=EXAMPLE,
+        max_move=.03, climb_after=5, pre_relax=False, mirror_tolerance=None):
     symbols, images = band(case, distortion, twist, source)
     job = {'symbols':symbols, 'images':images.tolist(), 'mode':mode, 'fmax':.05, 'maxMove':max_move,
            'spring':1., 'climbAfter':climb_after, 'maxSteps':steps}
     if case == 'mirror':
         job['pathSymmetry'] = {'type':'mirror', 'pairs':PAIRS}
+        if mirror_tolerance is not None:
+            job['pathSymmetry']['maxInitialCorrection'] = mirror_tolerance
     if mode in ('cineb', 'lup'):
         job['endpointMode'] = endpoint_mode
     trace = []
@@ -173,6 +176,7 @@ def run(mode, case, *, engine, distortion, steps, endpoint_mode, workers=1, twis
                 seed_job.pop('endpointMode', None)
                 seed = evaluate(seed_job, directory, record)
                 pre = {k:seed[k] for k in ('reason','steps','effectiveFmax','evaluations')}
+                pre['initialMirrorCorrectionA'] = seed.get('initialSymmetryCorrection')
                 if not seed['converged']:
                     raise RuntimeError('NEB seed failed to converge: '+str(pre))
                 job['images'] = seed['images']
@@ -186,7 +190,9 @@ def run(mode, case, *, engine, distortion, steps, endpoint_mode, workers=1, twis
             result = {**(last_band or {}), 'reason':'failed'}
     final = {}
     if 'images' in result:
-        final = geometry(np.array(result['images']), np.array(result['energies']))
+        final_images = np.asarray(result['images'])
+        final = geometry(final_images, np.asarray(result['energies']))
+        final['maxEndpointDisplacementA'] = float(np.linalg.norm(final_images[[0, -1]] - images[[0, -1]], axis=2).max())
         final['peakCoordinatesA'] = result['images'][final['peakImage']-1]
         if failure:
             failure.update(lastCompleteBandA=result['images'], lastCompleteEnergiesEV=result['energies'])
@@ -195,6 +201,8 @@ def run(mode, case, *, engine, distortion, steps, endpoint_mode, workers=1, twis
             'inputSHA256':hashlib.sha256(Path(source).read_bytes()).hexdigest(),
             'inputBandClass':initial['bandClass'], 'inputMaxMirrorErrorA':initial['maxMirrorErrorA'],
             'pathConsistencyWarning':result.get('pathConsistencyWarning'), 'failure':failure,
+            'mirrorToleranceA':job.get('pathSymmetry', {}).get('maxInitialCorrection', .05) if case == 'mirror' else None,
+            'initialMirrorCorrectionA':pre['initialMirrorCorrectionA'] if pre else result.get('initialSymmetryCorrection'),
             'maxMoveA':max_move, 'climbAfter':climb_after, 'maxSteps':steps, 'endpointMode':job.get('endpointMode','fixed'),
             'inputBendA':0. if case=='con' else distortion, 'inputTerminalTwistDeg':0. if case=='con' else twist, 'steps':result.get('steps'),
             'evaluations':result.get('evaluations'), 'reason':result['reason'], 'fmaxEVPerA':result.get('effectiveFmax'),
@@ -208,6 +216,7 @@ def main():
     parser.add_argument('--engine', choices=['tblite','gxtb'], default='tblite')
     parser.add_argument('--mode', choices=['neb','cineb','lup'], nargs='+', default=['neb','cineb','lup'])
     parser.add_argument('--case', choices=['free','mirror','con'], nargs='+', default=['free','mirror','con'])
+    parser.add_argument('--mirror-tolerance', type=float, help='Maximum initial displacement per atom in Å for the mirror case (app default 0.05).')
     parser.add_argument('--input', type=Path, default=EXAMPLE, help='Matched C4H6 XYZ with the same atom order and x=0 mirror plane')
     parser.add_argument('--distortion', type=float, default=.015)
     parser.add_argument('--twist-deg', type=float, default=0., help='Additional mirror-breaking terminal twist (degrees)')
@@ -225,7 +234,8 @@ def main():
             try:
                 result = run(mode, case, engine=args.engine, distortion=args.distortion, steps=args.steps,
                              endpoint_mode=args.endpoint_mode, workers=args.workers, twist=args.twist_deg, source=args.input,
-                             max_move=args.max_move, climb_after=args.climb_after, pre_relax=args.pre_relax)
+                             max_move=args.max_move, climb_after=args.climb_after, pre_relax=args.pre_relax,
+                             mirror_tolerance=args.mirror_tolerance)
             except (OSError, ValueError) as exc:
                 result = {'mode':mode, 'case':case, 'engine':args.engine, 'reason':'failed',
                           'failure':{'stage':'input', 'error':str(exc)}}

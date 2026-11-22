@@ -1155,8 +1155,10 @@ class MirrorPath:
     """A common, fixed affine reflection plane and a user-defined atom permutation."""
 
     def __init__(self, spec, symbols, images, relax_ends, plane=None):
-        if not isinstance(spec, dict) or set(spec) != {'type', 'pairs'} or spec['type'] != 'mirror':
+        if (not isinstance(spec, dict) or spec.get('type') != 'mirror' or 'pairs' not in spec
+                or set(spec) - {'type', 'pairs', 'maxInitialCorrection'}):
             raise ValueError('pathSymmetryにはmirrorと原子対の配列を指定してください。')
+        self.max_initial_correction = number(spec.get('maxInitialCorrection', .05), '鏡映による初期補正の上限 (Å)', 0, 2.)
         pairs = spec['pairs']
         if not isinstance(pairs, list) or not 1 <= len(pairs) <= len(symbols)//2:
             raise ValueError('鏡映で入れ替わる原子対を1組以上指定してください。')
@@ -1202,16 +1204,21 @@ class MirrorPath:
         correction = np.linalg.norm(projected - images, axis=-1)
         intervals = np.diff(projected, axis=0).reshape(len(images)-1, -1)
         if not self.relax_ends:
-            if correction[[0, -1]].max() > 1e-6:
-                raise ValueError('固定端点の鏡映誤差が1e-6 Åを超えています。原子対と両端の向きを確認してください。')
+            endpoint_error = float(correction[[0, -1]].max())
+            if endpoint_error > 1e-6:
+                raise ValueError(f'固定端点の鏡映誤差は{endpoint_error} Åで、許容値1e-6 Åを超えています。原子対と両端の向きを確認してください。')
             projected[[0, -1]] = images[[0, -1]]
-        if correction.max() > .05:
-            raise ValueError('鏡映面への補正が0.05 Åを超えています。原子対と全構造の向き・位置を確認してください。')
+            correction = correction[1:-1]
+        maximum = float(correction.max())
+        # A zero limit accepts exact symmetry up to the precision of the input coordinate frame.
+        roundoff = 32 * np.finfo(float).eps * max(1., float(np.max(np.abs(images))))
+        if maximum > self.max_initial_correction + roundoff:
+            raise ValueError(f'鏡映面への初期補正には最大{maximum} Åが必要です。設定した上限は{self.max_initial_correction} Åです。原子対と全構造の向き・位置を確認してください。')
         if any(has_atomic_collision(image) for image in projected):
             raise ValueError('鏡映面への射影後に0.1 Å未満の原子衝突があります。')
         if np.any(np.linalg.norm(intervals, axis=1) < 1e-10):
             raise ValueError('鏡映面への射影後に隣接ノードが重複します。')
-        return projected
+        return projected, maximum
 
 
 def band_force_components(images, energies, physical, mode, spring, climbing, fixed=(), tangents=None, relax_endpoints=False, allowed=None):
@@ -1499,8 +1506,10 @@ def relax(data, calculate, progress=lambda _: None):
     if 'pathSymmetry' in data:
         mirror = MirrorPath(data['pathSymmetry'], data['symbols'], images, relax_endpoints,
                             resumed.get('mirrorPlane') if resumed else None)
-        images = mirror.initial_band(images)
+        images, correction = mirror.initial_band(images)
         path_fields['pathSymmetry'] = data['pathSymmetry']
+        saved_correction = (resumed or {}).get('initialSymmetryCorrection', data.get('_initialSymmetryCorrectionResume', correction))
+        path_fields['initialSymmetryCorrection'] = saved_correction
     moving = slice(None) if relax_endpoints else slice(1, -1)
 
     def band_state(climbing):
@@ -4426,6 +4435,7 @@ class Jobs:
             data.pop('_scanResume', None)
             data.pop('_optimizerResume', None)
             data.pop('_pathWarningResume', None)
+            data.pop('_initialSymmetryCorrectionResume', None)
             if job.get('configFingerprint') != calculation_identity(data, self.config):
                 raise RuntimeError('保存時とエンジン・モデル・パッケージ・計算設定が異なります。同じ環境で再開するか、結果を新しい入力として実行してください。')
             # Revalidate stored public settings; no arbitrary paths or code can be restored.
@@ -4442,10 +4452,13 @@ class Jobs:
                 if result.get('optimizerState'):
                     data['_optimizerResume']=copy.deepcopy(result['optimizerState'])
                     kind='optimizer_state'
-                elif 'pathConsistencyWarning' in result:
+                else:
                     # A band interrupted during adaptive insertion is checkpointed
                     # before the new geometry has a complete optimizer state.
-                    data['_pathWarningResume'] = copy.deepcopy(result['pathConsistencyWarning'])
+                    if 'pathConsistencyWarning' in result:
+                        data['_pathWarningResume'] = copy.deepcopy(result['pathConsistencyWarning'])
+                    if 'initialSymmetryCorrection' in result:
+                        data['_initialSymmetryCorrectionResume'] = result['initialSymmetryCorrection']
             elif result and data['mode']=='scan' and result.get('scan', {}).get('nodes'):
                 data['_scanResume'] = copy.deepcopy(result)
                 kind = 'scan_remaining'

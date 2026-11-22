@@ -37,6 +37,15 @@ class ButadienePaths(unittest.TestCase):
         self.assertEqual(profile['bandClass'], 'dis')
         self.assertGreater(profile['maxMirrorErrorA'], .05)
 
+    def test_asymmetric_native_regression_starts_with_seven_disrotatory_nodes(self):
+        _, reference = b.band('free', 0)
+        source = b.ROOT / 'tests/fixtures/butadiene-disrotatory-asymmetric.xyz'
+        _, asymmetric = b.band('free', 0, source=source)
+        np.testing.assert_array_equal(reference[[0, -1]], asymmetric[[0, -1]])
+        profile = b.geometry(asymmetric, np.arange(len(asymmetric)))
+        self.assertEqual(profile['imageClasses'][1:-1], ['dis'] * 7)
+        self.assertGreaterEqual(np.min(profile['imageAnglesDeg'][1:-1]), 11. - 1e-7)
+
     def test_mixed_profile_is_localised_to_the_measured_node(self):
         _, dis = b.band('free', 0)
         _, con = b.band('con', 0)
@@ -83,3 +92,18 @@ class ButadienePaths(unittest.TestCase):
     @unittest.skipUnless(os.environ.get('GXTB_TEST_BINARY'), 'explicit native g-xTB executable required')
     def test_gxtb_mapped_paths(self):
         self.check_native_path('gxtb')
+
+    @unittest.skipUnless(os.environ.get('GXTB_TEST_BINARY'), 'explicit native g-xTB executable required')
+    def test_gxtb_explicitly_projects_asymmetric_string(self):
+        options = dict(engine='gxtb', distortion=0., steps=50, endpoint_mode='fixed',
+                       source=b.ROOT / 'tests/fixtures/butadiene-disrotatory-asymmetric.xyz')
+        rejected = b.run('lup', 'mirror', **options)
+        self.assertEqual(rejected['reason'], 'failed')
+        self.assertEqual(rejected['trace'], [])
+        projected = b.run('lup', 'mirror', **options, mirror_tolerance=.71)
+        self.assertIn(projected['reason'], ('step_limit', 'converged'))
+        self.assertGreater(projected['initialMirrorCorrectionA'], .69)
+        self.assertEqual(projected['maxEndpointDisplacementA'], 0.)
+        self.assertEqual(projected['bandClass'], 'dis')
+        self.assertIsNone(projected['firstConrotatoryInterior'])
+        self.assertLess(max(node['maxMirrorErrorA'] for node in projected['trace']), 1e-8)

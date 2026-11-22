@@ -51,12 +51,16 @@
     const available=mirrorModes.includes($('engineMode').value);
     $('enginePathSymmetry').hidden=!available;
     $('engineMirrorFields').hidden=!$('engineMirror').checked;
+    const limit=$('engineMirrorLimit').value;
+    $('engineMirrorOptionsLabel').textContent='初期座標の補正上限'+(limit?`（${limit} Å）`:'');
     $('engineMirrorCapability').textContent=available&&connection&&!connection.info.pathSymmetryTypes?.includes('mirror')?
       'この接続は鏡映拘束に対応していません。bridge.pyを更新して再接続してください。':'';
   }
   function restoreMirror(spec){
     if(spec&&spec.type!=='mirror')throw Error('保存されている経路の対称性条件に対応していません。');
     $('engineMirror').checked=!!spec;
+    $('engineMirrorLimit').value=spec?.maxInitialCorrection??.05;
+    $('engineMirrorOptions').open=spec?.maxInitialCorrection!=null&&spec.maxInitialCorrection!==.05;
     $('engineMirrorPairs').value=spec?spec.pairs.map(([a,b])=>`${a+1}-${b+1}`).join(', '):'';
     syncMirror();MV.CalculationPanel?.sync();
   }
@@ -74,7 +78,10 @@
       if(data.symbols[a]!==data.symbols[b])throw Error('鏡映で入れ替わる原子の元素が異なります。原子番号を確認してください。');
       used.add(a);used.add(b);return [a,b];
     });
+    const rawLimit=$('engineMirrorLimit').value,limit=Number(rawLimit);
+    if(!rawLimit.trim()||!Number.isFinite(limit)||limit<0||limit>2)throw Error('初期座標の補正上限は0〜2 Åの数値で指定してください。');
     data.pathSymmetry={type:'mirror',pairs};
+    if(limit!==.05)data.pathSymmetry.maxInitialCorrection=limit;
   }
   function endpointDescription(mode,value){
     if(!climbingModes.includes(mode)||value==='fixed')return '両端点を入力座標に固定します。';
@@ -310,9 +317,12 @@
     const spec=data.pathSymmetry;
     if(!spec&&!r.pathSymmetry)return;
     if(!spec||r.pathSymmetry?.type!==spec.type||
+       (r.pathSymmetry.maxInitialCorrection??.05)!==(spec.maxInitialCorrection??.05)||
        JSON.stringify(r.pathSymmetry.pairs)!==JSON.stringify(spec.pairs))
       throw Error('結果の鏡映条件が入力と一致しません。');
-    const d=r.diagnostics;
+    const d=r.diagnostics,correction=r.initialSymmetryCorrection;
+    if(correction!=null&&(!Number.isFinite(correction)||correction<0||correction>(spec.maxInitialCorrection??.05)+1e-10))
+      throw Error('初期座標に加えた補正量が指定の上限と一致しません。');
     if(!Number.isFinite(d?.symmetryResidual)||d.symmetryResidual<0||d.symmetryResidual>1e-6+1e-10||
        !Number.isFinite(d.symmetryRemovedFmax)||d.symmetryRemovedFmax<0)
       throw Error('鏡映残差または対称性を破る力の値が不正です。');
@@ -395,6 +405,7 @@
     if(r.pathSymmetry){
       const d=r.diagnostics;
       $('engineResultSummary').textContent+=' · 鏡映拘束下の経路 · 鏡映残差 '+d.symmetryResidual.toExponential(2)+' Å · 対称性を破る力の最大値 '+d.symmetryRemovedFmax.toPrecision(4)+' eV/Å';
+      if(Number.isFinite(r.initialSymmetryCorrection))$('engineResultSummary').textContent+=' · 初期座標の最大補正量 '+r.initialSymmetryCorrection.toPrecision(4)+' Å';
       if(d.endpointAllowedFmax&&j.data.endpointMode==='relax')$('engineResultSummary').textContent+=' · 端点の対称性を保つ力 A '+d.endpointAllowedFmax[0].toPrecision(4)+' / B '+d.endpointAllowedFmax[1].toPrecision(4)+' eV/Å';
       if(Number.isFinite(d.climbingAllowedFmax))$('engineResultSummary').textContent+=' · 登坂ノードの対称性を保つ力 '+d.climbingAllowedFmax.toPrecision(4)+' eV/Å';
     }
@@ -469,7 +480,13 @@
       const created=await request(j.connection,'/api/jobs',j.data);if(!/^[a-f0-9]{32}$/.test(created.id))throw Error('不正な計算IDです。');j.id=created.id;if(pendingMethod!=='dsafir')pendingMethod=null;if(j.livePreview){$('engineDialog').close();MV.EnergyProfile.reveal();}
       if(j.cancelRequested)await request(j.connection,`/api/jobs/${j.id}/cancel`,{});
       await watch(j);
-    }catch(error){MV.EnergyProfile.restore();message(error.message+(j?.id?' 接続が途切れた場合、計算はローカル側で継続している可能性があります。サービスをCtrl+Cで停止できます。':''));}
+    }catch(error){
+      MV.EnergyProfile.restore();
+      if(j?.data.pathSymmetry&&!j.id){
+        $('engineMirrorOptions').open=true;
+        MV.CalculationPanel?.show('setup',true);
+      }
+      message(error.message+(j?.id?' 接続が途切れた場合、計算はローカル側で継続している可能性があります。サービスをCtrl+Cで停止できます。':''));}
     finally{if(job===j){job=null;MV.EnergyProfile.finish();busy(false);if(j.pauseRequested&&result)refineResult();}}
   }
   async function watch(j){
@@ -793,6 +810,7 @@
     for(const id of ['dsafirRelaxPotential','dsafirRelaxMode','dsafirRelaxEndpoints'])$(id).addEventListener('change',syncDSRelaxation);
     $('engineEndpointMode').addEventListener('change',syncEndpointMode);
     $('engineMirror').addEventListener('change',syncMirror);
+    $('engineMirrorLimit').addEventListener('input',syncMirror);
     $('dsafirRelaxPrepare').addEventListener('click',()=>{
       try{prepareDSRelaxation(result?.result,$('dsafirRelaxMode').value);}
       catch(error){message(error.message);$('dsafirRelaxHelp').textContent=error.message;}

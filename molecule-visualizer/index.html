@@ -19,7 +19,7 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./group-constraints.js?v=model-f-48"></script>
 <script defer src="./group-constraints-ui.js?v=studio-54"></script>
 <script defer src="./optimization.js?v=model-f-48"></script>
-<script defer src="./optimization-ui.js?v=path-symmetry-55"></script>
+<script defer src="./optimization-ui.js?v=path-symmetry-56"></script>
 <script defer src="./workflow-ui.js?v=path-symmetry-55"></script>
 <link rel="stylesheet" href="./optimization.css?v=model-f-48">
 <script defer src="./renderer3dmol.js?v=model-f-48"></script>
@@ -46,7 +46,7 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./activity-ui.js?v=studio-54"></script>
 <link rel="stylesheet" href="./calculation-panel.css?v=path-symmetry-55">
 <script defer src="./calculation-panel.js?v=path-symmetry-55"></script>
-<script defer src="./engine-ui.js?v=path-symmetry-55"></script>
+<script defer src="./engine-ui.js?v=path-symmetry-56"></script>
 <script defer src="./vibration-ui.js?v=constraints-34"></script>
 <script defer src="./path-refinement.js?v=path-symmetry-55"></script>
 <script defer src="./afir.js?v=17"></script>
@@ -615,9 +615,13 @@ H -0.3 1.0 0"></textarea>
     <div id="engineMirrorFields" hidden>
       <label for="engineMirrorPairs">鏡映で入れ替わる原子番号の組</label>
       <input id="engineMirrorPairs" type="text" placeholder="1-4, 2-3" spellcheck="false" aria-describedby="engineMirrorHelp">
-      <p class="mv-small" id="engineMirrorHelp">対称面を挟んで対応する同じ元素の原子を、1から始まる番号で指定します。対に含めない原子は面上に置きます。全ノードを共通の座標系にそろえてください。非周期分子が対象です。鏡映対称にするための座標補正が1原子でも0.05 Å（固定端点では10⁻⁶ Å）を超えると、入力エラーになります。</p>
+      <p class="mv-small" id="engineMirrorHelp">対称面を挟んで対応する同じ元素の原子を、1から始まる番号で指定します。対に含めない原子は面上に置きます。全ノードを共通の座標系にそろえてください。非周期分子が対象です。</p>
       <p class="mv-small"><a href="./examples/butadiene-disrotatory.xyz" download>ブタジエン逆旋環化の入力例（XYZ）</a>の組は <code>1-4, 2-3, 5-9, 6-10, 7-8</code> です。他のファイルを使う場合は原子の並び順に合わせて指定してください。</p>
       <p class="mv-small">対称性を保つ力の成分で収束を判定します。経路の極大が一次鞍点かどうかは、拘束を外してTS最適化と振動解析で確認してください。自動手順でもTS最適化以降は拘束を外します。</p>
+      <details id="engineMirrorOptions" class="mv-calc-disclosure"><summary id="engineMirrorOptionsLabel">初期座標の補正上限（0.05 Å）</summary>
+        <label>1原子あたりの最大補正量 (Å)<input id="engineMirrorLimit" type="number" min="0" max="2" step="any" value="0.05" aria-describedby="engineMirrorLimitHelp"></label>
+        <p class="mv-small" id="engineMirrorLimitHelp">初期座標を鏡映対称にそろえてから緩和します。既定の上限は0.05 Åです。非対称な入力から新しい対称経路を作成したい場合は、原子の対応を確認して上限を引き上げてください（最大2 Å）。結果を適用するまでは、作業中の構造列を保持します。固定端点の座標は補正せず、端点の許容誤差は常に10⁻⁶ Åです。</p>
+      </details>
       <p class="mv-small" id="engineMirrorCapability" role="status"></p>
     </div>
   </section>

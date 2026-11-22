@@ -368,6 +368,8 @@ test('mirror CI convergence checks allowed forces while retaining full-force dia
     endpointAllowedFmax:[.01,.01],climbingAllowedFmax:.01,symmetryRemovedFmax:.48,symmetryResidual:1e-9}};
  M.EngineUI.validateResult(result,j);
  assert.throws(()=>M.EngineUI.validateResult({...result,pathSymmetry:undefined},j),/鏡映条件/);
+ assert.throws(()=>M.EngineUI.validateResult({...result,pathSymmetry:{...d.pathSymmetry,maxInitialCorrection:.75}},j),/鏡映条件/);
+ assert.throws(()=>M.EngineUI.validateResult({...result,initialSymmetryCorrection:.2},j),/補正量/);
  for(const [key,value] of [['symmetryResidual',.05],['symmetryRemovedFmax',undefined],['climbingAllowedFmax',.5],
                            ['endpointAllowedFmax',[.1,.5]],['endpointAllowedFmax',undefined]]){
   assert.throws(()=>M.EngineUI.validateResult({...result,diagnostics:{...result.diagnostics,[key]:value}},j),/鏡映|収束/);
@@ -394,4 +396,32 @@ test('energy/force inconsistency remains visible on saved paths and does not blo
  assert.equal(nodes.get('engineApply').disabled,false);
  M.EngineUI.showResult({...r,pathConsistencyWarning:undefined},j);
  assert.equal(nodes.get('enginePathWarning').hidden,true);
+});
+
+test('initial mirror correction is optional, bounded and reproduced in saved path settings',async()=>{
+ const {M,nodes,select}=await boot(),limit=nodes.get('engineMirrorLimit');
+ select('cineb');
+ nodes.get('engineMirror').checked=true;
+ nodes.get('engineMirrorPairs').value='2-3';
+ assert.equal(M.EngineUI.input().data.pathSymmetry.maxInitialCorrection,undefined);
+ for(const value of ['',-.01,2.001,'NaN']){
+  limit.value=value;
+  assert.throws(()=>M.EngineUI.input(),/補正上限/);
+ }
+ for(const value of [0,.75,2]){
+  limit.value=value;
+  const {data}=M.EngineUI.input();
+  assert.equal(data.pathSymmetry.maxInitialCorrection,value);
+  limit.value=.05;
+  M.EngineUI.restoreInput(data);
+  assert.equal(Number(limit.value),value);
+  assert.equal(nodes.get('engineMirrorOptions').open,true);
+  assert.match(nodes.get('engineMirrorOptionsLabel').textContent,new RegExp(String(value)));
+ }
+ const {data}=M.EngineUI.input();
+ delete data.pathSymmetry.maxInitialCorrection;
+ M.EngineUI.restoreInput(data);
+ assert.equal(Number(limit.value),.05);
+ assert.equal(nodes.get('engineMirrorOptions').open,false);
+ assert.equal(M.EngineUI.input().data.pathSymmetry.maxInitialCorrection,undefined);
 });
