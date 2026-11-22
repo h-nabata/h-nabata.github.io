@@ -1,0 +1,21 @@
+.mv-app .mv-activity {
+  display: grid;
+  grid-template-columns: minmax(7rem,.65fr) minmax(12rem,1.25fr) minmax(16rem,2fr);
+  margin: 0 0 14px;
+  padding: 11px 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.mv-activity > div { min-width: 0; padding: 0 18px; }
+.mv-activity > div + div { border-left: 1px solid var(--border); }
+.mv-activity dt { margin: 0 0 2px; color: var(--muted); font-size: .8rem; }
+.mv-activity dd { margin: 0; font-size: .91rem; font-weight: 650; overflow-wrap: anywhere; }
+#activityJobs { white-space: pre-line; }
+#activityJobs[data-state="running"], #activityJobs[data-state="completed"] { color: #096860; }
+#activityJobs[data-state="error"], #activityJobs[data-state="unknown"] { color: #963b39; }
+@media(max-width: 700px) {
+  .mv-app .mv-activity { grid-template-columns: auto minmax(0,1fr); row-gap: 8px; }
+  .mv-activity > div { padding: 0 12px; }
+  .mv-activity > div:last-child { grid-column: 1 / -1; border-left: none; border-top: 1px solid var(--border); padding-top: 7px; }
+}

@@ -1,7 +1,7 @@
 name: Molecule editor tests
 on:
   push:
-    branches: [main, molecule-studio-v3, molecule-research-workflows, molecule-performance-*, molecule-llmlip-*]
+    branches: [main, molecule-studio-v3, molecule-research-workflows, molecule-performance-*, molecule-llmlip-*, molecule-dsafir-*]
     paths: ['molecule-visualizer/**', '.github/workflows/molecule-test.yml']
   workflow_dispatch:
 permissions:
@@ -104,6 +104,7 @@ jobs:
           node molecule-visualizer/tests/import-browser.cjs || molecule_test_status=1
           node molecule-visualizer/tests/performance-browser.cjs || molecule_test_status=1
           node molecule-visualizer/tests/browser.cjs || molecule_test_status=1
+          node molecule-visualizer/tests/dsafir-browser.cjs || molecule_test_status=1
           node molecule-visualizer/tests/engine-browser.cjs || molecule_test_status=1
           node molecule-visualizer/tests/batch-browser.cjs || molecule_test_status=1
           node molecule-visualizer/tests/constraints-browser.cjs || molecule_test_status=1

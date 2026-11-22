@@ -69,7 +69,7 @@
   function extract(source,count,method='index',options={},cumulative){
     validate(source);
     const picked=indices(source.images,count,method,cumulative);
-    if(source.kind!=='afir')return {indices:picked};
+    if(!['afir','dsafir'].includes(source.kind))return {indices:picked};
     const features=energyFeatures(source,options);
     if(count<features.minimum)throw Error(`AFIRの両端点と最高エネルギー構造を残すには${features.minimum}ノード以上が必要です。`);
     const anchors=new Set([0,source.images.length-1,features.highest]);
@@ -103,6 +103,7 @@
     if(!['all','index','distance'].includes(method))throw Error('抽出方法が不正です。');
     return selected.map((i,k)=>{
       let comment=`MoleculeStudio frame=${k+1}/${selected.length} source_frame=${i+1}/${source.images.length} selection=${method}`;
+      if(source.kind==='dsafir')comment+=' method=DS-AFIR';
       if(source.kind==='afir'||source.kind==='optimize')comment+=` step=${source.stepNumbers?.[i]??i}`;
       if(source.energies)comment+=` energy_eV=${source.energies[i].toPrecision(15)}`;
       if(source.modelF){const s=source.modelF;comment+=` modelF=amf surface=${s.surface} alpha_kJ_mol=${s.alphaKJMol} multiplicities="${s.multiplicities.join(' ')}"`;if(source.surfaceComponents)for(const key of ['state1EV','state2EV','gapEV','couplingEV','lowerEV','upperEV'])comment+=` ${key}=${source.surfaceComponents[key][i].toPrecision(15)}`;}

@@ -1,3 +1,4 @@
+const {clickWorkspaceCommand} = require('./workspace-commands.cjs');
 /* UI/transport contract test with a fake ML predictor, not native UMA accuracy. */
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{spawn}=require('node:child_process');
 (async()=>{
@@ -8,7 +9,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   browser=await chromium.launch({headless:true});const page=await browser.newPage({viewport:{width:1360,height:1050}}),errors=[],requests=[];
   page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/api/jobs'))requests.push(r.postDataJSON());});
   await page.goto('http://127.0.0.1:8766/');await page.waitForSelector('canvas');
-  await page.click('#btnConstraints');const p=await page.evaluate(()=>{const a=MoleculeVisualizer.App.renderer().projectedAtoms.find(a=>a.index===1);return {x:a.x,y:a.y};});
+  await clickWorkspaceCommand(page, '#btnConstraints');const p=await page.evaluate(()=>{const a=MoleculeVisualizer.App.renderer().projectedAtoms.find(a=>a.index===1);return {x:a.x,y:a.y};});
   await page.locator('canvas').click({position:p});await page.click('#constraintAddSelected');assert.equal(await page.locator('#constraintAtoms').inputValue(),'1');
   await page.click('#btnExternalEngine');await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
   assert.equal(await page.locator('#engineUMADetails').isVisible(),true);assert.match(await page.locator('#engineUMASummary').textContent(),/uma-s-1p2p1.*omol.*CPU.*float64/);

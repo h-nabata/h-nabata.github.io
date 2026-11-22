@@ -38,12 +38,12 @@ from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 from scipy.spatial import cKDTree
 
-VERSION = '1.16.0'
+VERSION = '1.17.0'
 KJ_MOL_PER_EV = 96.48533212331002
 UMA_MODELS = ('uma-s-1p2p1', 'uma-s-1p2', 'uma-s-1p1', 'uma-m-1p1')
 ANYSOLV_MODELS = ('model_compact', 'model_moe')
 MAX_BODY = 8 * 1024 * 1024
-MODES = ('evaluate', 'optimize', 'perpendicular', 'neb', 'cineb', 'lup', 'afir', 'ts', 'vibrations', 'irc', 'scan')
+MODES = ('evaluate', 'optimize', 'perpendicular', 'neb', 'cineb', 'lup', 'afir', 'dsafir', 'ts', 'vibrations', 'irc', 'scan')
 PATH_MODES = ('perpendicular', 'neb', 'cineb', 'lup')
 
 
@@ -57,7 +57,7 @@ def number(value, name, lo, hi, integer=False):
 
 def validate(data, engine):
     allowed = {'symbols', 'images', 'cell', 'charge', 'multiplicity', 'mode',
-               'maxSteps', 'fmax', 'spring', 'maxMove', 'climbAfter', 'atomIds', 'afir', 'livePreview',
+               'maxSteps', 'fmax', 'spring', 'maxMove', 'climbAfter', 'atomIds', 'afir', 'dsafir', 'livePreview',
                'optimizer', 'trustRadius', 'vibrations', 'fixedAtoms', 'umaDevice', 'solvation',
                'irc', 'thermochemistry', 'internalConstraints', 'groupConstraints', 'scan', 'adaptiveNEB', 'pathSplit', 'nodeIds', 'lup', 'fixedComponents', 'rigidGroups', 'cellOptimization', 'stagedOptimization', 'modelF', 'llmlip'}
     if not isinstance(data, dict) or set(data) - allowed:
@@ -78,6 +78,10 @@ def validate(data, engine):
     mode = data.get('mode', 'evaluate')
     if mode not in MODES or (mode in PATH_MODES and len(images) < 3) or (mode in ('optimize', 'afir', 'ts', 'vibrations', 'irc', 'scan') and len(images) != 1):
         raise ValueError('経路緩和には端点を含む3〜100構造、単一最適化・振動解析には1構造が必要です。')
+    if mode == 'dsafir' and len(images) != 2:
+        raise ValueError('DS-AFIRには反応物と生成物の2構造が必要です。')
+    if mode != 'dsafir' and 'dsafir' in data:
+        raise ValueError('dsafir設定はDS-AFIR専用です。')
     charge = number(data.get('charge', 0), '電荷', -100, 100, True)
     multiplicity = number(data.get('multiplicity', 1), '多重度', 1, 100 if engine == 'uma' else 101, True)
     electrons = sum(atomic_numbers[s] for s in symbols) - charge
@@ -102,12 +106,32 @@ def validate(data, engine):
             raise ValueError('0.1 Å未満で重なった原子があります。初期経路の衝突を解消してください。')
     result = dict(symbols=symbols, images=images.tolist(), cell=cell, charge=charge,
                   multiplicity=multiplicity, mode=mode, livePreview=data.get('livePreview', False))
-    step_default, step_limit = (10000 if mode == 'afir' else 100 if mode == 'lup' else 150), 10000
-    for key, default, low, high, integer in [('maxSteps', step_default, 1, step_limit, True), ('fmax', .05, .00001, 10, False),
-            ('spring', .1, .001, 10, False), ('maxMove', .03 if mode == 'lup' else .04, .001, .2, False), ('climbAfter', 5 if mode == 'lup' else 10, 0, 500, True)]:
-        result[key] = number(data.get(key, default), key, low, high, integer)
-    if mode in ('cineb', 'lup') and result['climbAfter'] >= result['maxSteps']:
-        raise ValueError('CI開始ステップは最大ステップ数より小さくしてください。')
+    if mode == 'dsafir':
+        result['maxSteps'] = number(data.get('maxSteps', 300), 'maxSteps', 1, 9999, True)
+        if any(k in data for k in ('fmax', 'maxMove', 'spring', 'climbAfter')):
+            raise ValueError('DS-AFIRには積分刻みstepSizeと接続距離thresholdを指定してください。ばね・CI・力の収束条件は使用しません。')
+        if cell and any(cell['pbc']):
+            raise ValueError('DS-AFIRは非周期分子用です。')
+        aligned = dsafir_align(images[0], images[1])
+        if np.linalg.norm(aligned - images[0]) <= 1e-8:
+            raise ValueError('重ね合わせると両端点が同一です。異なる2構造を指定してください。')
+        if np.max(np.abs(aligned)) > 1e4:
+            raise ValueError('重ね合わせ後の座標が10000 Åの範囲を超えています。')
+        config = data.get('dsafir', {})
+        if not isinstance(config, dict) or set(config) - {'delta', 'stepSize', 'threshold'}:
+            raise ValueError('DS-AFIRの設定が不正です。')
+        result['dsafir'] = {
+            'delta': number(config.get('delta', 1.5), 'DS-AFIRの駆動力 (eV/Å)', .0001, 50),
+            'stepSize': number(config.get('stepSize', .1), 'DS-AFIRの積分刻み (Å)', .001, .2),
+            'threshold': number(config.get('threshold', .12), '両端の接続距離 (Å)', .001, 1),
+        }
+    else:
+        step_default, step_limit = (10000 if mode == 'afir' else 100 if mode == 'lup' else 150), 10000
+        for key, default, low, high, integer in [('maxSteps', step_default, 1, step_limit, True), ('fmax', .05, .00001, 10, False),
+                ('spring', .1, .001, 10, False), ('maxMove', .03 if mode == 'lup' else .04, .001, .2, False), ('climbAfter', 5 if mode == 'lup' else 10, 0, 500, True)]:
+            result[key] = number(data.get(key, default), key, low, high, integer)
+        if mode in ('cineb', 'lup') and result['climbAfter'] >= result['maxSteps']:
+            raise ValueError('CI開始ステップは最大ステップ数より小さくしてください。')
     if mode in PATH_MODES and any(np.linalg.norm(images[i+1]-images[i]) < 1e-10 for i in range(len(images)-1)):
         raise ValueError('隣接構造が同一です。重複フレームを除いてください。')
     if mode == 'afir':
@@ -121,6 +145,8 @@ def validate(data, engine):
         result['atomIds'] = ids[:]
     optimizer = data.get('optimizer', 'sella-prfo' if mode == 'ts' else 'lbfgs' if mode == 'lup' else 'fire')
     choices = ('sella-prfo', 'sella-rfo') if mode == 'ts' else ('fire', 'lbfgs', 'bfgs', 'staged', 'precon-lbfgs') if mode in ('optimize', 'scan') else ('fire', 'lbfgs') if mode == 'lup' else ('fire',)
+    if mode == 'dsafir':
+        optimizer, choices = data.get('optimizer', 'ds-steepest'), ('ds-steepest',)
     if optimizer not in choices:
         raise ValueError('この操作では指定した最適化手法を使用できません。TSにはSella PRFO/RFOを指定してください。')
     result['optimizer'] = optimizer
@@ -771,6 +797,133 @@ def afir_bias(positions, symbols, ids, config, prepared=None):
         force = -(coefficient*weights*(-5+6*distance/distances)/distances)[:,None]*vectors
         np.add.at(forces, a, force); np.add.at(forces, b, -force)
     return total, forces
+
+
+def dsafir_align(reactant, product):
+    """Least-squares fit with fixed atom correspondence and det(R)=+1."""
+    a = np.asarray(reactant, dtype=float)
+    b = np.asarray(product, dtype=float)
+    centered = b - b.mean(axis=0)
+    u, _, vh = np.linalg.svd(centered.T @ (a - a.mean(axis=0)))
+    if np.linalg.det(u @ vh) < 0:
+        u[:, -1] *= -1
+    return centered @ (u @ vh) + a.mean(axis=0)
+
+
+def dsafir_force(q, p, reference, physical_force, delta, diagnostics=None):
+    """Maeda et al., JCC 39 (2018), Eqs. 6–10; force = -gradient.
+
+    X and Y are held fixed when taking the derivative for this single
+    descent direction. Norms and projections use the complete 3N vector.
+    """
+    toward_source = q - p
+    gap = np.linalg.norm(toward_source)
+    if gap == 0:
+        raise ValueError('DS-AFIRの両探索点が一致しています。')
+    direction = toward_source / gap
+    offset = q - reference
+    radius = np.linalg.norm(offset)
+    weight = 1.
+    if radius > 1e-12:
+        radial = offset / radius
+        z = max(0., radius / gap + np.vdot(direction, radial))
+        weight = z / (1. + z)
+        direction = weight * direction - (1. - weight) * radial
+    length = np.linalg.norm(direction)
+    if length < 1e-14:
+        raise ValueError('DS-AFIRの人工力の方向を決定できません。')
+    unit = direction / length
+    correction = delta + np.vdot(physical_force, unit)
+    if diagnostics is not None:
+        x = correction / length
+        diagnostics.update(x=float(x), y=float(weight),
+                           artificialEnergyEV=float(x * (weight * gap - (1. - weight) * radius)))
+    return physical_force - correction * unit
+
+
+def dsafir_result(data, frames, reason):
+    """Reassemble chronological, individually evaluated frames in A→B order."""
+    left = [f for f in frames if f['side'] == 'reactant']
+    right = [f for f in frames if f['side'] == 'product']
+    gap = float(np.linalg.norm(np.subtract(left[-1]['positions'], right[-1]['positions'])))
+    connected = gap <= data['dsafir']['threshold']
+    ordered = left + right[::-1]
+    return dict(mode='dsafir', optimizer='ds-steepest', steps=len(frames)-2,
+                evaluations=len(frames), converged=connected, reason=reason,
+                dsafir={**data['dsafir'], 'gap':gap, 'connected':connected, 'joinIndex':len(left)-1},
+                images=[f['positions'] for f in ordered], energies=[f['energy'] for f in ordered],
+                forces=[f['force'] for f in ordered], imageFmax=[f['fmax'] for f in ordered],
+                history=[f['advance'] for f in frames if 'advance' in f],
+                **({'atomIds':data['atomIds']} if 'atomIds' in data else {}),
+                **checkpoint_components(ordered),
+                units={'length':'angstrom', 'energy':'eV', 'force':'eV/angstrom'})
+
+
+def dsafir_search(data, calculate, progress):
+    settings = data['dsafir']
+    a, b = np.asarray(data['images'], dtype=float)
+    fronts = [a, dsafir_align(a, b)]
+    references = fronts.copy()
+    branches = [[], []]
+    frames = []
+    forces = [None, None]
+    names = ('reactant', 'product')
+
+    def evaluate(side, positions, advance=None):
+        if not np.isfinite(positions).all() or np.max(np.abs(positions)) > 1e4:
+            raise ValueError('DS-AFIR探索点の座標が範囲外です。')
+        if has_atomic_collision(positions):
+            raise ValueError('DS-AFIR探索中に0.1 Å未満の原子衝突を検出しました。積分刻みを小さくしてください。')
+        energy, force = calculate(side, positions)
+        force = np.asarray(force, dtype=float)
+        if not np.isfinite(energy) or force.shape != positions.shape or not np.isfinite(force).all():
+            raise ValueError('DS-AFIR探索点のエネルギー・力が不正です。')
+        frame = dict(side=names[side], positions=positions.tolist(), energy=float(energy),
+                     force=force.tolist(), fmax=force_max(force))
+        if advance is not None:
+            frame['advance'] = advance
+        frames.append(frame)
+        branch = branches[side]
+        branch.append(frame)
+        if len(branch) >= 3 and branch[-3]['energy'] >= branch[-2]['energy'] < energy:
+            references[side] = fronts[side]
+        fronts[side], forces[side] = positions, force
+        return frame
+
+    # Reuse one engine/SCC evaluation lane per side throughout the search.
+    first = evaluate(0, fronts[0])
+    progress({'phase':'dsafir', 'side':names[0], 'step':0, 'evaluations':1, 'checkpoint':first})
+    frame = evaluate(1, fronts[1])
+    for step in range(data['maxSteps']+1):
+        gap = float(np.linalg.norm(fronts[0] - fronts[1]))
+        connected = gap <= settings['threshold']
+        report = dict(phase='dsafir', side=frame['side'], step=step, gap=gap,
+                      evaluations=len(frames), checkpoint=frame)
+        if data.get('livePreview'):
+            tips = [side[-1] for side in branches]
+            report['preview'] = dict(step=step, mode='dsafir', images=[f['positions'] for f in tips],
+                                     energies=[f['energy'] for f in tips],
+                                     dsafir={**settings, 'gap':gap, 'connected':connected, 'joinIndex':0})
+        progress(report)
+        if connected or step == data['maxSteps']:
+            return dsafir_result(data, frames, 'connected' if connected else 'step_limit')
+        # On an exactly flat surface, break energy ties by advancing the
+        # shorter branch; otherwise always advance the lower-energy frontier.
+        side = min(range(2), key=lambda i: (branches[i][-1]['energy'], len(branches[i])))
+        energy = branches[side][-1]['energy']
+        advance = dict(step=step+1, side=names[side], gapBefore=gap, physicalEnergyEV=energy)
+        effective = dsafir_force(fronts[side], fronts[1-side], references[side],
+                                 forces[side], settings['delta'], advance)
+        advance['biasedEnergyEV'] = energy + advance['artificialEnergyEV']
+        length = np.linalg.norm(effective)
+        if not math.isfinite(length) or length == 0:
+            raise ValueError('DS-AFIRの積分方向が不正です。')
+        # First-order, normalized Cartesian steepest descent (not GRRM's LQA).
+        # Leave distinct nodes at the seam, even if a large requested step
+        # points exactly down the separation vector. NEB/LUP need a tangent.
+        step_length = min(settings['stepSize'], gap - .5 * settings['threshold'])
+        positions = fronts[side] + step_length * (effective / length)
+        frame = evaluate(side, positions, advance)
 
 
 def afir_relax(data, calculate, progress=lambda p:None):
@@ -2237,6 +2390,8 @@ def calculate_job(data, calculate, directory, progress=lambda p: None):
         result = relaxed_scan(data, calculate, directory, progress)
     elif (any(data.get(k) for k in ('internalConstraints','groupConstraints','fixedComponents','rigidGroups')) or data.get('optimizer') in ('staged','precon-lbfgs') ) and data['mode'] in ('optimize', 'afir'):
         result = constrained_minimize(data, calculate, directory, progress)
+    elif data['mode']=='dsafir':
+        result = dsafir_search(data, calculate, progress)
     elif data['mode']=='afir':
         result = afir_relax(data, calculate, progress)
     elif data['mode']=='ts' or (data['mode']=='optimize' and data.get('optimizer','fire')!='fire'):
@@ -3960,6 +4115,15 @@ class Jobs:
     def _recover_partial(self, job):
         if job.get('structureCheckpoint') or job.get('bandCheckpoint'):
             job['result'] = self.partial_structure(job)
+        elif job['data']['mode'] == 'dsafir' and len(job.get('checkpoints', [])) >= 2:
+            data = job['data']
+            reason = {'cancelled':'cancelled', 'interrupted':'interrupted'}.get(job['status'], 'failed')
+            result = dsafir_result(data, job['checkpoints'], reason)
+            identity = {'data':data, 'identity':job.get('configFingerprint') or calculation_identity(data, self.config)}
+            job['result'] = dict(result, symbols=data['symbols'], cell=data['cell'], charge=data['charge'],
+                                 multiplicity=data['multiplicity'], error=job.get('error'),
+                                 conditionId=hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest(),
+                                 **self._record_identity(job))
         elif job['data']['mode'] == 'afir' and job.get('checkpoints'):
             job['result'] = self.partial_afir(job)
         elif job['data']['mode'] in ('optimize','ts') and job.get('checkpoints'):
@@ -4254,7 +4418,7 @@ class Handler(BaseHTTPRequestHandler):
         extensions = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
             '.css': 'text/css; charset=utf-8', '.wasm': 'application/wasm', '.data': 'application/octet-stream',
             '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon',
-            '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.py': 'text/plain; charset=utf-8', '.gz': 'application/gzip'}
+            '.xyz': 'chemical/x-xyz', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.py': 'text/plain; charset=utf-8', '.gz': 'application/gzip'}
         if not target.is_relative_to(root) or any(p.startswith('.') for p in target.relative_to(root).parts) or not target.is_file() or (target.suffix not in extensions and not re.search(r'\.gz\.part[0-9]+$', target.name)):
             self.response(404, {'error': 'Not found'})
             return

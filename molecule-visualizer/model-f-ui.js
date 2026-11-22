@@ -26,8 +26,20 @@
     const x=i=>90+495*i/Math.max(n-1,1),y=e=>190-150*(e-low)/span;
     const add=(tag,attrs,text)=>{const node=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))node.setAttribute(k,v);if(text!=null)node.textContent=text;svg.append(node);return node;};
     for(let k=0;k<=3;k++){const e=low+k*span/3,yy=y(e);add('line',{x1:90,x2:585,y1:yy,y2:yy,stroke:'#cbd5e1'});add('text',{x:85,y:yy+6,'text-anchor':'end','font-size':20,fill:'currentColor'},((e-zero)*M.ModelF.K).toFixed(1));}
-    // Limit plot DOM/string size, preserving bin minima/maxima.
-    for(const [key,color,name] of series){const ids=new Set([0,n-1]);const width=Math.max(1,Math.ceil(n/200));for(let i=0;i<n;i+=width){let a=i,b=i;for(let j=i+1;j<Math.min(n,i+width);j++){if(c[key][j]<c[key][a])a=j;if(c[key][j]>c[key][b])b=j;}ids.add(a);ids.add(b);}const selected=key===s.surface+'EV';add('polyline',{points:[...ids].sort((a,b)=>a-b).map(i=>`${x(i)},${y(c[key][i])}`).join(' '),fill:'none',stroke:color,'stroke-width':selected?3:1.5,...(!selected&&key.endsWith('EV')&&!key.startsWith('state')?{'stroke-dasharray':'5 3'}:{})});if(n===1)add('circle',{cx:x(0),cy:y(c[key][0]),r:3,fill:color});const k=series.findIndex(v=>v[0]===key);add('text',{x:60+130*k,y:20,fill:color,'font-size':20},name+(selected?'（追跡）':''));}
+    const split=result.dsafir&&!result.dsafir.connected?result.dsafir.joinIndex:undefined;
+    if(split!=null)root.append(el('p',`構造${split+1}と${split+2}の間は未接続です。`,{class:'mv-small'}));
+    for(const [k,[key,color,name]] of series.entries()){
+      const selected=key===s.surface+'EV';
+      for(const ids of M.EnergyProfile.sampleSegments(c[key],split)){
+        if(ids.length===1){
+          const i=ids[0];add('circle',{cx:x(i),cy:y(c[key][i]),r:3,fill:color});
+        }else{
+          const points=ids.map(i=>`${x(i)},${y(c[key][i])}`).join(' ');
+          add('polyline',{points,fill:'none',stroke:color,'stroke-width':selected?3:1.5,...(!selected&&!key.startsWith('state')?{'stroke-dasharray':'5 3'}:{})});
+        }
+      }
+      add('text',{x:60+130*k,y:20,fill:color,'font-size':20},name+(selected?'（追跡）':''));
+    }
     add('text',{x:90,y:212,fill:'currentColor','font-size':20},'1');if(n>1)add('text',{x:585,y:212,fill:'currentColor','text-anchor':'end','font-size':20},String(n));root.append(svg);
     const slider=el('input',null,{type:'range',min:1,max:n,value:n,step:1,'aria-label':'ModelFの構造番号'});slider.style.width='100%';
     const detail=el('p',null,{class:'mv-small'}),table=el('table',null,{class:'mv-table'}),head=el('tr'),values=el('tr');for(const name of ['E₁ (eV)','E₂ (eV)','E− (eV)','E+ (eV)'])head.append(el('th',name));table.append(head,values);const wrap=el('div',null,{class:'mv-table-scroll'});wrap.append(table);

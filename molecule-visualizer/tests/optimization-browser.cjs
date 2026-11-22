@@ -1,3 +1,4 @@
+const {clickWorkspaceCommand} = require('./workspace-commands.cjs');
 /* Public synthetic structures: native execution, browser contracts and explicit workflow gates. */
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{spawn}=require('node:child_process');
 (async()=>{
@@ -36,7 +37,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   const xyz=await page.evaluate(()=>{const M=MoleculeVisualizer,j=M.EngineUI.getResult(),s=M.EngineUI.resultSource(j.result,j);return M.Trajectory.xyz(s,s.images.map((_,i)=>i));});assert.equal((xyz.match(/Lattice=/g)||[]).length,5);await page.click('#engineApply');assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.cell),cellReport.result.cell);
   await page.screenshot({path:'test-artifacts/optimization-cell.png',fullPage:true});
   // Named conditions, adaptive round trip, two-axis heatmap and click-to-preview.
-  await load();await page.click('#btnScan');await page.selectOption('#cellOptimizationMode','fixed');await page.fill('#engineSteps','200');await page.fill('#engineFmax','0.05');
+  await load();await clickWorkspaceCommand(page, '#btnScan');await page.selectOption('#cellOptimizationMode','fixed');await page.fill('#engineSteps','200');await page.fill('#engineFmax','0.05');
   await page.evaluate(()=>{const M=MoleculeVisualizer,rows=document.getElementById('scanCoordinateRows');rows.replaceChildren();M.ResearchUI.coordinateRow(rows,true,{type:'distance',atoms:[0,1],start:.95,stop:1.0,points:2});M.ResearchUI.coordinateRow(rows,true,{type:'angle',atoms:[1,0,2],start:100,stop:110,points:2});document.getElementById('scanRoundTrip').checked=true;document.getElementById('scanAdaptive').checked=true;document.getElementById('scanBudget').value=12;document.getElementById('scanEnergyGap').value=10;document.getElementById('scanRmsGap').value=10;});
   await page.locator('#optimizationPresetName').evaluate(e=>e.closest('details').open=true);await page.fill('#optimizationPresetName','public scan');await page.click('#optimizationPresetSave');await page.fill('#engineSteps','2');await page.click('#optimizationPresetLoad');assert.equal(await page.inputValue('#engineSteps'),'200');await page.click('#engineRun');await done();
   const scan=JSON.parse(await download('#engineDownload'));assert.equal(scan.input.scan.bidirectional,true);assert.ok(scan.input.scan.adaptive.enabled);assert.equal(scan.result.images.length,8);assert.equal(await page.locator('.mv-scan-map table').count(),2);await page.locator('.mv-scan-map button').first().click();await page.click('#engineClose');await page.evaluate(()=>MoleculeVisualizer.EnergyProfile.restore());

@@ -148,6 +148,7 @@
     });
     const modeBadge = byId("modeBadge");
     if (modeBadge) modeBadge.textContent = ({select:"選択モード",move:"原子移動モード",bond:"結合モード",box:"範囲選択モード"})[mode];
+    if (modeBadge) MV.Activity?.showEditor(modeBadge.textContent);
     if (renderer && typeof renderer.setInteractionMode === "function") renderer.setInteractionMode(mode);
     const btn = byId("btnToggleMove");
     if (btn) btn.textContent = `移動モード: ${moveMode ? "ON" : "OFF"}`;
@@ -172,6 +173,7 @@
     MV.Measurements?.bind(state);
     renderer.renderState(state, Boolean(preserveCamera));
     if(persist)saveLocal();
+    MV.EngineUI?.syncEndpoints?.();
     updateAtomTable();
     updateBondTable();
     syncUI();

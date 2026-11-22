@@ -12,7 +12,7 @@ async function boot(version='1.9.0'){
  const document={getElementById:id=>nodes.get(id),createElement:()=>new Element()},window={document};
  const info={version,engine:'tblite',method:'GFN2-xTB',engineVersion:'fixture',modes:['evaluate','optimize','cineb','lup'],lup:true,pathOptimizers:{cineb:['fire'],lup:['fire','lbfgs']},maxImages:100,maxSteps:10000,vibrations:true,adaptiveNEB:true,pathSplit:true};
  const ctx=vm.createContext({window,document,location:{hostname:'example.test'},URL,AbortController,setTimeout,clearTimeout,console,fetch:async()=>({ok:true,json:async()=>info})});
- for(const f of ['model','optimization','bonding','geometry','io','molfile','periodic','constraints','research-ui','engine-ui','path-refinement'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../'+f+'.js'),'utf8'),ctx,{filename:f+'.js'});
+ for(const f of ['model','optimization','bonding','geometry','io','molfile','periodic','constraints','structure-analysis','research-ui','engine-ui','path-refinement'])vm.runInContext(fs.readFileSync(path.join(__dirname,'../'+f+'.js'),'utf8'),ctx,{filename:f+'.js'});
  const M=window.MoleculeVisualizer;let state=M.Model.createState({atoms:[{id:'o',element:'O',x:0,y:0,z:0},{id:'h1',element:'H',x:.96,y:0,z:0},{id:'h2',element:'H',x:-.24,y:.93,z:0}]});
  state.metadata.pathNodeId='n0';state.metadata.trajectory=[0,.1,.2].map((shift,i)=>{const f=M.Periodic.snapshot(state);f.atoms[1].x+=shift;f.metadata.pathNodeId='n'+i;return f;});state.metadata.frameIndex=0;
  M.App={getState:()=>state,getDisplayedState:()=>state,useDisplayedStructure(){},freezeDisplayedStructure(){},change(_label,fn){state=fn(state)||state;}};M.EnergyProfile={reset(){}};M.Studio={stop(){}};M.App.setStatus=()=>{};
@@ -48,4 +48,61 @@ test('manual node insertion keeps LUP mode and existing node identities',async()
  const refined=M.PathRefinement.refine(frames,0,2,1);assert.equal(refined.length,5);assert.equal(JSON.stringify([refined[0],refined[2],refined[4]].map(f=>f.metadata.pathNodeId)),'["n0","n1","n2"]');assert.equal(new Set(refined.map(f=>f.metadata.pathNodeId)).size,5);
  M.PathRefinement.init();M.PathRefinement.open(frames,'lup');assert.match(nodes.get('refineNEB').textContent,/LUP系/);await nodes.get('refineNEB').click();assert.equal(nodes.get('engineMode').value,'lup');assert.equal(M.App.getState().metadata.trajectory.length,5);assert.equal(new Set(M.EngineUI.input().data.nodeIds).size,5);
  M.PathRefinement.open();assert.match(nodes.get('refineNEB').textContent,/CI-NEB/);
+});
+
+test('DS-AFIR submits the two selected endpoints and current fields, preserves their order across reopen and restore',async()=>{
+ const {M,nodes,info}=await boot('1.17.0');
+ info.modes.push('dsafir');
+ M.EngineUI.prepareMethod('dsafir');
+ assert.equal(nodes.get('dsafirStart').value,'0');
+ assert.equal(nodes.get('dsafirEnd').value,'2');
+ for(const [id,value] of Object.entries({dsafirStart:2,dsafirEnd:1,engineSteps:82,dsafirDelta:.85,dsafirStep:.035,dsafirThreshold:.11}))nodes.get(id).value=value;
+ M.EngineUI.open();
+ const {data}=M.EngineUI.input(),frames=M.App.getState().metadata.trajectory;
+ assert.equal(data.mode,'dsafir');assert.equal(data.maxSteps,82);
+ assert.equal(JSON.stringify(data.dsafir),JSON.stringify({delta:.85,stepSize:.035,threshold:.11}));
+ assert.deepEqual(Array.from(data.images,image=>image[1][0]),[frames[2].atoms[1].x,frames[1].atoms[1].x]);
+ assert.equal(data.spring,undefined);assert.equal(data.maxMove,undefined);
+ M.EngineUI.restoreJob({id:'c'.repeat(32),data},true);
+ M.EngineUI.open();assert.equal(nodes.get('dsafirStart').value,'0');assert.equal(nodes.get('dsafirEnd').value,'1');
+ assert.equal(JSON.stringify(M.EngineUI.input().data),JSON.stringify(data));
+ nodes.get('dsafirEnd').value='0';assert.throws(()=>M.EngineUI.input(),/異なる構造/);
+ nodes.get('dsafirEnd').value='1';nodes.get('dsafirDelta').value='';assert.throws(()=>M.EngineUI.input(),/0.0001/);
+ nodes.get('dsafirDelta').value=1;info.modes=info.modes.filter(m=>m!=='dsafir');assert.throws(()=>M.EngineUI.input(),/bridge/);
+});
+
+test('DS-AFIR profiles separate unfinished branches, validate the measured gap and retain the atom identity of A',async()=>{
+ const {M,info}=await boot('1.17.0');info.modes.push('dsafir');
+ M.EngineUI.prepareMethod('dsafir');
+ const j=M.EngineUI.input(),d=j.data,images=JSON.parse(JSON.stringify(d.images));
+ const gap=Math.sqrt(images[0].reduce((sum,a,i)=>sum+a.reduce((v,x,k)=>v+(x-images[1][i][k])**2,0),0));
+ const dsafir={...d.dsafir,joinIndex:0,connected:false,gap};
+ const r={mode:'dsafir',converged:false,reason:'step_limit',symbols:d.symbols,atomIds:d.atomIds,cell:d.cell,images,energies:[0,1],imageFmax:[.01,.02],steps:0,dsafir,units:{energy:'eV',length:'angstrom'}};
+ let view;M.EnergyProfile.set=next=>{view=next;};
+ M.EngineUI.validateResult(r,j);M.EngineUI.showProfile(r,j);
+ assert.equal(view.breakAfter,0);assert.equal(view.exportXYZ,null);assert.match(view.legend,/未接続/);
+ assert.throws(()=>M.EngineUI.resultSource(r,j),/未接続/);
+ assert.throws(()=>M.EngineUI.validateResult({...r,dsafir:{...dsafir,gap:gap+.01}},j),/距離/);
+ d.dsafir.threshold=gap+.01;r.dsafir={...dsafir,threshold:d.dsafir.threshold,connected:true};r.reason='connected';r.converged=true;
+ M.EngineUI.validateResult(r,j);M.EngineUI.showProfile(r,j);assert.equal(view.breakAfter,undefined);assert.equal(typeof view.exportXYZ,'function');
+ const source=M.EngineUI.resultSource(r,j);
+ assert.equal(source.base(1),j.frames[0]);assert.deepEqual(source.atomIds,d.atomIds);
+});
+
+test('choosing DS-AFIR before importing the endpoints keeps the selected method',async()=>{
+ const {M,nodes}=await boot('1.17.0'),original=M.App.getState(),frames=original.metadata.trajectory;
+ M.App.change('single structure',()=>M.Model.createState(frames[0]));
+ M.EngineUI.prepareMethod('dsafir');assert.equal(nodes.get('dsafirEnd').disabled,true);
+ M.App.change('open both endpoints',()=>original);M.EngineUI.open();
+ assert.equal(nodes.get('engineMode').value,'dsafir');assert.equal(nodes.get('dsafirEnd').disabled,false);
+ assert.equal(nodes.get('dsafirEnd').value,'2');
+});
+
+test('plot sampling keeps the last point of A and the first of B in different segments',()=>{
+ const window={MoleculeVisualizer:{}},ctx=vm.createContext({window});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../energy-profile.js'),'utf8'),ctx);
+ const values=Array.from({length:2500},(_,i)=>Math.sin(i*.01));
+ const [left,right]=window.MoleculeVisualizer.EnergyProfile.sampleSegments(values,923);
+ assert.equal(left[0],0);assert.equal(left.at(-1),923);assert.equal(right[0],924);assert.equal(right.at(-1),2499);
+ assert.ok(left.length+right.length<1000);
 });

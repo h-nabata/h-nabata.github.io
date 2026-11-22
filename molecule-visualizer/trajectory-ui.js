@@ -35,7 +35,7 @@
       const extraction=MV.Trajectory.extract(source,Number($('trajectoryCount').value),method,options(),arc);selected=extraction.indices;
       const shown=selected.length<=24?selected.map(i=>i+1).join(', '):selected.slice(0,10).map(i=>i+1).join(', ')+' … '+selected.slice(-3).map(i=>i+1).join(', ');
       $('trajectorySelection').textContent=`${selected.length}構造を抽出 · 元の構造番号: ${shown}`+(method==='distance'&&arc.at(-1)===0?' · 全構造の座標が同じため、番号の等間隔で選択します。':'');
-      if(source.kind==='afir'){
+      if(['afir','dsafir'].includes(source.kind)){
         $('trajectorySelection').textContent+=` · 物理エネルギー最高点: ${extraction.highest+1}番（${source.energies[extraction.highest].toFixed(6)} eV）を保持 · 極大点: ${extraction.retainedPeaks}/${extraction.peaks.length}点を含む`;
         plot(extraction);
       }
@@ -47,10 +47,10 @@
   }
   function open(next){
     MV.Trajectory.validate(next);source=next;arc=null;
-    $('trajectoryAFIROptions').hidden=source.kind!=='afir';$('trajectoryPeaks').checked=true;$('trajectorySmooth').value=5;$('trajectoryProminence').value=.01;
+    $('trajectoryAFIROptions').hidden=!['afir','dsafir'].includes(source.kind);$('trajectoryPeaks').checked=true;$('trajectorySmooth').value=5;$('trajectoryProminence').value=.01;
     const n=source.images.length;$('trajectorySummary').textContent=`${source.title} · ${n}構造 · ${source.symbols.length}原子`;
     $('trajectoryNotice').textContent=source.notice||'';$('trajectoryNotice').hidden=!source.notice;
-    $('trajectoryCount').min=source.kind==='afir'?MV.Trajectory.energyFeatures(source).minimum:n===1?1:2;$('trajectoryCount').max=n;$('trajectoryCount').value=Math.min(10,n);
+    $('trajectoryCount').min=['afir','dsafir'].includes(source.kind)?MV.Trajectory.energyFeatures(source).minimum:n===1?1:2;$('trajectoryCount').max=n;$('trajectoryCount').value=Math.min(10,n);
     $('trajectoryName').value=Array.from(String(source.name||'molecule')).slice(0,60).join('');
     $('trajectoryMethod').value='index';$('trajectoryFormat').value='xyz';updateFormat();update();$('trajectoryDialog').showModal();
   }
@@ -90,9 +90,9 @@
         s.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=original.images[i][k];});
         s.metadata.cell=original.cells?.[i]||original.cell||null;s.metadata.totalCharge=original.charge;s.metadata.multiplicity=original.multiplicity;
         delete s.metadata.externalCalculation;delete s.metadata.afirCalculation;
-        s.metadata.trajectoryExtraction={sourceKind:original.kind,sourceFrame:i,sourceCount:original.images.length,method,...(original.kind==='afir'?settings:{})};
+        s.metadata.trajectoryExtraction={sourceKind:original.kind,sourceFrame:i,sourceCount:original.images.length,method,...(['afir','dsafir'].includes(original.kind)?settings:{})};
         if(original.kind==='afir')s.metadata.afirCalculation={engine:original.engine,method:original.method,physicalEnergyEV:original.energies[i],biasEnergyEV:original.biasEnergies?.[i],step:original.stepNumbers?.[i]??i,validation:'biased-trajectory-not-ts',atomIds:s.atoms.map(a=>a.id)};
-        else if(original.energies)s.metadata.externalCalculation={engine:original.engine,method:original.method,energyEV:original.energies[i],mode:original.kind,charge:original.charge,multiplicity:original.multiplicity};
+        else if(original.energies)s.metadata.externalCalculation={engine:original.engine,method:original.method,energyEV:original.energies[i],mode:original.kind,...(original.dsafir?{dsafir:original.dsafir,pathFrame:i}:{}),charge:original.charge,multiplicity:original.multiplicity};
         MV.ModelF?.attach(s,original,original,i);
         MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);
       });

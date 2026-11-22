@@ -1,3 +1,4 @@
+const {clickWorkspaceCommand} = require('./workspace-commands.cjs');
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs');
 (async()=>{
  const browser=await chromium.launch({headless:true}),page=await browser.newPage({viewport:{width:1440,height:1440}}),errors=[];
@@ -8,14 +9,14 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  for(const id of ['engineLive','afirLive','xyzHeader'])assert.equal(await page.locator('#'+id).isChecked(),true);
  // These display choices belong to this browser, independently of the molecule.
  await page.uncheck('#xyzHeader');await page.click('#btnExternalEngine');await page.uncheck('#engineLive');await page.click('#engineClose');
- await page.click('#btnAFIR');await page.uncheck('#afirLive');await page.click('#afirClose');
+ await clickWorkspaceCommand(page, '#btnAFIR');await page.uncheck('#afirLive');await page.click('#afirClose');
  await page.reload();await page.waitForSelector('canvas');
  for(const id of ['engineLive','afirLive','xyzHeader'])assert.equal(await page.locator('#'+id).isChecked(),false);
  assert.match(await page.locator('#dataText').inputValue(),/^O /);
  await page.check('#xyzHeader');await page.click('#btnExternalEngine');await page.check('#engineLive');await page.click('#engineClose');
  await page.reload();await page.waitForSelector('canvas');
  assert.equal(await page.locator('#engineLive').isChecked(),true);assert.equal(await page.locator('#afirLive').isChecked(),false);assert.match(await page.locator('#dataText').inputValue(),/^3\n/);
- await page.click('#btnAFIR');await page.check('#afirLive');await page.click('#afirClose');
+ await clickWorkspaceCommand(page, '#btnAFIR');await page.check('#afirLive');await page.click('#afirClose');
  // Canvas height changes must preserve the molecule, view and coordinate draft.
  const shell=page.locator('.mv-viewer-shell'),resize=page.locator('#viewerResizeHandle');
  const initialHeight=(await shell.boundingBox()).height;
@@ -100,7 +101,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.screenshot({path:'test-artifacts/'+id+'-scroll.png'});
  };
  await checkPanel('coordinatePanel','coordinate');
- await page.click('#btnAFIR');await checkPanel('afirPanel','afir');await page.click('#afirClose');
+ await clickWorkspaceCommand(page, '#btnAFIR');await checkPanel('afirPanel','afir');await page.click('#afirClose');
  await page.fill('#dataText','O 2.5 0 0\nH .9572 0 0\nH -.239987 .926627 0');
  await page.click('#dataApply');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[0].x),2.5);
  await page.click('#btnUndo');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[0].x),0);
@@ -185,7 +186,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  const cameraAfter=await page.evaluate(()=>({q:[...MoleculeVisualizer.App.renderer().orientation],direction:MoleculeVisualizer.App.renderer().viewVectorToWorld([0,0,1]),atoms:JSON.stringify(MoleculeVisualizer.App.getState().atoms)}));assert.notDeepEqual(cameraAfter.q,cameraBefore.q);assert.equal(cameraAfter.atoms,cameraBefore.atoms);cameraAfter.direction.forEach((v,i)=>assert.ok(Math.abs(v-cameraBefore.direction[i])<1e-9));
  await page.screenshot({path:'test-artifacts/advanced.png',fullPage:true});
  await page.evaluate(()=>{const a=MoleculeVisualizer.App;a.change('distort',s=>{s.atoms[0].x+=1.2;});});const distorted=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms));
- await page.click('#btnRelax');await page.waitForFunction(()=>!document.querySelector('#btnRelax').disabled);assert.match(await page.locator('#statusBadge').textContent(),/構造を整えました/);assert.notEqual(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),distorted);await page.click('#btnUndo');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),distorted);
+ await clickWorkspaceCommand(page, '#btnRelax');await page.waitForFunction(()=>!document.querySelector('#btnRelax').disabled);assert.match(await page.locator('#statusBadge').textContent(),/構造を整えました/);assert.notEqual(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),distorted);await page.click('#btnUndo');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),distorted);
  await page.evaluate(()=>{MoleculeVisualizer.Advanced.relax();MoleculeVisualizer.Advanced.cancel();});assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),distorted);
  await page.evaluate(()=>{MoleculeVisualizer.Advanced.relax();MoleculeVisualizer.App.change('edit while busy',s=>{s.atoms[0].x+=.25;});});const editedWhileBusy=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms));await page.waitForFunction(()=>!document.querySelector('#btnRelax').disabled);assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),editedWhileBusy);assert.match(await page.locator('#statusBadge').textContent(),/結果は適用しませんでした/);
 
@@ -194,7 +195,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  await page.click('#dataReset');await page.fill('#dataText',cifText);await page.click('#dataApply');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms.length),3);assert.match(await page.locator('#dataText').inputValue(),/TV /);assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.sourceFormat),'cif');
  const multiSdf=await page.evaluate(()=>{const m=MoleculeVisualizer,s=m.IO.parseXYZToState('C 0 0 0\nO 1.2 0 0');s.bonds[0].order=2;return m.IO.stateToSDFText(s)+m.IO.stateToSDFText(s);});await page.fill('#dataText',multiSdf);await page.click('#dataApply');assert.equal(await page.locator('#frameLabel').textContent(),'1 / 2');await page.click('#frameNext');assert.equal(await page.locator('#frameLabel').textContent(),'2 / 2');
  await page.fill('#dataText','#p hf/sto-3g\n\nwater\n\n0 1\nO 0 0 0\nH .96 0 0\nH -.24 .93 0\n\n');await page.click('#dataApply');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.sourceFormat),'gaussian');
- await page.click('#btnRandomStructures');await page.selectOption('#randomMode','orientation');await page.fill('#generationCount','20');await page.click('#generationRun');await page.waitForFunction(()=>!document.querySelector('#generationDialog').open||!document.querySelector('#generationRun').disabled);assert.equal(await page.locator('#generationDialog').evaluate(e=>e.open),false,await page.locator('#generationMessage').textContent());assert.equal(await page.locator('#frameLabel').textContent(),'1 / 20');await page.click('#frameNext');assert.equal(await page.locator('#frameLabel').textContent(),'2 / 20');
+ await clickWorkspaceCommand(page, '#btnRandomStructures');await page.selectOption('#randomMode','orientation');await page.fill('#generationCount','20');await page.click('#generationRun');await page.waitForFunction(()=>!document.querySelector('#generationDialog').open||!document.querySelector('#generationRun').disabled);assert.equal(await page.locator('#generationDialog').evaluate(e=>e.open),false,await page.locator('#generationMessage').textContent());assert.equal(await page.locator('#frameLabel').textContent(),'1 / 20');await page.click('#frameNext');assert.equal(await page.locator('#frameLabel').textContent(),'2 / 20');
  // Playback keeps advancing during a held camera gesture and preserves the view
  // across frames. Actual atom-edit gestures and the Stop button still stop it.
  const frameAtoms=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().metadata.trajectory.map(f=>f.atoms)));
@@ -223,10 +224,10 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  const editBounds=await page.locator('canvas').boundingBox(),editPick=await page.evaluate(()=>{const p=MoleculeVisualizer.App.renderer().projectedAtoms[0];return {x:p.x,y:p.y};});
  await page.mouse.click(editBounds.x+editPick.x,editBounds.y+editPick.y);assert.match(await page.locator('#framePlay').textContent(),/再生/);await page.click('#toolSelect');
  await page.click('#btnUndo');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.sourceFormat),'gaussian');assert.equal(await page.locator('#frameLabel').textContent(),'1 / 1');
- await page.click('#btnReactionPath');await page.fill('#pathStart','C -1 0 0\nC 1 0 0');await page.fill('#pathEnd','C 1 0 0\nN -1 0 0');await page.fill('#generationCount','5');await page.click('#generationRun');await page.waitForFunction(()=>!document.querySelector('#generationRun').disabled);assert.match(await page.locator('#generationMessage').textContent(),/File-order/);
+ await clickWorkspaceCommand(page, '#btnReactionPath');await page.fill('#pathStart','C -1 0 0\nC 1 0 0');await page.fill('#pathEnd','C 1 0 0\nN -1 0 0');await page.fill('#generationCount','5');await page.click('#generationRun');await page.waitForFunction(()=>!document.querySelector('#generationRun').disabled);assert.match(await page.locator('#generationMessage').textContent(),/File-order/);
  await page.fill('#pathEnd','C 1 0 0\nC -1 0 0');await page.screenshot({path:'test-artifacts/path-dialog.png',fullPage:true});await page.click('#generationRun');await page.waitForFunction(()=>!document.querySelector('#generationDialog').open||!document.querySelector('#generationRun').disabled);assert.equal(await page.locator('#generationDialog').evaluate(e=>e.open),false,await page.locator('#generationMessage').textContent());assert.equal(await page.locator('#frameLabel').textContent(),'1 / 5');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[0].x),-1);await page.click('#frameNext');await page.click('#frameNext');assert.ok(await page.evaluate(()=>{const s=MoleculeVisualizer.App.getState();return MoleculeVisualizer.Geometry.distance(...s.atoms)>1.5;}));
  await page.click('#btnExport');const downloadPath=page.waitForEvent('download');await page.click('#allFrames');const generatedFile=await downloadPath;const output=fs.readFileSync(await generatedFile.path(),'utf8');assert.equal((output.match(/^2$/gm)||[]).length,5);await page.locator('#exportDialog [data-close]').click();
- await page.click('#btnRandomStructures');await page.selectOption('#randomMode','orientation');await page.fill('#generationCount','21');await page.click('#generationRun');assert.match(await page.locator('#generationMessage').textContent(),/20/);await page.fill('#generationCount','5');await page.evaluate(()=>{MoleculeVisualizer.GeneratorUI.run();MoleculeVisualizer.GeneratorUI.cancel();});assert.match(await page.locator('#generationMessage').textContent(),/中止/);await page.locator('#generationDialog [data-close]').click();assert.equal(await page.locator('#frameLabel').textContent(),'3 / 5');
+ await clickWorkspaceCommand(page, '#btnRandomStructures');await page.selectOption('#randomMode','orientation');await page.fill('#generationCount','21');await page.click('#generationRun');assert.match(await page.locator('#generationMessage').textContent(),/20/);await page.fill('#generationCount','5');await page.evaluate(()=>{MoleculeVisualizer.GeneratorUI.run();MoleculeVisualizer.GeneratorUI.cancel();});assert.match(await page.locator('#generationMessage').textContent(),/中止/);await page.locator('#generationDialog [data-close]').click();assert.equal(await page.locator('#frameLabel').textContent(),'3 / 5');
 
  // Canvas shortcuts: one-edge expansion, connected-only selection and rigid B-side edits.
  await page.click('#dataReset');
@@ -273,7 +274,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
  await page.screenshot({path:'test-artifacts/studio.png',fullPage:true});
  await page.setViewportSize({width:390,height:844});
  for(const [id,prefix] of [['coordinatePanel','coordinate'],['afirPanel','afir']]){
-  if(prefix==='afir')await page.click('#btnAFIR');const panel=page.locator('#'+id);await panel.scrollIntoViewIfNeeded();
+  if(prefix==='afir')await clickWorkspaceCommand(page, '#btnAFIR');const panel=page.locator('#'+id);await panel.scrollIntoViewIfNeeded();
   const before=await panel.boundingBox();await page.click('#'+prefix+'Shorter');assert.ok((await panel.boundingBox()).height<before.height-70);
   await page.click('#'+prefix+'Taller');assert.ok(Math.abs((await panel.boundingBox()).height-before.height)<2);
   assert.ok(await panel.evaluate(e=>e.scrollWidth<=e.clientWidth+1));await page.screenshot({path:'test-artifacts/'+id+'-mobile.png'});

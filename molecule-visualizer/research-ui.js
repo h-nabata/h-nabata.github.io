@@ -20,6 +20,9 @@
   function numeric(id,lo,hi,integer=false){const value=Number($(id).value);if(!$(id).value.trim()||!Number.isFinite(value)||value<lo||value>hi||(integer&&!Number.isInteger(value)))throw Error(`${$(id).closest('label').firstChild.textContent}: ${lo}〜${hi}${integer?'の整数':''}を指定してください。`);return value;}
   function input(data,state,info,options={}){
     const constraints=constraintsInput(state,data.mode);if(constraints.length){if(!info.internalConstraints)throw Error('接続中のサーバーは内部座標の拘束に対応していません。');data.internalConstraints=constraints;}
+    if(data.mode==='dsafir')data.dsafir={
+      delta:numeric('dsafirDelta',.0001,50),stepSize:numeric('dsafirStep',.001,.2),threshold:numeric('dsafirThreshold',.001,1)
+    };
     if(data.mode==='irc'){if(data.symbols.length>200)throw Error('IRCは最大200原子です。');if(!info.modes.includes('irc')||!info.sellaVersion)throw Error('IRCにはSellaを導入した対応サーバーが必要です。');data.irc={direction:$('ircDirection').value,stepSize:numeric('ircStepSize',.005,.5),relaxEndpoints:$('ircRelaxEndpoints').checked};}
     if(data.mode==='scan'){if(!info.modes.includes('scan'))throw Error('接続中のサーバーは緩和スキャンに対応していません。');const rows=coordinates($('scanCoordinateRows'),state.atoms.length,true);if(rows.length<1||rows.length>2||rows.reduce((p,r)=>p*r.points,1)>400)throw Error('1〜2本の座標を指定し、合計400点以内にしてください。');data.scan={coordinates:rows,stopOnFailure:$('scanStopOnFailure').checked};}
     if(data.mode==='lup'){
@@ -40,6 +43,9 @@
   function settings(mode){if(mode!==lastMode&&['ts','optimize'].includes(mode))$('thermoState').value=mode==='ts'?'ts':'minimum';lastMode=mode;$('researchConstraints').hidden=!['optimize','batch','scan'].includes(mode)&&!$('internalConstraintsEnabled').checked;$('engineLUPSettings').hidden=mode!=='lup';$('engineIRCSettings').hidden=mode!=='irc';$('engineScanSettings').hidden=mode!=='scan';$('engineAdaptiveSettings').hidden=!['cineb','lup'].includes(mode);$('engineThermoSettings').hidden=!['optimize','ts','vibrations'].includes(mode);}
   function restore(data){
     $('internalConstraintsEnabled').checked=!!data.internalConstraints?.length;$('internalConstraintRows').replaceChildren();for(const c of data.internalConstraints||[])coordinateRow($('internalConstraintRows'),false,c);
+    if(data.dsafir){
+      $('dsafirDelta').value=data.dsafir.delta;$('dsafirStep').value=data.dsafir.stepSize;$('dsafirThreshold').value=data.dsafir.threshold;
+    }
     if(data.mode==='lup')$('lupOptimizer').value=data.optimizer||'lbfgs';if(data.lup){$('lupRedistributeEvery').value=data.lup.redistributeEvery;$('lupRedistributionTolerance').value=data.lup.redistributionTolerance;}
     if(data.irc){$('ircDirection').value=data.irc.direction;$('ircStepSize').value=data.irc.stepSize;$('ircRelaxEndpoints').checked=data.irc.relaxEndpoints;}
     if(data.scan){$('scanCoordinateRows').replaceChildren();for(const c of data.scan.coordinates)coordinateRow($('scanCoordinateRows'),true,c);$('scanStopOnFailure').checked=data.scan.stopOnFailure;}
