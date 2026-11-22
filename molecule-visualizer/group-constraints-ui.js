@@ -24,7 +24,9 @@
   }
   function open(){
     if(!busy())M.App.useDisplayedStructure();
+    M.PanelLayout?.showInspector('constraints');
     $('groupConstraintPanel').open=true;$('groupConstraintPanel').scrollIntoView({block:'nearest',behavior:'smooth'});
+    $('groupConstraintPanel').querySelector('summary')?.focus({preventScroll:true});
     if(!busy()){$('toolSelect').click();$('multiSelect').checked=true;}
     sync();
   }

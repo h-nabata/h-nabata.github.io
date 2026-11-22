@@ -1,4 +1,4 @@
-const {clickWorkspaceCommand} = require('./workspace-commands.cjs');
+const {clickWorkspaceCommand, openCalculationPane, openInspector, openDetails} = require('./workspace-commands.cjs');
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{spawn}=require('node:child_process');
 (async()=>{
  const root=path.resolve(__dirname,'..'),engine=spawn(process.env.PYTHON||'python',[path.join(root,'local-engine/bridge.py'),'--engine','tblite','--port','8766','--allow-origin','http://127.0.0.1:8765','--site-dir',root],{env:{...process.env,OMP_NUM_THREADS:'1',OPENBLAS_NUM_THREADS:'1'}});
@@ -51,13 +51,13 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.equal(await page.locator('#engineLive').isChecked(),true);assert.equal(await page.locator('#afirLive').isChecked(),true);
   // Keep explicit live-off coverage in the first calculation sequence.
   await clickWorkspaceCommand(page, '#btnAFIR');await page.uncheck('#afirLive');await page.click('#afirClose');
-  await page.click('#btnExternalEngine');await page.uncheck('#engineLive');await page.fill('#engineURL','http://127.0.0.1:8766');await page.fill('#engineToken','incorrect');await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineMessage').textContent.includes('トークンが一致'));
+  await page.click('#btnExternalEngine');await page.uncheck('#engineLive');await page.click('#enginePanelConnect');await page.fill('#engineURL','http://127.0.0.1:8766');await page.fill('#engineToken','incorrect');await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineMessage').textContent.includes('トークンが一致'));
   await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
-  await page.selectOption('#engineMode','neb');
+  await openCalculationPane(page,'setup');await page.selectOption('#engineMode','neb');
   assert.equal(await page.locator('#engineMode').inputValue(),'neb');
   await page.selectOption('#engineMode','cineb');
   assert.deepEqual(await page.locator('#engineSteps,#engineFmax,#engineMove,#engineSpring,#engineClimb').evaluateAll(es=>es.map(e=>e.value)),['100','0.05','0.03','1','5']);
-  await page.fill('#engineFmax','0.02');await page.selectOption('#engineMode','ts');assert.equal(await page.locator('#engineFmax').inputValue(),'0.05');
+  await openDetails(page,'#engineNumericOptions');await page.fill('#engineFmax','0.02');await page.selectOption('#engineMode','ts');assert.equal(await page.locator('#engineFmax').inputValue(),'0.05');
   assert.equal(await page.locator('#engineVibrationDelta').inputValue(),'0.001');
   await page.selectOption('#engineMode','cineb');assert.equal(await page.locator('#engineFmax').inputValue(),'0.02');
   await spin('engineFmax','0.3','0.31');await spin('engineMove','0.04','0.05');await spin('engineSpring','0.1','0.2');
@@ -69,20 +69,20 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.screenshot({path:'test-artifacts/engine-energy.png'});
   await page.click('#engineApply');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.externalCalculation.engine),'tblite');await page.click('#btnUndo');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.externalCalculation),undefined);
   // Stale result never overwrites an edit made after the input snapshot.
-  await page.click('#btnExternalEngine');await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
+  await page.click('#btnExternalEngine');await openCalculationPane(page,'setup');await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
   await page.evaluate(()=>MoleculeVisualizer.App.change('stale edit',s=>{s.atoms[0].x+=.01;return s;}));await page.click('#engineApply');assert.match(await page.locator('#engineMessage').textContent(),/変更されています/);await page.click('#engineClose');await page.click('#btnUndo');await page.click('#dataReset');
   // AFIR: pick on canvas, add three groups / two pairs, run a real local potential.
-  await page.click('#btnExternalEngine');await page.selectOption('#engineMode','optimize');
+  await page.click('#btnExternalEngine');await openCalculationPane(page,'setup');await page.selectOption('#engineMode','optimize');
   await page.fill('#engineFmax','0');await page.click('#engineRun');assert.match(await page.locator('#engineMessage').textContent(),/fmaxは/);
   await page.fill('#engineFmax','10');
   await page.fill('#engineSteps','10001');await page.click('#engineRun');assert.match(await page.locator('#engineMessage').textContent(),/maxStepsは1〜10000/);
   for(const steps of ['1500','10000']){
-    await page.fill('#engineSteps',steps);await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
+    await openCalculationPane(page,'setup');await page.fill('#engineSteps',steps);await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
     const saved=page.waitForEvent('download');await page.click('#engineDownload');const file=await saved;
     const report=JSON.parse(fs.readFileSync(await file.path(),'utf8'));assert.equal(report.input.maxSteps,Number(steps));assert.equal(report.input.mode,'optimize');assert.equal(report.result.converged,true);
   }
   // A real optimization retains every evaluated geometry even with live display off.
-  await page.fill('#engineSteps','3');await page.fill('#engineFmax','0.00001');await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
+  await openCalculationPane(page,'setup');await page.fill('#engineSteps','3');await page.fill('#engineFmax','0.00001');await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
   const optDownload=page.waitForEvent('download');await page.click('#engineDownload');const optFile=await optDownload,opt=JSON.parse(fs.readFileSync(await optFile.path(),'utf8'));
   assert.equal(opt.result.trajectory.images.length,4);assert.deepEqual(opt.result.trajectory.images[0],opt.input.images[0]);assert.deepEqual(opt.result.trajectory.images[3],opt.result.images[0]);
   await page.click('#engineXYZ');assert.match(await page.locator('#trajectorySummary').textContent(),/4構造/);
@@ -95,11 +95,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.selectOption('#trajectoryMethod','index');await saveLUP('#trajectorySaveSelected',optExpected,[0,2,3]);
   await page.screenshot({path:'test-artifacts/trajectory-export.png'});
   await page.click('#trajectoryClose');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),before);
-  await page.click('#btnExternalEngine');await page.click('#engineProfile');assert.equal(await page.locator('#profileRange').getAttribute('max'),'3');
+  await page.click('#btnExternalEngine');await openCalculationPane(page,'results');await page.click('#engineProfile');assert.equal(await page.locator('#profileRange').getAttribute('max'),'3');
   await page.locator('#profileRange').focus();await page.locator('#profileRange').press('End');assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.renderer().state.atoms.map(a=>[a.x,a.y,a.z])),opt.result.images[0]);
   await page.click('#profileRestore');await page.click('#profileDetails');
   assert.equal(await page.locator('#engineMode optgroup').getAttribute('label'),'単一構造の最適化（AFIR法を含む）');
-  const jobsBefore=jobRequests.length;await page.selectOption('#engineMode','afir');
+  const jobsBefore=jobRequests.length;await openCalculationPane(page,'setup');await page.selectOption('#engineMode','afir');
   assert.equal(await page.locator('#engineDialog').isVisible(),false);assert.equal(await page.locator('#afirPanel').isVisible(),true);
   assert.equal(await page.locator('#engineMode').inputValue(),'optimize');assert.equal(jobRequests.length,jobsBefore,'opening AFIR setup must not start a calculation');
   await spin('afirFmax','0.3','0.31');await spin('afirMove','0.04','0.05');await spin('afirGamma','100','101');
@@ -209,7 +209,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.equal(await page.locator('#profileRange').inputValue(),'1');
   await page.locator('#profileRange').focus();await page.locator('#profileRange').press('End');
   assert.match(await page.locator('#frameLabel').textContent(),/4 \/ 4/);
-  await page.screenshot({path:'test-artifacts/afir.png',fullPage:true});await page.click('#btnUndo');await page.click('#afirClose');await page.click('#dataReset');
+  await page.screenshot({path:'test-artifacts/afir.png',fullPage:true});await page.click('#btnUndo');await page.click('#afirClose');await openInspector(page,'coordinates');await page.click('#dataReset');
   // Actual fixed-cell path relaxation, final review, apply, navigation, export and Undo.
   const xyz=offset=>`3\npath Lattice="9 0 0 1 9 0 0 0 9" pbc="T T T"\nO 0 0 0\nH ${.96+offset} 0 0\nH -.24 .93 0\n`;
   await page.fill('#dataText',[0,.2,.4].map(xyz).join(''));await page.click('#dataApply');
@@ -227,7 +227,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.click('#btnUndo');assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().metadata.trajectory)),source);
   // CI-NEB exports the final path, including endpoints, rather than optimizer iterations.
   {
-    await page.click('#btnExternalEngine');await page.selectOption('#engineMode','cineb');await page.fill('#engineSteps','3');
+    await page.click('#btnExternalEngine');await openCalculationPane(page,'setup');await page.selectOption('#engineMode','cineb');await page.fill('#engineSteps','3');
     await page.fill('#engineClimb','1');
     await page.click('#engineRun');await page.waitForSelector('#engineResult:not([hidden])');
     const pending=page.waitForEvent('download');await page.click('#engineDownload');const file=await pending,report=JSON.parse(fs.readFileSync(await file.path(),'utf8'));
@@ -245,7 +245,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   const fixtureId='00000000000000000000000000000001';let fixtureInput,phase=0,complete=false,cancelCalls=0;
   const checkpoint=step=>({mode:'cineb',endpointMode:fixtureInput.endpointMode,climbingImage:2,
     diagnostics:{endpointPhysicalFmax:[0,0],climbingPhysicalFmax:1,climbingBracketed:true},step,energies:[0,1+step,3+step,2+step,0],images:fixtureInput.images.map((image,i)=>image.map(p=>[p[0],p[1]+(i&&i<4?step*.02:0),p[2]]))});
-  const createFixture=async route=>{fixtureInput=route.request().postDataJSON();await route.fulfill({json:{id:fixtureId}});};
+  const createFixture=async route=>{
+    if(route.request().method()!=='POST')return route.continue();
+    fixtureInput=route.request().postDataJSON();
+    await route.fulfill({json:{id:fixtureId}});
+  };
   const fixtureURL=new RegExp('/api/jobs/'+fixtureId+'(?:[/?].*)?$');
   await page.route('**/api/jobs',createFixture);
   await page.route(fixtureURL,async route=>{
@@ -255,7 +259,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   });
   await page.click('#dataReset');await page.fill('#dataText',[0,.1,.2,.3,.4].map(xyz).join(''));await page.click('#dataApply');
   const fixtureSource=await page.evaluate(()=>MoleculeVisualizer.IO.stateToProjectText(MoleculeVisualizer.App.getState()));
-  await page.click('#btnExternalEngine');await page.selectOption('#engineMode','cineb');await page.check('#engineLive');await page.click('#engineRun');
+  await page.click('#btnExternalEngine');await openCalculationPane(page,'setup');await page.selectOption('#engineMode','cineb');await page.check('#engineLive');await page.click('#engineRun');
   await page.waitForFunction(()=>document.getElementById('profileTitle').textContent.includes('ステップ 0'));
   assert.equal(await page.locator('#profileRange').inputValue(),'2');
   await page.locator('#energyProfile circle[tabindex="0"]').nth(1).click();assert.equal(await page.locator('#profileFollow').isChecked(),true);
@@ -298,7 +302,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.click('#frameNext');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.renderer().projectedBonds.length),0);
   // Local UI fallback is served without Jekyll front matter and works at mobile width.
   const local=await browser.newPage({viewport:{width:390,height:844}});await local.goto('http://127.0.0.1:8766/');await local.waitForSelector('canvas');await local.click('#btnExternalEngine');assert.equal(await local.locator('#engineURL').inputValue(),'http://127.0.0.1:8766');
-  await local.fill('#engineToken',token);await local.click('#engineConnect');await local.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
+  await local.click('#enginePanelConnect');await local.fill('#engineToken',token);await local.click('#engineConnect');await local.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
   const dimensions=await local.locator('#engineDialog').evaluate(e=>({client:e.clientWidth,scroll:e.scrollWidth}));assert.ok(dimensions.scroll<=dimensions.client+2,'dialog must fit mobile width');await local.screenshot({path:'test-artifacts/engine-mobile.png'});
   assert.equal(await local.locator('#engineLive').isChecked(),true);
   let defaultLiveRequest;local.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/api/jobs'))defaultLiveRequest=r.postDataJSON();});

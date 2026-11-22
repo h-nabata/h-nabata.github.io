@@ -1,4 +1,4 @@
-const {clickWorkspaceCommand} = require('./workspace-commands.cjs');
+const {clickWorkspaceCommand, openCalculationPane, openDetails} = require('./workspace-commands.cjs');
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{spawn}=require('node:child_process');
 (async()=>{
  const root=path.resolve(__dirname,'..'),engine=spawn(process.env.PYTHON||'python',[path.join(root,'local-engine/bridge.py'),'--engine','tblite','--port','8766','--site-dir',root],{env:{...process.env,OMP_NUM_THREADS:'1',OPENBLAS_NUM_THREADS:'1'}});
@@ -10,10 +10,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.goto('http://127.0.0.1:8766/');await page.waitForSelector('canvas');
   const water=x=>`O 0 0 0\nH ${x} 0 0\nH -.24 .92 0`,text=water(1.1)+'\n\n'+water(1.3)+'\n--\n'+water(1.1);
   const original=await page.evaluate(()=>MoleculeVisualizer.IO.stateToProjectText(MoleculeVisualizer.App.getState()));
-  await clickWorkspaceCommand(page, '#btnBatchOptimize');await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
+  await clickWorkspaceCommand(page, '#btnBatchOptimize');await openCalculationPane(page, 'connection');await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
+  await openCalculationPane(page, 'setup');
   await page.uncheck('#engineLive');await page.fill('#batchText',text);await page.click('#batchCheck');assert.match(await page.locator('#batchInputSummary').textContent(),/3構造/);
   // No input blur before Run: exact conditions must be captured once for all jobs.
-  await page.selectOption('#engineOptimizer','lbfgs');await page.fill('#engineFmax','0.0001');await page.fill('#engineMove','0.02');await page.fill('#engineSteps','3');await page.click('#engineRun');
+  await openDetails(page, '#engineNumericOptions');await page.selectOption('#engineOptimizer','lbfgs');await page.fill('#engineFmax','0.0001');await page.fill('#engineMove','0.02');await page.fill('#engineSteps','3');await page.click('#engineRun');
   await page.waitForFunction(()=>!MoleculeVisualizer.EngineUI.isBusy()&&document.getElementById('batchRows').children.length===3&&document.getElementById('engineMessage').textContent.includes('終了しました'),{},{timeout:60000});
   assert.equal(requests.length,3);assert.ok(requests.every(r=>r.mode==='optimize'&&r.images.length===1&&r.maxSteps===3&&r.fmax===.0001&&r.maxMove===.02&&r.optimizer==='lbfgs'&&!r.vibrations));
   assert.deepEqual(requests[0].images,requests[2].images);assert.equal(await page.evaluate(()=>MoleculeVisualizer.IO.stateToProjectText(MoleculeVisualizer.App.getState())),original);
@@ -46,10 +47,10 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   });
   await page.fill('#batchText',text);await page.click('#engineRun');await page.waitForFunction(()=>!MoleculeVisualizer.EngineUI.isBusy()&&document.getElementById('batchRows').textContent.includes('Fixture SCF failure'));
   assert.equal(fixtureCount,3);const partial=JSON.parse(await download('#batchJSON'));assert.deepEqual(partial.entries.map(e=>e.status),['converged','failed','converged']);assert.equal(((await download('#batchXYZ')).match(/energy_eV=/g)||[]).length,2);
-  held=true;await page.click('#engineRun');await page.waitForFunction(()=>MoleculeVisualizer.EngineUI.isBusy());await page.click('#engineCancel');await page.waitForFunction(()=>!MoleculeVisualizer.EngineUI.isBusy());
+  held=true;await openCalculationPane(page, 'setup');await page.click('#engineRun');await page.waitForFunction(()=>MoleculeVisualizer.EngineUI.isBusy());await page.click('#engineCancel');await page.waitForFunction(()=>!MoleculeVisualizer.EngineUI.isBusy());
   assert.equal(fixtureCount,4);assert.equal(cancelCount,1);const stopped=JSON.parse(await download('#batchJSON'));assert.deepEqual(stopped.entries.map(e=>e.status),['cancelled','not_run','not_run']);
   // Live batch execution still sends isolated inputs and ends on the comparison profile.
-  held=false;await page.check('#engineLive');await page.click('#engineRun');await page.waitForFunction(()=>!MoleculeVisualizer.EngineUI.isBusy()&&document.getElementById('profileTitle').textContent.includes('最終エネルギー比較'));
+  held=false;await openCalculationPane(page, 'setup');await page.check('#engineLive');await page.click('#engineRun');await page.waitForFunction(()=>!MoleculeVisualizer.EngineUI.isBusy()&&document.getElementById('profileTitle').textContent.includes('最終エネルギー比較'));
   assert.equal(fixtureCount,7);assert.ok(requests.slice(-3).every(r=>r.livePreview));
   await page.click('#profileDetails');await page.setViewportSize({width:390,height:844});const dimensions=await page.locator('#engineDialog').evaluate(e=>[e.clientWidth,e.scrollWidth]);assert.ok(dimensions[1]<=dimensions[0]+2);await page.locator('#batchResult').scrollIntoViewIfNeeded();await page.screenshot({path:'test-artifacts/batch-mobile.png',fullPage:true});
   assert.ok(!(await page.evaluate(()=>JSON.stringify({...localStorage}))).includes(token));assert.deepEqual(errors,[]);console.log('Batch optimization: real tblite, isolated jobs, input, comparison, exports, preview, failure and cancellation passed');

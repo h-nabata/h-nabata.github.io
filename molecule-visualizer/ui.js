@@ -1119,7 +1119,7 @@
     bind('dataReset' ,'click',()=>{if(renderer.previewOnly){MV.VibrationUI?.restore();byId('profileRestore').click();}else xyzDirty=false;syncXYZEditor();});
     bind('cellLowerTriangular','click',()=>{try{if(xyzDirty)applyXYZEditor();MV.App.change('lower triangular cell',s=>{MV.Periodic.lowerTriangular(s);},true);setStatus('原子と格子を一緒に回転し、TVを下三角化しました。');}catch(error){report(error);}});
     bind('dataApply','click',()=>{try{applyXYZEditor();}catch(error){byId('xyzEditStatus').textContent=error.message;report(error);}});
-    bind('btnDataDock','click',()=>{byId('tab-atoms').click();byId('dataText').focus();byId('dataText').scrollIntoView?.({block:'center',behavior:'smooth'});});
+    bind('btnDataDock','click',()=>{MV.PanelLayout?.showInspector('coordinates');byId('dataText').focus();byId('dataText').scrollIntoView?.({block:'center',behavior:'smooth'});});
     bind('btnTranslate','click',()=>{const delta=['translateX','translateY','translateZ'].map(id=>numberInput(id));if(!state.selectedAtomIds.size)return;pushHistory('translate');selectedAtoms().forEach(a=>['x','y','z'].forEach((k,i)=>a[k]+=delta[i]));renderAfterEdit(true);setStatus('選択原子を平行移動しました。');});
     bind('btnFit','click',()=>renderer.fit());
     bind('btnResetCamera','click',()=>{renderer.resetCamera();setStatus('カメラの向き・拡大率・表示位置をリセットしました。');});

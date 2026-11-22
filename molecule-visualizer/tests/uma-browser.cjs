@@ -1,4 +1,4 @@
-const {clickWorkspaceCommand} = require('./workspace-commands.cjs');
+const {clickWorkspaceCommand, openCalculationPane, openDetails} = require('./workspace-commands.cjs');
 /* UI/transport contract test with a fake ML predictor, not native UMA accuracy. */
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{spawn}=require('node:child_process');
 (async()=>{
@@ -11,10 +11,13 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.goto('http://127.0.0.1:8766/');await page.waitForSelector('canvas');
   await clickWorkspaceCommand(page, '#btnConstraints');const p=await page.evaluate(()=>{const a=MoleculeVisualizer.App.renderer().projectedAtoms.find(a=>a.index===1);return {x:a.x,y:a.y};});
   await page.locator('canvas').click({position:p});await page.click('#constraintAddSelected');assert.equal(await page.locator('#constraintAtoms').inputValue(),'1');
-  await page.click('#btnExternalEngine');await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
+  await page.click('#btnExternalEngine');await openCalculationPane(page, 'connection');await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
+  await openCalculationPane(page, 'connection');
   assert.equal(await page.locator('#engineUMADetails').isVisible(),true);assert.match(await page.locator('#engineUMASummary').textContent(),/uma-s-1p2p1.*omol.*CPU.*float64/);
   assert.match(await page.locator('#engineMessage').textContent(),/計算実行時/);
-  await page.selectOption('#engineMode','optimize');await page.uncheck('#engineLive');await page.fill('#engineSteps','2');await page.fill('#engineFmax','0.00001');
+  await page.screenshot({path:'test-artifacts/uma-connection.png'});
+  await openCalculationPane(page, 'setup');
+  await page.selectOption('#engineMode','optimize');await openDetails(page, '#engineNumericOptions');await page.uncheck('#engineLive');await page.fill('#engineSteps','2');await page.fill('#engineFmax','0.00001');
   await page.fill('#engineCharge','1');await page.fill('#engineMultiplicity','2');
   // Submit while the condition field still has focus: do not depend on blur.
   await page.locator('#engineRun').evaluate(el=>el.click());
@@ -25,11 +28,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.equal(JSON.stringify(report).includes(token),false);
   assert.deepEqual(report.result.images[0][0],report.input.images[0][0]);assert.notDeepEqual(report.result.images[0][1],report.input.images[0][1]);
   await page.click('#engineApply');assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.getDisplayedState().atoms.map(a=>[a.x,a.y,a.z])),report.result.images[0]);
-  await page.click('#btnExternalEngine');await page.screenshot({path:'test-artifacts/uma-connection.png'});
+  await page.click('#btnExternalEngine');await openCalculationPane(page, 'setup');
   // Rejected requests must never reach the worker; reconnecting resets capability UI.
   await page.selectOption('#engineMode','evaluate');await page.fill('#engineMultiplicity','101');const count=requests.length;await page.locator('#engineRun').evaluate(el=>el.click());
   assert.equal(requests.length,count);assert.match(await page.locator('#engineMessage').textContent(),/UMA.*1〜100/);
-  await page.fill('#engineToken','changed');assert.equal(await page.locator('#engineUMADetails').isVisible(),false);assert.equal(await page.locator('#engineMultiplicity').getAttribute('max'),'101');
+  await openCalculationPane(page, 'connection');await page.fill('#engineToken','changed');assert.equal(await page.locator('#engineUMADetails').isVisible(),false);assert.equal(await page.locator('#engineMultiplicity').getAttribute('max'),'101');
   assert.deepEqual(errors,[]);console.log('UMA browser contract: conditions, selection, fixed MIN, apply, export, capability reset passed (fake predictor).');
  }finally{if(browser)await browser.close();engine.kill('SIGTERM');}
 })().catch(e=>{console.error(e);process.exitCode=1;});

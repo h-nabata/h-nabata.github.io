@@ -24,7 +24,7 @@
     MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);
   }
   function available(){return batch?.entries.map((e,i)=>({entry:e,index:i})).filter(({entry:e})=>MV.Batch.completed(e))||[];}
-  function openResults(){MV.EngineUI.open();$('batchResult').scrollIntoView({block:'start'});}
+  function openResults(){MV.EngineUI.open();MV.CalculationPanel?.show('results',true);$('batchResult').scrollIntoView({block:'start'});}
   function profile(selected){
     const rows=available();if(!rows.length)return;
     MV.EnergyProfile.set({title:'一括最適化 · 最終エネルギー比較',kind:'batch',referenceEnergy:MV.Batch.minimum(batch.entries),labels:rows.map(x=>`入力 ${x.index+1}`),energies:rows.map(x=>x.entry.result.energies[0]),positions:i=>rows[i].entry.result.images[0],base:i=>resultFrame(rows[i].entry,rows[i].index),details:openResults,exportXYZ:()=>downloadXYZ()});

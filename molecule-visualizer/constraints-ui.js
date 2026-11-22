@@ -20,7 +20,9 @@
   function add(ids){flush();const c=C.config(MV.App.getState());edit([...new Set([...c.fixedAtomIds,...ids])],true);}
   function open(){
     if(!busy())MV.App.useDisplayedStructure();
+    MV.PanelLayout?.showInspector('constraints');
     $('constraintPanel').open=true;$('constraintPanel').scrollIntoView({block:'nearest',behavior:'smooth'});
+    $('constraintPanel').querySelector('summary')?.focus({preventScroll:true});
     if(!busy()){$('toolSelect').click();$('multiSelect').checked=true;}
     sync();
   }

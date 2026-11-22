@@ -1,3 +1,4 @@
+const {openCalculationPane, openInspector, openDetails} = require('./workspace-commands.cjs');
 /* Synthetic file import through native File/DataTransfer and real UI controls. */
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs');
 const fixture=require('./import-fixtures.cjs');
@@ -32,9 +33,9 @@ const fixture=require('./import-fixtures.cjs');
   // Actual canvas hit test and selected atom must agree after frame change.
   const point=await page.evaluate(()=>{const r=MoleculeVisualizer.App.renderer(),p=r.projectedAtoms[2],box=r.canvas.getBoundingClientRect();return {x:box.left+p.x,y:box.top+p.y,id:p.atom.id};});
   await page.mouse.click(point.x,point.y);assert.equal(await page.evaluate(id=>MoleculeVisualizer.App.getState().selectedAtomIds.has(id),point.id),true);
-  await page.click('#btnExternalEngine');await page.fill('#engineURL','http://127.0.0.1:8777');await page.fill('#engineToken','synthetic-token');await page.click('#engineConnect');
+  await page.click('#btnExternalEngine');await openCalculationPane(page,'connection');await page.fill('#engineURL','http://127.0.0.1:8777');await page.fill('#engineToken','synthetic-token');await page.click('#engineConnect');
   await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.startsWith('接続済み'));
-  await page.selectOption('#engineMode','optimize');await page.uncheck('#engineVibrationCheck');await page.uncheck('#engineLive');await page.fill('#engineSteps','17');await page.click('#engineRun');
+  await openCalculationPane(page,'setup');await page.selectOption('#engineMode','optimize');await page.uncheck('#engineVibrationCheck');await page.uncheck('#engineLive');await openDetails(page,'#engineNumericOptions');await page.fill('#engineSteps','17');await page.click('#engineRun');
   await page.waitForFunction(()=>!MoleculeVisualizer.EngineUI.isBusy());
   assert.equal(posted.length,1,await page.locator('#engineMessage').textContent());assert.deepEqual(posted[0].fixedAtoms,[2]);assert.equal(posted[0].maxSteps,17);assert.equal(posted[0].charge,0);assert.equal(posted[0].multiplicity,1);assert.equal(posted[0].images[0][1][2],1.4);
   assert.equal(await page.locator('#engineResult').isVisible(),true,await page.locator('#engineMessage').textContent());await page.click('#engineApply');s=await state();assert.ok(Math.abs(s.atoms[1].z-1.41)<1e-8);assert.equal(s.atoms[2].x,5);
@@ -51,7 +52,7 @@ const fixture=require('./import-fixtures.cjs');
   // Companion files are resolved locally and not duplicated in the trajectory.
   await drop([{name:'job.inp',text:'* xyzfile 0 1 h2.xyz'},{name:'h2.xyz',text:fixture.xyz}]);await page.waitForFunction(()=>MoleculeVisualizer.App.getState().metadata.sourceFormat==='orca');assert.equal((await state()).metadata.trajectory,undefined);
   // Editor file import uses filename hints for otherwise ambiguous GRO content.
-  await page.click('#tab-atoms');await page.locator('#coordinateImportHelp summary').click();
+  await openInspector(page,'coordinates');await openDetails(page,'#coordinateImportHelp');
   await page.setInputFiles('#dataFile',{name:'coords.gro',mimeType:'text/plain',buffer:Buffer.from(fixture.gro)});await page.waitForFunction(()=>document.getElementById('inputFormat').value==='gro');
   await page.click('#dataApply');await page.waitForFunction(()=>MoleculeVisualizer.App.getState().metadata.sourceFormat==='gro');s=await state();assert.equal(s.atoms[1].z,.74);assert.equal(s.metadata.cell.vectors[0][0],10);
   // Removing the cell is a model edit: no stale TV/Lattice in exports or localhost jobs.
@@ -63,7 +64,7 @@ const fixture=require('./import-fixtures.cjs');
   await page.click('#btnUndo');assert.deepEqual((await state()).metadata.cell,originalCell);await page.click('#btnRedo');assert.equal((await state()).metadata.cell,null);
   await page.click('#btnExport');assert.doesNotMatch(await page.locator('#exportText').inputValue(),/Lattice=|pbc=/);const removedDownload=page.waitForEvent('download');await page.click('#btnSaveProject');const removedText=fs.readFileSync(await (await removedDownload).path(),'utf8');assert.equal(JSON.parse(removedText).metadata.cell,null);await page.locator('[data-close=exportDialog]').click();
   await page.setInputFiles('#fileInput',{name:'nonperiodic.json',mimeType:'application/json',buffer:Buffer.from(removedText)});await page.waitForFunction(()=>document.getElementById('statusBadge').textContent.includes('読み込みました'));assert.equal((await state()).metadata.cell,null);
-  await page.click('#btnExternalEngine');await page.selectOption('#engineMode','optimize');await page.click('#engineRun');await page.waitForFunction(()=>!MoleculeVisualizer.EngineUI.isBusy());assert.equal(posted.length,2);assert.equal(posted.at(-1).cell,null);await page.click('#engineApply');assert.equal((await state()).metadata.cell,null);
+  await page.click('#btnExternalEngine');await openCalculationPane(page,'setup');await page.selectOption('#engineMode','optimize');await page.click('#engineRun');await page.waitForFunction(()=>!MoleculeVisualizer.EngineUI.isBusy());assert.equal(posted.length,2);assert.equal(posted.at(-1).cell,null);await page.click('#engineApply');assert.equal((await state()).metadata.cell,null);
   // A late file read cannot overwrite a newer edit.
   await page.evaluate(()=>{window.originalRead=MoleculeVisualizer.Formats.readFiles;MoleculeVisualizer.Formats.readFiles=async(...args)=>{await new Promise(resolve=>window.finishRead=resolve);return originalRead(...args);};});
   await drop([{name:'late.com',text:fixture.grrm}]);await page.waitForFunction(()=>!!window.finishRead);

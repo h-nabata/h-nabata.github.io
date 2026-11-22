@@ -1,4 +1,4 @@
-const {clickWorkspaceCommand} = require('./workspace-commands.cjs');
+const {clickWorkspaceCommand, openCalculationPane, openDetails, openInspector} = require('./workspace-commands.cjs');
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{spawn}=require('node:child_process');
 (async()=>{
  const root=path.resolve(__dirname,'..'),engine=spawn(process.env.PYTHON||'python',[path.join(root,'local-engine/bridge.py'),'--engine','tblite','--port','8766','--site-dir',root],{env:{...process.env,OMP_NUM_THREADS:'1',OPENBLAS_NUM_THREADS:'1'}});
@@ -14,8 +14,9 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.equal(await page.locator('#constraintEnabled').isChecked(),true);assert.equal(await page.locator('#constraintAtoms').inputValue(),'1');
   await page.click('#btnUndo');assert.equal(await page.locator('#constraintEnabled').isChecked(),false);await page.click('#btnRedo');assert.equal(await page.locator('#constraintAtoms').inputValue(),'1');
   // Last keystroke need not blur: the submitted request must capture the visible draft.
-  await page.fill('#constraintAtoms','1, 3');await page.click('#btnExternalEngine');await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
-  await page.selectOption('#engineMode','optimize');await page.uncheck('#engineLive');await page.fill('#engineSteps','3');await page.fill('#engineFmax','0.00001');await page.selectOption('#engineOptimizer','lbfgs');await page.click('#engineRun');
+  await page.fill('#constraintAtoms','1, 3');await page.click('#btnExternalEngine');await openCalculationPane(page, 'connection');await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('接続済み'));
+  await openCalculationPane(page, 'setup');
+  await page.selectOption('#engineMode','optimize');await openDetails(page, '#engineNumericOptions');await page.uncheck('#engineLive');await page.fill('#engineSteps','3');await page.fill('#engineFmax','0.00001');await page.selectOption('#engineOptimizer','lbfgs');await page.click('#engineRun');
   await page.waitForFunction(()=>!MoleculeVisualizer.EngineUI.isBusy()&&!document.getElementById('engineResult').hidden,{},{timeout:60000});
   assert.deepEqual(requests.at(-1).fixedAtoms,[0,2]);assert.equal(requests.at(-1).optimizer,'lbfgs');
   const report=JSON.parse(await download('#engineDownload'));
@@ -29,7 +30,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.click('#constraintClear');await clickWorkspaceCommand(page, '#btnAFIR');await page.click('#btnClearSel');await select(0);await page.fill('#afirName','Fixed O');await page.click('#afirAddFragment');
   await select(1);await page.fill('#afirName','Mobile H');await page.click('#afirAddFragment');await page.click('#afirAddPair');
   await clickWorkspaceCommand(page, '#btnConstraints');await page.selectOption('#constraintGroup',{label:'Fixed O'});await page.click('#constraintAddGroup');assert.equal(await page.locator('#constraintAtoms').inputValue(),'1');
-  await page.fill('#afirSteps','3');await page.fill('#afirFmax','0.00001');await page.uncheck('#afirLive');await page.click('#afirRun');
+  await openInspector(page, 'afir');await page.fill('#afirSteps','3');await page.fill('#afirFmax','0.00001');await page.uncheck('#afirLive');await page.click('#afirRun');
   await page.waitForFunction(()=>!MoleculeVisualizer.AFIRUI.isBusy()&&!document.getElementById('afirResult').hidden,{},{timeout:60000});
   const afir=JSON.parse(await download('#afirDownload'));assert.deepEqual(afir.input.fixedAtoms,[0]);assert.deepEqual(afir.result.fixedAtoms,[0]);
   for(const p of afir.result.images)assert.deepEqual(p[0],afir.result.images[0][0]);assert.notDeepEqual(afir.result.images.at(-1)[1],afir.result.images[0][1]);
@@ -42,13 +43,13 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   for(const e of batch.entries){assert.ok(e.result);assert.deepEqual(e.result.images[0][0],[e.frame.atoms[0].x,e.frame.atoms[0].y,e.frame.atoms[0].z]);}
   assert.notDeepEqual(batch.entries[0].result.images[0][0],batch.entries[1].result.images[0][0]);
   // All-fixed, vibrations, unsupported services fail before any calculation is sent.
-  await page.click('#engineClose');await clickWorkspaceCommand(page, '#btnConstraints');await page.fill('#constraintAtoms','1-3');await page.click('#constraintApply');await page.click('#btnExternalEngine');await page.selectOption('#engineMode','optimize');const count=requests.length;await page.click('#engineRun');assert.match(await page.locator('#engineMessage').textContent(),/全原子/);assert.equal(requests.length,count);
-  await page.click('#engineClose');await page.fill('#constraintAtoms','1');await page.click('#constraintApply');await page.click('#btnExternalEngine');await page.selectOption('#engineMode','optimize');await page.check('#engineVibrationCheck');await page.click('#engineRun');assert.match(await page.locator('#engineMessage').textContent(),/振動解析/);assert.equal(requests.length,count);await page.uncheck('#engineVibrationCheck');
-  await page.route('**/api/info',async route=>{const response=await route.fetch(),info=await response.json();delete info.fixedAtoms;info.version='1.4.0';await route.fulfill({json:info});});await page.click('#engineConnect');await page.waitForFunction(()=>!document.getElementById('engineConnect').disabled);await page.click('#engineRun');assert.match(await page.locator('#engineMessage').textContent(),/bridge.py/);assert.equal(requests.length,count);
+  await page.click('#engineClose');await clickWorkspaceCommand(page, '#btnConstraints');await page.fill('#constraintAtoms','1-3');await page.click('#constraintApply');await page.click('#btnExternalEngine');await openCalculationPane(page, 'setup');await page.selectOption('#engineMode','optimize');const count=requests.length;await page.click('#engineRun');assert.match(await page.locator('#engineMessage').textContent(),/全原子/);assert.equal(requests.length,count);
+  await page.click('#engineClose');await page.fill('#constraintAtoms','1');await page.click('#constraintApply');await page.click('#btnExternalEngine');await openCalculationPane(page, 'setup');await page.selectOption('#engineMode','optimize');await page.check('#engineVibrationCheck');await page.click('#engineRun');assert.match(await page.locator('#engineMessage').textContent(),/振動解析/);assert.equal(requests.length,count);await page.uncheck('#engineVibrationCheck');
+  await page.route('**/api/info',async route=>{const response=await route.fetch(),info=await response.json();delete info.fixedAtoms;info.version='1.4.0';await route.fulfill({json:info});});await openCalculationPane(page, 'connection');await page.click('#engineConnect');await page.waitForFunction(()=>!document.getElementById('engineConnect').disabled);await openCalculationPane(page, 'setup');await page.click('#engineRun');assert.match(await page.locator('#engineMessage').textContent(),/bridge.py/);assert.equal(requests.length,count);
   // Manual drag, coordinate input, rigid transforms and navigation preserve bonds.
   await page.click('#engineClose');await page.click('#constraintClear');await page.evaluate(()=>{const MV=MoleculeVisualizer;MV.App.change('edit fixture',()=>MV.IO.parseXYZToState('C 0 0 0\nC 3 0 0'),true);});
-  await page.fill('#dataText','C 0 0 0\nC 1.4 0 0');await page.click('#dataApply');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().bonds.length),0);
-  await page.click('[data-workspace-jump=editing]');await page.click('#tab-bonds');await page.click('#btnReinferBonds');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().bonds.length),1);
+  await openInspector(page, 'coordinates');await page.fill('#dataText','C 0 0 0\nC 1.4 0 0');await page.click('#dataApply');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().bonds.length),0);
+  await openInspector(page, 'editing');await page.click('#tab-bonds');await page.click('#btnReinferBonds');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().bonds.length),1);
   await page.click('#toolMove');const p=await page.evaluate(()=>{const a=MoleculeVisualizer.App.renderer().projectedAtoms.find(a=>a.index===2),r=document.querySelector('canvas').getBoundingClientRect();return {x:a.x+r.x,y:a.y+r.y};});await page.mouse.move(p.x,p.y);await page.mouse.down();await page.mouse.move(p.x+150,p.y+80,{steps:5});await page.mouse.up();assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().bonds.length),1);
   // Real tblite angular constraints and a dihedral scan across 180 degrees.
   // Three fixed H atoms define the frame; the fourth retains a radial freedom.
@@ -58,11 +59,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().selectedAtomIds.size),1);
   if(!await page.locator('#constraintAtoms').isVisible())await clickWorkspaceCommand(page, '#btnConstraints');
   await page.fill('#constraintAtoms','1-3');await page.check('#constraintEnabled');await page.click('#constraintApply');
-  await page.click('#btnExternalEngine');await page.click('#engineConnect');
+  await page.click('#btnExternalEngine');await openCalculationPane(page, 'connection');await page.click('#engineConnect');
   await page.waitForFunction(()=>!document.getElementById('engineConnect').disabled);
-  await page.selectOption('#engineMode','optimize');await page.selectOption('#engineOptimizer','lbfgs');
+  await openCalculationPane(page, 'setup');await page.selectOption('#engineMode','optimize');await page.selectOption('#engineOptimizer','lbfgs');
   await page.fill('#engineSteps','3');await page.fill('#engineFmax','0.00001');
-  await page.locator('#internalConstraintsDetails summary').click();await page.check('#internalConstraintsEnabled');
+  await openDetails(page, '#engineAdditionalOptions');await openDetails(page, '#internalConstraintsDetails');await page.check('#internalConstraintsEnabled');
   const addCoordinate=async(type,atoms,value)=>{
     await page.click('#internalConstraintAdd');const row=page.locator('#internalConstraintRows .research-coordinate').last();
     await row.locator('[data-field="type"]').selectOption(type);await row.locator('[data-field="atoms"]').fill(atoms);await row.locator('[data-field="value"]').fill(value);return row;

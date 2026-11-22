@@ -122,3 +122,190 @@
   .mv-command-sheet { grid-template-columns: 1fr; gap: .7rem; padding: .65rem; }
   .mv-app #engineDialog { box-sizing: border-box; max-width: 96vw; padding: 1rem; }
 }
+
+/* Workspace chrome. Scope the compact site navigation to the studio page. */
+body:has(.mv-app) {
+  --studio-site-height: 2.5rem;
+  margin: 0;
+  padding-top: 0;
+  background: #f0f3f5;
+}
+body:has(.mv-app) > .header {
+  height: var(--studio-site-height);
+  background: #20343d;
+  z-index: 80;
+  padding-inline: clamp(.75rem, 2vw, 2rem);
+}
+body:has(.mv-app) > .header .header-left { font: 500 .78rem/1.2 system-ui,sans-serif; color: #c9d6da; }
+body:has(.mv-app) > .header .logo { width: 1.4rem; vertical-align: middle; }
+body:has(.mv-app) > .header .menu-icon { padding: .15rem .55rem; margin: 0; font-size: 1.25rem; background: transparent; }
+body:has(.mv-app) > .header .gaming::after { display: none; }
+body:has(.mv-app) > .header .dropdown-menu { top: 100%; max-height: calc(100dvh - var(--studio-site-height)); }
+.mv-page-buffer { height: 0; }
+.header ~ .mv-page-buffer { height: var(--studio-site-height); }
+.mv-app {
+  --ink: #182e3a;
+  --muted: #506674;
+  --surface: #fff;
+  --border: #d1dbdf;
+  --soft: #edf3f3;
+  --accent: #087774;
+  --workspace-navy: #193640;
+  width: 100%;
+  padding: clamp(.75rem,1.7vw,1.65rem) clamp(.65rem,2vw,2rem) 2rem;
+  background: transparent;
+  font-size: .94rem;
+}
+.mv-app .mv-app-header {
+  display: grid;
+  grid-template-columns: minmax(14rem,1fr) auto;
+  align-items: center;
+  gap: .75rem 1rem;
+  margin: 0 0 .8rem;
+}
+.mv-app .mv-brand { gap: .75rem; }
+.mv-app .mv-brand-mark { width: 2.85rem; height: 2.85rem; padding: .52rem; border-radius: .7rem; }
+.mv-app .mv-brand h1 { line-height: 1.3; font-size: clamp(1.2rem,2.3vw,1.65rem); letter-spacing: -.025em; }
+.mv-app .mv-brand .mv-eyebrow { font-size: .66rem; line-height: 1.5; letter-spacing: .14em; color: #42666b; }
+.mv-app .mv-document {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .3rem .65rem;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  margin: 0;
+  padding: .5rem 0 0;
+  background: transparent;
+}
+.mv-app .mv-document > label { color: #3b535c; font-size: .82rem; font-weight: 650; }
+.mv-app .mv-document #structureTitle { width: auto; max-width: 38rem; flex: 1 1 12rem; min-width: 4rem; height: 2rem; background: #fff; border: 1px solid var(--border); font-size: .91rem; }
+.mv-app .mv-document #structureStats { padding: 0; font-size: .8rem; background: transparent; color: #314e5b; }
+.mv-app .mv-document #saveState { margin-inline-start: auto; font-size: .78rem; color: #4a6865; }
+.mv-app .mv-file-actions { width: auto; justify-content: flex-end; gap: .4rem; }
+.mv-app .mv-file-actions > .mv-btn, .mv-app .mv-popover > summary {
+  box-sizing: border-box;
+  min-height: 2.35rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  padding: .4rem .65rem;
+  border: 1px solid #c6d3d7;
+  border-radius: .45rem;
+  color: var(--ink);
+  background: #fff;
+  line-height: 1.3;
+  font-size: .86rem;
+  font-weight: 600;
+}
+.mv-app .mv-file-actions #btnOpen { color: #fff; background: #146c69; border-color: #146c69; }
+.mv-app .mv-file-actions #btnOpen:hover { background: #105856; }
+.mv-app .mv-file-actions #btnHelp { border-color: transparent; background: transparent; }
+.mv-app .mv-file-actions #btnExport { margin: 0; }
+.mv-popover { position: relative; font-size: .9rem; }
+.mv-popover summary { list-style: none; }
+.mv-popover summary::-webkit-details-marker { display: none; }
+.mv-app .mv-popover > summary::after {
+  content: '';
+  width: .38rem; height: .38rem;
+  border: solid currentColor; border-width: 0 1.5px 1.5px 0;
+  transform: translateY(-.1rem) rotate(45deg);
+}
+.mv-app .mv-popover[open] > summary { background: #e3f1ed; border-color: #739c98; color: #175954; }
+.mv-app .mv-popover[open] > summary::after { transform: translateY(.1rem) rotate(225deg); }
+.mv-popover-body {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + .3rem);
+  right: 0;
+  width: min(23rem, 84vw);
+  overflow-y: auto;
+  max-height: min(65dvh,28rem);
+  padding: .85rem;
+  background: #fff;
+  border: 1px solid #b6ccce;
+  border-radius: .6rem;
+  box-shadow: 0 .65rem 1.8rem #193b4d2b;
+}
+.mv-app .mv-popover-body > .mv-row:first-child { margin-top: 0; }
+.mv-app .mv-popover-body .mv-examples { margin: .6rem 0 0; padding: .6rem 0 0; gap: .4rem; border: 0; border-top: 1px solid var(--border); }
+.mv-app .mv-examples > span:first-child { width: 100%; color: #284847; font-size: .86rem; font-weight: 650; }
+.mv-app .mv-workflow-bar { padding: .45rem .55rem; background: var(--workspace-navy); border-color: var(--workspace-navy); }
+.mv-app .mv-workspace { gap: clamp(.7rem,1.3vw,1.2rem); }
+.mv-app .mv-stage, .mv-app .mv-inspector { border: 1px solid var(--border); background: #fff; border-radius: .7rem; box-shadow: 0 .16rem .55rem #182e3a0a; }
+.mv-app .mv-stage { top: calc(var(--studio-site-height, 0px) + .5rem); }
+.mv-app .mv-stage-heading, .mv-app .mv-stage-toolbar { position: relative; padding: .5rem .75rem; }
+.mv-app .mv-stage-heading { background: #fff; }
+.mv-app .mv-stage-heading h2, .mv-app .mv-inspector-heading h2 { font-size: 1rem; letter-spacing: .01em; margin: 0; }
+.mv-app .mv-stage-heading .mv-btn, .mv-app .mv-stage-heading .mv-popover > summary,
+.mv-app .mv-stage-toolbar .mv-btn, .mv-app .mv-stage-toolbar .mv-popover > summary { min-height: 2rem; font-size: .82rem; }
+.mv-app .mv-stage-heading .mv-unit-badge { border: 0; padding: .32rem .45rem; color: #335e63; background: #e6efef; font-size: .72rem; font-weight: 700; }
+.mv-app #viewportTools .mv-display-controls { display: grid; gap: .55rem; padding: 0; background: #fff; border: 0; }
+.mv-app #viewportTools .mv-control-cluster { display: flex; flex-wrap: wrap; gap: .3rem; }
+.mv-app #viewportTools .mv-control-cluster > .mv-btn { width: auto; }
+.mv-app #viewportTools .mv-view-options { font-size: .82rem; }
+.mv-app #viewportTools .mv-view-options > summary { padding: .5rem 0 0; }
+.mv-app .mv-stage-toolbar { justify-content: start; gap: .4rem; background: #f6f8f8; }
+.mv-app .mv-stage-toolbar .mv-tool { font-size: .82rem; min-height: 2rem; }
+.mv-app .mv-stage-toolbar .mv-toolbar { padding: .18rem; }
+.mv-app .mv-stage-toolbar .mv-history-actions { margin-inline-start: auto; }
+.mv-app #selectionTools .mv-popover-body { width: max-content; max-width: 82vw; }
+.mv-app .mv-stage .mv-viewer-shell:not(.mv-custom-height) { height: clamp(17rem, 47vh, 43rem); }
+.mv-app .mv-stage:has(#profilePanel:not([hidden])) .mv-viewer-shell:not(.mv-custom-height) { height: clamp(14rem, 30vh, 24rem); }
+.mv-app .mv-result-actions .mv-btn:disabled { display: none; }
+.mv-app .mv-inspector { overflow: visible; min-width: 0; }
+.mv-app .mv-inspector-heading { display: block; padding: .85rem .8rem 0; margin: 0; border-width: 0 0 1px; border-radius: .7rem .7rem 0 0; background: #fff; }
+.mv-app .mv-inspector-nav { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: .2rem; margin-top: .6rem; }
+.mv-app .mv-inspector-nav button {
+  margin: 0; padding: .5rem .1rem;
+  color: #52636d; background: transparent;
+  border: none; border-bottom: 3px solid transparent;
+  border-radius: .3rem .3rem 0 0;
+  font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer;
+}
+.mv-app .mv-inspector-nav [aria-selected="true"] { color: #155856; background: #eaf5f1; border-bottom-color: #18796e; }
+.mv-app .mv-inspector .mv-inspector-pane[role=tabpanel] {
+  padding: .7rem;
+  border: 0; border-radius: 0;
+  max-height: none; min-width: 0;
+  overflow: visible; background: transparent;
+}
+.mv-app .mv-inspector.mv-afir-active > #inspector-afir:not([hidden]) { display: block!important; }
+.mv-app .mv-inspector #coordinatePanel, .mv-app .mv-inspector #afirPanel { margin: 0; border: 1px solid #d9e3e6; box-shadow: none; }
+.mv-app .mv-inspector .mv-scroll-panel-header h2 { font-size: .92rem; }
+.mv-app .mv-inspector .mv-panel-size-hint { display: none; }
+.mv-app #inspector-coordinates .mv-cellbar { border: 0; padding: .65rem 0 0; }
+.mv-app #inspector-constraints .mv-panel { margin: 0 0 .6rem; }
+.mv-app #inspector-editing > .mv-atom-list { margin: .7rem 0 0; padding: .65rem .75rem; }
+.mv-app #inspector-editing .mv-tabs { margin-top: 0; }
+.mv-app .mv-inspector .mv-afir-note, .mv-app .mv-inspector .mv-afir-intro { font-size: .82rem; }
+.mv-app [data-workspace-jump], .mv-app .mv-inspector-pane { scroll-margin-top: calc(var(--studio-site-height, 0px) + 1rem); }
+@media(min-width: 801px) {
+  .mv-app .mv-workspace { grid-template-columns: minmax(0,1fr) minmax(20rem,34%); }
+}
+@media(max-width: 800px) {
+  .mv-app .mv-app-header { grid-template-columns: minmax(0,1fr); gap: .5rem; }
+  .mv-app .mv-file-actions { justify-content: flex-start; }
+  .mv-app .mv-file-actions .mv-btn,.mv-app .mv-file-actions .mv-popover > summary { font-size: .8rem; padding-inline: .5rem; min-height: 2.2rem; }
+  .mv-app .mv-document { padding-top: .45rem; }
+  .mv-app .mv-document #structureTitle { max-width: 19rem; }
+  .mv-app .mv-workspace { grid-template-columns: minmax(0,1fr); }
+  .mv-app .mv-stage { top: auto; }
+  .mv-app .mv-inspector-heading { position: static; }
+  .mv-app .mv-stage-toolbar, .mv-app .mv-stage-heading { padding-inline: .5rem; }
+  .mv-app .mv-stage .mv-viewer-shell:not(.mv-custom-height) { height: 42dvh; }
+  .mv-app .mv-brand-mark { width: 2.1rem; height: 2.1rem; padding: .33rem; }
+  .mv-app #workspaceFileMenu { position: static; }
+  .mv-app .mv-file-actions, .mv-app .mv-stage-toolbar, .mv-app .mv-stage-heading { position: relative; }
+  .mv-app #workspaceFileMenu .mv-popover-body, .mv-app .mv-stage .mv-popover-body { inset-inline: 0; width: auto; max-width: none; }
+  .mv-app .mv-stage .mv-popover { position: static; }
+}
+
+.mv-app #exportDialog { width: min(36rem, calc(100% - 1.5rem)); color: #1c3944; }
+.mv-app #exportDialog .mv-export-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.mv-app #exportDialog h2 { border: 0; padding: 0; margin: 0; }
+.mv-app #exportDialog h3 { font-size: .93rem; margin: 0 0 .45rem; }
+.mv-app #exportDialog section { margin-top: .9rem; padding-top: .75rem; border-top: 1px solid #dbe5e7; }
+.mv-app #exportDialog details { margin-top: .7rem; }

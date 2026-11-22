@@ -2,27 +2,37 @@
   'use strict';
 
   document.addEventListener('DOMContentLoaded', () => {
-    const bar = document.getElementById('calculationControls');
-    const menus = [...bar.querySelectorAll('.mv-command-menu')];
+    const app = document.querySelector('.mv-app');
+    const menus = [...app.querySelectorAll('.mv-command-menu, .mv-popover')];
+
     function close(menu, restoreFocus) {
       menu.open = false;
       if (restoreFocus) menu.querySelector('summary').focus({preventScroll:true});
     }
-    bar.addEventListener('click', event => {
+
+    app.addEventListener('click', event => {
       const button = event.target.closest('button');
-      const menu = button?.closest('.mv-command-menu');
+      const menu = button?.closest('.mv-command-menu, .mv-popover');
       if (!menu?.open || button.disabled) return;
       if (button.dataset.engineMethod) {
         global.MoleculeVisualizer.EngineUI.prepareMethod(button.dataset.engineMethod);
       }
-      // Some commands move focus into a dialog or into the molecular editor.
+      // Leave controls for camera orientation, zoom and size available for repeated adjustments.
+      if (menu.id === 'viewportTools' && button.id !== 'btnDataDock') return;
+
       close(menu, menu.contains(document.activeElement));
       if (button.id === 'btnAFIR' && !document.getElementById('afirPanel').hidden) {
         document.getElementById('afirPanel').scrollIntoView({block:'nearest'});
         document.getElementById('afirName').focus({preventScroll:true});
       }
     });
+
     document.addEventListener('pointerdown', event => {
+      for (const menu of menus) {
+        if (menu.open && !menu.contains(event.target)) close(menu, false);
+      }
+    });
+    document.addEventListener('focusin', event => {
       for (const menu of menus) {
         if (menu.open && !menu.contains(event.target)) close(menu, false);
       }

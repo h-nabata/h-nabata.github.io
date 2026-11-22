@@ -1,3 +1,4 @@
+const {clickWorkspaceCommand, openDetails} = require('./workspace-commands.cjs');
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs');
 (async()=>{
  const browser=await chromium.launch({headless:true});
@@ -22,17 +23,18 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await page.click('#btnExport');const pending=page.waitForEvent('download');await page.click('#btnSaveProject');const saved=JSON.parse(fs.readFileSync(await (await pending).path(),'utf8'));assert.deepEqual(saved.atoms,moved.atoms);assert.deepEqual(saved.bonds,moved.bonds);await page.click('[data-close=exportDialog]');
   await page.locator('.mv-stage-toolbar').scrollIntoViewIfNeeded();await page.screenshot({path:'test-artifacts/fragment-copy-desktop.png',fullPage:true});
   // New document retains page clipboard; button paste and shortcut paste share the format.
-  await page.click('#btnNew');await page.click('#btnPasteSelection');await count(2);next=await state();assert.equal(next.atoms[0].x,original.atoms[0].x);assert.equal(next.bonds.length,1);assert.ok(next.atoms.every(a=>!original.atoms.some(b=>a.id===b.id)));
-  await page.click('#btnCopySelection');await page.waitForFunction(()=>document.getElementById('statusBadge').textContent.includes('コピーしました'));assert.equal(await page.evaluate(()=>document.activeElement.tagName),'CANVAS');
+  await clickWorkspaceCommand(page,'#btnNew');await clickWorkspaceCommand(page,'#btnPasteSelection');await count(2);next=await state();assert.equal(next.atoms[0].x,original.atoms[0].x);assert.equal(next.bonds.length,1);assert.ok(next.atoms.every(a=>!original.atoms.some(b=>a.id===b.id)));
+  await clickWorkspaceCommand(page,'#btnCopySelection');await page.waitForFunction(()=>document.getElementById('statusBadge').textContent.includes('コピーしました'));assert.equal(await page.evaluate(()=>document.activeElement.tagName),'CANVAS');
   await page.keyboard.press('Control+v');await count(4);
   // Textarea shortcuts remain text operations and do not add atoms.
   await page.locator('#dataText').focus();await page.keyboard.press('Control+a');await page.keyboard.press('Control+c');assert.match(await page.evaluate(()=>navigator.clipboard.readText()),/^4\r?\n/);
   await page.evaluate(()=>navigator.clipboard.writeText('He 0 0 0'));await page.keyboard.press('Control+v');assert.equal((await state()).atoms.length,4);assert.equal(await page.locator('#dataText').inputValue(),'He 0 0 0');
-  await page.click('#btnPasteSelection');assert.match(await page.locator('#statusBadge').textContent(),/未適用/);assert.equal((await state()).atoms.length,4);await page.click('#dataReset');
+  await clickWorkspaceCommand(page,'#btnPasteSelection');assert.match(await page.locator('#statusBadge').textContent(),/未適用/);assert.equal((await state()).atoms.length,4);await page.click('#dataReset');
   // Browser denial uses the exact page copy and announces the fallback.
   await page.evaluate(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:{readText:async()=>{throw Error('permission denied');},writeText:async()=>{throw Error('permission denied');}}});});
-  await page.click('#btnPasteSelection');await count(6);assert.match(await page.locator('#statusBadge').textContent(),/ページ内/);
+  await clickWorkspaceCommand(page,'#btnPasteSelection');await count(6);assert.match(await page.locator('#statusBadge').textContent(),/ページ内/);
   await page.setViewportSize({width:390,height:844});await page.locator('.mv-stage-toolbar').scrollIntoViewIfNeeded();
+  await openDetails(page,'#selectionTools');
   for(const selector of ['.mv-stage-toolbar','#btnCopySelection','#btnPasteSelection']){const box=await page.locator(selector).boundingBox();assert.ok(box.x>=0&&box.x+box.width<=390);}
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));await page.screenshot({path:'test-artifacts/fragment-copy-mobile.png',fullPage:true});
   assert.deepEqual(errors,[]);console.log('Fragment clipboard: native copy/paste, selection and internal bonds, rigid drag, undo/redo, saved project, new document, text focus, denied API fallback and mobile layout passed');

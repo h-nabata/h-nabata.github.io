@@ -1,3 +1,4 @@
+const {openInspector} = require('./workspace-commands.cjs');
 // CI comparison against the public pre-change baseline. Timing is reported, not a flaky pass threshold.
 'use strict';
 const {chromium}=require('playwright'),{execFileSync}=require('node:child_process'),fs=require('node:fs'),assert=require('node:assert/strict');
@@ -12,6 +13,7 @@ const revision='f70b9b8ca1f1ba7f88eac09a7fcd3a5ed862a87c';
    page.on('pageerror',e=>errors.push(e.message));
    if(label==='before')await page.route('**/*.js*',route=>{const name=new URL(route.request().url()).pathname.split('/').pop();return old[name]?route.fulfill({body:old[name],contentType:'application/javascript'}):route.continue();});
    await page.goto('http://127.0.0.1:8765/molecule-visualizer/');await page.waitForSelector('canvas');
+   await openInspector(page,'editing');
    const result=await page.evaluate(async()=>{
     const M=MoleculeVisualizer,atoms=Array.from({length:1000},(_,i)=>({id:'a'+i,element:i%3?'C':'H',x:i%20*1.4,y:Math.floor(i/20)%20*1.4,z:Math.floor(i/400)*1.4}));
     const bonds=atoms.slice(1).map((a,i)=>({id:'b'+i,atom1:atoms[i].id,atom2:a.id,order:1,source:'manual'}));

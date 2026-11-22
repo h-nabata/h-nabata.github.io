@@ -1,4 +1,4 @@
-const {clickWorkspaceCommand} = require('./workspace-commands.cjs');
+const {clickWorkspaceCommand, openCalculationPane, openDetails} = require('./workspace-commands.cjs');
 /* End-to-end, real tblite + Sella; only small public NH3/H2O test structures. */
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),{spawn}=require('node:child_process');
 (async()=>{
@@ -11,7 +11,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/api/jobs'))requests.push(r.postDataJSON());});
   await page.goto('http://127.0.0.1:8765/molecule-visualizer/');await page.waitForSelector('canvas');
   assert.equal(await page.locator('#engineVibrationCheck').isChecked(),false);
-  await page.click('#btnExternalEngine');await page.uncheck('#engineLive');await page.fill('#engineURL','http://127.0.0.1:8767');await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('Sella 2.6'));
+  await page.click('#btnExternalEngine');await page.uncheck('#engineLive');await openCalculationPane(page, 'connection');await page.fill('#engineURL','http://127.0.0.1:8767');await page.fill('#engineToken',token);await page.click('#engineConnect');await page.waitForFunction(()=>document.getElementById('engineConnected').textContent.includes('Sella 2.6'));
   await page.click('#engineClose');
   const ammonia=async(count=1)=>page.evaluate(count=>{
     const M=MoleculeVisualizer,s=M.IO.parseXYZToState('4\nNH3 inversion test\nN 0 0 0.05\nH 1.03 0 0\nH -0.515 0.892 0\nH -0.515 -0.892 0\n');
@@ -23,7 +23,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   await ammonia();const original=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms));
   await clickWorkspaceCommand(page, '#btnTS');assert.equal(await page.locator('#engineMode').inputValue(),'ts');assert.equal(await page.locator('#engineScope').inputValue(),'current');
   assert.equal(await page.locator('#engineFmax').inputValue(),'0.05');assert.equal(await page.locator('#engineVibrationDelta').inputValue(),'0.001');
-  await page.fill('#engineSteps','60');await page.fill('#engineFmax','0.00001');await page.check('#engineVibrationCheck');await page.selectOption('#engineVibrationNfree','4');await page.fill('#engineVibrationThreshold','50');await page.fill('#engineTrust','0.03');await page.fill('#engineVibrationDelta','0.004'); // intentionally no blur
+  await openDetails(page, '#engineNumericOptions');await page.fill('#engineSteps','60');await page.fill('#engineFmax','0.00001');await page.check('#engineVibrationCheck');await page.selectOption('#engineVibrationNfree','4');await page.fill('#engineVibrationThreshold','50');await page.fill('#engineTrust','0.03');await page.fill('#engineVibrationDelta','0.004'); // intentionally no blur
   await page.click('#engineRun');await waitDone();const ts=await report();
   assert.equal(requests.at(-1).mode,'ts');assert.equal(requests.at(-1).trustRadius,.03);assert.deepEqual(requests.at(-1).vibrations,{delta:.004,nfree:4,imaginaryThreshold:50});
   assert.equal(ts.result.converged,true);assert.equal(ts.result.optimizer,'sella-prfo');assert.equal(ts.result.vibrations.status,'completed');assert.equal(ts.result.vibrations.significantImaginaryCount,1);assert.equal(ts.result.vibrations.modes.length,12);assert.equal(ts.result.vibrations.evaluations,49);
@@ -31,7 +31,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.equal(await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.getState().atoms)),original);
   await page.click('#engineVibrationShow');assert.equal(await page.locator('#vibrationRows tr').count(),12);await page.locator('#vibrationRows tr').first().click();
   assert.equal(await page.locator('#vibrationRows tr').first().evaluate(e=>getComputedStyle(e).color),'rgb(183, 28, 28)');
-  await page.click('#btnViewXZ');assert.ok(await page.evaluate(()=>MoleculeVisualizer.App.renderer().projectedModeArrows.length)>0);
+  await openDetails(page, '#viewportTools');await page.click('#btnViewXZ');assert.ok(await page.evaluate(()=>MoleculeVisualizer.App.renderer().projectedModeArrows.length)>0);
   // Arrow scaling changes only the drawing, preserving mode ratios and physical displacement.
   const arrowsBefore=await page.evaluate(()=>MoleculeVisualizer.App.renderer().vibrationVectors.vectors);
   const atomsBeforeScale=await page.evaluate(()=>JSON.stringify(MoleculeVisualizer.App.renderer().state.atoms));
@@ -56,11 +56,11 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   const visible=await page.evaluate(()=>MoleculeVisualizer.App.renderer().state.atoms.map(a=>[a.x,a.y,a.z]));
   await clickWorkspaceCommand(page, '#btnVibrations');await page.click('#engineRun');await waitDone();assert.deepEqual(requests.at(-1).images,[visible]);
   // Minimize with L-BFGS; optional frequencies OFF and edited value forwarded.
-  await page.selectOption('#engineMode','optimize');await page.uncheck('#engineVibrationCheck');await page.selectOption('#engineOptimizer','lbfgs');await page.fill('#engineSteps','3');await page.fill('#engineMove','0.03');await page.click('#engineRun');await waitDone();const opt=await report();assert.equal(opt.result.optimizer,'lbfgs');assert.equal(opt.input.maxMove,.03);assert.equal(opt.result.vibrations,undefined);assert.equal(opt.result.trajectory.images.length,opt.result.steps+1);
+  await openCalculationPane(page, 'setup');await page.selectOption('#engineMode','optimize');await page.uncheck('#engineVibrationCheck');await page.selectOption('#engineOptimizer','lbfgs');await page.fill('#engineSteps','3');await page.fill('#engineMove','0.03');await page.click('#engineRun');await waitDone();const opt=await report();assert.equal(opt.result.optimizer,'lbfgs');assert.equal(opt.input.maxMove,.03);assert.equal(opt.result.vibrations,undefined);assert.equal(opt.result.trajectory.images.length,opt.result.steps+1);
   await page.click('#engineClose');await ammonia(5);
   // Relax a band, keep all its nodes when choosing one specific TS candidate.
-  await page.click('#btnExternalEngine');assert.equal(await page.locator('#engineMode').inputValue(),'cineb');await page.fill('#engineSteps','1');await page.fill('#engineClimb','0');await page.click('#engineRun');await waitDone();const neb=await report();
-  const nodeIDs=await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms.map(a=>a.id));await page.getByRole('button',{name:'構造3をTS入力にする',exact:true}).click();
+  await page.click('#btnExternalEngine');await openCalculationPane(page, 'setup');assert.equal(await page.locator('#engineMode').inputValue(),'cineb');await page.fill('#engineSteps','1');await page.fill('#engineClimb','0');await page.click('#engineRun');await waitDone();const neb=await report();
+  const nodeIDs=await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms.map(a=>a.id));await openDetails(page, '#engineEnergyDetails');await page.getByRole('button',{name:'構造3をTS入力にする',exact:true}).click();
   assert.equal(await page.locator('#engineMode').inputValue(),'ts');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.frameIndex),2);assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.trajectory.length),5);
   assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms.map(a=>[a.x,a.y,a.z])),neb.result.images[2]);assert.deepEqual(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms.map(a=>a.id)),nodeIDs);
   await page.click('#engineClose');
@@ -80,7 +80,7 @@ const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=r
   assert.equal(await page.locator('#engineMode').inputValue(),'cineb');assert.equal(requests.length,beforeRefinement,'opening settings does not launch a new job');
   await page.click('#engineRun');await waitDone();assert.equal(requests.at(-1).mode,'cineb');assert.equal(requests.at(-1).images.length,9);assert.equal((await report()).result.mode,'cineb');await page.click('#engineClose');
   // Running NEB can be stopped at its latest fully evaluated band with live preview OFF.
-  await ammonia(21);await page.click('#btnExternalEngine');assert.equal(await page.locator('#engineMode').inputValue(),'cineb');await page.fill('#engineSteps','10000');await page.fill('#engineFmax','0.00001');assert.equal(await page.locator('#engineLive').isChecked(),false);
+  await ammonia(21);await page.click('#btnExternalEngine');await openCalculationPane(page, 'setup');assert.equal(await page.locator('#engineMode').inputValue(),'cineb');await page.fill('#engineSteps','10000');await page.fill('#engineFmax','0.00001');assert.equal(await page.locator('#engineLive').isChecked(),false);
   const checkpoint=page.waitForResponse(async response=>{if(!new URL(response.url()).pathname.match(/\/api\/jobs\/[a-f0-9]+$/)||response.request().method()!=='GET')return false;const j=await response.json();return j.status==='running'&&j.progress?.step>=1;},{timeout:60000});
   await page.click('#engineRun');await checkpoint;await page.click('#enginePause');await page.waitForSelector('#refineDialog[open]',{timeout:30000});
   assert.match(await page.locator('#refineSummary').textContent(),/21ノード/);await page.fill('#refineFrom','10');await page.fill('#refineTo','12');await page.fill('#refineEach','1');await page.screenshot({path:'test-artifacts/neb-pause-refine.png'});await page.click('#refineNEB');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().metadata.trajectory.length),23);assert.equal(await page.locator('#engineMode').inputValue(),'cineb');
