@@ -56,7 +56,12 @@ async function run(browser, periodic) {
     await page.goto(url);
     const name = periodic ? 'polyethylene-periodic.xyz' : 'polyethylene-20.sdf';
     if(periodic)await checkPrimitiveBackbone(page,name);
-    await page.locator('#fileInput').setInputFiles(path.join(app,'examples',name));
+    const href = await page.locator('a[download][href="./examples/'+name+'"]').getAttribute('href');
+    const sample = await page.request.get(new URL(href,page.url()).href);
+    assert.ok(sample.ok(), 'sample '+name+' returned HTTP '+sample.status());
+    const mimeType = periodic ? 'chemical/x-xyz' : 'chemical/x-mdl-sdfile';
+    assert.ok(sample.headers()['content-type'].startsWith(mimeType));
+    await page.locator('#fileInput').setInputFiles({name,mimeType,buffer:await sample.body()});
     const count = periodic ? 24 : 122;
     await page.waitForFunction(n=>MoleculeVisualizer.App.getState().atoms.length===n,count);
     const readState = ()=>page.evaluate(()=>{

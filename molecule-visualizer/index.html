@@ -47,7 +47,7 @@ title: 分子構造エディタ | Molecule Studio
 <link rel="stylesheet" href="./calculation-panel.css?v=ensembles-59">
 <script defer src="./calculation-panel.js?v=ensembles-59"></script>
 <script defer src="./md-ui.js?v=ensembles-60"></script>
-<script defer src="./engine-ui.js?v=ensembles-59"></script>
+<script defer src="./engine-ui.js?v=polymer-61"></script>
 <script defer src="./vibration-ui.js?v=constraints-34"></script>
 <script defer src="./path-refinement.js?v=path-optimizer-57"></script>
 <script defer src="./afir.js?v=17"></script>
@@ -757,7 +757,7 @@ H -0.3 1.0 0"></textarea>
     <label>接続トークン<input id="engineToken" type="password" autocomplete="off" spellcheck="false"></label>
   </div><div class="mv-row"><button class="mv-btn" id="engineConnect">接続を確認</button><span id="engineConnected" class="mv-small">未接続</span></div></fieldset>
   <details class="mv-engine-setup"><summary>初回のセットアップ・計算エンジンの選択</summary>
-    <p><a href="./local-engine/bridge.py?v=1.22.0" download>bridge.pyをダウンロード</a>し、使いたいエンジンの手順で起動してください。tblite / g-xTBはPython 3.10以上、UMA / llmlip.rsはPython 3.12の専用環境を推奨します。</p>
+    <p><a href="./local-engine/bridge.py?v=1.22.1" download>bridge.pyをダウンロード</a>し、使いたいエンジンの手順で起動してください。tblite / g-xTBはPython 3.10以上、UMA / llmlip.rsはPython 3.12の専用環境を推奨します。</p>
     <ul>
       <li><strong>tblite</strong>：GFN2-xTB（既定）、GFN1-xTB、IPEA1-xTBを利用します。このアプリでは非周期系と周期系に対応し、3方向周期のセルではNPT分子動力学も実行できます。</li>
       <li><strong>g-xTB</strong>：公式のg-xTB対応実行ファイルを別途用意します。このアプリでは非周期系に対応します。tbliteのPythonパッケージは不要です。</li>
