@@ -48,6 +48,16 @@
     return METALS.has(element);
   }
 
+  function bondLimit(radiusA,radiusB,metalPair) {
+    return (metalPair?METAL_DISTANCE_SCALE:BOND_DISTANCE_SCALE)*(radiusA+radiusB);
+  }
+
+  function imageShifts(mic,delta,bond,a,b) {
+    const ra=COVALENT_RADII[a.element],rb=COVALENT_RADII[b.element];
+    if(!ra||!rb||bond.type==='hydrogen')return [mic(delta).shift];
+    return mic.contactShifts(delta,MIN_BOND_DISTANCE,bondLimit(ra,rb,isMetal(a.element)||isMetal(b.element)));
+  }
+
   function inferBonds(atoms, cell) {
     const bonds=[],radii=atoms.map(a=>COVALENT_RADII[a.element]||0),metal=atoms.map(a=>isMetal(a.element));
     const mic=cell?MV.Periodic.prepareMinimumImage(cell):null;
@@ -79,7 +89,7 @@
       const consider=j=>{
         if(!radii[j])return;
         const a=atoms[i],b=atoms[j],dx=b.x-a.x,dy=b.y-a.y,dz=b.z-a.z;
-        const metalPair=metal[i]||metal[j],limit=(metalPair?METAL_DISTANCE_SCALE:BOND_DISTANCE_SCALE)*(radii[i]+radii[j]);
+        const metalPair=metal[i]||metal[j],limit=bondLimit(radii[i],radii[j],metalPair);
         const d=mic?mic([dx,dy,dz]).distance:Math.sqrt(dx*dx+dy*dy+dz*dz);
         if(!(d>=MIN_BOND_DISTANCE&&d<=limit))return;
         bonds.push(Model.createBond({atom1:a.id,atom2:b.id,order:1,type:metalPair?'coordination_candidate':'covalent',source:'inferred'}));
@@ -101,6 +111,7 @@
     COVALENT_RADII,
     distance,
     inferBonds,
+    imageShifts,
     refreshInferredBonds
   };
 })(window);

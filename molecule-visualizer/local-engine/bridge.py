@@ -39,7 +39,7 @@ from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 from scipy.spatial import cKDTree
 
-VERSION = '1.22.0'
+VERSION = '1.22.1'
 KJ_MOL_PER_EV = 96.48533212331002
 RDKIT_FORCE_FIELDS = ('MMFF94', 'MMFF94s', 'UFF')
 UMA_MODELS = ('uma-s-1p2p1', 'uma-s-1p2', 'uma-s-1p1', 'uma-m-1p1')
@@ -5407,7 +5407,7 @@ class Handler(BaseHTTPRequestHandler):
         extensions = {'.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
             '.css': 'text/css; charset=utf-8', '.wasm': 'application/wasm', '.data': 'application/octet-stream',
             '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon',
-            '.xyz': 'chemical/x-xyz', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.py': 'text/plain; charset=utf-8', '.gz': 'application/gzip'}
+            '.xyz': 'chemical/x-xyz', '.sdf': 'chemical/x-mdl-sdfile', '.txt': 'text/plain; charset=utf-8', '.md': 'text/plain; charset=utf-8', '.py': 'text/plain; charset=utf-8', '.gz': 'application/gzip'}
         if not target.is_relative_to(root) or any(p.startswith('.') for p in target.relative_to(root).parts) or not target.is_file() or (target.suffix not in extensions and not re.search(r'\.gz\.part[0-9]+$', target.name)):
             self.response(404, {'error': 'Not found'})
             return

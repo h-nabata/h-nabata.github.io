@@ -207,7 +207,7 @@
     const bonds=this.state.bonds||[];
     let same=cache&&cache.key===cameraKey&&cache.atoms.length===atoms.length&&cache.bonds.length===bonds.length;
     if(same)for(let i=0;i<atoms.length;i++){const a=atoms[i],old=cache.atoms[i];if(a.id!==old.id||a.element!==old.element||a.x!==old.x||a.y!==old.y||a.z!==old.z){same=false;break;}}
-    if(same)for(let i=0;i<bonds.length;i++){const a=bonds[i],old=cache.bonds[i];if(a.id!==old.id||a.atom1!==old.atom1||a.atom2!==old.atom2){same=false;break;}}
+    if(same)for(let i=0;i<bonds.length;i++){const a=bonds[i],old=cache.bonds[i];if(a.id!==old.id||a.atom1!==old.atom1||a.atom2!==old.atom2||a.type!==old.type){same=false;break;}}
     if(!same){
       this.projectedAtoms=atoms.map((atom,index)=>Object.assign(this.project(atom,center,scale,width,height),{index:index+1})).filter(p=>p.visible);
       const atomById=new Map(this.projectedAtoms.map(pa=>[pa.atom.id,pa]));
@@ -215,13 +215,15 @@
       this.projectedBonds=bonds.flatMap(bond=>{
         const a=atomById.get(bond.atom1),b=atomById.get(bond.atom2);if(!a||!b)return [];
         if(!cell)return [{bond,a,b}];
-        const image=mic([b.atom.x-a.atom.x,b.atom.y-a.atom.y,b.atom.z-a.atom.z]);
-        if(!image.shift.some(Boolean))return [{bond,a,b}];
-        const offset=MV.Periodic.cartesian(image.shift,cell);
-        const translate=(atom,sign)=>this.project({x:atom.x+sign*offset[0],y:atom.y+sign*offset[1],z:atom.z+sign*offset[2]},center,scale,width,height);
-        return [{bond,a,b:translate(b.atom,1)},{bond,a:translate(a.atom,-1),b}];
+        const delta=[b.atom.x-a.atom.x,b.atom.y-a.atom.y,b.atom.z-a.atom.z];
+        return MV.Bonding.imageShifts(mic,delta,bond,a.atom,b.atom).flatMap(shift=>{
+          if(!shift.some(Boolean))return [{bond,a,b}];
+          const offset=MV.Periodic.cartesian(shift,cell);
+          const translate=(atom,sign)=>this.project({x:atom.x+sign*offset[0],y:atom.y+sign*offset[1],z:atom.z+sign*offset[2]},center,scale,width,height);
+          return [{bond,a,b:translate(b.atom,1)},{bond,a:translate(a.atom,-1),b}];
+        });
       }).filter(p=>p.a.visible&&p.b.visible);
-      cache=this.geometryCache={key:cameraKey,atoms:atoms.map(a=>({id:a.id,element:a.element,x:a.x,y:a.y,z:a.z})),bonds:bonds.map(b=>({id:b.id,atom1:b.atom1,atom2:b.atom2})),atomById,
+      cache=this.geometryCache={key:cameraKey,atoms:atoms.map(a=>({id:a.id,element:a.element,x:a.x,y:a.y,z:a.z})),bonds:bonds.map(b=>({id:b.id,atom1:b.atom1,atom2:b.atom2,type:b.type})),atomById,
         sortedAtoms:this.projectedAtoms.slice().sort((a,b)=>a.z-b.z),sortedBonds:this.projectedBonds.slice().sort((a,b)=>(a.a.z+a.b.z)-(b.a.z+b.b.z))};
       this.projectionBuilds=(this.projectionBuilds||0)+1;
     }else{

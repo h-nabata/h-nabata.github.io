@@ -21,3 +21,16 @@ test('TV editor round trip with both header counts, Unicode whitespace, and tria
  const s=IO.parseXYZToState('2\nLattice="0 4 0 -5 1 0 2 3 6"\nC 1 2 3\nO 2 4 3\n'),before=P.fractional(P.xyz(s.atoms[0]),s.metadata.cell),d=Math.hypot(...P.xyz(s.atoms[0]).map((x,i)=>x-P.xyz(s.atoms[1])[i]));
  P.lowerTriangular(s);const v=s.metadata.cell.vectors;close(v[0][1],0);close(v[0][2],0);close(v[1][2],0);P.fractional(P.xyz(s.atoms[0]),s.metadata.cell).forEach((x,i)=>close(x,before[i]));close(Math.hypot(...P.xyz(s.atoms[0]).map((x,i)=>x-P.xyz(s.atoms[1])[i])),d);
 });
+
+test('short polymer repeats expose both bonded images, with skew and partial periodicity',()=>{
+  const vectors=[[7.4,0,0],[.4,4.9,0],[.2,0,2.534]];
+  const delta=[.74,.58,1.267];
+  const shifts=(pbc,v)=>Array.from(P.prepareMinimumImage(P.cell(vectors,pbc))
+    .contactShifts(v,.35,1.9),s=>Array.from(s).join(',')).sort();
+  assert.deepEqual(shifts([false,false,true],delta),['0,0,-1','0,0,0']);
+  assert.deepEqual(shifts([true,true,false],delta),['0,0,0']);
+  const translated=delta.map((value,i)=>value+3*vectors[2][i]);
+  assert.deepEqual(shifts([true,true,true],translated),['0,0,-3','0,0,-4']);
+  const thin=P.prepareMinimumImage(P.cell([[8,0,0],[0,8,0],[0,0,.001]]));
+  assert.equal(thin.contactShifts(delta,.35,1.9).length,1);
+});
