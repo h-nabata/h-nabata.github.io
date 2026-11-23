@@ -1,6 +1,7 @@
 """MD as an ordinary bridge job: potential selection, component history and durable sampling."""
 import copy
 import importlib.util
+from pathlib import Path
 import queue
 import tempfile
 import unittest
@@ -27,6 +28,94 @@ def messages_list(messages):
 
 
 class MolecularDynamicsJob(unittest.TestCase):
+    def test_bridge_without_supported_ase_chain_announces_its_actual_default(self):
+        raw = md_request()
+        raw['md']['ensemble'] = 'nvt'
+        with patch.object(b, 'md_nose_hoover_class', return_value=None):
+            caps = b.md_capabilities(CONFIG)
+            self.assertEqual(caps['thermostats'], ['langevin','bussi'])
+            data = b.validate(raw, 'tblite')
+            self.assertEqual(data['md']['thermostat'], caps['defaultThermostat'])
+            result = b.molecular_dynamics(data, well)
+            self.assertEqual(result['reason'], 'completed')
+            raw['md']['thermostat'] = 'nose-hoover-chain'
+            with self.assertRaisesRegex(ValueError, 'ASE 3.25'):
+                b.validate(raw, 'tblite')
+
+    def test_variable_cell_md_recovery_keeps_the_last_measured_geometry_and_state_energies(self):
+        class PeriodicState(State):
+            def with_cell(self, index, positions, cell):
+                energy, force = self(index, positions)
+                volume = np.linalg.det(cell)
+                density = self.sign * 1e-5
+                return energy + density * volume, force, density * np.eye(3)
+
+        raw = md_request(18)
+        raw.update(cell={'vectors':(6*np.eye(3)).tolist(),'pbc':[True]*3}, modelF=settings())
+        raw['md'].update(ensemble='npt', thermostat='bussi', barostatInterval=1, sampleEvery=3)
+        data = b.validate(raw, 'tblite')
+        with tempfile.TemporaryDirectory() as directory:
+            config = {**CONFIG, 'historyDir':directory}
+            jobs = b.Jobs(config)
+            with patch.object(b,'make_calculator',lambda d,c,path:PeriodicState(d['multiplicity'])):
+                calc = b.ModelFEngine(data,config,None)
+            messages = queue.Queue()
+            b.execute_with_calculator(data,config,directory,messages,calc)
+            entries = messages_list(messages)
+            issued = next(value for kind,value in entries if kind == 'result')
+            checkpoints = [p['checkpoint'] for k,p in entries if k=='progress' and 'checkpoint' in p]
+            previews = [p['preview'] for k,p in entries if k=='progress' and 'preview' in p]
+            for frame, preview in zip(checkpoints, previews, strict=True):
+                self.assertEqual(preview['cell'], frame['cell'])
+                self.assertEqual(preview['cells'], [frame['cell']])
+                for key in ('timeFs','temperatureK','volumeA3','pressureBar'):
+                    self.assertEqual(preview[key], [frame[key]])
+                for i in (1,2):
+                    state = PeriodicState(data['modelF']['multiplicities'][i-1])
+                    expected, _, _ = state.with_cell(0,np.array(frame['positions']),frame['cell']['vectors'])
+                    self.assertAlmostEqual(expected,frame['surfaceComponents'][f'state{i}EV'])
+            self.assertGreater(issued['volumeAccepted'], 0)
+            self.assertEqual(issued['evaluations'], 37)
+            self.assertEqual(issued['cells'], [checkpoints[-1]['cell']])
+            self.assertEqual(issued['history'][-1]['pressureBar'], issued['pressureBar'])
+            with patch.object(jobs, '_launch_next'):
+                identifier = jobs.start(data)['id']
+            job = jobs.jobs[identifier]
+            job.update(status='running', checkpoints=copy.deepcopy(checkpoints[:-1]))
+            jobs._persist(job, force=True)
+            restored_jobs = b.Jobs(config)
+            restored = restored_jobs.get(identifier)['result']
+            last = checkpoints[-2]
+            self.assertNotEqual(last['cell'], raw['cell'])
+            self.assertEqual(restored['cell'], last['cell'])
+            self.assertEqual(restored['cells'], [last['cell']])
+            for key in ('volumeA3','pressureBar','volumeAccepted','volumeAttempts','evaluations'):
+                self.assertEqual(restored[key], last[key])
+            for key in ('cells','images','pressureBar','volumeA3'):
+                self.assertEqual(restored['trajectory'][key], issued['trajectory'][key][:-1])
+            self.assertEqual(restored_jobs.listing()['jobs'][0]['md'], {'ensemble':'npt','thermostat':'bussi'})
+
+    def test_rebuild_legacy_md_history_summary_with_original_thermostat(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = {**CONFIG, 'historyDir':directory}
+            jobs = b.Jobs(config)
+            data = b.validate(md_request(), 'tblite')
+            data['md'].update(ensemble='nvt', frictionPerPs=8.)
+            with patch.object(jobs, '_launch_next'):
+                identifier = jobs.start(data)['id']
+            job = jobs.jobs[identifier]
+            job.update(status='completed',result={'steps':2})
+            jobs._persist(job, force=True)
+            path = Path(directory) / (identifier + '.summary')
+            summary = jobs._read_record(path)
+            del summary['job']['data']['md']
+            jobs._atomic_record(path, summary)
+            for _ in range(2):
+                jobs = b.Jobs(config)
+                self.assertEqual(jobs.listing()['jobs'][0]['md'], {'ensemble':'nvt','thermostat':'langevin'})
+                self.assertTrue(jobs.jobs[identifier]['_lazy'])
+            self.assertEqual(jobs.get(identifier)['data']['md'],data['md'])
+
     def test_validation_and_revalidation_for_connected_engines(self):
         for engine in ('gxtb', 'tblite', 'uma', 'llmlip'):
             data = b.validate(md_request(), engine)

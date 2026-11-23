@@ -174,6 +174,7 @@
     renderer.renderState(state, Boolean(preserveCamera));
     if(persist)saveLocal();
     MV.EngineUI?.syncEndpoints?.();
+    if(byId('engineDialog').open&&byId('engineMode').value==='md')MV.MDUI?.sync();
     updateAtomTable();
     updateBondTable();
     syncUI();

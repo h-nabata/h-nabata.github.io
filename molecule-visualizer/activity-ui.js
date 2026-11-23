@@ -104,6 +104,8 @@
     }
     if (p.phase==='md') {
       if (Number.isFinite(p.timeFs)) fields.push(Number(p.timeFs.toPrecision(6))+' fs');
+      if (Number.isFinite(p.pressureBar)) fields.push(Number(p.pressureBar.toPrecision(5))+' bar');
+      if (Number.isFinite(p.volumeA3)) fields.push(Number(p.volumeA3.toPrecision(5))+' Å³');
       if (Number.isFinite(p.temperatureK)) fields.push(Number(p.temperatureK.toPrecision(5))+' K');
     }
     const gap = result?.dsafir?.gap ?? p.gap;
@@ -132,7 +134,8 @@
     if (status === 'completed' && fromListing && !state.result) status = 'finished';
     const engine = state.data || !previous ? engineDescription(c.info,state.data) : previous.engine;
     const surface = state.data ? state.data.modelF?.surface : previous?.surface;
-    const details = [engine, surface && 'ModelF · ' + surface, progressDetail(status,p,state.result,state.steps)];
+    const md=state.md||state.data?.md||state.result?.md||previous?.md;
+    const details = [engine, md&&MV.MDUI?.methodLabel(md), surface && 'ModelF · ' + surface, progressDetail(status,p,state.result,state.steps)];
     if (status === 'unknown') details.push('履歴・キューで再確認');
     if (status === 'partial') details.push(state.result.vibrations?.status === 'failed' ? '振動解析が未完了' : '熱化学量の計算が未完了');
     if (status === 'error' && state.error) details.push(String(state.error).split('\n')[0].slice(0,100));
@@ -140,7 +143,7 @@
       p.phase === 'dsafir' && p.side === 'reactant' ? '反応物側を探索' :
       p.phase === 'dsafir' && p.side === 'product' ? '生成物側を探索' :
       p.phase === 'vibrations' ? '振動解析中' : Number.isInteger(p.step) ? p.step + 'ステップ' : ''));
-    saveRecord(id, {label, status, phaseLabel, detail:details.filter(Boolean).join(' · '), engine, surface,
+    saveRecord(id, {label, status, phaseLabel, detail:details.filter(Boolean).join(' · '), engine, surface, md,
       detached: detached ?? previous?.detached ?? true, context: context || previous?.context}, state.updatedAt || Date.now());
     if (!fromListing) { render(); schedule(); }
   }

@@ -49,6 +49,7 @@
     }
     $('engineVibrationCheck').disabled=!!l&&!f64;
     MV.AFIRUI?.sync();
+    MV.MDUI?.sync();
   }
   function connected(source){
     info=source||null;const l=info?.llmlip;

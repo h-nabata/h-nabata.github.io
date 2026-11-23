@@ -1,0 +1,24 @@
+# Untrained scalar-only NequIP test model. No external parameters or datasets.
+format_version = "0.1"
+architecture = "nequip-lite-v1"
+dtype = "f64"
+length_unit = "angstrom"
+energy_unit = "eV"
+force_unit = "eV/angstrom"
+
+[species]
+symbols = ["H", "O"]
+
+[geometry]
+cutoff = 3.0
+edge_vector = "R_j + shift - R_i"
+directed_edges = true
+
+[spherical_harmonics]
+l_max = 0
+normalize_input = true
+normalization = "component"
+reference_convention = "pinned-fixture"
+
+[nequip_lite]
+model = "model.json"

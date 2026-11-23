@@ -18,8 +18,9 @@
   const det=a=>a[0][0]*(a[1][1]*a[2][2]-a[1][2]*a[2][1])-a[0][1]*(a[1][0]*a[2][2]-a[1][2]*a[2][0])+a[0][2]*(a[1][0]*a[2][1]-a[1][1]*a[2][0]);
   const near=(a,b,tol=1e-8)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every((x,i)=>Array.isArray(x)?near(x,b[i],tol):Number.isFinite(x)&&Math.abs(x-b[i])<=tol);
   function validCell(cell){return cell&&Array.isArray(cell.vectors)&&cell.vectors.length===3&&cell.vectors.every(v=>Array.isArray(v)&&v.length===3&&v.every(Number.isFinite))&&Math.abs(det(cell.vectors))>1e-6&&Array.isArray(cell.pbc)&&cell.pbc.length===3&&cell.pbc.every(v=>typeof v==='boolean');}
-  function checkCell(cell,data){const c=data.cellOptimization,base=data.cell;
-    if(!c||c.mode==='fixed'){if(JSON.stringify(cell)!==JSON.stringify(base))throw Error('固定セルが変化しています。');return;}
+  function checkCell(cell,data){
+    const c=data.mode==='md'&&data.md?.ensemble==='npt'?{mode:'isotropic'}:data.cellOptimization,base=data.cell;
+    if(!c||c.mode==='fixed'){if((!!cell!==!!base)||JSON.stringify(cell?.vectors)!==JSON.stringify(base?.vectors)||JSON.stringify(cell?.pbc)!==JSON.stringify(base?.pbc))throw Error('固定セルが変化しています。');return;}
     if(!validCell(cell)||JSON.stringify(cell.pbc)!==JSON.stringify(base.pbc)||det(cell.vectors)*det(base.vectors)<=0)throw Error('計算結果のセルが不正です。');
     const a=base.vectors,b=cell.vectors,mode=c.mode;
     if(mode==='full')return;
@@ -37,5 +38,5 @@
       if(!Number.isFinite(r.stressResidual)||r.stressResidual<0||r.converged&&r.stressResidual>data.cellOptimization.stressTolerance)throw Error('応力の収束状態が不正です。');
     }
   }
-  return {defaults,config,indices,forJob,attach,rememberCoordinates,checkPositions,checkCell,validateResult,validCell,near,clone};
+  return {defaults,config,indices,forJob,attach,rememberCoordinates,checkPositions,checkCell,validateResult,validCell,cellVolume:c=>Math.abs(det(c.vectors)),near,clone};
 });

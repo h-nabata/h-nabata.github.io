@@ -10,9 +10,11 @@ from test_engine import b, CONFIG, WATER
 from test_persistent_jobs import wait_for
 
 
-def water_run(engine, steps, dt, cold_start=False, stride=1):
-    md = dict(ensemble='nvt' if cold_start else 'nve', timestepFs=dt, temperatureK=300, sampleEvery=stride,
+def water_run(engine, steps, dt, cold_start=False, stride=1, thermostat=None):
+    md = dict(ensemble='nvt' if cold_start or thermostat is not None else 'nve', timestepFs=dt, temperatureK=300, sampleEvery=stride,
               seed=731, removeCOM=True)
+    if thermostat is not None and thermostat != 'default':
+        md['thermostat'] = thermostat
     if cold_start:
         md.update(frictionPerPs=50, initialVelocitiesAngstromPerFs=[[0, 0, 0]]*3)
     # Stretch one O–H bond to excite a fast vibration in both NVE trajectories.
@@ -74,6 +76,24 @@ class NativeMolecularDynamics(unittest.TestCase):
     @unittest.skipUnless(importlib.util.find_spec('rdkit'), 'optional RDKit force field')
     def test_mmff94_water_timestep_halving(self):
         self.check_second_order_energy('rdkit')
+
+    @unittest.skipUnless(importlib.util.find_spec('rdkit'), 'optional RDKit force field')
+    def test_native_canonical_baths_and_legacy_implicit_langevin(self):
+        # The job submission path normalizes new NVT requests and old saved settings alike.
+        for selected, expected in [('default','nose-hoover-chain'), ('bussi','bussi')]:
+            result = water_run('rdkit', 16000, .5, stride=20, thermostat=selected)
+            self.assertEqual(result['md']['thermostat'], expected)
+            tr = result['trajectory']
+            sample = np.asarray(tr['temperatureK'])[np.asarray(tr['timeFs'])>=2000.]
+            mean = float(np.mean(sample))
+            self.assertAlmostEqual(mean, 300., delta=36.)
+            self.assertGreater(np.std(sample), 20.)
+            print(f'MMFF94 water NVT {expected}, 8 ps, mean T over 2–8 ps {mean:.2f} K')
+
+        legacy = water_run('rdkit', 20, .5, cold_start=True)
+        explicit = water_run('rdkit', 20, .5, cold_start=True, thermostat='langevin')
+        self.assertEqual(legacy['md']['thermostat'], 'langevin')
+        self.assertEqual(legacy['trajectory'], explicit['trajectory'])
 
     @unittest.skipUnless(importlib.util.find_spec('rdkit'), 'optional RDKit force field')
     def test_mmff94_langevin_heats_cold_water(self):

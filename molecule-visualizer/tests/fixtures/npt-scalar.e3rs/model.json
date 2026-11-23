@@ -1,0 +1,33 @@
+{
+  "schema_version": "nequip-lite-model-v1",
+  "name": "Untrained scalar H/O stress test",
+  "type_names": ["H", "O"],
+  "cutoff": 3.0,
+  "l_max": 0,
+  "num_bessels": 1,
+  "polynomial_cutoff_p": 4,
+  "edge_embedding_factor": 1.0,
+  "node_embedding": [[1.0], [1.5]],
+  "per_type_energy_scales": [0.2, 0.2],
+  "per_type_energy_shifts": [0.0, 0.0],
+  "layers": [{
+    "input_irreps": "1x0e",
+    "linear1": {"in_dim": 1, "out_dim": 1, "weight": [1.0]},
+    "avg_num_neighbors_norm": 1.0,
+    "edge_mlp": {"in_dim": 1, "out_dim": 1, "weight": [1.0]},
+    "tensor_product": {
+      "irreps_in1": "1x0e", "irreps_in2": "1x0e", "irreps_out": "1x0e", "weight_numel": 1,
+      "instruction_in1_segment": [0], "instruction_in2_segment": [0], "instruction_out_segment": [0],
+      "instruction_cg_offset": [0], "instruction_cg_len": [1],
+      "instruction_weight_offset": [0], "instruction_path_weight": [1.0],
+      "cg_i_m": [0], "cg_j_m": [0], "cg_k_m": [0], "cg_value": [1.0]
+    },
+    "linear2": {"in_dim": 1, "out_dim": 1, "weight": [1.0]},
+    "gate": {
+      "input_dim": 1, "output_dim": 1, "scalar_indices": [0],
+      "scalar_activation": "silu", "scalar_activation_scale": 1.0,
+      "gate_activation": "silu", "gate_activation_scale": 1.0, "gated_groups": []
+    }
+  }],
+  "readout": {"in_dim": 1, "out_dim": 1, "weight": [1.0]}
+}

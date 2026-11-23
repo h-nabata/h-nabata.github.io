@@ -33,6 +33,7 @@
   function makeRow(j) {
     const tr = el('tr'), info = el('td', MV.EngineUI.modeLabel(j.mode) || j.mode || '計算');
     tr.dataset.jobId = j.id;
+    if(j.md)info.append(el('small',MV.MDUI.methodLabel(j.md)));
     const date = j.createdAt ? new Date(j.createdAt).toLocaleString() : j.id.slice(0,8);
     info.append(el('small', [date, j.parentId && '再開', j.archived && 'アーカイブ'].filter(Boolean).join(' · ')));
     const state = el('td'), badge = el('span', statuses[j.status] || j.status, 'job-state');
@@ -80,7 +81,7 @@
     list.sort((a,b) => rank(a)-rank(b) || (a.status === 'queued' && b.status === 'queued' ? String(a.createdAt).localeCompare(String(b.createdAt)) : 0));
     const existing = new Map([...body.children].map(row => [row.dataset.jobId,row]));
     list.forEach((j,i) => {
-      const signature = JSON.stringify([j.mode,j.status,j.archived,j.hasResult,j.resumeKind,j.resumable,j.parentId,j.createdAt]);
+      const signature = JSON.stringify([j.mode,j.md,j.status,j.archived,j.hasResult,j.resumeKind,j.resumable,j.parentId,j.createdAt]);
       let row = existing.get(j.id);
       if (row?.dataset.signature !== signature) {
         const fresh = makeRow(j);

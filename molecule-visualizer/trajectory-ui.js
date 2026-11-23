@@ -94,7 +94,7 @@
         s.metadata.trajectoryExtraction={sourceKind:original.kind,sourceFrame:i,sourceCount:original.images.length,method,...(['afir','dsafir'].includes(original.kind)?settings:{})};
         if(original.kind==='afir')s.metadata.afirCalculation={engine:original.engine,method:original.method,physicalEnergyEV:original.energies[i],biasEnergyEV:original.biasEnergies?.[i],step:original.stepNumbers?.[i]??i,validation:'biased-trajectory-not-ts',atomIds:s.atoms.map(a=>a.id)};
         else if(original.energies)s.metadata.externalCalculation={engine:original.engine,method:original.method,energyEV:original.energies[i],mode:original.kind,...(original.dsafir?{dsafir:original.dsafir,pathFrame:i}:{}),charge:original.charge,multiplicity:original.multiplicity};
-        if(original.md)Object.assign(s.metadata.externalCalculation,MV.MDUI.thermalValues(original.md,i));
+        if(original.md)Object.assign(s.metadata.externalCalculation,{ensemble:original.mdSettings?.ensemble,thermostat:original.mdSettings?.thermostat||(original.mdSettings?.ensemble==='nvt'?'langevin':null)},MV.MDUI.thermalValues(original.md,i));
         MV.ModelF?.attach(s,original,original,i);
         if(!original.fixedTopology)MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);
       });
@@ -102,7 +102,7 @@
       MV.Studio.stop();const next=MV.Model.createState(frames[0]);if(!original.fixedTopology)MV.Bonding.refreshInferredBonds(next);next.metadata.trajectory=frames;next.metadata.frameIndex=0;next.viewSettings={...MV.App.getState().viewSettings};
       MV.App.change('extracted trajectory',()=>next,true);$('dataReset').click();$('trajectoryDialog').close();
       original.onApplied?.(MV.App.getState().metadata.trajectory);
-      if(original.energies){MV.EnergyProfile.set({title:`${original.title} · 抽出した${ids.length}構造`,kind:original.md?'md':'path',...(original.md?{timeFs:ids.map(i=>original.md.timeFs[i]),stepNumbers:ids.map(i=>original.stepNumbers[i]),fixedTopology:original.fixedTopology}:{}),energies:ids.map(i=>original.energies[i]),biasEnergies:original.biasEnergies?ids.map(i=>original.biasEnergies[i]):null,positions:i=>original.images[ids[i]],base:i=>frames[i],exportXYZ:()=>open(original),details:()=>open(original)});MV.EnergyProfile.bindTrajectory(frames);}
+      if(original.energies){MV.EnergyProfile.set({title:`${original.title} · 抽出した${ids.length}構造`,kind:original.md?'md':'path',...(original.md?{timeFs:ids.map(i=>original.md.timeFs[i]),temperatureK:ids.map(i=>original.md.temperatureK[i]),pressureBar:original.md.pressureBar&&ids.map(i=>original.md.pressureBar[i]),volumeA3:original.md.volumeA3&&ids.map(i=>original.md.volumeA3[i]),stepNumbers:ids.map(i=>original.stepNumbers[i]),fixedTopology:original.fixedTopology}:{}),energies:ids.map(i=>original.energies[i]),biasEnergies:original.biasEnergies?ids.map(i=>original.biasEnergies[i]):null,positions:i=>original.images[ids[i]],base:i=>frames[i],exportXYZ:()=>open(original),details:()=>open(original)});MV.EnergyProfile.bindTrajectory(frames);}
       else MV.EnergyProfile.reset();
       if(toNEB)MV.EngineUI.prepareNEB();else{MV.EnergyProfile.reveal();MV.Studio.play();}
       MV.App.setStatus(`${ids.length}構造を${toNEB?'CI-NEB入力に取り込みました。電荷・多重度と計算条件を確認して実行してください。':'描画へ反映しました。FRAMESで再生・移動できます。'}「戻す」で反映前に戻れます。`);

@@ -101,7 +101,8 @@ class Dynamics(unittest.TestCase):
 
     def test_randomized_initial_velocities_and_bath_are_reproducible(self):
         data = request(symbols=['He','Ne'], positions=[[1,0,0],[2,0,0]], steps=11,
-                       ensemble='nvt', timestepFs=.2, sampleEvery=1, seed=70108, removeCOM=False)
+                       ensemble='nvt', thermostat='langevin', timestepFs=.2, sampleEvery=1,
+                       seed=70108, removeCOM=False)
         first = b.molecular_dynamics(data, no_force)
         self.assertEqual(first, b.molecular_dynamics(data, no_force))
         data['md']['seed'] += 1
