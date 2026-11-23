@@ -22,7 +22,7 @@
 
 [内部7構造の左右の末端がすべて逆旋方向を向く入力](./tests/fixtures/butadiene-disrotatory-asymmetric.xyz)を、座標の前処理なしで計算した。刻みを小さくしても、同旋型の出現を一律に抑えられなかった。たとえば固定端点のCI-NEB（FIRE）では、最大変位0.03 Åで最高点が初めて同旋になったのは72反復目、0.01 Åでは59反復目だった。終点のエネルギーや最高点の分類だけを比較すると、この途中経過を見落とす。
 
-CI-StringのノードごとのL-BFGSで最大変位を0.015 Å、CI開始を50反復目にすると、同じ非対称入力でも400反復まで同旋判定が付いた内部ノードは0個だった。ただし最終の頂点は+93.3°／−0.6°で片方の末端がほぼ平面にあり、最大有効力も2.89 eV/Åだった。乗り移りの判定が出なくなったことを、逆旋鞍点への収束とは扱わない。
+CI-StringのノードごとのL-BFGSで最大変位を0.015 Å、CI開始を50反復目にすると、同じ非対称入力でも400反復まで同旋判定が付いた内部ノードは0個だった。ただし最終の頂点は+93.3°／−0.6°で片方の末端がほぼ平面にあり、最大有効力も2.89 eV/Åだった。同条件で900反復まで延ばすと、782反復目に初めて内部ノードと最高点が同旋と判定された。900反復目の最大有効力は0.843 eV/Åだった。既定設定の46反復目と比べて乗り移りは遅れたが、逆旋鞍点への収束は確認できなかった。
 
 経路全体のL-BFGSでも、同じ固定端点・最大変位0.03 ÅのCI-NEBで21反復目に最高点が同旋と判定された。軽い非対称変位の標準入力では両CI法とも200反復の間に同旋判定は生じなかったが、経路全体のL-BFGSの最大有効力はCI-NEBで5.78、CI-Stringで7.93 eV/Åにとどまった（従来法は4.53、5.62 eV/Å）。エタンと同旋対照ではCI-StringのノードごとのL-BFGSが速かったため、手法ごとに従来の既定値も利用できる。
 
@@ -31,6 +31,8 @@ CI-StringのノードごとのL-BFGSで最大変位を0.015 Å、CI開始を50�
 固定端点のCI-NEB（FIRE、最大変位0.045 Å）では、旧版の123反復目を越えて128反復目まで進んだ後、129反復目で再試行を使い切った。この場合も、失敗した構造に直前のエネルギーを付けて経路を返すことはしない。
 
 元の水素番号を追跡した回転角とは別に、頂点での各末端の角度が±100°を超えた反復数も記録する。メチレンの等価な水素のうち一対を入れ替えると、同じ同旋遷移構造でも角度がともに正になる場合がある。同旋対照のCI-NEB頂点では、虚振動方向に変位させた際の角度の変化は左+64.0、右−64.0 °/Åだった（最大原子変位で規格化し、左が正になる位相を採用）。構造比較や虚振動は計算後の診断にだけ使う。
+
+この反応について、[MirzanejadとMuechlerによる多参照計算](https://doi.org/10.1002/cphc.202400786)では、熱的な同旋経路の頂点は一次鞍点、逆旋経路の頂点は虚振動が2本ある二次鞍点と報告されている。経路に垂直な方向にもエネルギーが下がるため、全自由度での緩和では、刻み幅を小さくしても逆旋側の頂点に安定に収束するとは限らない。今回のg-xTBでは逆旋側の停留点を同定できず、その鞍点の次数は未確定である。
 
 ### 再計算
 
@@ -44,7 +46,7 @@ stress=molecule-visualizer/tests/fixtures/butadiene-disrotatory-asymmetric.xyz
 python "$bench" --engine gxtb --workers 2 --endpoint-mode fixed --case free --mode neb cineb lup --optimizer band-lbfgs --json standard-free.json
 python "$bench" --engine gxtb --workers 2 --endpoint-mode fixed --case con --mode cineb lup --optimizer band-lbfgs --json con.json
 python "$bench" --engine gxtb --workers 2 --endpoint-mode fixed --case free --mode neb cineb lup --input "$stress" --distortion 0 --optimizer band-lbfgs --json asymmetric-free.json
-python "$bench" --engine gxtb --workers 2 --endpoint-mode fixed --case free --mode lup --input "$stress" --distortion 0 --optimizer lbfgs --max-move .015 --climb-after 50 --steps 400 --json string-small-step.json
+python "$bench" --engine gxtb --workers 2 --endpoint-mode fixed --case free --mode lup --input "$stress" --distortion 0 --optimizer lbfgs --max-move .015 --climb-after 50 --steps 900 --json string-small-step.json
 python "$bench" --engine gxtb --workers 2 --endpoint-mode fixed --case free --mode lup --input "$stress" --distortion 0 --optimizer lbfgs --steps 500 --json string-retries.json
 python molecule-visualizer/tests/benchmark_butadiene_modes.py con.json --mode cineb --case con --delta .005 .010
 ```
