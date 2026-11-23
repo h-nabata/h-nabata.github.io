@@ -232,12 +232,24 @@
     const summary=[numberText(last.timeFs)+' fs',t.images.length+'保存フレーム','最終温度 '+numberText(last.temperatureK)+' K'];
     if(settings.ensemble==='nve')summary.push('全エネルギーの始点との差 '+numberText(last.totalEnergyEV-t.totalEV[0])+' eV');
     else summary.push('目標温度 '+numberText(settings.temperatureK)+' K');
-    if(t.pressureBar)summary.push('最終体積 '+numberText(last.volumeA3)+' Å³','最終瞬間圧力 '+numberText(last.pressureBar)+' bar');
+    if(t.pressureBar){
+      summary.push('最終体積 '+numberText(last.volumeA3)+' Å³','最終瞬間圧力 '+numberText(last.pressureBar)+' bar');
+      if(t.timeFs.length>1){
+        const duration=last.timeFs-t.timeFs[0];
+        let mean=0;
+        for(let i=1;i<t.timeFs.length;i++){
+          const weight=(t.timeFs[i]-t.timeFs[i-1])/duration;
+          mean+=weight*(0.5*t.pressureBar[i-1]+0.5*t.pressureBar[i]);
+        }
+        summary.push('保存区間の平均圧力（台形積分） '+numberText(mean)+' bar');
+      }
+    }
     if(settings.ensemble==='npt'){
       summary.push('目標圧力 '+numberText(settings.pressureBar)+' bar');
       if(Number.isInteger(r.volumeAttempts))summary.push('セル変更 '+r.volumeAccepted+' / '+r.volumeAttempts+'回採択');
     }
     $('mdEnergySummary').textContent=summary.join(' · ');
+    $('mdThermoSummary').textContent=t.pressureBar?'時刻ごとのエネルギー・温度・体積・圧力':'時刻ごとのエネルギーと温度';
     $('mdVolumeHeading').hidden=$('mdPressureHeading').hidden=!t.pressureBar;
     $('mdApplyTrajectory').textContent=t.images.length>200?'再生するフレームを選ぶ':'軌跡を再生';
     const body=$('mdThermoRows');body.replaceChildren();

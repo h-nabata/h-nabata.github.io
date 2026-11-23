@@ -15,11 +15,12 @@ function modern(){
 }
 function fixture(info=modern()){
   const nodes = new Map();
+  const createElement=()=>({children:[],append(node){this.children.push(node);},replaceChildren(){this.children=[];}});
   const $ = id => nodes.get(id);
-  for (const tag of html.matchAll(/<[a-z][^>]*\bid="(md\w+|engineMode)"[^>]*>/gi)) {
+  for (const tag of html.matchAll(/<[a-z][^>]*\bid="(md\w+|engineMode|engineApply|engineConvergenceHelp|engineEnergyDetails)"[^>]*>/gi)) {
     const label = {}, listeners = {}, id=tag[1];
     let value=tag[0].match(/\bvalue="([^"]*)"/)?.[1]||'';
-    nodes.set(id,{get value(){return value;},set value(v){value=String(v);},checked:/\bchecked\b/.test(tag[0]),
+    nodes.set(id,{...createElement(),get value(){return value;},set value(v){value=String(v);},checked:/\bchecked\b/.test(tag[0]),
       closest:()=>label, addEventListener(event,fn){listeners[event]=fn;}, input(){listeners.input?.();}});
   }
   for (const id of ['mdEnsemble','mdThermostat','mdVelocitySource']){
@@ -29,7 +30,7 @@ function fixture(info=modern()){
   }
   const frame={atoms:[{},{}],bonds:[],metadata:{cell:cell()}};
   const M={EngineUI:{getConnection:()=>({info})},Optimization,Trajectory,App:{getState:()=>frame}};
-  vm.runInNewContext(code,{window:{MoleculeVisualizer:M},document:{getElementById:$}});
+  vm.runInNewContext(code,{window:{MoleculeVisualizer:M},document:{getElementById:$,createElement}});
   const ui=M.MDUI;
   $('engineMode').value='md';ui.init();ui.sync();
   const request=()=>{
@@ -109,4 +110,26 @@ test('isotropic NPT results retain actual per-sample dimensions and reject parti
   check(r=>{r.trajectory.volumeA3[1]=28;r.volumeA3=28;});
   check(r=>{r.cell=cell(2);});
   check(r=>{r.units.pressure='GPa';});
+});
+
+test('pressure results use elapsed time for the mean and show only measured quantities',()=>{
+  const {$,ui}=fixture();
+  const show=(timeFs,pressureBar)=>{
+    const zeros=timeFs.map(()=>0);
+    const trajectory={images:timeFs.map(()=>[[0,0,0]]),timeFs,stepNumbers:timeFs,energies:zeros,
+      kineticEV:zeros,totalEV:zeros,temperatureK:zeros};
+    if(pressureBar)Object.assign(trajectory,{pressureBar,volumeA3:timeFs.map(()=>8)});
+    ui.showResult({mode:'md',trajectory},{md:{ensemble:'nve'}});
+    return $('mdEnergySummary').textContent;
+  };
+  // 4 fs at a trapezoid midpoint of 1 bar, then 1 fs at 8.5 bar.
+  const irregular=show([0,4,5],[-1,3,14]);
+  assert.match(irregular,/保存区間の平均圧力（台形積分） 2.5 bar/);
+  assert.match(irregular,/最終瞬間圧力 14 bar/);
+  assert.match($('mdThermoSummary').textContent,/体積・圧力/);
+  assert.equal($('mdThermoRows').children[0].children.length,8);
+  assert.doesNotMatch(show([0],[12]),/平均圧力|NaN/);
+  assert.doesNotMatch(show([0,4]),/圧力/);
+  assert.doesNotMatch($('mdThermoSummary').textContent,/圧力/);
+  assert.equal($('mdThermoRows').children[0].children.length,6);
 });

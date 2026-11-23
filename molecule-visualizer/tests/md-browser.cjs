@@ -126,7 +126,15 @@ async function verifyRun(browser, engine, ensemble, port, thermostat) {
     }
 
     await page.waitForSelector('#mdResult:not([hidden])', {state:'attached'});
+    let previewCell;
     if (ensemble!=='nve') {
+      const title = await page.locator('#profileTitle').innerText();
+      assert.ok(title.includes(ensemble.toUpperCase()));
+      assert.ok(title.includes({'nose-hoover-chain':'Nosé–Hoover',bussi:'Bussi',langevin:'Langevin'}[thermostat]));
+      if (periodic) {
+        assert.match(await page.locator('#profileValue').innerText(),/Å³.*bar/);
+        previewCell = await page.evaluate(()=>MoleculeVisualizer.App.renderer().state.metadata.cell);
+      }
       await page.click('#profileDetails');
       await openCalculationPane(page,'results');
     }
@@ -146,6 +154,7 @@ async function verifyRun(browser, engine, ensemble, port, thermostat) {
     assert.notDeepEqual(trajectory.images[0],trajectory.images.at(-1));
     if (periodic) {
       assert.match(display,/bar/);
+      assert.deepEqual(previewCell,trajectory.cells.at(-1));
       if (variableCell) assert.notDeepEqual(trajectory.cells[0],trajectory.cells.at(-1));
       else for (const h of trajectory.cells) assert.deepEqual(h,trajectory.cells[0]);
       const initialVolume = variableCell ? 5.43**3/4 : 512;
@@ -199,6 +208,15 @@ async function verifyRun(browser, engine, ensemble, port, thermostat) {
     }
     assert.equal(await page.locator('#frameRange').getAttribute('max'),'3');
     assert.ok(await page.locator('#framePlay').isEnabled());
+    await page.click('#frameNext');
+    const selected = Number(await page.inputValue('#frameRange'));
+    const readout = await page.locator('#mdFrameReadout').innerText();
+    assert.ok(readout.includes(ensemble.toUpperCase()));
+    assert.ok(readout.includes(trajectory.timeFs[selected]+' fs'));
+    if (periodic) {
+      assert.ok(readout.includes(Number(trajectory.pressureBar[selected].toPrecision(6))+' bar'));
+      assert.ok(readout.includes(Number(trajectory.volumeA3[selected].toPrecision(6))+' Å³'));
+    }
     assert.deepEqual(errors,[]);
     console.log(engine,ensemble,thermostat||'',report.steps,trajectory.timeFs.at(-1),'fs',trajectory.images.length,'frames');
   } finally {

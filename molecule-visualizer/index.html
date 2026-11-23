@@ -46,7 +46,7 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./activity-ui.js?v=ensembles-59"></script>
 <link rel="stylesheet" href="./calculation-panel.css?v=ensembles-59">
 <script defer src="./calculation-panel.js?v=ensembles-59"></script>
-<script defer src="./md-ui.js?v=ensembles-59"></script>
+<script defer src="./md-ui.js?v=ensembles-60"></script>
 <script defer src="./engine-ui.js?v=ensembles-59"></script>
 <script defer src="./vibration-ui.js?v=constraints-34"></script>
 <script defer src="./path-refinement.js?v=path-optimizer-57"></script>
@@ -853,7 +853,7 @@ python bridge.py --engine rdkit --allow-origin https://h-nabata.github.io</pre><
     <section id="mdResult" hidden aria-labelledby="mdResultTitle"><h4 id="mdResultTitle">MD軌跡</h4>
       <p id="mdEnergySummary" class="mv-small"></p>
       <button type="button" class="mv-btn" id="mdApplyTrajectory">軌跡を再生</button>
-      <details class="mv-calc-disclosure"><summary>時刻ごとのエネルギーと温度</summary>
+      <details class="mv-calc-disclosure"><summary id="mdThermoSummary">時刻ごとのエネルギーと温度</summary>
         <div class="mv-table-scroll"><table><thead><tr><th>ステップ</th><th>時間 (fs)</th><th>温度 (K)</th><th>ポテンシャル (eV)</th><th>運動 (eV)</th><th>合計 (eV)</th><th id="mdVolumeHeading" hidden>体積 (Å³)</th><th id="mdPressureHeading" hidden>瞬間圧力 (bar)</th></tr></thead><tbody id="mdThermoRows"></tbody></table></div>
       </details>
     </section>
