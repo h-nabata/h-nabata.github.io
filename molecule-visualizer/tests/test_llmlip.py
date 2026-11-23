@@ -207,6 +207,23 @@ class Native(unittest.TestCase):
         print('llmlip native finite-difference max error (eV/A):',max(differences))
         self.assertNotIn('torch',sys.modules)
 
+    def test_native_md_uses_registered_model_on_each_sample(self):
+        data, calc = self.engine({**WATER, 'mode':'md', 'maxSteps':8,
+                                 'md':{'ensemble':'nvt','timestepFs':.25,'sampleEvery':2}})
+        with tempfile.TemporaryDirectory() as directory:
+            output = queue.Queue()
+            b.execute_with_calculator(data, b.job_config(data,self.config), directory, output, calc)
+        records = []
+        while not output.empty():
+            records.append(output.get_nowait())
+        result = next(v for k,v in records if k == 'result')
+        self.assertEqual(result['engine'], 'llmlip')
+        self.assertEqual(result['provenance']['llmlip']['device'], 'cpu')
+        trajectory = result['trajectory']
+        self.assertEqual(trajectory['stepNumbers'], [0,2,4,6,8])
+        for p,e in zip(trajectory['images'], trajectory['energies']):
+            self.assertAlmostEqual(calc(0,np.array(p))[0], e, places=8)
+
     def test_real_rust_pbc_and_parallel_images(self):
         if self.config['llmlipModels'][0]['periodic']=='none':self.skipTest('selected model does not support PBC')
         lattice=np.array([[16.,0,0],[1.,16,0],[.5,.7,16]])

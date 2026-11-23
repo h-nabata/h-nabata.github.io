@@ -1,5 +1,37 @@
 # AFIR追加機能の検証記録
 
+## 分子動力学の実測（1.21.0）
+
+下表の水はO–Hをわずかに伸ばした同一構造で、同じ質量・シード731・300 Kの分布から初速度を生成した。NVEで24 fsまで積分し、全ステップについて全エネルギーの初期値からの絶対偏差の最大値を求めた。刻み幅0.5 fsは48ステップ、0.25 fsは96ステップ。
+
+| 接続したポテンシャル | 0.5 fs | 0.25 fs |
+|---|---:|---:|
+| 公式g-xTB v2.0.1 | 0.00159721 eV | 0.00040065 eV |
+| RDKit MMFF94 | 0.00123385 eV | 0.00032704 eV |
+
+水のMMFF94によるLangevin NVTでは、初速度ゼロ、目標300 K、摩擦係数50 ps⁻¹、0.5 fs刻みで5 ps積分した。最初の1 psを除く平均運動温度は291.25 Kだった。周期系では、固定セルのtblite/GFN2-xTBで原子がセル境界を越えても座標が連続し、格子ベクトル分だけ平行移動して再評価した構造とエネルギーが一致した。
+
+ブタジエンではg-xTBの同旋CI-NEB頂点（9構造、固定端点）から、虚振動1本に沿って0.100 eVの初期運動エネルギーを正負に与え、原子拘束・熱浴を使わず40 fs積分した。頂点はC1–C4距離2.10342 Å、虚振動809.02i cm⁻¹。下表は同一の初期構造から開始した2本のNVE軌跡で、開環・閉環は速度の初期方向を表す。
+
+| 初期方向 | 20 fsのC1–C4 | 40 fsのC1–C4 | 40 fsでの全エネルギーの最大偏差 |
+|---|---:|---:|---:|
+| 開環 | 2.64108 Å | 3.58462 Å | 0.002431 eV |
+| 閉環 | 1.50435 Å | 1.80964 Å | 0.001501 eV |
+
+本表の刻みは0.25 fs。0.125 fsに半減した計算での距離の差は、20 fsと40 fsのいずれも0.000051 Å以下だった。2本からは熱反応の速度、分岐比、無置換体の逆旋経路への到達頻度を推定できない。入力XYZ、速度と画面での再現手順は[分子動力学の操作](./MD.md)に掲載した。
+
+元のCI-NEB経路から再計算する場合はリポジトリのルートで実行する。
+
+```bash
+export GXTB_TEST_BINARY=/absolute/path/to/gxtb-enabled-xtb
+export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1
+python molecule-visualizer/tests/benchmark_butadiene.py --engine gxtb --mode cineb --case con --optimizer band-lbfgs --endpoint-mode fixed --workers 2 --json con.json
+python molecule-visualizer/tests/benchmark_butadiene_md.py con.json --steps 160 --timestep-fs 0.25 > md025.json
+python molecule-visualizer/tests/benchmark_butadiene_md.py con.json --steps 320 --timestep-fs 0.125 > md0125.json
+```
+
+RDKitではMMFF94、MMFF94s、UFFの力の単位と符号をエネルギーの有限差分で照合し、帯電分子、芳香環、分子間相互作用を検査した。MDのモデル連携は、llmlip.rsの公開合成モデルとUMA・AnySolvのテスト用の計算器でも検査する。これらは接続と結果の受け渡しの試験で、実学習済みモデルの反応精度を意味しない。
+
 ## 経路全体のL-BFGSとSCF未収束時の刻み幅縮小（1.20.0）
 
 公式g-xTBで、鏡映の指定を省き、旧版と同じXYZ・原子対応を使って比較した。左右のCH₂基に逆方向の0.015 Åの変位を加えた9構造のブタジエン経路では、通常NEBがFIREの68反復・485勾配評価から、経路全体のL-BFGSでは39反復・282評価で力の基準を満たした。両端を緩和したエタンの内部回転では、CI-NEBは69から33反復に短縮し、障壁は0.1515から0.1516 eVだった。CI-StringではノードごとのL-BFGSは14反復、経路全体のL-BFGSは25反復だった。解析解と比較できる曲がったMüller–Brown経路のCI-NEBでも、可動端点の勾配評価が972回から342回に減り、既知の鞍点に達した。[他の反応・曲面での回帰試験](./tests/test_path_optimizer_controls.py)

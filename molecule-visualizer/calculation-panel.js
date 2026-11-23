@@ -17,7 +17,7 @@
     $('enginePanelConnect').hidden=!setup||!!connection;
     $('enginePanelReturn').hidden=setup;
     $('engineRun').hidden=!setup||!connection;
-    $('engineNumericOptions').hidden=['evaluate','vibrations'].includes(mode);
+    $('engineNumericOptions').hidden=['evaluate','vibrations','md'].includes(mode);
     const info=connection?.info,engine=info?'接続中 · '+[info.engine,info.method].filter(Boolean).join(' / '):'未接続';
     setText('enginePanelConnection',engine);
     $('enginePanelConnection').dataset.connected=String(!!info);

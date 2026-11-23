@@ -8,7 +8,7 @@
     if(images.some(p=>!Array.isArray(p)||p.length!==symbols.length||p.some(v=>!Array.isArray(v)||v.length!==3||v.some(x=>!Number.isFinite(x)||Math.abs(x)>10000))))throw Error('構造列の原子数・座標が不正です。');
     for(const series of [energies,biasEnergies])if(series!=null&&(!Array.isArray(series)||series.length!==images.length||series.some(x=>!Number.isFinite(x))))throw Error('構造列とエネルギーが一致しません。');
     if(biasEnergies&&!energies)throw Error('人工項と併せて物理エネルギーが必要です。');
-    if(source.stepNumbers&&(!Array.isArray(source.stepNumbers)||source.stepNumbers.length!==images.length||source.stepNumbers.some(i=>!Number.isInteger(i)||i<0||i>=limit)))throw Error('最適化ステップの番号が不正です。');
+    if(source.stepNumbers&&(!Array.isArray(source.stepNumbers)||source.stepNumbers.length!==images.length||source.stepNumbers.some(i=>!Number.isInteger(i)||i<0||i>=(source.kind==='md'?100001:limit))))throw Error('最適化ステップの番号が不正です。');
     if(cell&&(!Array.isArray(cell.vectors)||cell.vectors.length!==3||cell.vectors.some(v=>!Array.isArray(v)||v.length!==3||v.some(x=>!Number.isFinite(x)))||!Array.isArray(cell.pbc)||cell.pbc.length!==3||cell.pbc.some(x=>typeof x!=='boolean')))throw Error('構造列のセルが不正です。');
     if(source.cells&&(!Array.isArray(source.cells)||source.cells.length!==images.length))throw Error("構造列とセル数が一致しません。");
     if(source.cells)source.cells.forEach(c=>validate({symbols,images:[images[0]],cell:c}));
@@ -120,6 +120,7 @@
     if(!['all','index','distance'].includes(method))throw Error('抽出方法が不正です。');
     return selected.map((i,k)=>{
       let comment=`MoleculeStudio frame=${k+1}/${selected.length} source_frame=${i+1}/${source.images.length} selection=${method}`;
+      if(source.kind==='md'&&source.md)comment+=' method=MD step='+source.stepNumbers[i]+' time_fs='+source.md.timeFs[i]+' temperature_K='+source.md.temperatureK[i]+' kinetic_eV='+source.md.kineticEV[i]+' total_eV='+source.md.totalEV[i];
       if(source.kind==='dsafir')comment+=' method=DS-AFIR';
       if(source.kind==='afir'||source.kind==='optimize')comment+=` step=${source.stepNumbers?.[i]??i}`;
       if(source.energies)comment+=` energy_eV=${source.energies[i].toPrecision(15)}`;

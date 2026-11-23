@@ -1,5 +1,9 @@
 # 外部エンジン連携と経路緩和
 
+## 分子動力学とRDKitの古典力場（1.21.0）
+
+単一ファイルの `bridge.py` を更新・再起動して接続します。g-xTB、tblite、UMA、llmlip.rsの既存接続では、その接続のエネルギーと力を使ってNVE・Langevin NVTを実行できます。RDKit接続では、同じPython環境に `python -m pip install rdkit` で追加し、`python bridge.py --engine rdkit --allow-origin https://h-nabata.github.io` で起動します。[MDの操作と力場の選び方](../MD.md)
+
 ## 1.16.0への更新とCPU配分
 
 新しい`bridge.py`を保存し、サービスを再起動・再接続してください。依存パッケージの追加はありません。`--threads`は総CPUスレッド数、`--workers`は独立評価の上限です。たとえば`--threads 8 --workers 4`なら、単一MIN／AFIR／TS／IRC／スキャンと1構造の単点は8スレッド、2構造の単点は2評価×4スレッド、4構造以上の経路・振動は最大4評価×2スレッドに配分します。MIN＋振動の併用時は振動側の同時評価数に合わせた固定配分です。UMAは従来どおり1ワーカーです。

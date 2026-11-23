@@ -160,6 +160,22 @@ class NativeTBLite(unittest.TestCase):
         final_energy,_=engine(4,np.array(result['images'][0]))
         self.assertAlmostEqual(final_energy,result['energies'][0],places=5)
 
+    def test_md_with_native_periodic_water_across_cell_boundary(self):
+        cell = {'vectors':[[9.,0,0],[1.,9.,0],[0,0,9.]], 'pbc':[True]*3}
+        velocities = [[.015,0,0],[.016,.002,0],[.014,-.001,0]]
+        coords = np.array(WATER['images'][0]) + [8.995,0.,0.]
+        data = b.validate({**WATER, 'mode':'md', 'cell':cell, 'images':[coords.tolist()],
+                           'maxSteps':8, 'md':{'ensemble':'nve','sampleEvery':1,'timestepFs':.25,
+                               'removeCOM':False,'initialVelocitiesAngstromPerFs':velocities}}, 'tblite')
+        engine = b.TBLiteEngine(data, CONFIG, tempfile.gettempdir())
+        trajectory = b.calculate_job(data, engine, tempfile.gettempdir())['trajectory']
+        self.assertGreater(trajectory['images'][-1][0][0], 9.)
+        np.testing.assert_allclose(trajectory['timeFs'], np.arange(9)*.25)
+        for xyz, energy in zip(trajectory['images'], trajectory['energies']):
+            wrapped = np.array(xyz)
+            wrapped[0] -= cell['vectors'][0]
+            self.assertAlmostEqual(energy, engine(1,wrapped)[0], delta=2e-5)
+
     def test_real_fixed_cell_path_and_endpoints(self):
         water=np.array(WATER['images'][0]);images=[]
         for offset in (0,.2,.4):

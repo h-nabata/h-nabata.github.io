@@ -33,17 +33,19 @@ from urllib.parse import urlsplit, unquote, parse_qsl
 
 import numpy as np
 import psutil
-from ase.data import atomic_numbers, covalent_radii
+from ase import units as ase_units
+from ase.data import atomic_masses, atomic_numbers, covalent_radii
 from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 from scipy.spatial import cKDTree
 
-VERSION = '1.20.0'
+VERSION = '1.21.0'
 KJ_MOL_PER_EV = 96.48533212331002
+RDKIT_FORCE_FIELDS = ('MMFF94', 'MMFF94s', 'UFF')
 UMA_MODELS = ('uma-s-1p2p1', 'uma-s-1p2', 'uma-s-1p1', 'uma-m-1p1')
 ANYSOLV_MODELS = ('model_compact', 'model_moe')
 MAX_BODY = 8 * 1024 * 1024
-MODES = ('evaluate', 'optimize', 'perpendicular', 'neb', 'cineb', 'lup', 'afir', 'dsafir', 'ts', 'vibrations', 'irc', 'scan')
+MODES = ('evaluate', 'optimize', 'perpendicular', 'neb', 'cineb', 'lup', 'afir', 'dsafir', 'ts', 'vibrations', 'irc', 'scan', 'md')
 PATH_MODES = ('perpendicular', 'neb', 'cineb', 'lup')
 
 
@@ -56,10 +58,10 @@ def number(value, name, lo, hi, integer=False):
 
 
 def validate(data, engine):
-    allowed = {'symbols', 'images', 'cell', 'charge', 'multiplicity', 'mode',
+    allowed = {'symbols', 'images', 'cell', 'charge', 'multiplicity', 'mode', 'md',
                'maxSteps', 'fmax', 'spring', 'maxMove', 'climbAfter', 'atomIds', 'afir', 'dsafir', 'livePreview',
                'optimizer', 'trustRadius', 'vibrations', 'fixedAtoms', 'umaDevice', 'solvation', 'endpointMode',
-               'irc', 'thermochemistry', 'internalConstraints', 'groupConstraints', 'scan', 'adaptiveNEB', 'pathSplit', 'nodeIds', 'lup', 'fixedComponents', 'rigidGroups', 'cellOptimization', 'stagedOptimization', 'modelF', 'llmlip', 'pathSymmetry'}
+               'irc', 'thermochemistry', 'internalConstraints', 'groupConstraints', 'scan', 'adaptiveNEB', 'pathSplit', 'nodeIds', 'lup', 'fixedComponents', 'rigidGroups', 'cellOptimization', 'stagedOptimization', 'modelF', 'llmlip', 'pathSymmetry', 'forceField'}
     if not isinstance(data, dict) or set(data) - allowed:
         raise ValueError('未定義の入力項目があります。コマンド・パス指定は受け付けません。')
     if type(data.get('livePreview', False)) is not bool:
@@ -67,7 +69,7 @@ def validate(data, engine):
     symbols = data.get('symbols')
     if not isinstance(symbols, list) or not 1 <= len(symbols) <= 500:
         raise ValueError('原子数は1〜500にしてください。')
-    maximum_z = {'gxtb':103, 'tblite':86, 'uma':83, 'llmlip':118}[engine]
+    maximum_z = {'gxtb':103, 'tblite':86, 'uma':83, 'llmlip':118, 'rdkit':118}[engine]
     if any(not isinstance(s, str) or s not in atomic_numbers or not 1 <= atomic_numbers[s] <= maximum_z for s in symbols):
         raise ValueError(f'このエンジンの入力元素は原子番号{maximum_z}までです。対応パラメータの有無は計算時にも検査します。')
     images = np.asarray(data.get('images'), dtype=float)
@@ -76,8 +78,10 @@ def validate(data, engine):
     if not np.isfinite(images).all() or np.max(np.abs(images)) > 1e4:
         raise ValueError('座標は有限値、絶対値10000 Å以下にしてください。')
     mode = data.get('mode', 'evaluate')
-    if mode not in MODES or (mode in PATH_MODES and len(images) < 3) or (mode in ('optimize', 'afir', 'ts', 'vibrations', 'irc', 'scan') and len(images) != 1):
-        raise ValueError('経路緩和には端点を含む3〜100構造、単一最適化・振動解析には1構造が必要です。')
+    if mode not in MODES or (mode in PATH_MODES and len(images) < 3) or (mode in ('optimize', 'afir', 'ts', 'vibrations', 'irc', 'scan', 'md') and len(images) != 1):
+        raise ValueError('経路緩和には端点を含む3〜100構造、単一最適化・振動解析・MDには1構造が必要です。')
+    if 'md' in data and mode != 'md':
+        raise ValueError('mdの設定は分子動力学専用です。')
     if mode == 'dsafir' and len(images) != 2:
         raise ValueError('DS-AFIRには反応物と生成物の2構造が必要です。')
     if mode != 'dsafir' and 'dsafir' in data:
@@ -106,6 +110,10 @@ def validate(data, engine):
             raise ValueError('0.1 Å未満で重なった原子があります。初期経路の衝突を解消してください。')
     result = dict(symbols=symbols, images=images.tolist(), cell=cell, charge=charge,
                   multiplicity=multiplicity, mode=mode, livePreview=data.get('livePreview', False))
+    if engine == 'rdkit':
+        result['forceField'] = validate_force_field(data.get('forceField'), result)
+    elif 'forceField' in data:
+        raise ValueError('forceFieldの指定にはRDKit接続が必要です。')
     if mode in ('cineb', 'lup'):
         # Existing scripts and saved jobs omitted this field and fixed both ends.
         result['endpointMode'] = data.get('endpointMode', 'fixed')
@@ -119,7 +127,11 @@ def validate(data, engine):
         symmetry = MirrorPath(data['pathSymmetry'], symbols, images, result.get('endpointMode') == 'relax')
         symmetry.initial_band(images)
         result['pathSymmetry'] = copy.deepcopy(data['pathSymmetry'])
-    if mode == 'dsafir':
+    if mode == 'md':
+        if any(key in data for key in ('optimizer', 'fmax', 'spring', 'maxMove', 'climbAfter')):
+            raise ValueError('MDには時間刻みと積分ステップ数を指定してください。')
+        validate_md(data, result)
+    elif mode == 'dsafir':
         result['maxSteps'] = number(data.get('maxSteps', 300), 'maxSteps', 1, 9999, True)
         if any(k in data for k in ('fmax', 'maxMove', 'spring', 'climbAfter')):
             raise ValueError('DS-AFIRには積分刻みstepSizeと接続距離thresholdを指定してください。ばね・CI・力の収束条件は使用しません。')
@@ -162,7 +174,8 @@ def validate(data, engine):
         optimizer, choices = data.get('optimizer', 'ds-steepest'), ('ds-steepest',)
     if optimizer not in choices:
         raise ValueError('この操作では指定した最適化手法を使用できません。TSにはSella PRFO/RFOを指定してください。')
-    result['optimizer'] = optimizer
+    if mode != 'md':
+        result['optimizer'] = optimizer
     if mode == 'ts':
         result['trustRadius'] = number(data.get('trustRadius', .04), '初期信頼半径', .001, .2)
     elif 'trustRadius' in data:
@@ -227,8 +240,8 @@ def validate(data, engine):
     validate_irc_settings(data, result)
     validate_thermochemistry_settings(data, result)
     if 'modelF' in data:
-        if engine == 'llmlip':
-            raise ValueError('llmlip.rs β版ではModelFの2状態合成面は未対応です。')
+        if engine in ('llmlip', 'rdkit'):
+            raise ValueError('このエンジンではModelFの2状態合成面は未対応です。')
         result['modelF'] = validate_model_f(data['modelF'], result, engine)
     return result
 
@@ -359,7 +372,7 @@ class ModelFEngine:
             key=self.key(positions,lattice,answer[0]);self.records[key]=row;self.records.move_to_end(key)
             # A band stores only its latest evaluated geometries; do not retain
             # a million unused component rows for a 100-image, 10000-step path.
-            if self.data['mode'] in PATH_MODES:
+            if self.data['mode'] in (*PATH_MODES, 'md'):
                 while len(self.records)>2048:self.records.popitem(last=False)
         return answer
 
@@ -396,6 +409,10 @@ class ModelFEngine:
                 lattice=(cells[i] if cells is not None else None) or fixed_cell
                 key=self.key(p,lattice['vectors'] if isinstance(lattice,dict) else lattice,result['energies'][i])
                 row=self.records.get(key)
+                if row is None and self.data['mode'] == 'md':
+                    # Sparse trajectory rows were validated at their sampling step.
+                    stored = result.get('surfaceComponents', {})
+                    row = {name:values[i] for name,values in stored.items()} if stored else None
                 if row is None:raise ValueError('ModelFの両状態を評価済みの構造だけを保存できます。')
                 # A fixed endpoint or stationary string node may go thousands
                 # of evaluations without another calculator/cache invocation.
@@ -420,7 +437,7 @@ class ModelFEngine:
 
 def make_calculator(data,config,directory):
     if data.get('modelF'):return ModelFEngine(data,config,directory)
-    cls=SolvatedUMAEngine if config.get('solvation') else {'tblite':TBLiteEngine,'gxtb':GXTBEngine,'uma':UMAEngine,'llmlip':LLMLIPEngine}[config['engine']]
+    cls=SolvatedUMAEngine if config.get('solvation') else {'tblite':TBLiteEngine,'gxtb':GXTBEngine,'uma':UMAEngine,'llmlip':LLMLIPEngine,'rdkit':RDKitEngine}[config['engine']]
     return cls(data,config,directory)
 
 
@@ -2730,9 +2747,193 @@ def vibration_analysis(data, calculate, directory, progress=lambda p: None):
         vibrations.clean()
 
 
+def validate_md(data, result):
+    """Validate clock, output and thermostat settings independently of the potential."""
+    options = data.get('md', {})
+    allowed = {'ensemble', 'timestepFs', 'temperatureK', 'frictionPerPs', 'sampleEvery',
+               'seed', 'removeCOM', 'massesAmu', 'initialVelocitiesAngstromPerFs'}
+    if not isinstance(options, dict) or set(options) - allowed:
+        raise ValueError('MDの設定項目を確認してください。')
+    n_atoms = len(result['symbols'])
+    steps = number(data.get('maxSteps', 100), 'MDのステップ数', 1, 100000, True)
+    stride = number(options.get('sampleEvery', 10), 'MDの保存間隔', 1, 100000, True)
+    frame_count = 1 + (steps + stride - 1) // stride
+    if frame_count > 1000 or n_atoms * frame_count > 100000:
+        raise ValueError('軌跡は1000フレーム、延べ100000原子までです。保存間隔を広げてください。')
+    ensemble = options.get('ensemble', 'nve')
+    if ensemble not in ('nve', 'nvt'):
+        raise ValueError('MDのアンサンブルはnveまたはnvtです。')
+    remove = options.get('removeCOM', True)
+    if type(remove) is not bool:
+        raise ValueError('重心運動の除去には真偽値を指定してください。')
+    settings = dict(ensemble=ensemble, sampleEvery=stride,
+                    timestepFs=number(options.get('timestepFs', .5), '時間刻み (fs)', .001, 10),
+                    temperatureK=number(options.get('temperatureK', 300), '温度 (K)', 0, 10000),
+                    seed=number(options.get('seed', 42), '乱数シード', 0, 2**32 - 1, True),
+                    removeCOM=remove and n_atoms > 1)
+    if ensemble == 'nvt':
+        settings['frictionPerPs'] = number(options.get('frictionPerPs', 10), '摩擦係数 (/ps)', .001, 1000)
+    elif 'frictionPerPs' in options:
+        raise ValueError('摩擦係数はLangevin NVTの設定です。')
+    if 'massesAmu' in options:
+        values = options['massesAmu']
+        if not isinstance(values, list) or len(values) != n_atoms:
+            raise ValueError('massesAmuは全原子に対応する質量 (u) またはnullの配列です。')
+        settings['massesAmu'] = [None if m is None else number(m, '原子質量 (u)', .01, 1000) for m in values]
+    if 'initialVelocitiesAngstromPerFs' in options:
+        velocities = options['initialVelocitiesAngstromPerFs']
+        if (not isinstance(velocities, list) or len(velocities) != n_atoms or
+                any(not isinstance(v, list) or len(v) != 3 for v in velocities)):
+            raise ValueError('初速度は入力の原子順にN行×3成分をÅ/fsで指定してください。')
+        settings['initialVelocitiesAngstromPerFs'] = [
+            [number(value, '初速度 (Å/fs)', -10, 10) for value in row] for row in velocities]
+    result.update(maxSteps=steps, md=settings)
+
+
+def md_masses(data):
+    masses = [atomic_masses[atomic_numbers[s]] for s in data['symbols']]
+    for i, mass in enumerate(data['md'].get('massesAmu', [])):
+        if mass is not None:
+            masses[i] = mass
+    return np.asarray(masses, dtype=float)
+
+
+def md_result(data, frames, reason):
+    """Assemble an exact measured trajectory, also used for interrupted jobs."""
+    last = frames[-1]
+    history = [dict(step=p['step'], timeFs=p['timeFs'], potentialEnergyEV=p['energy'],
+                    kineticEnergyEV=p['kineticEnergyEV'], totalEnergyEV=p['totalEnergyEV'],
+                    temperatureK=p['temperatureK'], evaluations=p['step'] + 1) for p in frames]
+    keys = {'images':'positions', 'energies':'energy', 'stepNumbers':'step', 'timeFs':'timeFs',
+            'kineticEV':'kineticEnergyEV', 'totalEV':'totalEnergyEV', 'temperatureK':'temperatureK'}
+    trajectory = {name:[p[key] for p in frames] for name, key in keys.items()}
+    trajectory.update(checkpoint_components(frames))
+    settings = data['md']
+    return dict(mode='md', md=settings, steps=last['step'], evaluations=last['step'] + 1,
+                reason=reason, converged=False, images=[last['positions']], energies=[last['energy']],
+                forces=[last['force']], imageFmax=[last['fmax']], effectiveFmax=last['fmax'],
+                masses=md_masses(data).tolist(), velocitiesAngstromPerFs=last['velocitiesAngstromPerFs'],
+                degreesOfFreedom=3 * (len(data['symbols']) - int(settings['removeCOM'])),
+                trajectory=trajectory, history=history, climbingImage=None,
+                units={'time':'fs', 'length':'angstrom', 'energy':'eV', 'force':'eV/angstrom',
+                       'velocity':'angstrom/fs', 'temperature':'K', 'mass':'u'},
+                **({'forceField':copy.deepcopy(data['forceField'])} if 'forceField' in data else {}),
+                **({'surfaceInterpretation':'amf-model-surface-not-state-transition-dynamics'} if 'modelF' in data else {}),
+                **checkpoint_components([last]))
+
+
+def append_md_sample(frames, frame):
+    # Only the newest sample needs full vectors for a terminal or interrupted result.
+    # Replace the local entry, leaving any frame pending serialization by IPC intact.
+    if frames:
+        frames[-1] = {key:value for key,value in frames[-1].items()
+                      if key not in ('force', 'velocitiesAngstromPerFs')}
+    frames.append(frame)
+
+
+def molecular_dynamics(data, calculate, progress=lambda _: None):
+    """Velocity Verlet (NVE) and Langevin BAOAB (NVT), in ASE mechanical units."""
+    settings = data['md']
+    positions = np.array(data['images'][0], dtype=float)
+    masses = md_masses(data)[:, None]
+    total_mass = np.sum(masses)
+    dt_fs = settings['timestepFs']
+    dt = dt_fs * ase_units.fs
+    rng = np.random.default_rng(settings['seed'])
+    sigma = np.sqrt(ase_units.kB * settings['temperatureK'] / masses)
+    remove_com = settings['removeCOM']
+    dof = 3 * (len(masses) - int(remove_com))
+
+    def com_velocity(v):
+        return np.sum(v * masses, axis=0) / total_mass
+
+    # Sampling a Maxwell distribution preserves the fluctuations in instantaneous K.
+    if 'initialVelocitiesAngstromPerFs' in settings:
+        velocity = np.array(settings['initialVelocitiesAngstromPerFs'], dtype=float) / ase_units.fs
+    else:
+        velocity = sigma * rng.standard_normal(positions.shape)
+    if remove_com:
+        velocity -= com_velocity(velocity)
+    thermostat = settings['ensemble'] == 'nvt'
+    if thermostat:
+        exponent = settings['frictionPerPs'] * dt_fs / 1000.
+        damping = math.exp(-exponent)
+        noise_scale = sigma * math.sqrt(-math.expm1(-2 * exponent))
+
+    def evaluate(x):
+        if not np.isfinite(x).all() or np.max(np.abs(x)) > 1e4:
+            raise ValueError('MD座標が有限値または10000 Åの範囲を超えました。時間刻みを確認してください。')
+        energy, force = calculate(0, x)
+        force = np.asarray(force, dtype=float)
+        if not np.isfinite(energy) or force.shape != x.shape or not np.isfinite(force).all():
+            raise ValueError('MDのポテンシャルエネルギーまたは力が不正です。')
+        return float(energy), force
+
+    def thermodynamics(v, potential):
+        kinetic = .5 * np.sum(masses * v**2)
+        # External forces can accelerate the COM. Its kinetic energy contributes to E,
+        # while the reported internal temperature omits those three translations.
+        thermal = .5 * np.sum(masses * (v - com_velocity(v))**2) if remove_com else kinetic
+        total = kinetic + potential
+        if not math.isfinite(total) or not math.isfinite(thermal):
+            raise ValueError('MDの運動エネルギーが発散しました。時間刻みを確認してください。')
+        return dict(kineticEnergyEV=float(kinetic), totalEnergyEV=float(total),
+                    temperatureK=float(2 * thermal / (dof * ase_units.kB)))
+
+    frames = []
+    energy, force = evaluate(positions)
+    thermo = thermodynamics(velocity, energy)
+
+    def report(step, sample):
+        event = dict(phase='md', step=step, timeFs=step * dt_fs, potentialEnergyEV=energy,
+                     evaluations=step + 1, **thermo)
+        if sample:
+            xyz = positions.tolist()
+            frame = dict(step=step, timeFs=step * dt_fs, positions=xyz, energy=energy,
+                         force=force.tolist(), fmax=force_max(force),
+                         velocitiesAngstromPerFs=(velocity * ase_units.fs).tolist(), **thermo)
+            append_md_sample(frames, frame)
+            event['mdCheckpoint'] = frame
+            if data.get('livePreview'):
+                event['preview'] = dict(step=step, images=[xyz], energies=[energy])
+        progress(event)
+
+    report(0, True)
+    for step in range(1, data['maxSteps'] + 1):
+        try:
+            # B (half kick). The OU update lies between the two half drifts in BAOAB.
+            half = velocity + .5 * dt * force / masses
+            if thermostat:
+                trial = positions + .5 * dt * half
+                noise = noise_scale * rng.standard_normal(positions.shape)
+                if remove_com:
+                    # Couple the bath only to relative velocities. No atom is anchored.
+                    center = com_velocity(half)
+                    noise -= com_velocity(noise)
+                    half = center + damping * (half - center) + noise
+                else:
+                    half = damping * half + noise
+                trial += .5 * dt * half
+            else:
+                trial = positions + dt * half
+            trial_energy, trial_force = evaluate(trial)
+            trial_velocity = half + .5 * dt * trial_force / masses
+            trial_thermo = thermodynamics(trial_velocity, trial_energy)
+        except Exception:
+            # Preserve the last fully integrated state if a force call fails off stride.
+            if frames[-1]['step'] != step - 1:
+                report(step - 1, True)
+            raise
+        positions, velocity, energy, force, thermo = trial, trial_velocity, trial_energy, trial_force, trial_thermo
+        report(step, step % settings['sampleEvery'] == 0 or step == data['maxSteps'])
+    return md_result(data, frames, 'completed')
+
+
 def calculate_job(data, calculate, directory, progress=lambda p: None):
     if data.get('cellOptimization',{}).get('mode','fixed')!='fixed':
         result = optimize_cell(data, calculate, progress)
+    elif data['mode']=='md':
+        result = molecular_dynamics(data, calculate, progress)
     elif data['mode']=='irc':
         result = irc_calculation(data, calculate, directory, progress)
     elif data['mode']=='scan':
@@ -3028,6 +3229,112 @@ def sella_version():
         return importlib.metadata.version('sella')
     except importlib.metadata.PackageNotFoundError:
         return None
+
+
+def validate_force_field(settings, data):
+    if data['mode'] != 'md':
+        raise ValueError('RDKit古典力場は分子動力学（MD）で利用できます。')
+    if data['cell'] and any(data['cell']['pbc']):
+        raise ValueError('RDKit古典力場は非周期分子専用です。')
+    if data['multiplicity'] != 1:
+        raise ValueError('RDKit古典力場は閉殻分子（多重度1）に対応します。')
+    if not isinstance(settings, dict) or set(settings) != {'model', 'bonds', 'formalCharges'}:
+        raise ValueError('古典力場の種類、結合次数、各原子の形式電荷を指定してください。')
+    if settings['model'] not in RDKIT_FORCE_FIELDS:
+        raise ValueError('古典力場にはMMFF94、MMFF94sまたはUFFを指定してください。')
+    count = len(data['symbols'])
+    charges, bonds = settings['formalCharges'], settings['bonds']
+    if not isinstance(charges, list) or len(charges) != count or any(type(q) is not int or abs(q)>100 for q in charges):
+        raise ValueError('全原子の形式電荷を原子順に整数で指定してください。')
+    if sum(charges) != data['charge']:
+        raise ValueError('形式電荷の和と全電荷が一致しません。')
+    if not isinstance(bonds, list) or len(bonds) > count * (count-1) // 2:
+        raise ValueError('重複のない結合リストを指定してください。')
+    seen = set()
+    for row in bonds:
+        if not isinstance(row, list) or len(row) != 3:
+            raise ValueError('結合は始点、終点、結合次数の3項目です。')
+        a, b, order = row
+        if any(type(i) is not int or not 0 <= i < count for i in (a, b)) or a == b:
+            raise ValueError('結合には異なる2原子を0始まりの番号で指定してください。')
+        if type(order) not in (int, float) or order not in (1, 1.5, 2, 3):
+            raise ValueError('結合次数は1、1.5（芳香族）、2、3のいずれかです。')
+        pair = (min(a, b), max(a, b))
+        if pair in seen:
+            raise ValueError('同じ原子対の結合が重複しています。')
+        seen.add(pair)
+    return copy.deepcopy(settings)
+
+
+def rdkit_packages():
+    try:
+        from rdkit import Chem
+        from rdkit.Chem import rdForceFieldHelpers
+        # Registers the Python ForceField wrapper used by the helpers.
+        from rdkit.ForceField import rdForceField
+    except ImportError as error:
+        raise ValueError('RDKit古典力場には同じ環境で python -m pip install rdkit を実行してください。') from error
+    return Chem, rdForceFieldHelpers
+
+
+class RDKitEngine:
+    """Fixed user-provided molecular graph, with all nonbonded pairs included."""
+    def __init__(self, data, config, directory):
+        chem, helpers = rdkit_packages()
+        settings = data['forceField']
+        graph = chem.RWMol()
+        for symbol, charge in zip(data['symbols'], settings['formalCharges']):
+            atom = chem.Atom(symbol)
+            atom.SetFormalCharge(charge)
+            graph.AddAtom(atom)
+        kinds = {1:chem.BondType.SINGLE, 2:chem.BondType.DOUBLE, 3:chem.BondType.TRIPLE, 1.5:chem.BondType.AROMATIC}
+        for a, b, order in settings['bonds']:
+            graph.AddBond(a, b, kinds[order])
+        self.mol = graph.GetMol()
+        try:
+            chem.SanitizeMol(self.mol)
+        except (ValueError, RuntimeError) as error:
+            raise ValueError('RDKitで結合次数・形式電荷を解釈できません。原子価と芳香族環を確認してください。') from error
+        for atom, charge in zip(self.mol.GetAtoms(), settings['formalCharges']):
+            if atom.GetNumImplicitHs() or atom.GetNumExplicitHs():
+                raise ValueError(f'原子{atom.GetIdx()+1}の水素が不足しています。水素座標と結合次数を明示してください。')
+            if atom.GetNumRadicalElectrons() or atom.GetFormalCharge() != charge:
+                raise ValueError('ラジカルまたは形式電荷の補正を要する分子には対応していません。')
+        self.count = self.mol.GetNumAtoms()
+        conf = chem.Conformer(self.count)
+        for i, xyz in enumerate(data['images'][0]):
+            conf.SetAtomPosition(i, tuple(xyz))
+        self.mol.AddConformer(conf)
+        model = settings['model']
+        # RDKit otherwise drops fragment interactions and builds a fixed pair
+        # list from an initial-distance cutoff. Keep even initially distant pairs
+        # so fragments that later approach each other exert the proper force.
+        if model == 'UFF':
+            if not helpers.UFFHasAllMoleculeParams(self.mol):
+                raise ValueError('UFFでパラメータを割り当てられない原子があります。')
+            self.field = helpers.UFFGetMoleculeForceField(self.mol, vdwThresh=1.e6, ignoreInterfragInteractions=False)
+        else:
+            properties = helpers.MMFFGetMoleculeProperties(self.mol, mmffVariant=model)
+            if properties is None:
+                raise ValueError(f'{model}でパラメータを割り当てられない原子があります。')
+            self.field = helpers.MMFFGetMoleculeForceField(self.mol, properties, nonBondedThresh=1.e6,
+                                                          ignoreInterfragInteractions=False)
+        if self.field is None:
+            raise ValueError(f'{model}の力場を構築できませんでした。')
+        self.field.Initialize()
+
+    def __call__(self, index, positions):
+        xyz = np.asarray(positions, dtype=float)
+        if xyz.shape != (self.count, 3) or not np.isfinite(xyz).all():
+            raise ValueError('RDKitに渡す座標が不正です。')
+        coords = tuple(xyz.ravel())
+        # Native energy is kcal/mol and CalcGrad is +dE/dx in kcal/(mol Å).
+        factor = 4.184 / KJ_MOL_PER_EV
+        energy = self.field.CalcEnergy(coords) * factor
+        forces = -np.asarray(self.field.CalcGrad(coords)).reshape(self.count, 3) * factor
+        if not math.isfinite(energy) or not np.isfinite(forces).all():
+            raise ValueError('古典力場のエネルギーまたは力が有限値ではありません。構造と時間刻みを確認してください。')
+        return energy, forces
 
 
 class TBLiteEngine:
@@ -3427,6 +3734,8 @@ class LLMLIPEngine:
 
 def job_config(data, config):
     result = dict(config)
+    if config['engine'] == 'rdkit' and 'forceField' in data:
+        result['rdkitModel'] = data['forceField']['model']
     if config['engine'] == 'llmlip':
         result = llmlip_job_config(data, result)
     if 'umaDevice' in data:
@@ -3571,6 +3880,12 @@ class SolvatedUMAEngine:
             self.component_forces, self.component_maxima = {}, {}
         self.component_maxima[key] = {'uma':force_max(force), 'solvation':force_max(correction)}
         self.component_forces[key] = {'uma':np.asarray(force).tolist(), 'solvation':correction.tolist()}
+        # MD records annotated samples in its trajectory. Unsampled scalar
+        # decompositions are only needed briefly by the current evaluation.
+        if self.data['mode'] == 'md' and len(self.components) > 256:
+            oldest = next(iter(self.components))
+            self.components.pop(oldest)
+            self.component_maxima.pop(oldest)
         # Keep vectors for one complete band, not every finite-difference probe.
         if len(self.component_forces) > 200:
             del self.component_forces[next(iter(self.component_forces))]
@@ -3712,6 +4027,8 @@ def engine_method(config, data=None):
     if config['engine'] == 'llmlip':
         s = config.get('llmlipSelection', {})
         return 'llmlip.rs（CPU・β） / '+s.get('model', config['llmlipDefaultModel'])+((' / '+s['head']) if s.get('head') else '')
+    if config['engine'] == 'rdkit':
+        return 'RDKit / '+config['rdkitModel'] if 'rdkitModel' in config else 'RDKit'
     return config['method'] if config['engine'] == 'tblite' else 'g-xTB'
 
 
@@ -3871,6 +4188,10 @@ def execute_with_calculator(data, config, directory, messages, calculator):
         nonlocal last_notification, last_phase
         now = time.monotonic()
         phase = p.get('phase')
+        if 'mdCheckpoint' in p:
+            # Reuse the same component annotations, journal and periodic writes
+            # as other sampled trajectories. Frames retain physical time/velocity.
+            p['checkpoint'] = p.pop('mdCheckpoint')
         if (not any(k in p for k in ('checkpoint', 'bandCheckpoint', 'structureCheckpoint', 'preview'))
                 and now-last_notification < .1 and phase == last_phase):
             return
@@ -3899,7 +4220,7 @@ def execute_with_calculator(data, config, directory, messages, calculator):
                 component_history[key] = {name:copy.deepcopy(p[name]) for name in ('energyComponents','componentFmax') if name in p}
         messages.put(('progress', p))
     plan=cpu_plan(data,config);workers=plan['evaluationWorkers']
-    cached = ExactEvaluationCache(calculator, workers=workers)
+    cached = ExactEvaluationCache(calculator, capacity=1 if data['mode']=='md' else 128, workers=workers)
     metrics={};token=_metrics.set(metrics);started=time.perf_counter()
     try:
         result = calculate_job(data, cached, directory, progress)
@@ -4006,6 +4327,8 @@ def provenance(config, data=None):
         config = job_config({}, config)
     s = config.get('solvation')
     return {'bridgeVersion':VERSION, 'engine':config['engine'], 'binarySHA256':config.get('binarySHA256'),
+        **({'rdkit':{'version':package_version('rdkit'), 'model':config.get('rdkitModel'),
+                     'fixedTopology':True, 'interfragmentInteractions':True}} if config['engine']=='rdkit' else {}),
         **({'llmlip':{**config['llmlipSelection'], 'beta':True, 'backend':'direct', 'device':'cpu',
             'version':package_version('llmlip'), 'adapterSourceRevision':LLMLIP_SOURCE_REVISION,
             'architecture':config['llmlipCapabilities']['architecture'], 'synthetic':config['llmlipCapabilities']['synthetic'],
@@ -4435,8 +4758,11 @@ class Jobs:
                                 rows.append(row)
                         checkpoint = value.pop('checkpoint', None)
                         if checkpoint is not None:
-                            if job['checkpoints']:job['checkpoints'][-1].pop('optimizerState',None)
-                            job['checkpoints'].append(checkpoint)
+                            if job['data']['mode'] == 'md':
+                                append_md_sample(job['checkpoints'], checkpoint)
+                            else:
+                                if job['checkpoints']:job['checkpoints'][-1].pop('optimizerState',None)
+                                job['checkpoints'].append(checkpoint)
                         for key in ('bandCheckpoint','structureCheckpoint'):
                             saved = value.pop(key, None)
                             if saved is not None:
@@ -4479,6 +4805,17 @@ class Jobs:
     def _recover_partial(self, job):
         if job.get('structureCheckpoint') or job.get('bandCheckpoint'):
             job['result'] = self.partial_structure(job)
+        elif job['data']['mode'] == 'md' and job.get('checkpoints'):
+            data = job['data']
+            reason = {'cancelled':'cancelled', 'interrupted':'interrupted'}.get(job['status'], 'failed')
+            result = md_result(data, job['checkpoints'], reason)
+            identity = {'data':data, 'identity':job.get('configFingerprint') or calculation_identity(data, self.config)}
+            job['result'] = dict(result, symbols=data['symbols'], cell=data['cell'], charge=data['charge'],
+                                 multiplicity=data['multiplicity'], error=job.get('error'),
+                                 conditionId=hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest(),
+                                 **self._record_identity(job))
+            if 'atomIds' in data:
+                job['result']['atomIds'] = data['atomIds']
         elif job['data']['mode'] == 'dsafir' and len(job.get('checkpoints', [])) >= 2:
             data = job['data']
             reason = {'cancelled':'cancelled', 'interrupted':'interrupted'}.get(job['status'], 'failed')
@@ -4758,6 +5095,7 @@ class Handler(BaseHTTPRequestHandler):
                                    'checkpointSHA256':config.get('anysolvHashes', {}),
                                    'device':config.get('anysolvDevice'), 'precision':config['umaPrecision']},
                         'maxMultiplicity':100, 'maxAtomicNumber':83} if config['engine']=='uma' else {}),
+                    'molecularDynamics':{'ensembles':['nve','nvt'], 'maxSteps':100000, 'maxFrames':1000, 'maxAtomFrames':100000},
                     'sellaVersion':sella_version(), 'vibrations':1, 'maxVibrationAtoms':200, 'pathCheckpoint':1, 'fixedAtoms':True,
                     'irc':bool(sella_version()), 'thermochemistry':True, 'internalConstraints':True, 'groupConstraints':True, 'scan':True, 'resourceOptimization':1, 'evaluationWorkers':config.get('workers',1), 'advancedOptimization':True, 'optimizerRestart':True, 'cellOptimization':config['engine']=='tblite',
                     'adaptiveNEB':True, 'pathSplit':True, 'history':True, 'queue':True, 'residentModels':True,
@@ -4772,7 +5110,14 @@ class Handler(BaseHTTPRequestHandler):
                         'workers':config.get('workers',1), 'backend':'direct', 'device':'cpu'},
                         'engineVersion':package_version('llmlip'), 'modelF':None, 'cellOptimization':False,
                         'periodic':any(m.get('periodic')!='none' for m in config['llmlipModels'] if m['available']),
-                        'maxAtomicNumber':118} if config['engine']=='llmlip' else {})})
+                        'maxAtomicNumber':118} if config['engine']=='llmlip' else {}),
+                    **({'forceFields':list(RDKIT_FORCE_FIELDS), 'engineVersion':package_version('rdkit'),
+                        'modes':['md'], 'maxAtomicNumber':118, 'maxMultiplicity':1, 'periodic':False,
+                        'modelF':None, 'vibrations':False, 'irc':False, 'thermochemistry':False,
+                        'fixedAtoms':False, 'internalConstraints':False, 'groupConstraints':False,
+                        'scan':False, 'adaptiveNEB':False, 'pathSplit':False, 'lup':False,
+                        'advancedOptimization':False, 'pathOptimizers':{}, 'pathSymmetryTypes':[],
+                        'residentModels':False} if config['engine']=='rdkit' else {})})
             elif self.path == '/api/jobs':
                 self.response(200, self.server.jobs.listing())
             elif self.path == '/api/runtime':
@@ -4872,7 +5217,7 @@ def make_server(config, token, port=8766, origins=(), site_dir=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--engine', choices=('tblite', 'gxtb', 'uma', 'llmlip'), default='tblite')
+    parser.add_argument('--engine', choices=('tblite', 'gxtb', 'uma', 'llmlip', 'rdkit'), default='tblite')
     parser.add_argument('--llmlip-model', action='append', default=[], metavar='ID=/absolute/path/model.e3rs', help='llmlip CPU beta; repeat to register local converted models')
     parser.add_argument('--method', choices=('GFN1-xTB', 'GFN2-xTB', 'IPEA1-xTB'), help='tblite only; default GFN2-xTB')
     parser.add_argument('--binary', help='Absolute path to the locally installed xtb with --gxtb --grad support')
@@ -4917,6 +5262,11 @@ def main():
     if args.engine == 'gxtb':
         if not args.binary or not Path(args.binary).is_absolute() or not Path(args.binary).is_file() or not os.access(args.binary, os.X_OK) or Path(args.binary).suffix.lower() in ('.bat', '.cmd'):
             parser.error('--binary must be an absolute executable path (not a shell script wrapper .bat/.cmd)')
+    elif args.engine == 'rdkit':
+        try:
+            rdkit_packages()
+        except ValueError as error:
+            parser.error(str(error))
     elif args.engine == 'tblite':
         try:
             importlib.metadata.version('tblite')

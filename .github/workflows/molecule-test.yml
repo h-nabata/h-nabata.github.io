@@ -1,7 +1,7 @@
 name: Molecule editor tests
 on:
   push:
-    branches: [main, molecule-studio-v3, molecule-research-workflows, molecule-performance-*, molecule-llmlip-*, molecule-dsafir-*]
+    branches: [main, molecule-studio-v3, molecule-research-workflows, molecule-performance-*, molecule-llmlip-*, molecule-dsafir-*, molecule-md-*]
     paths: ['molecule-visualizer/**', '.github/workflows/molecule-test.yml']
   workflow_dispatch:
 permissions:
@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install -r molecule-visualizer/local-engine/requirements.txt
+      - run: python -m pip install -r molecule-visualizer/local-engine/requirements.txt 'rdkit>=2024.3'
       - name: Download and verify the official g-xTB Linux release
         working-directory: ${{ runner.temp }}
         run: |
@@ -36,6 +36,8 @@ jobs:
           test_butadiene_path.ButadienePaths.test_gxtb_unrestricted_perturbed_neb
           test_butadiene_path.ButadienePaths.test_gxtb_explicitly_projects_asymmetric_string
           test_path_optimizer_controls.UnrestrictedPathControls.test_gxtb_mobile_end_ethane_torsion
+      - name: Check native MD energy conservation and classical force fields
+        run: python -m unittest -v test_md_native test_rdkit_md
       - name: Compare fresh and restarted electronic states at two nearby geometries
         run: python molecule-visualizer/scripts/probe_butadiene_gxtb.py
       - uses: actions/setup-node@v4
@@ -45,6 +47,8 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Run unrestricted native g-xTB path optimizations through the browser
         run: node molecule-visualizer/tests/gxtb-path-browser.cjs
+      - name: Run native MD and play sampled trajectories in Chromium
+        run: node molecule-visualizer/tests/md-browser.cjs
   llmlip-native:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
