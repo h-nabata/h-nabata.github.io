@@ -5,12 +5,41 @@ import unittest
 
 import numpy as np
 from test_engine import b, CONFIG
+from test_persistent_jobs import wait_for
 
 
 def water(model='MMFF94'):
     return dict(mode='md', symbols=['O','H','H'], charge=0, multiplicity=1, cell=None,
                 images=[[[0.,0.,0.],[.98,.01,0.],[-.22,.94,.03]]],
                 forceField=dict(model=model, bonds=[[0,1,1],[0,2,1]], formalCharges=[0,0,0]))
+
+
+def load_md_sdf(path, model):
+    """Read the explicit all-atom graph and the supplied 3D conformer."""
+    from rdkit import Chem
+    mol = Chem.SDMolSupplier(str(path), removeHs=False)[0]
+    if mol is None:
+        raise ValueError(f'Invalid MD input: {path}')
+    atoms = list(mol.GetAtoms())
+    field = dict(model=model, formalCharges=[a.GetFormalCharge() for a in atoms],
+                 bonds=[[bond.GetBeginAtomIdx(), bond.GetEndAtomIdx(), bond.GetBondTypeAsDouble()]
+                        for bond in mol.GetBonds()])
+    return dict(mode='md', symbols=[a.GetSymbol() for a in atoms],
+                charge=sum(field['formalCharges']), images=[mol.GetConformer().GetPositions().tolist()],
+                forceField=field)
+
+
+def run_md_job(raw, steps, **settings):
+    jobs = b.Jobs({**CONFIG, 'engine':'rdkit', 'jobTimeout':180, 'evaluationTimeout':30})
+    try:
+        request = b.validate({**raw, 'maxSteps':steps, 'md':settings}, 'rdkit')
+        receipt = jobs.start(request)
+        job = wait_for(jobs, receipt['id'], timeout=185)
+        if job['status'] != 'completed':
+            raise AssertionError((job['status'], job.get('error')))
+        return job['result']
+    finally:
+        jobs.close()
 
 
 class ForceFieldInput(unittest.TestCase):
@@ -136,6 +165,53 @@ class NativeRDKit(unittest.TestCase):
             errors.append(np.max(np.abs(total-total[0])))
         self.assertLess(errors[1], .0005)
         self.assertTrue(3.5 < errors[0]/errors[1] < 4.5, errors)
+
+    def test_polyethylene_nve_energy_on_halving_timestep(self):
+        path = Path(__file__).resolve().parents[1] / 'examples' / 'polyethylene-20.sdf'
+        for model in b.RDKIT_FORCE_FIELDS:
+            with self.subTest(model=model):
+                raw = load_md_sdf(path, model)
+                self.assertEqual(raw['symbols'].count('C'), 40)
+                self.assertEqual(raw['symbols'].count('H'), 82)
+                self.assertEqual(len(raw['forceField']['bonds']), 121)
+                errors = []
+                for dt in (.5, .25):
+                    r = run_md_job(raw, int(48/dt), ensemble='nve', timestepFs=dt, temperatureK=300,
+                                   seed=731, sampleEvery=1, removeCOM=True)
+                    self.assertEqual(r['forceField'], raw['forceField'])
+                    self.assertEqual(r['trajectory']['timeFs'][-1], 48.)
+                    total = np.array(r['trajectory']['totalEV'])
+                    errors.append(abs(total-total[0]).max())
+                self.assertTrue(0. < errors[0] < .05, errors)
+                self.assertTrue(3.5 < errors[0]/errors[1] < 4.5, errors)
+
+    def test_isolated_polymer_baths_keep_geometry_and_sample_temperature(self):
+        examples = Path(__file__).resolve().parents[1] / 'examples'
+        cases = [('polyethylene-20', 'MMFF94', thermostat)
+                 for thermostat in ('nose-hoover-chain', 'bussi', 'langevin')]
+        cases += [('polyethylene-glycol-12', 'MMFF94s', 'nose-hoover-chain'),
+                  ('polyethylene-glycol-12', 'UFF', 'langevin')]
+        for name, model, thermostat in cases:
+            with self.subTest(name=name, model=model, thermostat=thermostat):
+                raw = load_md_sdf(examples / (name+'.sdf'), model)
+                r = run_md_job(raw, 4000, ensemble='nvt', thermostat=thermostat, timestepFs=.5,
+                               temperatureK=300, seed=731, sampleEvery=25, removeCOM=True)
+                self.assertEqual(r['forceField'], raw['forceField'])
+                tr = r['trajectory']
+                np.testing.assert_array_equal(tr['timeFs'], np.arange(161) * 12.5)
+                np.testing.assert_allclose(tr['totalEV'], np.add(tr['energies'], tr['kineticEV']), atol=1e-10, rtol=0)
+                temperature = np.array(tr['temperatureK'])[np.array(tr['timeFs'])>=500]
+                self.assertAlmostEqual(temperature.mean(), 300., delta=26.)
+                self.assertGreater(temperature.std(), 3.)
+                xyz = np.array(tr['images'])
+                i, j, _ = np.array(raw['forceField']['bonds'], dtype=int).T
+                distances = np.linalg.norm(xyz[:,i]-xyz[:,j], axis=2)
+                self.assertGreater(distances.min(), .85)
+                self.assertLess(distances.max(), 1.85)
+                mass = np.array(r['masses'])
+                com = np.einsum('fij,i->fj', xyz, mass)/mass.sum()
+                np.testing.assert_allclose(com-com[0], 0., atol=1e-7)
+                np.testing.assert_array_equal(r['images'][0], xyz[-1])
 
     def test_rdkit_job_provenance_and_strict_mode(self):
         raw = water()

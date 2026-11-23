@@ -48,7 +48,9 @@ jobs:
       - name: Run unrestricted native g-xTB path optimizations through the browser
         run: node molecule-visualizer/tests/gxtb-path-browser.cjs
       - name: Run native MD and play sampled trajectories in Chromium
-        run: node molecule-visualizer/tests/md-browser.cjs
+        run: |
+          node molecule-visualizer/tests/md-browser.cjs
+          node molecule-visualizer/tests/polymer-md-browser.cjs
   llmlip-native:
     runs-on: ubuntu-24.04
     timeout-minutes: 20

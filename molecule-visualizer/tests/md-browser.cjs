@@ -50,7 +50,7 @@ async function verifyRun(browser, engine, ensemble, port, thermostat) {
       ? {name:'helium.xyz', mimeType:'text/plain', buffer:Buffer.from('1\nLattice="8 0 0 0 8 0 0 0 8" pbc="T T T"\nHe 1 1 1\n')}
       : {name:'water.mol', mimeType:'chemical/x-mdl-molfile', buffer:Buffer.from(water)};
     if (variableCell) {
-      const sampleURL = await page.locator('#mdCellExample a').getAttribute('href');
+      const sampleURL = await page.locator('#mdSiliconExample').getAttribute('href');
       const sample = await page.request.get(new URL(sampleURL, url).href);
       assert.ok(sample.ok(), sample.statusText());
       input = {name:'silicon-npt.xyz', mimeType:'text/plain', buffer:await sample.body()};

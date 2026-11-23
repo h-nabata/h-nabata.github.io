@@ -37,6 +37,29 @@
       }
       return {vector,distance:Math.sqrt(best),shift};
     };
+    // A short periodic repeat can place several copies of an atom within one
+    // bonding radius. Outside such cells the nearest image already suffices.
+    const maxReciprocalNorm=Math.max(...norms.map((n,i)=>pbc[i]?n:0));
+    solve.contactShifts=(delta,minimum,radius)=>{
+      const nearest=()=>[solve(delta).shift];
+      if(2*radius*maxReciprocalNorm<1)return nearest();
+      const f=fractional(delta);
+      const bounds=f.map((x,i)=>pbc[i]
+        ? [Math.ceil(-x-radius*norms[i]-1e-9),Math.floor(-x+radius*norms[i]+1e-9)]
+        : [0,0]);
+      // Very small or unreduced cells can have arbitrarily many images.
+      // Keep their original nearest-image display rather than flooding the canvas.
+      if(bounds.reduce((count,[lo,hi])=>count*Math.max(0,hi-lo+1),1)>512)return nearest();
+      const shifts=[];
+      for(let a=bounds[0][0];a<=bounds[0][1];a++)
+        for(let b=bounds[1][0];b<=bounds[1][1];b++)
+          for(let d=bounds[2][0];d<=bounds[2][1];d++){
+            const vec=cart(f[0]+a,f[1]+b,f[2]+d),distSq=dot(vec,vec);
+            if(distSq>=minimum*minimum&&distSq<=radius*radius)shifts.push([a,b,d]);
+          }
+      // A manually assigned bond may be longer than the inference cutoff.
+      return shifts.length?shifts:nearest();
+    };
     solve.fractional=fractional;solve.reciprocalNorms=norms;return solve;
   }
   function minimumImage(delta,c){return prepareMinimumImage(c)(delta);}
@@ -70,22 +93,34 @@
   // Normalize Unicode whitespace without collapsing the XYZ comment line.
   function normalizeXYZInput(text){return String(text).replace(/\r\n|[\r\u0085\u2028\u2029\v\f]/g,'\n').replace(/[\uFEFF\u200B]/g,'').replace(/[^\S\n]/gu,' ');}
   function parseXYZ(text){
-    const lines=normalizeXYZInput(text).split('\n');while(lines.length&&!lines[0].trim())lines.shift();
-    if(!/^\d+$/.test(lines[0]?.trim()||'')){
-      const nonempty=lines.map(l=>l.trim()).filter(Boolean);if(!nonempty.length)throw Error('XYZが空です。');const tv=nonempty.filter(l=>/^TV\s/i.test(l)),body=nonempty.filter(l=>!/^TV\s/i.test(l));
+    const lines=normalizeXYZInput(text).split('\n');
+    let row=0;
+    while(row<lines.length&&!lines[row].trim())row++;
+    if(!/^\d+$/.test(lines[row]?.trim()||'')){
+      const nonempty=lines.slice(row).map(l=>l.trim()).filter(Boolean);if(!nonempty.length)throw Error('XYZが空です。');const tv=nonempty.filter(l=>/^TV\s/i.test(l)),body=nonempty.filter(l=>!/^TV\s/i.test(l));
       const s=parseFrame([String(body.length),'',...body]);if(tv.length){s.metadata.cell=cell(tv.map(l=>l.trim().split(/\s+/).slice(1).map(number)));MV.Bonding.refreshInferredBonds(s);}return s;
     }
-    const frames=[];let total=0;
-    while(lines.length){
-      if(!lines[0].trim()){lines.shift();continue;}
-      const n=Number(lines.shift());if(!Number.isInteger(n)||n<0||n>2000||!lines.length)throw Error('XYZの原子数またはコメント行を確認してください。');
-      const comment=lines.shift(),body=[];
-      while(body.length<n&&lines.length){const line=lines.shift();if(line.trim())body.push(line);}
+    const frames=[];
+    let first=null,total=0,count=0;
+    while(row<lines.length){
+      if(!lines[row].trim()){row++;continue;}
+      const n=Number(lines[row++]);
+      if(!Number.isInteger(n)||n<0||n>2000||row>=lines.length)throw Error('XYZの原子数またはコメント行を確認してください。');
+      count++;total+=n;
+      if(count>200||total>100000)throw Error('軌跡は200フレーム・合計100000原子までです。');
+      const comment=lines[row++],body=[];
+      while(body.length<n&&row<lines.length){const line=lines[row++];if(line.trim())body.push(line);}
       if(body.length!==n)throw Error('XYZの原子数と座標行数が一致しません。');
-      while(lines.length&&(!lines[0].trim()||/^TV\s/i.test(lines[0].trim()))){const line=lines.shift();if(line.trim())body.push(line);}
-      frames.push(parseFrame([String(body.length),comment,...body]));total+=n;if(frames.length>200||total>100000)throw Error('軌跡は200フレーム・合計100000原子までです。');
+      while(row<lines.length&&(!lines[row].trim()||/^TV\s/i.test(lines[row].trim()))){const line=lines[row++];if(line.trim())body.push(line);}
+      const frame=parseFrame([String(body.length),comment,...body]);
+      if(!first)first=frame;
+      else {
+        if(count===2)frames.push(snapshot(first));
+        frames.push(snapshot(frame));
+      }
     }
-    const s=frames[0];if(!s)throw Error('XYZが空です。');if(frames.length>1){s.metadata.trajectory=frames.map(snapshot);s.metadata.frameIndex=0;}return s;
+    if(frames.length){first.metadata.trajectory=frames;first.metadata.frameIndex=0;}
+    return first;
   }
   function toXYZ(s){
     const c=s.metadata.cell, extras=s.atoms[0]?.xyzExtras||{},keys=Object.keys(extras);
