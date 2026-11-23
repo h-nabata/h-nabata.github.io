@@ -71,6 +71,10 @@ class UnrestrictedPathControls(unittest.TestCase):
                         self.assertLessEqual(max(result['diagnostics']['endpointPhysicalFmax']), raw['fmax'])
                         np.testing.assert_allclose(mb_coordinates(positions[0]), [-.558224, 1.441726], atol=.002)
                         np.testing.assert_allclose(mb_coordinates(positions[-1]), [-.050011, .466694], atol=.004)
+                    if mode == 'cineb':
+                        previous = b.relax(b.validate({**raw, 'optimizer':'fire'}, 'tblite'), mb_potential)
+                        self.assertTrue(previous['converged'])
+                        self.assertLess(result['evaluations'], previous['evaluations'])
 
     def test_rotating_and_translating_the_band_preserves_the_updates(self):
         raw = muller_brown_input('cineb', 'band-lbfgs', 'relax')

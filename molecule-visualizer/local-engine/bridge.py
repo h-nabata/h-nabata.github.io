@@ -341,7 +341,12 @@ class ModelFEngine:
                 components.append(copy.copy(calculator.components.get(calculator.key(positions),{})) if isinstance(calculator,SolvatedUMAEngine) else {})
                 with self.lock:self.state_calls[state]+=1
             except Exception as error:
-                raise ValueError(f'ModelF 状態{state+1}（多重度{self.settings["multiplicities"][state]}）の評価に失敗しました。{error}') from error
+                message = f'ModelF 状態{state+1}（多重度{self.settings["multiplicities"][state]}）の評価に失敗しました。{error}'
+                if isinstance(error, SCFConvergenceError):
+                    with self.lock:
+                        self.state_calls[state] += 1
+                    raise SCFConvergenceError(message) from error
+                raise ValueError(message) from error
         row=model_f_components(answers[0][0],answers[1][0],self.settings)
         if self.settings['alphaKJMol']/KJ_MOL_PER_EV==0 and abs(row['gapEV'])<=1e-12 and (not np.allclose(answers[0][1],answers[1][1],atol=1e-10,rtol=0) or (lattice is not None and not np.allclose(answers[0][2],answers[1][2],atol=1e-10,rtol=0))):
             raise ValueError('ModelF α=0の交差点では力が一意に定まりません。αを正の値にして再計算してください。')
@@ -1370,7 +1375,7 @@ def lup_redistribute(images, climbing=None):
     return sample_string(images, arc, target)
 
 
-def lup_bounded_update(images, displacement, climbing, redistribute, max_move, cell, fraction=1.):
+def lup_bounded_update(images, displacement, climbing, redistribute, max_move, cell, max_fraction=1.):
     """Limit both the physical step and travel *along* the string before resampling."""
     cost = np.linalg.norm(displacement, axis=2).max(axis=1)
     if redistribute:
@@ -1384,7 +1389,7 @@ def lup_bounded_update(images, displacement, climbing, redistribute, max_move, c
         goal = np.interp(target, arc, travel)
         goal[target == arc] = travel[target == arc]
         cost += np.abs(goal-travel)
-    factor = fraction * min(1., max_move/max(float(cost.max()), 1e-15))
+    factor = min(max_fraction, max_move/max(float(cost.max()), 1e-15))
     for _ in range(7):
         advanced = images + factor*displacement
         if redistribute:
@@ -1570,8 +1575,9 @@ def relax(data, calculate, progress=lambda _: None):
     quasi_newton = retry_plan = None
     if optimizer_method == 'band-lbfgs':
         quasi_newton = BandLBFGS(data['maxMove'], (resumed or {}).get('bandLBFGS'))
+    if check_work:
         path_fields['optimizer'] = optimizer_method
-        path_fields['scfStepRetries'] = (resumed or {}).get('scfStepRetries', 0)
+        path_fields['scfStepRetries'] = (resumed or {}).get('scfStepRetries', data.get('_scfRetriesResume', 0))
     if resumed and resumed.get('optimizer', optimizer_method) != optimizer_method:
         raise ValueError('再開時の経路オプティマイザが保存時と一致しません。')
     if resumed and resumed.get('pathSymmetry') != data.get('pathSymmetry'):
@@ -1632,11 +1638,18 @@ def relax(data, calculate, progress=lambda _: None):
                     cache_hits += 1
                     continue
                 pending.append((i,images[i]))
-            if not quasi_newton or retry_plan is None:
+            if not check_work or local_step == 0:
                 answers = evaluate_many(calculate, pending)
                 break
             if isinstance(calculate, ExactEvaluationCache):
                 answers = calculate.map(pending, capture_scf=True)
+            elif hasattr(calculate, 'map'):
+                # A separate batch evaluator owns its worker synchronization.
+                # Preserve its batch contract rather than invoking it image by image.
+                try:
+                    answers = calculate.map(pending)
+                except SCFConvergenceError as error:
+                    answers = [error]
             else:
                 answers = [evaluate_scf_trial(calculate, i, p) for i, p in pending]
             failure = next((value for value in answers if isinstance(value, SCFConvergenceError)), None)
@@ -1651,12 +1664,21 @@ def relax(data, calculate, progress=lambda _: None):
                 raise failure
             # Retry the same physical and redistribution proposal along its
             # original polyline. No partial band contributes energy or secants.
-            origin, proposal, old_climb, redistribute, radius = retry_plan
+            if retry_plan is None:
+                # Ordinary FIRE NEB has already capped each image's step.
+                # Construct its retry proposal only on an actual SCF failure.
+                origin = np.asarray([previous_positions[node] for node in node_ids])
+                retry_plan = (origin, images-origin, None, False, data['maxMove'], 1.)
+            origin, proposal, old_climb, redistribute, radius, accepted_factor = retry_plan
             fraction = .5**(attempt+1)
             images, _, redistribution_move = lup_bounded_update(
-                origin, proposal, old_climb, redistribute, radius, data.get('cell'), fraction)
-            quasi_newton = BandLBFGS(data['maxMove'])
-            quasi_newton.radius = max(.05*data['maxMove'], fraction*radius)
+                origin, proposal, old_climb, redistribute, radius, data.get('cell'), accepted_factor*fraction)
+            velocity.fill(0.)
+            dt, alpha, positive = max(1e-5, .5*min(dt, .05)), .1, 0
+            lup_states.clear()
+            if quasi_newton:
+                quasi_newton = BandLBFGS(data['maxMove'])
+                quasi_newton.radius = max(.05*data['maxMove'], fraction*radius)
         for (i,positions),(energy,force) in zip(pending,answers):
             force = np.asarray(force, dtype=float)
             if not np.isfinite(energy) or force.shape != positions.shape or not np.isfinite(force).all():
@@ -1825,9 +1847,9 @@ def relax(data, calculate, progress=lambda _: None):
             displacement = quasi_newton.direction(images, effective, tangents, climbing, mode == 'lup')
             displacement *= min(1., quasi_newton.radius/max(force_max(displacement), 1e-15))
             redistribute = mode == 'lup' and ((step+1) % lup['redistributeEvery'] == 0 or maximum <= data['fmax'])
-            retry_plan = (images, displacement, climbing, redistribute, quasi_newton.radius)
-            candidate, _, redistribution_move = lup_bounded_update(
+            candidate, factor, redistribution_move = lup_bounded_update(
                 images, displacement, climbing, redistribute, quasi_newton.radius, data.get('cell'))
+            retry_plan = (images, displacement, climbing, redistribute, quasi_newton.radius, factor)
             if redistribution_move > 1e-12:
                 lup_redistributions += 1
                 quasi_newton = BandLBFGS(data['maxMove'])
@@ -1863,6 +1885,7 @@ def relax(data, calculate, progress=lambda _: None):
             redistribute = (step+1) % lup['redistributeEvery'] == 0 or maximum <= data['fmax']
             candidate, factor, redistribution_move = lup_bounded_update(
                 images, displacement, climbing, redistribute, data['maxMove'], data.get('cell'))
+            retry_plan = (images, displacement, climbing, redistribute, data['maxMove'], factor)
             if redistribution_move > 1e-12:
                 lup_redistributions += 1
                 lup_states.clear()
@@ -1899,6 +1922,7 @@ def relax(data, calculate, progress=lambda _: None):
             images[i] += displacement
             images[i, fixed] = anchors[i, fixed]
             velocity[i, fixed] = 0
+        retry_plan = None
         if not np.isfinite(images).all() or np.max(np.abs(images)) > 1e4:
             raise ValueError('座標が数値範囲を超えました。初期構造を確認してください。')
 
@@ -4478,9 +4502,11 @@ class Jobs:
     def partial_structure(self, job):
         data = job['data']
         result = copy.deepcopy(job.get('structureCheckpoint') or job['bandCheckpoint'])
-        if result.get('optimizer') == 'band-lbfgs' and 'scfStepRetries' in job.get('progress', {}):
+        if 'scfStepRetries' in result and 'scfStepRetries' in job.get('progress', {}):
             latest = job['progress']
             result['scfStepRetries'] = latest['scfStepRetries']
+            if latest.get('phase') == 'path_step_failed':
+                result['scfFailedStep'] = latest['step']
             result['evaluations'] = max(result['evaluations'], latest.get('evaluations', 0))
             if 'optimizerState' in result:
                 result['optimizerState']['scfStepRetries'] = result['scfStepRetries']
@@ -4579,6 +4605,7 @@ class Jobs:
             data.pop('_scanResume', None)
             data.pop('_optimizerResume', None)
             data.pop('_pathWarningResume', None)
+            data.pop('_scfRetriesResume', None)
             data.pop('_initialSymmetryCorrectionResume', None)
             if job.get('configFingerprint') != calculation_identity(data, self.config):
                 raise RuntimeError('保存時とエンジン・モデル・パッケージ・計算設定が異なります。同じ環境で再開するか、結果を新しい入力として実行してください。')
@@ -4601,6 +4628,8 @@ class Jobs:
                     # before the new geometry has a complete optimizer state.
                     if 'pathConsistencyWarning' in result:
                         data['_pathWarningResume'] = copy.deepcopy(result['pathConsistencyWarning'])
+                    if 'scfStepRetries' in result:
+                        data['_scfRetriesResume'] = result['scfStepRetries']
                     if 'initialSymmetryCorrection' in result:
                         data['_initialSymmetryCorrectionResume'] = result['initialSymmetryCorrection']
             elif result and data['mode']=='scan' and result.get('scan', {}).get('nodes'):

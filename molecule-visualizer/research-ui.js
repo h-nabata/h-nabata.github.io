@@ -60,8 +60,7 @@
     if(bandOptimizer){
       const radius=r.diagnostics?.stepRadius;
       out.append(el('p',{class:'mv-small'},'経路全体のL-BFGS · 設定した最大原子変位 '+j.data.maxMove+' Å'
-        +(Number.isFinite(radius)?' · 最終反復の変位上限 '+radius.toPrecision(3)+' Å':'')
-        +(r.scfStepRetries>0?' · SCF未収束で刻み幅を縮めた回数 '+r.scfStepRetries+'回':'')));
+        +(Number.isFinite(radius)?' · 最終反復の変位上限 '+radius.toPrecision(3)+' Å':'')));
     }
     if(r.mode==='lup'){
       const d=r.diagnostics||{},settings=r.lup||j.data.lup;out.append(el('p',{class:'mv-small'},`LUP系（CI-String） · ${bandOptimizer?'':(r.optimizer||j.data.optimizer||'lbfgs').toUpperCase()+' · '}再分布残差 ${Number.isFinite(d.redistributionResidual)?d.redistributionResidual.toPrecision(5)+' Å':'未取得'}${settings?' / 閾値 '+settings.redistributionTolerance+' Å':''}${Number.isFinite(d.redistributionMove)?' · 再分布による最大変位 '+d.redistributionMove.toPrecision(5)+' Å':''}。CIの最高点はTS候補です。TS最適化・振動解析で別途確認できます。`));

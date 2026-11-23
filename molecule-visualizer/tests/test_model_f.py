@@ -97,6 +97,16 @@ class ModelF(unittest.TestCase):
         c.secondary=fail
         with self.assertRaisesRegex(ValueError,'状態2'):c(0,np.zeros((1,3)))
         self.assertEqual(len(c.records),before)
+        # Preserve the typed native solver error so path optimizers can retry
+        # both states at a shorter step. No partial ModelF pair is published.
+        calls = c.state_calls.copy()
+        def unconverged(i, p):
+            raise b.SCFConvergenceError('SCF not converged in 250 cycles')
+        c.secondary = unconverged
+        with self.assertRaisesRegex(b.SCFConvergenceError, '状態2'):
+            c(0, np.zeros((1,3)))
+        self.assertEqual(c.state_calls, [n+1 for n in calls])
+        self.assertEqual(len(c.records), before)
 
     def test_native_tblite_two_spin_forces_and_variable_cell_stress(self):
         p=np.array([[0.,0,0],[1.1,.1,0]])

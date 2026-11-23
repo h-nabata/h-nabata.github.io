@@ -62,6 +62,7 @@ class ButadienePaths(unittest.TestCase):
             energies = [0., 1., 2., 3., 4., 3., 2., 1., 0.]
             progress({'step':0, 'bandCheckpoint':{'steps':0, 'evaluations':9,
                       'images':data['images'], 'energies':energies, 'effectiveFmax':2.}})
+            progress({'step':1, 'phase':'path_step_failed','evaluations':44,'scfStepRetries':4})
             raise ValueError('single point calculation terminated\nSCF not converged in 250 cycles')
         with patch.object(b.bridge, 'TBLiteEngine'), patch.object(b.bridge, 'calculate_job', fail_after_checkpoint):
             result = b.run('lup', 'free', engine='tblite', distortion=0, steps=10, endpoint_mode='relax')
@@ -70,6 +71,10 @@ class ButadienePaths(unittest.TestCase):
         self.assertEqual(len(result['failure']['lastCompleteBandA']), 9)
         self.assertEqual(result['steps'], 0)
         self.assertEqual(result['peakImage'], 5)
+        self.assertEqual(result['evaluations'], 44)
+        self.assertEqual(result['failure']['lastCompleteEvaluations'], 9)
+        self.assertEqual(result['failure']['scfFailedStep'], 1)
+        self.assertEqual(result['scfStepRetries'], 4)
 
     def test_large_labelled_turn_is_reported_separately_from_opposite_tilt(self):
         def sample(angles):
@@ -116,6 +121,22 @@ class ButadienePaths(unittest.TestCase):
     @unittest.skipUnless(os.environ.get('GXTB_TEST_BINARY'), 'explicit native g-xTB executable required')
     def test_gxtb_mapped_paths(self):
         self.check_native_path('gxtb')
+
+    @unittest.skipUnless(os.environ.get('GXTB_TEST_BINARY'), 'explicit native g-xTB executable required')
+    def test_gxtb_unrestricted_perturbed_neb(self):
+        settings = dict(engine='gxtb', distortion=.015, steps=110, endpoint_mode='fixed')
+        fire = b.run('neb', 'free', optimizer='fire', **settings)
+        band = b.run('neb', 'free', optimizer='band-lbfgs', **settings)
+        for result in (fire, band):
+            self.assertEqual(result['reason'], 'converged')
+            self.assertLessEqual(result['fmaxEVPerA'], .05)
+            self.assertEqual(result['maxEndpointDisplacementA'], 0.)
+            self.assertIsNone(result['initialMirrorCorrectionA'])
+            self.assertIsNone(result['firstConrotatoryInterior'])
+            self.assertEqual(result['peakClass'], 'dis')
+        self.assertLess(band['calculatorCalls'], fire['calculatorCalls'])
+        self.assertLess(abs(band['closingDistanceA'] - fire['closingDistanceA']), .03)
+        self.assertLess(abs(band['barrierEV'] - fire['barrierEV']), .03)
 
     @unittest.skipUnless(os.environ.get('GXTB_TEST_BINARY'), 'explicit native g-xTB executable required')
     def test_gxtb_explicitly_projects_asymmetric_string(self):

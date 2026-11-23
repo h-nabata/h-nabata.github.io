@@ -444,6 +444,10 @@
     $('engineResultForceLabel').textContent=ds?'物理力 (eV/Å)':'有効力 (eV/Å)';
     const reason=r.mode==='vibrations'?(r.vibrations?.status==='completed'?'振動解析完了':'振動解析未完了（構造評価は完了）'):{connected:'経路接続',no_resolved_peak:'経路方向の極大を確認できず終了（未収束）',interrupted:'サービス停止（途中結果）',converged:r.pathSymmetry?'鏡映拘束下で収束':'収束',step_limit:'ステップ上限（未収束）',evaluated:'評価完了',cancelled:'中止（途中結果）',failed:'計算失敗（途中結果）'}[r.reason]||r.reason;
     $('engineResultSummary').textContent=`${modeText[r.mode]}${j.data.modelF?" · "+MV.ModelF.label(j.data.modelF):""}${j.data.solvation?" · AnySolv / "+j.data.solvation.solvent:""} · ${reason} · ${r.steps}ステップ · ${r.evaluations}回の評価${ds?` · 探索点間距離 ${ds.gap.toFixed(4)} Å（接続基準 ${ds.threshold} Å）`:` · 最大有効力 ${r.effectiveFmax.toPrecision(4)} eV/Å`}${j.data.fixedAtoms?.length?'（可動原子のみ） · 固定 '+j.data.fixedAtoms.length+'原子':''}`+(r.maxTangentialStep!=null?` · 接線方向の最大更新 ${r.maxTangentialStep.toExponential(2)} Å`:'');
+    if(bandModes.includes(r.mode)){
+      if(r.scfStepRetries>0)$('engineResultSummary').textContent+=' · SCF未収束で刻み幅を縮めた回数 '+r.scfStepRetries+'回';
+      if(Number.isInteger(r.scfFailedStep))$('engineResultSummary').textContent+=' · ステップ'+r.scfFailedStep+'でSCF未収束';
+    }
     if(r.pathSymmetry){
       const d=r.diagnostics;
       $('engineResultSummary').textContent+=' · 鏡映拘束下の経路 · 鏡映残差 '+d.symmetryResidual.toExponential(2)+' Å · 対称性を破る力の最大値 '+d.symmetryRemovedFmax.toPrecision(4)+' eV/Å';
@@ -556,7 +560,9 @@
         const radius=state.preview?.diagnostics?.stepRadius??p.diagnostics?.stepRadius;
         const pathStatus=(j.data.optimizer==='band-lbfgs'?' · 経路全体のL-BFGS'+(Number.isFinite(radius)?' · 変位上限 '+radius.toPrecision(3)+' Å':''):'')+(state.preview?.pathConsistencyWarning?' · エネルギー変化と力からの予測に大きな差':'')+(j.data.pathSymmetry?' · 鏡映拘束':'')+(climbingModes.includes(j.data.mode)?' · '+(j.data.endpointMode==='relax'?'両端緩和':'両端固定')+
           (Number.isInteger(p.climbingImage)?' · 登坂ノード '+(p.climbingImage+1):''):'');
-        message(state.status==='queued'?'実行待ちです。履歴・キューから順番と状態を確認できます。':p.phase==='loading_model'?(j.connection.info.llmlip?'llmlip.rsのローカルモデルを読み込み中…':'UMAモデルを読み込み中（初回はダウンロードを含みます）…'):j.data.mode==='dsafir'&&Number.isFinite(p.gap)?`DS-AFIR · ${p.side==='reactant'?'A側':p.side==='product'?'B側':'両端点'}を評価 · ステップ ${p.step} / ${j.data.maxSteps} · 探索点間距離 ${p.gap.toFixed(4)} Å`+(j.cancelRequested?' · 中止処理中':''):p.phase==='vibrations'?`振動解析中: 力の評価 ${p.vibrationDone??0} / ${p.vibrationTotal??'?'}（構造最適化とは別の処理）`+(j.cancelRequested?' · 中止処理中':''):`計算中: ステップ ${p.step??0} / ${j.data.maxSteps} · 構造 ${p.image??0}/${p.images??j.frames.length}`+pathStatus+(p.fmax!=null?` · 最大有効力 ${p.fmax.toPrecision(4)} eV/Å`:'')+(j.cancelRequested?' · 中止処理中':''));
+        const retryStatus=MV.Activity?.pathSCFPhase?.(p);
+        if(retryStatus)message(modeText[j.data.mode]+' · '+retryStatus+(j.cancelRequested?' · 中止処理中':''));
+        else message(state.status==='queued'?'実行待ちです。履歴・キューから順番と状態を確認できます。':p.phase==='loading_model'?(j.connection.info.llmlip?'llmlip.rsのローカルモデルを読み込み中…':'UMAモデルを読み込み中（初回はダウンロードを含みます）…'):j.data.mode==='dsafir'&&Number.isFinite(p.gap)?`DS-AFIR · ${p.side==='reactant'?'A側':p.side==='product'?'B側':'両端点'}を評価 · ステップ ${p.step} / ${j.data.maxSteps} · 探索点間距離 ${p.gap.toFixed(4)} Å`+(j.cancelRequested?' · 中止処理中':''):p.phase==='vibrations'?`振動解析中: 力の評価 ${p.vibrationDone??0} / ${p.vibrationTotal??'?'}（構造最適化とは別の処理）`+(j.cancelRequested?' · 中止処理中':''):`計算中: ステップ ${p.step??0} / ${j.data.maxSteps} · 構造 ${p.image??0}/${p.images??j.frames.length}`+pathStatus+(p.fmax!=null?` · 最大有効力 ${p.fmax.toPrecision(4)} eV/Å`:'')+(j.cancelRequested?' · 中止処理中':''));
         await new Promise(resolve=>setTimeout(resolve,600));
       }
   }

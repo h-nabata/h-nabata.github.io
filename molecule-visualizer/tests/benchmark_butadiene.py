@@ -154,20 +154,22 @@ def rotation_summary(trace):
                 peakTurnOver100DegSteps=large_peak_turns)
 
 
-def reference_rmsd(peak, reference):
-    """Compare final geometries by proper rotation; permutations are used only after relaxation."""
+def mapped_rmsd(peak, reference):
     reference = np.asarray(reference, dtype=float)
     peak = np.asarray(peak, dtype=float)
     if peak.shape != (10, 3) or reference.shape != (10, 3):
         raise ValueError('The reference and measured peak must each contain the ten mapped C4H6 atoms.')
     peak = peak - peak.mean(axis=0)
     reference = reference - reference.mean(axis=0)
-    def rmsd(order):
-        target = reference[order]
-        left, _, right = np.linalg.svd(peak.T @ target)
-        left[:, -1] *= np.linalg.det(left @ right)
-        return float(np.sqrt(np.mean(np.sum((peak @ left @ right - target)**2, axis=1))))
-    raw = rmsd(np.arange(10))
+    left, _, right = np.linalg.svd(peak.T @ reference)
+    left[:, -1] *= np.linalg.det(left @ right)
+    return float(np.sqrt(np.mean(np.sum((peak @ left @ right - reference)**2, axis=1))))
+
+
+def reference_rmsd(peak, reference):
+    """Compare final geometries by proper rotation; permutations are used only after relaxation."""
+    reference = np.asarray(reference)
+    raw = mapped_rmsd(peak, reference)
     best, best_order = raw, list(range(10))
     for backbone in (np.arange(10), MIRROR):
         for swap_left in (False, True):
@@ -177,7 +179,7 @@ def reference_rmsd(peak, reference):
                     order[[4,5]] = order[[5,4]]
                 if swap_right:
                     order[[8,9]] = order[[9,8]]
-                distance = rmsd(order)
+                distance = mapped_rmsd(peak, reference[order])
                 if distance < best:
                     best, best_order = distance, order.tolist()
     return dict(mappedRmsdA=raw, equivalentAtomRmsdA=best, matchedReferenceAtoms=[i+1 for i in best_order])
@@ -188,21 +190,26 @@ def run(mode, case, *, engine, distortion, steps, endpoint_mode, workers=1, twis
         redistribute_every=None):
     symbols, images = band(case, distortion, twist, source)
     job = {'symbols':symbols, 'images':images.tolist(), 'mode':mode, 'fmax':.05, 'maxMove':max_move,
-           'spring':1., 'climbAfter':climb_after, 'maxSteps':steps}
+           'spring':1., 'climbAfter':climb_after, 'maxSteps':steps,
+           'optimizer':optimizer or ('lbfgs' if mode=='lup' else 'fire')}
     if case == 'mirror':
         job['pathSymmetry'] = {'type':'mirror', 'pairs':PAIRS}
         if mirror_tolerance is not None:
             job['pathSymmetry']['maxInitialCorrection'] = mirror_tolerance
     if mode in ('cineb', 'lup'):
         job['endpointMode'] = endpoint_mode
-    if optimizer is not None:
-        job['optimizer'] = optimizer
     if mode == 'lup' and redistribute_every is not None:
         job['lup'] = {'redistributeEvery':redistribute_every}
     trace = []
     last_band = None
+    failed_step = None
+    scf_retries = calculator_calls = 0
     def record(event):
-        nonlocal last_band
+        nonlocal last_band, scf_retries, failed_step
+        if 'scfStepRetries' in event:
+            scf_retries = event['scfStepRetries']
+        if event.get('phase') == 'path_step_failed':
+            failed_step = event
         snapshot = event.get('bandCheckpoint')
         if snapshot and 'steps' in snapshot:
             last_band = snapshot
@@ -210,6 +217,7 @@ def run(mode, case, *, engine, distortion, steps, endpoint_mode, workers=1, twis
             trace.append({'step':event['step'], 'fmaxEVPerA':snapshot['effectiveFmax'],
                           'evaluations':snapshot['evaluations'], **result})
     def evaluate(payload, directory, progress=lambda event: None):
+        nonlocal calculator_calls
         data = bridge.validate(payload, engine)
         if engine == 'gxtb':
             binary = os.environ.get('GXTB_TEST_BINARY')
@@ -224,6 +232,7 @@ def run(mode, case, *, engine, distortion, steps, endpoint_mode, workers=1, twis
             return bridge.calculate_job(data, cache, directory, progress)
         finally:
             cache.close()
+            calculator_calls = cache.calls
 
     pre = None
     stage = 'preRelaxation' if pre_relax else 'path'
@@ -238,11 +247,13 @@ def run(mode, case, *, engine, distortion, steps, endpoint_mode, workers=1, twis
                 seed_job['optimizer'] = 'fire'
                 seed = evaluate(seed_job, directory, record)
                 pre = {k:seed[k] for k in ('reason','steps','effectiveFmax','evaluations')}
+                pre['calculatorCalls'] = calculator_calls
                 pre['initialMirrorCorrectionA'] = seed.get('initialSymmetryCorrection')
                 if not seed['converged']:
                     raise RuntimeError('NEB seed failed to converge: '+str(pre))
                 job['images'] = seed['images']
                 stage, last_band = 'path', None
+                scf_retries = calculator_calls = 0
                 trace.clear()
             result = evaluate(job, directory, record)
         except (ValueError, RuntimeError, OSError) as exc:
@@ -250,28 +261,37 @@ def run(mode, case, *, engine, distortion, steps, endpoint_mode, workers=1, twis
             detail = next((line for line in lines if 'SCF not converged' in line), str(exc)[:350])
             failure = {'stage':stage, 'error':detail}
             result = {**(last_band or {}), 'reason':'failed'}
+            if failed_step:
+                failure.update(scfFailedStep=failed_step['step'], lastCompleteEvaluations=result.get('evaluations'))
+                result['evaluations'] = failed_step['evaluations']
     final = {}
     if 'images' in result:
         final_images = np.asarray(result['images'])
-        final = geometry(final_images, np.asarray(result['energies']))
+        energies = np.asarray(result['energies'])
+        final = geometry(final_images, energies)
+        peak = final['peakImage']-1
+        final['peakAboveHigherEndpointEV'] = float(energies[peak] - max(energies[0], energies[-1]))
+        final['peakEndpointRmsdA'] = [mapped_rmsd(final_images[peak], final_images[i]) for i in (0, -1)]
+        if 'forces' in result:
+            final['rawPeakFmaxEVPerA'] = bridge.force_max(np.asarray(result['forces'][peak]))
         final['maxEndpointDisplacementA'] = float(np.linalg.norm(final_images[[0, -1]] - images[[0, -1]], axis=2).max())
-        final['peakCoordinatesA'] = result['images'][final['peakImage']-1]
+        final['peakCoordinatesA'] = result['images'][peak]
         if failure:
             failure.update(lastCompleteBandA=result['images'], lastCompleteEnergiesEV=result['energies'])
     initial = geometry(images, np.zeros(len(images)))
     return {'mode':mode, 'case':case, 'engine':engine, 'inputFile':Path(source).name, 'preRelaxation':pre,
-            'optimizer':optimizer or ('lbfgs' if mode=='lup' else 'fire'),
+            'optimizer':job['optimizer'],
             'redistributeEvery':job.get('lup', {}).get('redistributeEvery', 5) if mode=='lup' else None,
             'inputSHA256':hashlib.sha256(Path(source).read_bytes()).hexdigest(),
             'inputBandClass':initial['bandClass'], 'inputMaxMirrorErrorA':initial['maxMirrorErrorA'],
             'pathConsistencyWarning':result.get('pathConsistencyWarning'), 'failure':failure,
-            'scfStepRetries':result.get('scfStepRetries', 0),
+            'scfStepRetries':max(scf_retries, result.get('scfStepRetries', 0)),
+            'calculatorCalls':calculator_calls,
             'mirrorToleranceA':job.get('pathSymmetry', {}).get('maxInitialCorrection', .05) if case == 'mirror' else None,
             'initialMirrorCorrectionA':pre['initialMirrorCorrectionA'] if pre else result.get('initialSymmetryCorrection'),
             'maxMoveA':max_move, 'climbAfter':climb_after, 'maxSteps':steps, 'endpointMode':job.get('endpointMode','fixed'),
             'inputBendA':0. if case=='con' else distortion, 'inputTerminalTwistDeg':0. if case=='con' else twist, 'steps':result.get('steps'),
             'evaluations':result.get('evaluations'), 'reason':result['reason'], 'fmaxEVPerA':result.get('effectiveFmax'),
-            'rawPeakFmaxEVPerA':result.get('diagnostics', {}).get('climbingPhysicalFmax'),
             **final, 'firstMirrorErrorOver0.05A':first_event(trace,'mirror'),
             'firstConrotatoryInterior':first_event(trace,'con'), 'firstConrotatoryPeak':first_event(trace,'peak'),
             'rotationSummary':rotation_summary(trace), 'trace':trace}
@@ -325,7 +345,8 @@ def main():
             results.append(result)
             summary = {k:v for k,v in result.items() if k not in ('trace','peakCoordinatesA','imageAnglesDeg')}
             if result.get('failure'):
-                summary['failure'] = {k:result['failure'][k] for k in ('stage','error')}
+                summary['failure'] = {k:v for k,v in result['failure'].items()
+                                      if k not in ('lastCompleteBandA','lastCompleteEnergiesEV')}
             print(json.dumps(summary), flush=True)
             if args.json:
                 args.json.write_text(json.dumps(results, indent=2)+'\n')

@@ -46,9 +46,10 @@ test('LUP history restores its optimizer, redistribution and path scope across r
 });
 
 test('manual node insertion keeps LUP mode and existing node identities',async()=>{
- const {M,nodes}=await boot(),frames=M.EngineUI.frames(M.App.getState(),'all');
+ const {M,nodes,info}=await boot(),frames=M.EngineUI.frames(M.App.getState(),'all');
+ info.pathOptimizers.lup.push('band-lbfgs');
  const refined=M.PathRefinement.refine(frames,0,2,1);assert.equal(refined.length,5);assert.equal(JSON.stringify([refined[0],refined[2],refined[4]].map(f=>f.metadata.pathNodeId)),'["n0","n1","n2"]');assert.equal(new Set(refined.map(f=>f.metadata.pathNodeId)).size,5);
- M.PathRefinement.init();M.PathRefinement.open(frames,'lup');assert.match(nodes.get('refineNEB').textContent,/LUP系/);await nodes.get('refineNEB').click();assert.equal(nodes.get('engineMode').value,'lup');assert.equal(M.App.getState().metadata.trajectory.length,5);assert.equal(new Set(M.EngineUI.input().data.nodeIds).size,5);
+ M.PathRefinement.init();M.PathRefinement.open(frames,'lup',null,{mode:'lup',optimizer:'band-lbfgs',maxMove:.011});assert.match(nodes.get('refineNEB').textContent,/LUP系/);await nodes.get('refineNEB').click();assert.equal(nodes.get('engineMode').value,'lup');assert.equal(M.App.getState().metadata.trajectory.length,5);const refinedJob=M.EngineUI.input().data;assert.equal(new Set(refinedJob.nodeIds).size,5);assert.equal(refinedJob.optimizer,'band-lbfgs');assert.equal(refinedJob.maxMove,.011);assert.equal(refinedJob.pathSymmetry,undefined);
  M.PathRefinement.open();assert.match(nodes.get('refineNEB').textContent,/CI-NEB/);
 });
 
@@ -396,6 +397,17 @@ test('energy/force inconsistency remains visible on saved paths and does not blo
  assert.equal(nodes.get('engineApply').disabled,false);
  M.EngineUI.showResult({...r,pathConsistencyWarning:undefined},j);
  assert.equal(nodes.get('enginePathWarning').hidden,true);
+ for(const [mode,optimizer] of [['neb','fire'],['lup','lbfgs'],['cineb','band-lbfgs']]){
+  const data={...d,mode,optimizer},saved={...r,mode,optimizer,scfStepRetries:3,scfFailedStep:5,reason:'failed'};
+  if(mode!=='neb'){
+   data.endpointMode=saved.endpointMode='fixed';
+   saved.diagnostics={endpointPhysicalFmax:[0,0]};
+  }
+  M.EngineUI.restoreJob({id:'a'.repeat(32),data,result:saved});
+  assert.match(nodes.get('engineResultSummary').textContent,/刻み幅を縮めた回数 3回.*ステップ5でSCF未収束/);
+ }
+ M.EngineUI.showResult(r,j);
+ assert.doesNotMatch(nodes.get('engineResultSummary').textContent,/刻み幅を縮めた回数/);
 });
 
 test('initial mirror correction is optional, bounded and reproduced in saved path settings',async()=>{

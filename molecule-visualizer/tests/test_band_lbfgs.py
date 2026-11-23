@@ -3,7 +3,7 @@ import copy
 import unittest
 
 import numpy as np
-from test_engine import b, well
+from test_engine import CONFIG, b, well
 from test_lup import curved_well
 
 
@@ -55,7 +55,16 @@ class BandStepControl(unittest.TestCase):
                                                  np.array(continued['images'])[[0,-1]])), .01)
 
     def test_scf_retry_accepts_only_a_complete_smaller_step(self):
-        d = band('lup', climbAfter=0, maxSteps=1, lup={'redistributeEvery':1})
+        for mode, optimizers in [('neb', ['fire','band-lbfgs']),
+                                 ('cineb', ['fire','band-lbfgs']),
+                                 ('lup', ['fire','lbfgs','band-lbfgs'])]:
+            for optimizer in optimizers:
+                with self.subTest(mode=mode, optimizer=optimizer):
+                    self.check_recovery(mode, optimizer)
+
+    def check_recovery(self, mode, optimizer):
+        extra = {'lup': {'redistributeEvery':1}} if mode == 'lup' else {}
+        d = band(mode, optimizer=optimizer, climbAfter=0, maxSteps=1, **extra)
         initial = np.array(d['images'])
         seen, checkpoints = [], []
         raw = b.relax(d, curved_well)
@@ -76,11 +85,19 @@ class BandStepControl(unittest.TestCase):
         final = np.array(result['images'])
         self.assertGreater(b.force_max(final-initial), 0)
         self.assertLessEqual(b.force_max(final-initial), d['maxMove']*.5 + 1e-12)
-        self.assertEqual(result['evaluations'], 3*len(final))
+        moving = len(final)-2 if mode == 'neb' else len(final)
+        self.assertEqual(result['evaluations'], len(final)+2*moving)
+        if mode in ('neb','cineb'):
+            np.testing.assert_allclose(final, initial+.5*(np.asarray(raw['images'])-initial), atol=1e-13)
+        if mode == 'neb':
+            np.testing.assert_array_equal(final[[0,-1]], initial[[0,-1]])
         for i,p in enumerate(final):
             energy, forces = curved_well(i, p)
             self.assertEqual(energy, result['energies'][i])
             np.testing.assert_array_equal(forces, result['forces'][i])
+        resumed = b.relax({**d, 'images':result['images'], '_optimizerResume':result['optimizerState']},
+                          curved_well)
+        self.assertEqual(resumed['scfStepRetries'], 1)
 
     def test_exhausted_retry_preserves_last_evaluated_checkpoint(self):
         d = band('cineb', climbAfter=0, maxSteps=1)
@@ -102,6 +119,24 @@ class BandStepControl(unittest.TestCase):
         self.assertEqual(events[-1]['scfStepRetries'], 4)
         self.assertEqual(events[-1]['evaluations'], 6*len(initial))
         self.assertEqual(events[-1]['phase'], 'path_step_failed')
+        partial = b.Jobs(CONFIG).partial_structure({
+            'data':d, 'status':'error', 'bandCheckpoint':saved[-1], 'progress':events[-1]})
+        self.assertEqual(partial['steps'], 0)
+        self.assertEqual(partial['scfFailedStep'], 1)
+        self.assertEqual(partial['scfStepRetries'], 4)
+        self.assertEqual(partial['optimizerState']['scfStepRetries'], 4)
+        self.assertEqual(partial['evaluations'], 6*len(initial))
+        np.testing.assert_array_equal(partial['images'], initial)
+
+    def test_batch_only_evaluator_keeps_its_normal_execution_path(self):
+        class Batch:
+            def map(self, items):
+                return [curved_well(i, p) for i,p in items]
+        d = band('cineb', optimizer='fire', climbAfter=0, maxSteps=2)
+        reference = b.relax(d, curved_well)
+        result = b.relax(d, Batch())
+        np.testing.assert_array_equal(result['images'], reference['images'])
+        self.assertEqual(result['scfStepRetries'], 0)
 
     def test_initial_failure_and_other_exceptions_are_not_retried(self):
         d = band('neb')
