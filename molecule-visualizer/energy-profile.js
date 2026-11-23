@@ -4,6 +4,16 @@
   const MV=global.MoleculeVisualizer,$=id=>document.getElementById(id),app=()=>MV.App,ns='http://www.w3.org/2000/svg';
   let data=null,index=0,active=false,bound=null,marker=null,range=null,live=null,details=null,visible=true;
   const isStep=s=>['afir','optimize'].includes(s.kind);
+  function horizontal(series,i){
+    if(series.kind==='md'&&series.timeFs.length>1){
+      const first=series.timeFs[0];
+      return 40+500*(series.timeFs[i]-first)/(series.timeFs.at(-1)-first);
+    }
+    return 40+500*i/Math.max(1,series.energies.length-1);
+  }
+  function mdLabel(series,i){
+    return 'ステップ '+series.stepNumbers[i]+' · '+Number(series.timeFs[i].toPrecision(7))+' fs';
+  }
   function element(tag,attrs,text){const e=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));if(text)e.textContent=text;return e;}
   function restore(draw=true,deferred=false){
     if(!active)return;active=false;app().renderer().previewOnly=false;$('profilePreview').hidden=true;
@@ -13,8 +23,8 @@
     if(!data||!Number.isInteger(i)||i<0||i>=data.energies.length)return;
     index=i;$('profileRange').value=i;
     const energy=data.energies[i],bias=data.biasEnergies?.[i],relative=energy-(data.referenceEnergy??data.energies[0]);
-    $('profileValue').textContent=(data.labels?data.labels[i]+' · 比較 '+data.energies.length+'構造':(isStep(data)?'ステップ '+i:'構造 '+(i+1))+' / '+(isStep(data)?data.energies.length-1:data.energies.length))+' · E = '+energy.toFixed(6)+' eV · ΔE = '+relative.toFixed(6)+' eV'+(bias==null?'':' · 人工項 = '+bias.toFixed(6)+' eV · 合計 = '+(energy+bias).toFixed(6)+' eV');
-    const x=40+500*i/Math.max(1,data.energies.length-1);
+    $('profileValue').textContent=(data.kind==='md'?mdLabel(data,i):data.labels?data.labels[i]+' · 比較 '+data.energies.length+'構造':(isStep(data)?'ステップ '+i:'構造 '+(i+1))+' / '+(isStep(data)?data.energies.length-1:data.energies.length))+' · E = '+energy.toFixed(6)+' eV · ΔE = '+relative.toFixed(6)+' eV'+(bias==null?'':' · 人工項 = '+bias.toFixed(6)+' eV · 合計 = '+(energy+bias).toFixed(6)+' eV');
+    const x=horizontal(data,i);
     marker?.setAttribute('x1',x);marker?.setAttribute('x2',x);
     if(!preview)return;
     MV.VibrationUI?.restore(false);
@@ -25,10 +35,10 @@
     const state=MV.Model.createState(data.base(i));
     if(positions.length!==state.atoms.length||positions.some(v=>!Array.isArray(v)||v.length!==3||v.some(x=>!Number.isFinite(x)||Math.abs(x)>10000)))return;
     state.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=positions[k];});
-    if(data.kind!=='evaluate')MV.Bonding.refreshInferredBonds(state);
+    if(data.kind!=='evaluate'&&!data.fixedTopology)MV.Bonding.refreshInferredBonds(state);
     state.viewSettings={...app().getState().viewSettings};state.selectedAtomIds.clear();state.selectedBondIds.clear();
     active=true;app().renderer().previewOnly=true;app().renderer().renderState(state,true);MV.OptimizationUI?.sync();
-    $('profilePreview').hidden=false;$('profilePreview').textContent='計算結果のプレビュー · '+(isStep(data)?'ステップ '+i:'構造 '+(i+1))+'（入力座標は保持）';
+    $('profilePreview').hidden=false;$('profilePreview').textContent='計算結果のプレビュー · '+(data.kind==='md'?mdLabel(data,i):isStep(data)?'ステップ '+i:'構造 '+(i+1))+'（入力座標は保持）';
   }
   // Preserve extrema in each bucket; limit SVG size even for 10,001 frames.
   function sample(values){
@@ -56,7 +66,7 @@
     svg.append(element('text',{x:12,y:16,'font-size':12},next.kind==='batch'?'ΔE (eV) · 最低エネルギー基準':'ΔE (eV) · 各系列の始点基準'));
     svg.append(element('text',{x:12,y:34,'font-size':11},lo.toFixed(4)+' 〜 '+hi.toFixed(4)));
     relative.forEach((values,k)=>{
-      const xy=i=>[40+500*i/Math.max(1,values.length-1),144-(values[i]-lo)*100/span];
+      const xy=i=>[horizontal(next,i),144-(values[i]-lo)*100/span];
       const segments=sampleSegments(values,next.breakAfter);
       for(const segment of segments){
         const points=segment.map(xy);
@@ -65,15 +75,15 @@
       }
       // Every small-series point is focusable. The range always covers every frame.
       if(values.length<=100)values.forEach((value,i)=>{
-        const [x,y]=xy(i),dot=element('circle',{cx:x,cy:y,r:4,fill:k?'#b45420':'#087e85',tabindex:k?-1:0,role:'button','aria-label':(isStep(next)?'ステップ '+i:(next.labels?.[i]||'構造 '+(i+1)))+': ΔE '+value.toFixed(6)+' eV'});
+        const [x,y]=xy(i),dot=element('circle',{cx:x,cy:y,r:4,fill:k?'#b45420':'#087e85',tabindex:k?-1:0,role:'button','aria-label':(next.kind==='md'?mdLabel(next,i):isStep(next)?'ステップ '+i:(next.labels?.[i]||'構造 '+(i+1)))+': ΔE '+value.toFixed(6)+' eV'});
         const choose=()=>{if(!restoringFocus)chooseFrame(i);};dot.addEventListener('focus',choose);dot.addEventListener('click',choose);
         dot.addEventListener('keydown',e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();choose();}});svg.append(dot);
         if(keepFocus&&!k&&i===index)focusPoint=dot;
       });
     });
     marker=element('line',{y1:36,y2:150,stroke:'#55646d','stroke-dasharray':'3 3'});svg.append(marker);
-    svg.append(element('text',{x:380,y:175,'font-size':12},isStep(next)?'最適化ステップ →':next.kind==='batch'?'入力構造 →':'経路の構造番号 →'));
-    $('profileTitle').textContent=next.title;$('profileLegend').textContent=next.legend|| (next.kind==='batch'?'各入力を独立に最適化した最終電子エネルギー。収束状態は結果表で確認してください。':next.biasEnergies?'緑：物理エネルギー　茶：物理エネルギー＋人工項。横軸は'+(isStep(next)?'探索ステップ':'構造番号')+'で、反応座標やTS検証結果ではありません。':(isStep(next)?'緑：物理エネルギー。横軸は最適化ステップです。':'緑：物理エネルギー。横軸は構造番号です（単一構造の評価では1点）。'));
+    svg.append(element('text',{x:380,y:175,'font-size':12},next.kind==='md'?'時間 (fs) · '+Number(next.timeFs[0].toPrecision(6))+' 〜 '+Number(next.timeFs.at(-1).toPrecision(6)):isStep(next)?'最適化ステップ →':next.kind==='batch'?'入力構造 →':'経路の構造番号 →'));
+    $('profileTitle').textContent=next.title;$('profileLegend').textContent=next.legend|| (next.kind==='md'?'保存フレームのポテンシャルエネルギー。点を選ぶと時刻と構造を確認できます。':next.kind==='batch'?'各入力を独立に最適化した最終電子エネルギー。収束状態は結果表で確認してください。':next.biasEnergies?'緑：物理エネルギー　茶：物理エネルギー＋人工項。横軸は'+(isStep(next)?'探索ステップ':'構造番号')+'で、反応座標やTS検証結果ではありません。':(isStep(next)?'緑：物理エネルギー。横軸は最適化ステップです。':'緑：物理エネルギー。横軸は構造番号です（単一構造の評価では1点）。'));
     $('profileXYZ').disabled=typeof next.exportXYZ!=='function';
     range=$('profileRange');range.max=next.energies.length-1;range.disabled=next.energies.length<2;
     // A response already in flight must also respect an explicit pause or hide.

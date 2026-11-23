@@ -14,7 +14,7 @@
   }
   function setSource(result,context={}){
     if(!result?.images?.length||!result.symbols?.length)return;
-    const history=['optimize','ts','irc'].includes(result.mode)&&result.trajectory?.images?.length?result.trajectory:result;
+    const history=['optimize','ts','irc','md'].includes(result.mode)&&result.trajectory?.images?.length?result.trajectory:result;
     let base=context.frames?.[0]||context.original||MV.App.getState();
     if(JSON.stringify(base.atoms?.map(a=>a.element))!==JSON.stringify(result.symbols))base=MV.Model.createState({atoms:result.symbols.map((element,i)=>({id:result.atomIds?.[i]||`analysis-${i+1}`,element})),metadata:{}});
     const data={...(context.data||{})};delete data.images;delete data.atomIds;delete data.livePreview;
@@ -33,7 +33,7 @@
         const s=MV.Model.createState(template);s.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=images[i][k];});
         s.metadata.cell=cells?.[i]||cell||null;s.metadata.totalCharge=charge;s.metadata.multiplicity=multiplicity;
         s.metadata.externalCalculation={...(s.metadata.externalCalculation||{}),energyEV:energies?.[i],comparisonConditionKey:conditionKey};
-        MV.Bonding.refreshInferredBonds(s);const frame=MV.Model.shareTrajectory([MV.Periodic.snapshot(s)])[0];cache.set(i,frame);
+        if(!data.forceField)MV.Bonding.refreshInferredBonds(s);const frame=MV.Model.shareTrajectory([MV.Periodic.snapshot(s)])[0];cache.set(i,frame);
         if(cache.size>8)cache.delete(cache.keys().next().value);return frame;
       },energies,conditionKey};
     if(initialized)$('analysisLatest').disabled=false;

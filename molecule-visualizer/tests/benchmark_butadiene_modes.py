@@ -33,7 +33,7 @@ def terminal_angular_response(positions, mode):
     return slopes
 
 
-def peak_modes(row, delta):
+def peak_modes(row, delta, *, include_directions=False):
     """Use fresh electronic states for both sides of every Cartesian difference."""
     positions = np.array(row['peakCoordinatesA'], dtype=float)
     atoms = Atoms('C4H6', positions=positions)
@@ -76,8 +76,10 @@ def peak_modes(row, delta):
     for i in np.flatnonzero(frequencies < -20):
         cartesian = mass_modes[i] / np.sqrt(masses)[:, None]
         slopes = terminal_angular_response(positions, cartesian)
-        angular_response.append(dict(frequencyCM=float(frequencies[i]),
-                                     terminalSlopesDegPerA=slopes.tolist()))
+        response = dict(frequencyCM=float(frequencies[i]), terminalSlopesDegPerA=slopes.tolist())
+        if include_directions:
+            response['massNormalizedCartesianMode'] = cartesian.tolist()
+        angular_response.append(response)
 
     # The benchmark accepts C4H6 in the x=0 reference frame. Only a mirror-
     # symmetric peak admits a physical even/odd label in this frame.

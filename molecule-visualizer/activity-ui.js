@@ -102,6 +102,10 @@
       if (p.side === 'reactant') fields.push('反応物側を探索');
       if (p.side === 'product') fields.push('生成物側を探索');
     }
+    if (p.phase==='md') {
+      if (Number.isFinite(p.timeFs)) fields.push(Number(p.timeFs.toPrecision(6))+' fs');
+      if (Number.isFinite(p.temperatureK)) fields.push(Number(p.temperatureK.toPrecision(5))+' K');
+    }
     const gap = result?.dsafir?.gap ?? p.gap;
     if (Number.isFinite(gap)) fields.push('探索点間 ' + gap.toFixed(3) + ' Å');
     if (Number.isInteger(p.climbingImage)) fields.push('登坂ノード ' + (p.climbingImage+1));
