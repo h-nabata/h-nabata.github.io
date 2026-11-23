@@ -4,11 +4,22 @@
   const MV=global.MoleculeVisualizer,$=id=>document.getElementById(id),app=()=>MV.App;
   let data=null,base=null,guard=null,index=0,timer=null,active=false,phaseShown=0;
   const fingerprint=s=>JSON.stringify([s.atoms,s.bonds,s.metadata]);
-  function validate(v,symbols,positions){
-    const n=symbols.length,m=3*n;
+  function validate(v,symbols,positions,job){
+    const n=symbols.length;
+    let m=3*n;
+    if(v?.spectrum==='gamma'){
+      const indices=v.activeAtoms;
+      if(!Array.isArray(indices)||!indices.length||indices.length>n||new Set(indices).size!==indices.length||indices.some(i=>!Number.isInteger(i)||i<0||i>=n)||v.projectedTranslations!==(indices.length===n?3:0))throw Error('Γ点の可動原子・並進自由度が不正です。');
+      if(job){
+        const movable=symbols.map((_,i)=>i).filter(i=>!job.fixedAtoms?.includes(i));
+        if(!job.cell?.pbc.some(Boolean)||JSON.stringify(indices)!==JSON.stringify(movable))throw Error('Γ点結果の周期条件・可動原子が入力と一致しません。');
+      }
+      m=3*indices.length-v.projectedTranslations;
+    }
     if(v?.status!=='completed'||v.schema!=='molecule-vibrations/1'||JSON.stringify(v.symbols)!==JSON.stringify(symbols)||JSON.stringify(v.positions)!==JSON.stringify(positions)||v.units?.frequency!=='cm^-1'||v.units?.quantum!=='meV')throw Error('振動解析結果の構造・単位が一致しません。');
     for(const key of ['frequenciesCM','quantaMEV'])if(!Array.isArray(v[key])||v[key].length!==m||v[key].some(x=>!Number.isFinite(x)||x<0))throw Error('振動数が不正です。');
     if(!Array.isArray(v.imaginary)||v.imaginary.length!==m||v.imaginary.some(x=>typeof x!=='boolean')||!Array.isArray(v.modes)||v.modes.length!==m||v.modes.some(a=>!Array.isArray(a)||a.length!==n||a.some(p=>!Array.isArray(p)||p.length!==3||p.some(x=>!Number.isFinite(x)))))throw Error('振動モードが不正です。');
+    if(v.spectrum==='gamma'&&job?.fixedAtoms?.length&&v.modes.some(mode=>job.fixedAtoms.some(i=>mode[i].some(x=>x!==0))))throw Error('Γ点モードで固定原子の変位を検出しました。');
     return v;
   }
   function vectors(mode,amplitude){
@@ -40,16 +51,17 @@
   function set(v,state,summary){
     restore();validate(v,state.atoms.map(a=>a.element),state.atoms.map(a=>[a.x,a.y,a.z]));
     data=v;base=MV.Periodic.snapshot(state);guard=fingerprint(app().getState());index=0;
-    $('vibrationSummary').textContent=summary+` · ${v.modes.length}モード · ${v.settings.imaginaryThreshold} cm⁻¹超の虚振動 ${v.significantImaginaryCount}本。虚振動1本だけでは反応経路の接続は確定しません。`;
+    $('vibrationSummary').textContent=summary+(v.spectrum==='gamma'?` · 固定セルΓ点 · 可動原子 ${v.activeAtoms.length}個`:'')+` · ${v.modes.length}モード · ${v.settings.imaginaryThreshold} cm⁻¹超の虚振動 ${v.significantImaginaryCount}本。虚振動1本だけでは反応経路の接続は確定しません。`;
     const body=$('vibrationRows');body.replaceChildren();
     v.frequenciesCM.forEach((f,i)=>{
       const tr=document.createElement('tr');tr.tabIndex=0;tr.setAttribute('role','button');tr.setAttribute('aria-selected','false');
       if(v.imaginary[i])tr.className='mv-imaginary';
       for(const value of [i+1,f.toFixed(2)+(v.imaginary[i]?' i':''),v.quantaMEV[i].toFixed(3)+(v.imaginary[i]?' i':'')]){const td=document.createElement('td');td.textContent=value;tr.append(td);}
       tr.addEventListener('click',()=>select(i));tr.addEventListener('keydown',e=>{if(['Enter',' '].includes(e.key)){e.preventDefault();select(i);}});body.append(tr);
-    });$('vibrationToggle').disabled=false;
+    });$('vibrationToggle').disabled=!v.modes.length;
+    if(!v.modes.length)$('vibrationMessage').textContent='この原始セルのΓ点には剛体並進以外のモードがありません。';
   }
-  function show(){if(!data)return;$('vibrationPanel').hidden=false;$('vibrationToggle').setAttribute('aria-expanded','true');$('vibrationToggle').textContent='振動モードを隠す';select(index);$('viewer').scrollIntoView({block:'start',behavior:'smooth'});}
+  function show(){if(!data?.modes.length)return;$('vibrationPanel').hidden=false;$('vibrationToggle').setAttribute('aria-expanded','true');$('vibrationToggle').textContent='振動モードを隠す';select(index);$('viewer').scrollIntoView({block:'start',behavior:'smooth'});}
   function hide(){restore();$('vibrationPanel').hidden=true;$('vibrationToggle').setAttribute('aria-expanded','false');$('vibrationToggle').textContent='振動モードを表示';}
   function play(){
     if(timer){stop();draw();return;}select(index);if(!active)return;

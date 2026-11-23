@@ -16,7 +16,7 @@ test('overlap, deleted members, bad projects, unsupported services and calculati
  s.metadata.groupConstraints.enabled=true;
  for(const mode of ['evaluate','ts','irc','cineb','lup','vibrations'])assert.throws(()=>wire(s,{mode}),/専用/);
  assert.throws(()=>wire(s,{vibrations:{}}),/専用/);assert.throws(()=>wire(s,{},{}),/bridge.py/);
- assert.throws(()=>wire(s,{cell:{pbc:[true,false,false]}}),/非周期/);
+ assert.throws(()=>wire(s,{cell:{pbc:[true,false,false]}}),/bridge.py/);
  assert.throws(()=>wire(s,{symbols:['H','H','H','O']}),/File-order/);
  s.metadata.groupConstraints.groups[1].atomIds.push('h');assert.throws(()=>wire(s),/重複/);s.metadata.groupConstraints.groups[1].atomIds.pop();
  s.atoms.pop();assert.throws(()=>wire(s),/削除済み/);
@@ -39,4 +39,30 @@ test('single group and absolute mode pin centers; attach restores indices as sta
  d.groupConstraints.mode='relative';d.groupConstraints.groups=[d.groupConstraints.groups[0]];assert.throws(()=>C.checkPositions([p],d));
  C.attach(s,d.groupConstraints);assert.deepEqual(s.metadata.groupConstraints.groups[0].atomIds,['o','h']);
  const restored=JSON.parse(JSON.stringify(s));assert.deepEqual(wire(restored).groups,[[0,1]]);
+});
+test('periodic jobs record the selected input images and reject a result with another convention',()=>{
+ const s=state(),cell={vectors:[[5,0,0],[1,6,0],[0,0,17]],pbc:[true,true,false]},d={...data(s),cell};
+ const info={groupConstraints:true,advancedOptimization:true,periodicGroupImages:'input-cartesian'};
+ d.groupConstraints=wire(s,{cell},info);
+ assert.equal(d.groupConstraints.imageConvention,'input-cartesian');
+ const r={images:d.images,groupConstraints:{...d.groupConstraints,referenceCenters:C.centers(d.images[0],d.groupConstraints)}};
+ C.validateResult(r,d);delete r.groupConstraints.imageConvention;assert.throws(()=>C.validateResult(r,d),/条件/);
+ const O=require('../optimization.js');s.metadata.optimization={rigidGroups:[{atomIds:['o','x']}]};
+ assert.throws(()=>O.forJob(s,d,{advancedOptimization:true}),/bridge.py/);
+ O.forJob(s,d,info);assert.equal(d.rigidGroupImages,'input-cartesian');
+ assert.throws(()=>O.validateResult({...r,cell},d),/周期像/);
+ O.validateResult({...r,cell,rigidGroupImages:d.rigidGroupImages},d);
+});
+test('compact-group preparation gathers only selected atoms onto the closest image to the first file atom',()=>{
+ const P=require('../periodic.js'),cell=P.cell([[4,0,0],[2,5,0],[0,0,15]],[true,true,false]);
+ const s=state();s.metadata.cell=cell;s.selectedAtomIds=new Set(['d','o','h']);
+ Object.assign(s.atoms[0],{x:0,y:.25,z:18});
+ Object.assign(s.atoms[1],{x:6.25,y:5,z:-13});
+ Object.assign(s.atoms[2],{x:.5,y:.5,z:19});
+ const original=structuredClone(s.atoms);
+ assert.equal(C.gatherSelectedImages(s,P.prepareMinimumImage),1);
+ assert.deepEqual(s.atoms[1],{...original[1],x:.25,y:0});
+ for(const i of [0,2,3])assert.deepEqual(s.atoms[i],original[i]);
+ assert.equal(C.gatherSelectedImages(s,P.prepareMinimumImage),0);
+ assert.throws(()=>C.gatherSelectedImages({...s,selectedAtomIds:new Set(['o'])},P.prepareMinimumImage),/2個/);
 });

@@ -34,3 +34,52 @@ test('short polymer repeats expose both bonded images, with skew and partial per
   const thin=P.prepareMinimumImage(P.cell([[8,0,0],[0,8,0],[0,0,.001]]));
   assert.equal(thin.contactShifts(delta,.35,1.9).length,1);
 });
+
+test('cell comparison tolerates export precision and continuous images preserve winding and open directions',()=>{
+  const cell=P.cell([[10,0,0],[2.75,7.1234567890123,0],[0,0,18]],[true,true,false]);
+  const rounded=P.cell(cell.vectors.map(row=>row.map(x=>Number(x.toFixed(9)))),cell.pbc);
+  assert.ok(P.sameCell(cell,rounded));
+  assert.ok(!P.sameCell(cell,P.cell(cell.vectors,[true,true,true])));
+  assert.ok(!P.sameCell(cell,P.cell([[10.001,0,0],...cell.vectors.slice(1)],cell.pbc)));
+  const wrapped=[[[9.7,0,1]],[[.2,0,16]],[[.8,0,19]]];
+  const original=JSON.stringify(wrapped);
+  const output=P.continuousImages(wrapped,cell);
+  assert.deepEqual(JSON.parse(JSON.stringify(output)),[[[9.7,0,1]],[[10.2,0,16]],[[10.8,0,19]]]);
+  assert.equal(JSON.stringify(wrapped),original);
+  assert.equal(JSON.stringify(P.continuousImages(output,cell)),JSON.stringify(output));
+});
+
+test('POSCAR imports active whole-atom and fractional locks and exports the edited selections',()=>{
+ const poscar='slab\n1\n4 0 0\n2 5 0\n0 0 12\nO H\n1 2\nSelective dynamics\nCartesian\n0 0 0 F F F\n1 0 .2 F T T\n-.5 .8 0 T T T\n';
+ const s=P.parsePOSCAR(poscar);
+ assert.equal(s.metadata.constraints.fixedAtomIds[0],s.atoms[0].id);
+ assert.equal(s.metadata.optimization.fixedComponents[0].basis,'fractional');
+ assert.equal(s.metadata.optimization.fixedComponents[0].atomId,s.atoms[1].id);
+ s.metadata.constraints.fixedAtomIds=[s.atoms[2].id];
+ const sc=P.supercell(s,[2,1,1]);
+ assert.deepEqual(Array.from(sc.metadata.constraints.fixedAtomIds),[sc.atoms[2].id,sc.atoms[5].id]);
+ assert.deepEqual(Array.from(sc.metadata.optimization.fixedComponents,x=>x.atomId),[sc.atoms[1].id,sc.atoms[4].id]);
+ const again=P.parsePOSCAR(P.toPOSCAR(s));
+ assert.equal(again.atoms[0].selective.join(''),'TTT');
+ assert.equal(again.atoms[1].selective.join(''),'FTT');
+ assert.equal(again.atoms[2].selective.join(''),'FFF');
+ s.metadata.optimization.fixedComponents[0].basis='cartesian';
+ assert.throws(()=>P.toPOSCAR(s),/Cartesian方向固定/);
+});
+
+test('extXYZ edits and reimports full, Cartesian and fractional move masks with their coordinate bases',()=>{
+ const text='4\nLattice="4 0 0 2 5 0 .4 .3 6" Properties=species:S:1:pos:R:3:move_mask:L:3:mv_fractional_move:L:3:tag:I:1\nC 0 0 0 F F F T T T 1\nO 1 0 0 F T F T T T 2\nH 2 0 0 T T T T F T 3\nH 3 0 0 T T T T T T 4\n';
+ const state=IO.parseXYZToState(text);
+ assert.equal(state.metadata.constraints.fixedAtomIds[0],state.atoms[0].id);
+ assert.deepEqual(Array.from(state.metadata.optimization.fixedComponents,x=>[x.basis,Array.from(x.axes)]),[['cartesian',[true,false,true]],['fractional',[false,true,false]]]);
+ state.metadata.constraints.fixedAtomIds=[state.atoms[3].id];
+ const output=IO.stateToXYZText(state);
+ assert.equal((output.match(/:move_mask:L:3/g)||[]).length,1);
+ const copy=IO.parseXYZToState(output);
+ assert.equal(copy.metadata.constraints.fixedAtomIds[0],copy.atoms[3].id);
+ assert.equal(copy.metadata.optimization.fixedComponents[1].basis,'fractional');
+ assert.equal(copy.atoms[2].xyzExtras.tag.values[0],'3');
+ assert.throws(()=>IO.parseXYZToState(text.replace('T F T 3','W F T 3')),/TまたはF/);
+ const scalar=IO.parseXYZToState('2\nProperties=species:S:1:pos:R:3:move_mask:L:1\nH 0 0 0 F\nH 1 0 0 T\n');
+ assert.match(IO.stateToXYZText(scalar),/:move_mask:L:1/);
+});

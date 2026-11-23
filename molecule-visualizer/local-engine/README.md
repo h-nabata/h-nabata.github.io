@@ -2,7 +2,7 @@
 
 ## 分子動力学とRDKitの古典力場（1.21.0）
 
-`bridge.py`を1.22.0以降、ASEを3.25以降に更新・再起動して接続します。g-xTB、tblite、UMA、llmlip.rsでNVE・NVTを実行できます。NVTの既定熱浴はNosé–Hoover鎖で、BussiとLangevinも選択できます。tbliteと周期系の応力に対応するllmlip.rsモデルでは、NPTまたは固定セルでの圧力記録も利用できます。RDKit接続では、同じPython環境に `python -m pip install rdkit` で追加し、`python bridge.py --engine rdkit --allow-origin https://h-nabata.github.io` で起動します。[MDの操作と力場の選び方](../MD.md)
+`bridge.py`を1.22.0以降、ASEを3.25以降に更新・再起動して接続します。g-xTB、tblite、UMA、llmlip.rsでNVE・NVTを実行できます。NVTの既定熱浴はNosé–Hoover鎖で、BussiとLangevinも選択できます。3方向周期のtblite、UMAのOMat、応力に対応するllmlip.rsモデルでは、NPTまたは固定セルでの圧力記録も利用できます。RDKit接続では、同じPython環境に `python -m pip install rdkit` で追加し、`python bridge.py --engine rdkit --allow-origin https://h-nabata.github.io` で起動します。[MDの操作と力場の選び方](../MD.md)
 
 ## 1.16.0への更新とCPU配分
 
@@ -128,7 +128,18 @@ LLMLIP_TEST_MODEL=/absolute/path/model.e3rs \
 
 ## UMA（fairchem-core）の導入と設定
 
-この接続は**非周期分子のomolタスク**を対象にします。材料・表面用のomat/oc20等へ自動的に切り替えることはありません。エネルギー・力の評価、MIN、一括MIN、AFIR-MIN、CI-NEB、Sella TS、ASE振動解析を同じUMAポテンシャルで実行します。原子固定はMIN/AFIR-MINで使用できます。入力上限は500原子・100構造・Z=83、多重度1〜100です。これは入力範囲であり、その全範囲でのモデル精度を保証するものではありません。
+「ポテンシャル・溶媒」で計算対象に合わせてタスクを選択します。経路の全像には同一のタスクを使用します。入力上限は500原子・100構造・原子番号83です。
+
+| UMAタスク | セルと電子状態 | セル自由度 |
+|---|---|---|
+| OMol・分子 | 非周期。全電荷とスピン多重度を指定 | 固定 |
+| OC20・触媒表面／吸着系 | 面内2方向周期、または真空層を持つ3方向周期。OC20の学習対象には酸化物と明示的な溶媒は含まれません。 | 固定 |
+| OC22・酸化物表面／OC25・触媒と溶媒の界面 | 面内2方向周期、または真空層を持つ3方向周期。UMA 1.2系で選択できます。 | 固定 |
+| OMC・有機分子結晶 | 3方向周期 | 応力に対応する重みでセル最適化・NPT・固定体積での圧力記録 |
+| ODAC・MOFのCO₂・水吸着 | 3方向周期 | 固定 |
+| OMat・バルク材料 | 3方向周期。電荷0、多重度欄1 | 応力に対応する重みでセル最適化・NPT・固定体積での圧力記録 |
+
+材料・表面タスクの予測では分子の電荷・多重度を条件に使いません。電荷欄には0、多重度欄には1を入力します。多重度欄の1は計算のスピン状態を意味しません。AnySolv溶媒補正や異なるスピン多重度を組み合わせるModel FはOMolで使用します。固定原子の指定は計算手法の設定で行います。[各タスクの汎関数・データセット・適用範囲（FAIR Chemistry）](https://facebookresearch.github.io/fairchem/uma/)
 
 1. [facebook/UMA](https://huggingface.co/facebook/UMA)で利用条件を確認し、モデルへのアクセス承認を取得します。
 2. Linux / WSL2のPython 3.12専用環境で、次を実行します（Windowsネイティブでの動作確認は未実施）。
@@ -142,11 +153,12 @@ hf auth login
 python bridge.py --engine uma --uma-model uma-s-1p2p1 --uma-device cpu --uma-precision float64 --allow-origin https://h-nabata.github.io
 ```
 
-3. 起動時のURLとbridgeのTokenをページへ入力し「接続を確認」を押します。モデル・omol・デバイス・精度の表示を確認し、電荷と多重度を指定して計算します。**Hugging Faceのトークンは端末の認証専用**です。ページの接続Token欄へ貼り付けないでください。
+3. 起動時のURLとbridgeのTokenをページへ入力し「接続を確認」を押します。モデル・タスク・デバイス・精度を確認して計算します。**Hugging Faceのトークンは端末の認証専用**です。ページの接続Token欄へ貼り付けないでください。
 
 | 起動引数 | 設定 |
 |---|---|
 | `--uma-model` | `uma-s-1p2p1`（既定）、`uma-s-1p2`、`uma-s-1p1`、`uma-m-1p1` |
+| `--uma-checkpoint` | 入手済みの公式UMAチェックポイント（.pt）のローカルパス。単一の非周期原子の参照エネルギーを使う場合は、参照表も取得する通常のモデル名を使用してください。対応するモデル名を `--uma-model` で指定します。ブリッジ起動時の指定だけを受理し、結果には重みのSHA-256を記録します。 |
 | `--uma-device` | `cpu`（既定）/ `cuda:0` / `cuda:1` 等（`cuda` は `cuda:0`）。画面からも選択できます。CUDAは対応GPU・ドライバー・PyTorchが必要。使用不可なら起動時にエラーとし、CPUへ黙って切り替えません。 |
 | `--uma-precision` | `float64`（既定）/ `float32`。TS・微小変位の振動解析ではfloat64を推奨。float32はメモリ・計算時間を抑える選択肢。 |
 | `--threads` | CPUスレッド数（既定1）。PyTorchにも設定します。 |
@@ -156,13 +168,20 @@ UMAには`--method`（GFN法）や`--binary`（g-xTB実行ファイル）を指�
 
 計算実行時にモデルを読み込みます。「接続を確認」の成功はモデル取得・推論の成功を意味しません。UMA／AnySolvは同じモデル・デバイス・精度のジョブ間で常駐し、一括MINでも再利用します。分子の元素、電荷、多重度、溶媒、ASEの状態はジョブごとに更新します。モデル条件が変わった場合、中止・失敗時、サービス終了時にはプロセスを終了します。「計算履歴 / キュー」の解放ボタン、または `--no-resident-models` でもメモリを解放できます。通常 `~/.cache/fairchem` に重みのキャッシュが残り、認証情報はHugging Faceのローカル設定に保存されます。計算座標や結果はHugging Faceへ送信しません。各評価の一時ファイルはジョブ終了時に削除し、計算履歴は後述の保存先へ残します。
 
-`FAIRChemCalculator(predictor, task_name="omol")`を使用し、`atoms.info['charge']`へ全電荷、`atoms.info['spin']`へ**2S+1の多重度**を渡します。g-xTBの`--uhf`の値（2S）とは異なります。ASEの出力は既にeV・eV/ÅなのでHartree/Bohr変換を行いません。conservative UMAモデルのみを選択肢とし、`InferenceSettings(tf32=False, compile=False, merge_mole=False, execution_mode='general', base_precision_dtype=...)`を明示します。ジョブ種別によって精度を自動変更せず、MINからCI-NEB・TS・振動解析まで同じ設定を使用します。
+`FAIRChemCalculator(predictor, task_name=選択タスク)` を使用します。OMolでは`atoms.info['charge']`へ全電荷、`atoms.info['spin']`へ**2S+1の多重度**を渡します。g-xTBの`--uhf`の値（2S）とは異なります。ASEの出力は既にeV・eV/ÅなのでHartree/Bohr変換を行いません。conservative UMAモデルのみを選択肢とし、`InferenceSettings(tf32=False, compile=False, merge_mole=False, execution_mode='general', base_precision_dtype=...)`を明示します。ジョブ種別によって精度を自動変更せず、MINからCI-NEB・TS・振動解析まで同じ設定を使用します。
 
 結果JSONにはモデル名・task・device・精度・推論設定・fairchem-core/PyTorchの版を記録します。UMAは学習済みポテンシャルの予測で、DFTのSCFを実行するわけではありません。モデルやタスクが異なるエネルギー、tblite/g-xTBの絶対エネルギーとは直接比較しないでください。未知の構造や反応に対する精度・TSの妥当性は別途検証が必要です。
 
 接続エラー時は利用承認、同じ環境での`hf auth login`、PyTorchの導入、モデルキャッシュを確認してください。上流のHTTP例外に含まれる認証情報やURLはページへ返しません。メモリ不足は中止として扱い、構造が得られていれば既存の途中結果保存を使います。
 
-実装参照：[公式導入手順](https://facebookresearch.github.io/fairchem/install/)、[omolの電荷・多重度](https://facebookresearch.github.io/fairchem/quickstart/)、[推論設定・精度](https://facebookresearch.github.io/fairchem/ase-calculator/)、[モデル一覧](https://huggingface.co/facebook/UMA)。配布版fairchem-core 2.23.0のAPIを確認しました。検証範囲は[AFIR-VALIDATION.md](../AFIR-VALIDATION.md)を参照してください。
+実装参照：[公式導入手順](https://facebookresearch.github.io/fairchem/install/)、[omolの電荷・多重度](https://facebookresearch.github.io/fairchem/quickstart/)、[推論設定・精度](https://facebookresearch.github.io/fairchem/ase-calculator/)、[モデル一覧](https://huggingface.co/facebook/UMA)。配布版fairchem-core 2.23.0および2.26.0のネイティブ推論経路を確認しました。検証範囲は[AFIR-VALIDATION.md](../AFIR-VALIDATION.md)を参照してください。
+
+入手済みの重みを用いた周期系の試験はリポジトリのルートから実行できます。ブラウザ試験にはPlaywrightとChromiumも必要です。
+
+```bash
+python molecule-visualizer/tests/benchmark_uma_periodic.py --checkpoint /path/to/uma-s-1p2p1.pt
+PYTHON="$(which python)" UMA_TEST_CHECKPOINT=/path/to/uma-s-1p2p1.pt node molecule-visualizer/tests/uma-periodic-browser.cjs
+```
 
 ## AnySolvの溶媒補正をUMAに追加する
 
@@ -205,9 +224,9 @@ Python 3.10以上を使用します。[bridge.py](./bridge.py) を保存して�
 
 | 起動時の指定 | 計算手法 | 必要なもの | このアプリで扱える系 |
 |---|---|---|---|
-| `--engine tblite` | GFN2-xTB（既定）、GFN1-xTB、IPEA1-xTB | tbliteのPython API（condaでは`tblite-python`） | 非周期系・固定セルの周期系 |
+| `--engine tblite` | GFN2-xTB（既定）、GFN1-xTB、IPEA1-xTB | tbliteのPython API（condaでは`tblite-python`） | 非周期系・3方向周期系 |
 | `--engine gxtb --binary …` | g-xTB | 公式のg-xTB対応xtb実行ファイルと付属ライブラリ | 非周期系 |
-| `--engine uma` | 学習済みUMA / omol | fairchem-core、PyTorch、利用承認済みUMAモデル | 非周期分子 |
+| `--engine uma` | 学習済みUMA / 分子・触媒・材料タスク | fairchem-core、PyTorch、利用承認済みUMAモデル | 非周期分子・表面・バルク |
 
 **通常配布版tblite 0.7.0はg-xTBに対応していません（2026年10月15日確認）。** [tbliteの組み込み手法](https://tblite.readthedocs.io/en/latest/spec/methods.html)は上表の3種類です。[公式g-xTB](https://github.com/grimme-lab/g-xtb)は改変版tbliteを内部で使用していますが、通常配布版tbliteのPython APIとは異なります。g-xTBが目的なら、下の「g-xTBの実行ファイルを使う」へ進んでください。
 
@@ -356,10 +375,10 @@ NEB・直交緩和と既定の単一構造最適化の座標更新は変位上�
 
 ## 4. 周期系・対応範囲
 
-- **tblite:** 固定格子と周期方向をそのまま渡します。格子・座標をBohrへ変換します。GFN2-xTB（既定）、GFN1-xTB、IPEA1-xTBは `--method` で選択できます。元素は最大Rn（Z=86）、実際のパラメータ対応はエンジンが判定します。
+- **tblite:** 非周期と3方向周期に対応します。部分周期の指定は、物理計算で周期の向きが増えてしまうため受理しません。格子・座標をBohrへ変換します。GFN2-xTB（既定）、GFN1-xTB、IPEA1-xTBは `--method` で選択できます。元素は最大Rn（Z=86）、実際のパラメータ対応はエンジンが判定します。
 - **g-xTB:** このアダプタは非周期系専用です。周期セルが有効な入力は拒否します。元素の上限はLr（Z=103）。`xtb --gxtb --grad` のTurbomole形式gradientからエネルギー・勾配を読み、元素順序と返された座標も照合します。
-- 周期経路は**連続した、折り返していないCartesian座標**で入力します。緩和中に原子ごとの最小像へ経路を再写像しません。境界をまたぐ短い初期経路は、初期構造生成の「周期系で終点の最小像を使う」で作れます。この初期生成では終点が周期等価な座標になりますが、外部緩和へ渡した後は両端点を一切動かしません。
-- 可変セルNEB、原子位置の固定、溶媒、外場、電荷・スピン状態をまたぐ経路、複数電子状態の追跡には対応していません。現在のUIでは系全体の電荷・多重度を全構造に共通して指定します。POSCARのselective dynamicsは外部緩和の拘束条件には使用しません。
+- 固定セルの経路は連続したCartesian座標で緩和します。セル内へ折り返されたXYZ列は、既定では直前のフレームに最も近い周期像へつなぎ直します。意図した移動が半セルを超えるときはこの設定を解除し、連続座標を入力します。CI-NEB・CI-Stringでは端点を独立に緩和するか固定するかを指定できます。
+- 原子を矩形で固定すると基板の該当原子は経路上も動きません。POSCARのSelective dynamicsと、各手法が受理する拘束の種類は[周期構造の計算手順](../PERIODIC.md)を参照してください。経路の全構造には同じセル、周期方向、元素順序を使います。可変セルNEBは対象外です。
 - CIFの部分占有は計算前に確定した構造へ整理します。SMILES/MOLの結合次数は電子計算へ強制せず、元素・座標・総電荷・多重度を渡します。同位体は通常のBorn–Oppenheimerエネルギーに影響しません。振動解析はASEの標準原子質量を使います。現在の画面ではMOLの同位体指定・XYZの個別質量を持つ構造の振動解析を拒否します。
 
 ## 5. 接続の境界
@@ -389,7 +408,7 @@ g-xTBは公式配布 `xtb-6.7.1-gxtb-140526-linux-x86_64` で検証していま�
 
 AFIRを利用する場合は、このフォルダーの`bridge.py`を最新版の1.4.0へ更新して再起動します。最大ステップ数の既定値・上限は10,000です。1.1.0のAFIR上限は500ステップで、1.1.1以降は10,000です。追加のPython依存関係はありません。NEBと同じ接続画面を使います。[AFIR操作説明](../AFIR.md)を参照してください。
 
-AFIRは非周期分子専用です。人工項を加えたエネルギーのFIRE最適化を実行し、物理エネルギーと人工項、原子ID付きの評価済みフレームを区別して返します。中止時は受領済みの途中フレームを保持し、子プロセスの終了後に停止を報告します。計算履歴は既定でディスクへ保存し、結果JSONもブラウザから保存できます。
+固定セルの周期AFIRでは、各フラグメント対の原子間距離と方向に最小像を使います。周期系のDS-AFIRは固定した格子座標系で両端を対応させ、選択した生成物像に沿う連続座標を返します。人工項を加えたエネルギーのFIRE最適化を実行し、物理エネルギーと人工項、原子ID付きの評価済みフレームを区別して返します。中止時は受領済みの途中フレームを保持し、子プロセスの終了後に停止を報告します。計算履歴は既定でディスクへ保存し、結果JSONもブラウザから保存できます。
 
 Windowsでの実g-xTB試験と、残る未検証範囲は[追加検証記録](../AFIR-VALIDATION.md)に記載しています。NEBの従来の検証記録とは区別します。
 
@@ -424,14 +443,14 @@ AFIR・通常の最適化・経路計算の結果から「構造列を保存・�
 
 1. 描画エリア付近の「現在の構造をTS最適化」を押します。NEB結果からは、表の任意のノードの「TS入力」を押すと、緩和済み経路を描画へ反映し、そのノードを選択した状態でTSの条件が開きます。別の候補はFRAMESで選び直せます。
 2. TS手法はSella PRFO（既定）またはRFO。一次鞍点（`order=1`）、Cartesian座標（`internal=False`）を使います。`初期信頼半径`はSellaの`delta0`であり、計算中に調整されるため固定の最大変位ではありません。通常の極小化にはFIRE、ASE L-BFGS、ASE BFGSを選べます。L-BFGSをTS探索として実行することはできません。
-3. 電荷・多重度・収束閾値・最大ステップ数を確認して実行します。エネルギーと勾配は接続中のtbliteまたはg-xTBの物理ポテンシャルです。AFIR人工項やNEBばねは加えません。Sellaは非周期分子用です。
+3. 電荷・多重度・収束閾値・最大ステップ数を確認して実行します。エネルギーと勾配には接続中のエンジンの物理ポテンシャルを使います。周期対応エンジンでは固定セルでのTS・Γ点振動・IRCと、基板などの原子固定を利用できます。
 4. 「最適化後に振動解析」をオンにした場合のみ、得られた最終構造で解析します。既定は**オフ**。最大ステップで未収束でも実行します。「現在の構造の振動解析」なら座標を最適化せずに解析できます。
-5. 「振動数表とモードを表示」で、全3Nモードの振動数（cm⁻¹）と量子エネルギーhν（meV）を表示します。虚振動は`i`を付けて赤字で表示します。表の行をクリックまたはEnter/Spaceで選ぶと、原子の変位矢印が描画されます。必要ならモードをアニメーションできます。表示振幅は最大原子変位（Å）として規格化し、動画の速さは全モード共通です。実時間の振動・虚振動の時間発展ではありません。
+5. 「振動数表とモードを表示」で、対象モードの振動数（cm⁻¹）と量子エネルギーhν（meV）を表示します。虚振動は`i`を付けて赤字で表示します。表の行をクリックまたはEnter/Spaceで選ぶと、原子の変位矢印が描画されます。必要ならモードをアニメーションできます。表示振幅は最大原子変位（Å）として規格化し、動画の速さは全モード共通です。実時間の振動・虚振動の時間発展ではありません。
 6. 「＋/−方向へ変位して入力に適用」で、解析した構造を選択モードに沿って微小変位させられます。変位はUndoできます。モードの符号は任意です。別の構造に編集した後の適用は拒否します。変位後「現在の構造をTS最適化」で再探索できます。これは収束の保証ではありません。
 
-振動解析はASE `Vibrations`の中心差分（2点±δ、または4点±δ・±2δ）。ブラウザの既定δ=0.001 Å。N原子で平衡構造1回と6N/12N回の力評価を行います。最大200原子、ASE標準原子質量、固定セルなしの非周期分子を対象にします。tbliteはTS/振動解析時の`accuracy`を0.01に設定します。g-xTBはローカル実行ファイルのSCF設定を使用します。
+振動解析はASE `Vibrations`の中心差分（2点±δ、または4点±δ・±2δ）。ブラウザの既定δ=0.001 Å。可動原子N個で平衡構造1回と6N/12N回の力評価を行います。最大200原子、ASE標準原子質量を使用します。周期系は固定セルのΓ点を扱い、格子方向に対する回転を自由度として保持します。[周期系の計算法と判定](../RESEARCH.md#irc)tbliteはTS/振動解析時の`accuracy`を0.01に設定します。g-xTBはローカル実行ファイルのSCF設定を使用します。
 
-モード表には並進・回転を射影除去しない全3Nモードを残し、指定閾値（既定20 cm⁻¹）より大きい虚振動の本数を別記します。熱化学量の計算では別途、質量重み付きHessianから剛体運動を射影除去します。低振動数が不安定な場合は構造の収束、差分幅、2/4点法、電子計算の収束を確認してください。**力の収束、虚振動1本、IRCによる接続確認は別の条件**です。
+非周期分子のモード表には並進・回転を射影除去しない全3Nモードを残し、指定閾値（既定20 cm⁻¹）より大きい虚振動の本数を別記します。熱化学量の計算では別途、質量重み付きHessianから剛体運動を射影除去します。低振動数が不安定な場合は構造の収束、差分幅、2/4点法、電子計算の収束を確認してください。**力の収束、虚振動1本、IRCによる接続確認は別の条件**です。
 
 振動解析中は進捗を表示し、中止できます。差分計算が失敗・中止されても、すでに評価済みの構造結果は保存・適用可能です。未完了の振動数・モードは表示しません。差分キャッシュはジョブ専用の一時フォルダー内にだけ作り、正常終了・中止・失敗時に削除します。モード表のCSVと計算結果JSONを明示的に保存できます。JSONには全モード・条件・Sella/ASEのバージョンを含め、接続トークンは含めません。
 
@@ -452,7 +471,7 @@ AFIR・通常の最適化・経路計算の結果から「構造列を保存・�
 
 配布中の `bridge.py` に差し替え、サービスを再起動して新しいTokenで再接続してください。追加依存パッケージはありません。ブラウザの「原子団の重心」で選択原子を登録し、1団の重心位置固定／複数団の相対ベクトル固定／各重心の絶対位置固定を選択できます。MIN・AFIR-MIN・緩和スキャン・一括MINに対応し、原子固定と内部座標拘束を同時に扱います。
 
-`/api/info` の `groupConstraints: true` が対応を示します。入力の `groupConstraints` は `{mode:"relative", groups:[[0,1,2],[3,4,5]], masses:[16,1,1,16,1,1]}` の形式で、全原子の質量をu単位で明示します。結果には参照重心も含み、再開時に保持します。非周期系専用で、原子団内部の形状は自由です。詳細な使い方・質量の扱い・制限は [RESEARCH.md](../RESEARCH.md#原子団の重心を固定した緩和)、射影方法と失敗条件は [AFIR.md](../AFIR.md) を参照してください。
+`/api/info` の `groupConstraints: true` が対応を示します。入力の `groupConstraints` は `{mode:"relative", groups:[[0,1,2],[3,4,5]], masses:[16,1,1,16,1,1]}` の形式で、全原子の質量をu単位で明示します。結果には参照重心も含み、再開時に保持します。固定セルで使用する場合は、能力情報の `periodicGroupImages: "input-cartesian"` を確認し、重心拘束の `groupConstraints.imageConvention`、または剛体の `rigidGroupImages` に `"input-cartesian"` を指定します。計算中は入力で選んだ周期像の座標を連続的に更新します。原子団内部の形状は自由です。詳細な使い方・質量の扱い・制限は [RESEARCH.md](../RESEARCH.md#原子団の重心を固定した緩和)、射影方法と失敗条件は [AFIR.md](../AFIR.md) を参照してください。
 
 ## 高速化版への更新（v1.10.0）
 

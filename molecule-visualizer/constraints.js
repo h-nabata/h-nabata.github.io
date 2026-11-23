@@ -25,10 +25,26 @@
     return [...set];
   }
   function forJob(state,data,info){
+    // Energies and physical forces can always be inspected at a frozen geometry.
+    if(data.mode==='evaluate')return [];
     const fixed=indices(state);if(!fixed.length)return [];
-    if(!['optimize','afir','scan'].includes(data.mode)||data.vibrations)throw Error('原子固定はMIN・AFIR-MIN・緩和スキャン専用です。TS・IRC・経路計算・振動解析の前に固定をオフにしてください。');
+    const legacy=['optimize','afir','scan'];
+    const modes=info?.fixedAtomModes||legacy;
+    const periodic=!!data.cell?.pbc.some(Boolean);
+    const gamma=data.vibrations||['ts','irc','vibrations'].includes(data.mode);
+    if(gamma&&!(periodic&&info?.periodicGammaPoint))throw Error('固定原子を含むTS・IRC・振動解析は、対応ブリッジでの固定セル周期系専用です。');
+    if(!modes.includes(data.mode))throw Error('接続中のブリッジは指定した計算の原子固定に未対応です。旧ブリッジはMIN・AFIR-MIN・緩和スキャン専用です。');
     if(info&&!info.fixedAtoms)throw Error('原子固定を使うには、最新のbridge.pyに差し替えて再起動・再接続してください。');
     if(JSON.stringify(state.atoms.map(a=>a.element))!==JSON.stringify(data.symbols))throw Error('原子固定を一括計算へ適用するには、現在の構造と入力全構造の元素・File-orderを一致させてください。');
+    return fixed;
+  }
+  function forFrames(state,frames,data,info){
+    if(data.mode==='evaluate')return [];
+    const hasFixed=s=>s.metadata?.constraints?.enabled&&s.metadata.constraints.fixedAtomIds?.length;
+    const imported=frames.filter(hasFixed);
+    const fixed=forJob(hasFixed(state)?state:imported[0]||state,data,info);
+    if(imported.some(s=>JSON.stringify(indices(s))!==JSON.stringify(fixed)))
+      throw Error('入力構造の間で固定原子が異なります。「原子固定」で共通の原子番号を指定してください。');
     return fixed;
   }
   function attach(frame,fixed){frame.metadata.constraints={schema:'molecule-fixed-atoms/1',enabled:fixed.length>0,fixedAtomIds:fixed.map(i=>frame.atoms[i].id)};return frame;}
@@ -41,5 +57,5 @@
     checkPositions(r.images,data.images[0],fixed);
     if(r.trajectory)checkPositions(r.trajectory.images,data.images[0],fixed);
   }
-  return {defaults,config,indices,parse,forJob,attach,checkPositions,validateResult};
+  return {defaults,config,indices,parse,forJob,forFrames,attach,checkPositions,validateResult};
 });

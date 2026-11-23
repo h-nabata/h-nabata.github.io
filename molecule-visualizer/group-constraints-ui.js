@@ -51,6 +51,8 @@
     $('btnGroupConstraints').setAttribute('aria-pressed',String(c.enabled));
     for(const field of $('groupConstraintFields').querySelectorAll('input,button,select'))field.disabled=!!busy();
     $('groupConstraintAddSelected').disabled=!!busy()||!s.selectedAtomIds.size;
+    $('groupImageSettings').hidden=!s.metadata.cell?.pbc.some(Boolean);
+    $('groupGatherImages').disabled=!!busy()||s.selectedAtomIds.size<2;
     const fragments=s.metadata.afir?.fragments||[],select=$('groupConstraintAFIR'),key=JSON.stringify(fragments);
     if(select.dataset.groups!==key){const prev=select.value;select.replaceChildren();for(const f of fragments){const o=document.createElement('option');o.value=f.id;o.textContent=f.label;select.append(o);}if(fragments.some(f=>f.id===prev))select.value=prev;select.dataset.groups=key;}
     $('groupConstraintAddAFIR').disabled=!!busy()||!fragments.length;
@@ -63,6 +65,15 @@
     $('groupConstraintAddSelected').onclick=()=>safe(()=>{const s=M.App.getState();add(s.atoms.filter(a=>s.selectedAtomIds.has(a.id)).map(a=>a.id));});
     $('groupConstraintAddAFIR').onclick=()=>safe(()=>{const f=M.App.getState().metadata.afir?.fragments.find(f=>f.id===$('groupConstraintAFIR').value);if(f)add(f.atomIds,f.label);});
     $('groupConstraintClear').onclick=()=>safe(()=>{if(busy())throw Error('計算終了後に重心拘束を解除してください。');if(/未適用|編集中/.test($('xyzEditStatus').textContent))throw Error('編集中の座標を先に適用してください。');M.App.useDisplayedStructure();M.App.change('clear group center constraints',s=>{s.metadata.groupConstraints=C.defaults();});message('重心拘束をすべて解除しました。');});
+    $('groupGatherImages').onclick=()=>safe(()=>{
+      if(busy()||/未適用|編集中/.test($('xyzEditStatus').textContent))throw Error('計算・座標編集中は周期像を変更できません。');
+      M.App.useDisplayedStructure();let moved=0;
+      M.App.change('gather selected periodic images',state=>{
+        moved=C.gatherSelectedImages(state,M.Periodic.prepareMinimumImage);
+        if(state.metadata.trajectory)state.metadata.trajectory[state.metadata.frameIndex||0]=M.Periodic.snapshot(state);
+      });
+      message(moved?`選択原子のうち${moved}個を、先頭原子に最も近い周期像に移しました。`:'選択原子はすでに先頭原子に最も近い周期像にあります。');
+    });
     $('groupConstraintOptimize').onclick=()=>M.EngineUI.prepareSingle('optimize');
     sync();
   }

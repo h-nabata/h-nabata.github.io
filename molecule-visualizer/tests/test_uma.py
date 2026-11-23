@@ -30,7 +30,8 @@ class FakeCalculator(Calculator):
 
     def __init__(self, predictor, task_name):
         super().__init__()
-        assert task_name == 'omol'
+        assert task_name in b.UMA_TASKS
+        self.task = task_name
         self.predictor = predictor
 
     def calculate(self, atoms=None, properties=('energy',), system_changes=all_changes):
@@ -38,7 +39,8 @@ class FakeCalculator(Calculator):
         self.predictor.calls.append(atoms.copy())
         # A smooth known potential in ASE units, with distinct charge/spin dependence.
         p = atoms.positions
-        self.results = {'energy':float(.5*(p*p).sum()+10*atoms.info['charge']+atoms.info['spin']), 'forces':-p.copy()}
+        conditioning = 10*atoms.info['charge']+atoms.info['spin'] if self.task == 'omol' else 0
+        self.results = {'energy':float(.5*(p*p).sum()+conditioning), 'forces':-p.copy()}
 
 
 class Adapter(unittest.TestCase):
@@ -69,7 +71,93 @@ class Adapter(unittest.TestCase):
         self.assertEqual(vars(kwargs['inference_settings']),b.uma_settings(UMA))
         self.assertFalse(kwargs['inference_settings'].tf32)
         self.assertFalse(kwargs['inference_settings'].compile)
+        self.assertFalse(kwargs['inference_settings'].auto_add_default_untrained_tasks)
         self.assertEqual(kwargs['inference_settings'].base_precision_dtype,'float64')
+
+    def test_material_heads_periodicity_cell_updates_and_pressure(self):
+        class MaterialCalculator(Calculator):
+            implemented_properties = ['energy', 'forces', 'stress']
+
+            def __init__(self, predictor, task_name):
+                super().__init__()
+                self.task = task_name
+
+            def calculate(self, atoms=None, properties=('energy',), system_changes=all_changes):
+                super().calculate(atoms, properties, system_changes)
+                # A smooth elastic solid with a known isotropic stress in eV/Å³.
+                volume = atoms.get_volume()
+                k = .0001
+                self.results = dict(energy=.5*k*(volume-200)**2, forces=np.zeros_like(atoms.positions),
+                                    stress=np.array([1.,1.,1.,0.,0.,0.])*k*(volume-200))
+
+        h = np.diag([4., 5., 11.])
+        xyz = np.array([[0., 0., 0.]])
+        source = dict(symbols=['Cu'], images=[xyz.tolist()], cell=dict(vectors=h.tolist(), pbc=[True]*3))
+        with tempfile.TemporaryDirectory() as directory, patch.object(b, 'uma_packages', return_value=(
+                self.torch, MaterialCalculator, self.pretrained, SimpleNamespace)):
+            bulk = b.validate(dict(source, umaTask='omat'), 'uma')
+            engine = b.UMAEngine(bulk, UMA, directory)
+            energy, _, stress = engine.with_cell(0, xyz, h)
+            self.assertAlmostEqual(energy,.02)
+            np.testing.assert_allclose(stress, np.eye(3)*.002)
+            stretched = h.copy()
+            stretched[2, 2] = 12.
+            e2, _, stress2 = engine.with_cell(0, xyz, stretched)
+            self.assertGreater(e2, energy)
+            np.testing.assert_allclose(stress2, np.eye(3)*.004)
+            self.assertAlmostEqual(engine(0,xyz)[0],energy)
+            self.assertEqual(engine.atoms[0].calc.task,'omat')
+            self.assertNotIn('spin',engine.atoms[0].info)
+            slab = b.validate(dict(source, umaTask='oc20', cell=dict(vectors=h.tolist(),pbc=[True,True,False])), 'uma')
+            engine.reset(slab, UMA, directory)
+            engine(0, xyz)
+            np.testing.assert_array_equal(engine.atoms[0].pbc, [True,True,False])
+            self.assertEqual(engine.atoms[0].calc.task,'oc20')
+            self.assertNotEqual(b.calculation_identity(bulk, UMA), b.calculation_identity(slab, UMA))
+            self.assertEqual(b.provenance(UMA,slab)['uma']['task'], 'oc20')
+            self.assertEqual(b.engine_method(UMA,bulk), 'UMA / uma-s-1p2p1 / omat')
+
+    def test_reject_incompatible_material_settings_and_foreign_checkpoint_fields(self):
+        full = dict(vectors=np.diag([5.,6.,12.]).tolist(),pbc=[True]*3)
+        for extra in [dict(umaTask='omat', multiplicity=3), dict(umaTask='oc20', charge=1),
+                      dict(umaTask='omat', modelF={'multiplicities':[1,3]}),
+                      dict(umaTask='oc20', solvation={'model':'model_compact','solvent':'water','device':'cpu'}),
+                      dict(umaTask='omol'), dict(umaTask='omat', cell={**full,'pbc':[True,True,False]}),
+                      dict(umaTask='omat', umaCheckpoint='/tmp/wrong.pt'),dict(umaTask='oc20', mode='md',
+                           md={'ensemble':'npt','pressureBar':1,'temperatureK':300})]:
+            with self.subTest(extra=extra), self.assertRaises(ValueError):
+                b.validate({**WATER,'cell':full,**extra}, 'uma')
+        with self.assertRaises(ValueError): b.validate({**WATER,'umaTask':'omol'},'tblite')
+        self.assertIn('npt',b.md_capabilities(UMA)['ensembles'])
+
+    def test_domain_and_version_specific_material_tasks(self):
+        source = dict(symbols=['Cu'], images=[[[1.,1.,1.]]])
+        full = dict(vectors=np.diag([5.,6.,12.]).tolist(), pbc=[True]*3)
+        slab = dict(full, pbc=[True,True,False])
+        for task in ('oc20','oc22','oc25'):
+            data = b.validate(dict(source, cell=slab, umaTask=task), 'uma')
+            self.assertEqual(b.job_config(data, UMA)['umaTask'],task)
+        omc = dict(source, cell=full, umaTask='omc', mode='optimize', cellOptimization={'mode':'full'})
+        self.assertEqual(b.validate(omc,'uma')['cellOptimization']['mode'],'full')
+        for task in ('oc22','oc25'):
+            with self.assertRaisesRegex(ValueError,'1.2'):
+                b.job_config(dict(data, umaTask=task), dict(UMA,umaModel='uma-s-1p1'))
+        for task in ('omat','omc','odac'):
+            self.assertEqual(b.validate(dict(source, cell=full, umaTask=task),'uma')['umaTask'],task)
+            with self.assertRaises(ValueError):
+                b.validate(dict(source, cell=slab, umaTask=task),'uma')
+
+    def test_local_checkpoint_load_uses_startup_path_only(self):
+        data=b.validate(WATER,'uma')
+        cfg=dict(UMA,umaCheckpoint='/local/approved.pt', umaCheckpointSHA256='a'*64)
+        self.pretrained.load_predict_unit = Mock(return_value=self.predictor)
+        b.UMAEngine(data,cfg,tempfile.gettempdir())
+        self.pretrained.get_predict_unit.assert_not_called()
+        self.assertEqual(self.pretrained.load_predict_unit.call_args.args, ('/local/approved.pt',))
+        recorded = b.provenance(cfg,data)
+        self.assertEqual(recorded['uma']['checkpointSHA256'],'a'*64)
+        self.assertNotIn('/local',json.dumps(recorded))
+        self.assertNotEqual(b.calculation_identity(data,cfg),b.calculation_identity(data,UMA))
 
     def test_min_and_afir_constraints_band_endpoints_and_vibrations(self):
         requests = [{**WATER,'mode':'optimize','optimizer':o,'fixedAtoms':[0,2]} for o in ['fire','lbfgs','bfgs']]
@@ -156,7 +244,9 @@ class Configuration(unittest.TestCase):
                 self.assertEqual(info['uma']['task'],'omol')
                 self.assertEqual(info['uma']['precision'],'float64')
                 self.assertEqual(info['anysolv']['checkpointSHA256'],{'model_compact':'f'*64})
-                self.assertFalse(info['periodic'])
+                self.assertTrue(info['periodic'])
+                self.assertEqual(info['uma']['tasks'], ['omol','oc20','omat','omc','odac','oc22','oc25'])
+                self.assertEqual(info['uma']['stressTasks'], ['omat','omc'])
                 self.assertTrue(info['fixedAtoms'])
                 self.assertIn('ts',info['modes'])
                 self.assertNotIn('test-token',json.dumps(info))

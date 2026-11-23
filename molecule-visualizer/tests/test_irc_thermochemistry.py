@@ -64,7 +64,7 @@ class IRCAndThermochemistry(unittest.TestCase):
             with self.subTest(options=options), self.assertRaises(ValueError):
                 irc_input(**options)
         for key, value in (('fixedAtoms', [0]), ('constraints', [{}]),
-                           ('internalConstraints', [{}]), ('cell', {'pbc':[True, False, False]})):
+                           ('internalConstraints', [{}]), ('irc', {'imaginaryThreshold':-1})):
             invalid = copy.deepcopy(data)
             invalid[key] = value
             with self.subTest(key=key), self.assertRaises(ValueError):

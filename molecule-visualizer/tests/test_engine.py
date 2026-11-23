@@ -109,6 +109,15 @@ class Numerics(unittest.TestCase):
 
 
 class Validation(unittest.TestCase):
+    def test_tblite_prevents_silent_third_periodic_axis(self):
+        slab = {**WATER, 'cell':{'vectors':(15*np.eye(3)).tolist(), 'pbc':[True, True, False]}}
+        with self.assertRaisesRegex(ValueError, '部分周期'):
+            b.validate(slab, 'tblite')
+        with self.assertRaisesRegex(ValueError, '部分周期'):
+            b.TBLiteEngine(slab, CONFIG, '.')
+        for mask in ([True]*3, [False]*3):
+            self.assertEqual(b.validate({**slab, 'cell':{**slab['cell'], 'pbc':mask}}, 'tblite')['cell']['pbc'], mask)
+
     def test_charge_spin_bounds_and_no_commands(self):
         self.assertEqual(b.validate(WATER,'tblite')['multiplicity'],1)
         for patch in ({'charge':0.5},{'multiplicity':2},{'images':[[[float('nan'),0,0]]]},

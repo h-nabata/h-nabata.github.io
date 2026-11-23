@@ -142,17 +142,19 @@
   function setMode(mode) {
     editMode = mode;
     moveMode = mode === "move";
-    [["toolSelect", "select"], ["toolBond", "bond"], ["toolMove", "move"], ["toolBox", "box"]].forEach(item => {
+    [["toolSelect", "select"], ["toolBond", "bond"], ["toolMove", "move"], ["toolBox", "box"], ["toolFreeze", mode === "unfreeze" ? "unfreeze" : "freeze"], ["constraintBoxAdd","freeze"], ["constraintBoxRemove","unfreeze"]].forEach(item => {
       const el = byId(item[0]);
       if (el) { el.classList.toggle("active", item[1] === mode); el.setAttribute("aria-pressed",String(item[1]===mode)); }
     });
+    const hint = byId("gestureHint");
+    if(hint){hint.dataset.original ||= hint.textContent;hint.textContent=["freeze","unfreeze"].includes(mode) ? "ドラッグで範囲を指定 · 奥の原子も対象 · 選択モードで終了" : hint.dataset.original;}
     const modeBadge = byId("modeBadge");
-    if (modeBadge) modeBadge.textContent = ({select:"選択モード",move:"原子移動モード",bond:"結合モード",box:"範囲選択モード"})[mode];
+    if (modeBadge) modeBadge.textContent = ({select:"選択モード",move:"原子移動モード",bond:"結合モード",box:"範囲選択モード",freeze:"矩形で固定",unfreeze:"矩形で解除"})[mode];
     if (modeBadge) MV.Activity?.showEditor(modeBadge.textContent);
     if (renderer && typeof renderer.setInteractionMode === "function") renderer.setInteractionMode(mode);
     const btn = byId("btnToggleMove");
     if (btn) btn.textContent = `移動モード: ${moveMode ? "ON" : "OFF"}`;
-    setStatus(({select:"クリックで選択。ドラッグで回転します。",move:"原子をドラッグして移動。ZキーでZ方向への移動を拘束できます。",bond:"原子を2つ順にクリックして結合します。",box:"ドラッグした範囲の原子を選択します。"})[mode]);
+    setStatus(({select:"クリックで選択。ドラッグで回転します。",move:"原子をドラッグして移動。ZキーでZ方向への移動を拘束できます。",bond:"原子を2つ順にクリックして結合します。",box:"ドラッグした範囲の原子を選択します。",freeze:"矩形をドラッグすると範囲内の原子を固定します。",unfreeze:"矩形をドラッグすると範囲内の原子の固定を解除します。"})[mode]);
   }
 
   function atomLabel(atom) {
@@ -682,6 +684,10 @@
   }
 
   function handleBoxSelect(atomIds) {
+    if(editMode==="freeze"||editMode==="unfreeze"){
+      MV.ConstraintUI.applyBox(atomIds,editMode==="freeze");
+      return;
+    }
     const next = new Set(state.selectedAtomIds);
     atomIds.forEach(id => next.add(id));
     const added = next.size - state.selectedAtomIds.size;
@@ -1067,6 +1073,18 @@
       });
     });
     bind('toolBox','click',()=>setMode('box'));
+    function rectangleConstraintMode(mode) {
+      if (editMode===mode) {setMode('select');return;}
+      if (MV.EngineUI?.isBusy()||MV.AFIRUI?.isBusy()) throw Error('計算中は原子固定を変更できません。');
+      MV.App.useDisplayedStructure();
+      MV.ConstraintUI.flush();
+      setMode(mode);
+      renderer.canvas.focus({preventScroll:true});
+      byId('viewer').scrollIntoView({block:'nearest'});
+    }
+    bind('constraintBoxAdd','click',()=>rectangleConstraintMode('freeze'));
+    bind('constraintBoxRemove','click',()=>rectangleConstraintMode('unfreeze'));
+    bind('toolFreeze','click',()=>editMode==='unfreeze'?setMode('select'):rectangleConstraintMode('freeze'));
     bind('btnOpen','click',()=>byId('fileInput').click());
     bind('btnDataFile','click',()=>byId('dataFile').click());
     let importRequest=0,draftRequest=0;

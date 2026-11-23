@@ -8,14 +8,14 @@
  function button(text,fn){const b=document.createElement('button');b.className='mv-btn';b.type='button';b.textContent=text;b.onclick=fn;return b;}
  function choose(){const type=$('workflowRecipe').value,recipe=recipes[type];$('workflowSteps').textContent=recipe.name;if(['cineb','lup'].includes(recipe.steps[0]))M.EngineUI.prepareMethod(recipe.steps[0]);else M.EngineUI.prepareSingle(type==='conformers'?'optimize':recipe.steps[0]);$('workflowConformers').hidden=type!=='conformers';}
  function fingerprint(s){return JSON.stringify([s.atoms,s.bonds,s.metadata]);}
- function stageConditions(){return {tsMethod:$('engineTSMethod').value,trustRadius:Number($('engineTrust').value),vibrations:{delta:Number($('engineVibrationDelta').value),nfree:Number($('engineVibrationNfree').value),imaginaryThreshold:Number($('engineVibrationThreshold').value)},irc:{direction:'both',stepSize:Number($('ircStepSize').value),relaxEndpoints:true}};}
+ function stageConditions(){return {gammaThermo:$('gammaThermoEnabled').checked?{temperatureK:Number($('gammaTemperature').value),cutoffCM:Number($('gammaCutoff').value)}:null,tsMethod:$('engineTSMethod').value,trustRadius:Number($('engineTrust').value),vibrations:{delta:Number($('engineVibrationDelta').value),nfree:Number($('engineVibrationNfree').value),imaginaryThreshold:Number($('engineVibrationThreshold').value)},irc:{direction:'both',stepSize:Number($('ircStepSize').value),relaxEndpoints:true}};}
  function stageInput(base,mode,images,conditions){
-  const keys=['symbols','atomIds','cell','charge','multiplicity','maxSteps','fmax','maxMove','umaDevice','solvation','modelF'];const data={};for(const key of keys)if(base[key]!=null)data[key]=clone(base[key]);data.mode=mode;data.cell=clone(base.cell||null);data.images=clone(images);
-  if(mode==='optimize')for(const key of ['optimizer','stagedOptimization','fixedAtoms','fixedComponents','rigidGroups','groupConstraints','internalConstraints','cellOptimization'])if(base[key]!=null)data[key]=clone(base[key]);
+  const keys=['symbols','atomIds','cell','charge','multiplicity','maxSteps','fmax','maxMove','umaDevice','umaTask','llmlip','solvation','modelF','fixedAtoms'];const data={};for(const key of keys)if(base[key]!=null)data[key]=clone(base[key]);data.mode=mode;data.cell=clone(base.cell||null);data.images=clone(images);
+  if(mode==='optimize')for(const key of ['optimizer','stagedOptimization','fixedComponents','rigidGroups','groupConstraints','internalConstraints','cellOptimization'])if(base[key]!=null)data[key]=clone(base[key]);
   if(mode==='ts'){data.optimizer=conditions.tsMethod;data.trustRadius=conditions.trustRadius;}
-  if(mode==='vibrations')data.vibrations=clone(conditions.vibrations);
+  if(mode==='vibrations'){data.vibrations=clone(conditions.vibrations);if(base.cell?.pbc.some(Boolean)&&conditions.gammaThermo)data.vibrations.harmonicThermo=clone(conditions.gammaThermo);}
   if(mode==='vibrations'&&base.thermochemistry)data.thermochemistry=clone(base.thermochemistry);
-  if(mode==='irc')data.irc=clone(conditions.irc);
+  if(mode==='irc'){data.irc=clone(conditions.irc);if(base.cell?.pbc.some(Boolean))data.irc.imaginaryThreshold=conditions.vibrations.imaginaryThreshold;}
   if(['cineb','lup'].includes(mode))for(const key of ['pathSymmetry','endpointMode','spring','climbAfter','optimizer','lup','adaptiveNEB','pathSplit','nodeIds'])if(base[key]!=null)data[key]=clone(base[key]);
   return data;
  }
@@ -31,7 +31,7 @@
    }await new Promise(resolve=>setTimeout(resolve,600));
   }
  }
- function generate(state,options){return new Promise((resolve,reject)=>{const worker=new Worker('./generation-worker.js?v=performance-41');active.worker=worker;const timeout=setTimeout(()=>{worker.terminate();reject(Error('配座生成が時間上限を超えました。'));},120000);
+ function generate(state,options){return new Promise((resolve,reject)=>{const worker=new Worker('./generation-worker.js?v=periodic-62');active.worker=worker;const timeout=setTimeout(()=>{worker.terminate();reject(Error('配座生成が時間上限を超えました。'));},120000);
   const finish=()=>{clearTimeout(timeout);worker.terminate();if(active){active.worker=null;active.rejectGeneration=null;}};
   active.rejectGeneration=error=>{finish();reject(error);};
   worker.onmessage=e=>{if(e.data.progress!=null){message('配座生成 '+Math.round(e.data.progress*100)+'%');return;}finish();if(e.data.error)reject(Error(e.data.error));else resolve(e.data.result);};worker.onerror=e=>{finish();reject(Error(e.message||'配座生成に失敗しました。'));};worker.postMessage({kind:'random',state:M.Periodic.snapshot(state),options});
@@ -49,8 +49,8 @@
    if(['reaction','string'].includes(kind)&&(!Number.isFinite(conditions.trustRadius)||conditions.trustRadius<.001||conditions.trustRadius>.2||!Number.isFinite(conditions.irc.stepSize)||conditions.irc.stepSize<.005||conditions.irc.stepSize>.5))throw Error('TSの信頼半径・IRCの刻みを確認してください。');
    if(kind!=='conformers'&&base.symbols.length>200)throw Error('振動解析を含む手順は200原子までです。');
    if(kind==='conformers'&&base.cell?.pbc.some(Boolean))throw Error('配座探索の計算手順は非周期分子用です。');
-   if(kind!=='conformers'&&base.cell?.pbc.some(Boolean))throw Error('振動・TS・IRCを含む計算手順は非周期分子用です。');
-   if(kind!=='conformers'&&(base.fixedAtoms?.length||base.fixedComponents?.length||base.rigidGroups?.length||base.groupConstraints||base.internalConstraints?.length))throw Error('振動・TS・IRCを含む手順では拘束を解除してください。');
+   const periodic=base.cell?.pbc.some(Boolean);if(kind!=='conformers'&&periodic&&!connection.info.periodicGammaPoint)throw Error('周期TS・Γ点振動解析・IRCに対応するbridge.pyへ更新してください。');
+   if(kind!=='conformers'&&((base.fixedAtoms?.length&&!periodic)||base.fixedComponents?.length||base.rigidGroups?.length||base.groupConstraints||base.internalConstraints?.length))throw Error('振動・TS・IRCを含む手順では拘束を解除してください。');
    if(['reaction','string'].includes(kind)&&!connection.info.sellaVersion)throw Error('TS・IRCにはSellaが必要です。');
    active={connection,cancelled:false,jobId:null};results=[];record={schema:'molecule-workflow/1',recipe,conditions,started:new Date().toISOString(),jobs:[],status:'running'};
    $('workflowRun').disabled=true;$('workflowCancel').disabled=false;$('workflowSaveResults').disabled=true;
@@ -79,7 +79,7 @@
        seed=1;for(let i=2;i<j.result.images.length-1;i++)if(j.result.energies[i]>j.result.energies[seed])seed=i;
       }
       images=[j.result.images[seed]];
-     }else images=[j.result.images[0]];
+     }else{images=[j.result.images[0]];if(mode==='optimize'&&j.result.cell)base.cell=clone(j.result.cell);}
     }
     if(last)M.EngineUI.showResult(last.result,last);message('計算手順が完了しました。各結果を確認して構造へ適用できます。');
    }
@@ -97,7 +97,7 @@
   function refresh(){const select=$('workflowSaved');select.replaceChildren();for(const name of Object.keys(M.App.getState().metadata.workflowRecipes||{})){const o=document.createElement('option');o.value=name;o.textContent=name;select.append(o);}}
   for(const event of ['pointerdown','focus'])$('workflowSaved').addEventListener(event,refresh);
   $('workflowSave').onclick=()=>{try{if(active)throw Error('計算手順の終了後に保存してください。');const name=$('workflowName').value.trim();if(!name)throw Error('手順名を入力してください。');const values={recipe:$('workflowRecipe').value,data:M.EngineUI.input().data,conditions:stageConditions(),count:$('workflowCount').value,seed:$('workflowSeed').value,rmsd:$('workflowRmsd').value};M.App.change('save workflow recipe',s=>{s.metadata.workflowRecipes={...s.metadata.workflowRecipes,[name]:values};});refresh();message('手順と条件をプロジェクトへ保存しました。');}catch(e){message(e.message);}};
-  $('workflowLoad').onclick=()=>{try{if(active)throw Error('計算終了後に復元してください。');const saved=M.App.getState().metadata.workflowRecipes?.[$('workflowSaved').value];if(!saved)throw Error('保存した手順を選択してください。');$('workflowRecipe').value=saved.recipe;choose();M.EngineUI.restoreInput(saved.data);if(saved.conditions){$('engineTSMethod').value=saved.conditions.tsMethod;$('engineTrust').value=saved.conditions.trustRadius;for(const [key,id] of Object.entries({delta:'engineVibrationDelta',nfree:'engineVibrationNfree',imaginaryThreshold:'engineVibrationThreshold'}))$(id).value=saved.conditions.vibrations[key];$('ircStepSize').value=saved.conditions.irc.stepSize;}$('workflowCount').value=saved.count;$('workflowSeed').value=saved.seed;$('workflowRmsd').value=saved.rmsd;message('保存した条件を復元しました。入力構造と拘束を確認してください。');}catch(e){message(e.message);}};
+  $('workflowLoad').onclick=()=>{try{if(active)throw Error('計算終了後に復元してください。');const saved=M.App.getState().metadata.workflowRecipes?.[$('workflowSaved').value];if(!saved)throw Error('保存した手順を選択してください。');$('workflowRecipe').value=saved.recipe;choose();M.EngineUI.restoreInput(saved.data);if(saved.conditions){const h=saved.conditions.gammaThermo;$('gammaThermoEnabled').checked=!!h;if(h){$('gammaTemperature').value=h.temperatureK;$('gammaCutoff').value=h.cutoffCM;}$('engineTSMethod').value=saved.conditions.tsMethod;$('engineTrust').value=saved.conditions.trustRadius;for(const [key,id] of Object.entries({delta:'engineVibrationDelta',nfree:'engineVibrationNfree',imaginaryThreshold:'engineVibrationThreshold'}))$(id).value=saved.conditions.vibrations[key];$('ircStepSize').value=saved.conditions.irc.stepSize;}$('workflowCount').value=saved.count;$('workflowSeed').value=saved.seed;$('workflowRmsd').value=saved.rmsd;message('保存した条件を復元しました。入力構造と拘束を確認してください。');}catch(e){message(e.message);}};
   $('workflowSaveResults').onclick=()=>{if(!record)return;const url=URL.createObjectURL(new Blob([JSON.stringify(record,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='molecule-workflow.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};refresh();
  }
  function showProgress(){

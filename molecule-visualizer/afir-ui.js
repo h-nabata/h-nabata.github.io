@@ -3,6 +3,7 @@
   'use strict';
   const MV=global.MoleculeVisualizer,$=id=>document.getElementById(id),app=()=>MV.App;
   let ready=false,visible=false,lastConfig='',lastAtoms='',lastLists='',result=null,job=null,pairInputs=[];
+  let nearby=null,queuePosting=false;
   const settingsFields=[['afirCharge','charge'],['afirMultiplicity','multiplicity'],['afirSteps','maxSteps'],['afirFmax','fmax'],['afirMove','maxMove']];
   const config=()=>{
     const c=app().getState().metadata.afir||MV.AFIR.defaults();
@@ -28,6 +29,40 @@
     }catch(e){$('afirPairStatus').textContent=`追加できません: ${e.message}`;message(e.message);}
   }
   function readNumber(id){const raw=String($(id).value).trim();if(raw==='')throw Error('数値を入力してください。');return Number(raw);}
+  function nearbyKey(s){
+    return JSON.stringify([s.atoms.map(a=>[a.id,a.element,a.x,a.y,a.z]),s.bonds.map(b=>[b.atom1,b.atom2,b.type]),
+      s.metadata.cell,[...s.selectedAtomIds].sort(),MV.Constraints.indices(s),$('afirNearbyRadius').value,$('afirNearbyMode').value]);
+  }
+  function clearNearby(){
+    nearby=null;$('afirNearbyResults').hidden=true;$('afirNearbyPair').replaceChildren();
+    $('afirNearbyStatus').textContent='描画上で活性部位を選び、近傍を検索してください。';
+  }
+  function findNearby(){
+    clearNearby();
+    if(dirty())throw Error('編集中の座標を先に適用してください。');
+    const s=app().useDisplayedStructure(),fixed=MV.Constraints.indices(s);
+    const pairs=MV.AFIR.nearbyPairs(s,selected(),fixed,readNumber('afirNearbyRadius'),$('afirNearbyMode').value);
+    const options=pairs.slice(0,100),label=i=>`${i+1}${s.atoms[i].element}${fixed.includes(i)?' (固定)':''}`;
+    nearby={key:nearbyKey(s),options};
+    for(const [index,pair] of options.entries()){
+      const opt=document.createElement('option');opt.value=String(index);
+      opt.textContent=`${label(pair.i)}・${label(pair.j)}　${pair.distance.toFixed(3)} Å`;
+      $('afirNearbyPair').append(opt);
+    }
+    $('afirNearbyResults').hidden=!options.length;
+    $('afirNearbyStatus').textContent=options.length?`候補 ${pairs.length} 組`+(pairs.length>100?'（近い順に100組を表示。選択範囲を絞ると対象を限定できます）':''):'指定した距離・作用に該当する可動原子を含むペアはありません。';
+    sync();
+  }
+  function nearbyConfig(s){
+    if(!nearby||nearby.key!==nearbyKey(s))throw Error('構造・選択・固定または検索条件が変わりました。近傍を検索し直してください。');
+    const pair=nearby.options[$('afirNearbyPair').selectedIndex];
+    if(!pair)throw Error('計算するペアを選んでください。');
+    const cfg=MV.AFIR.defaults();
+    for(const [id,key] of settingsFields)cfg[key]=readNumber(id);
+    cfg.fragments=[pair.i,pair.j].map(i=>({id:'f'+(i+1),label:`${i+1}${s.atoms[i].element}`,atomIds:[s.atoms[i].id]}));
+    cfg.pairs=[{a:cfg.fragments[0].id,b:cfg.fragments[1].id,mode:pair.mode,gamma:readNumber('afirNearbyGamma')}];
+    return cfg;
+  }
   function saveSettings(){
     // Read the visible values at the action boundary, including unblurred inputs.
     const c=config(),next=JSON.parse(JSON.stringify(c));for(const [id,key] of settingsFields)next[key]=readNumber(id);
@@ -61,10 +96,13 @@
   function pairHint(){$('afirPairStatus').textContent=config().fragments.length<2?'原子団を2つ以上登録してください。':'A・Bに異なる原子団を選び、「ペアを追加」を押してください。同じ原子を両方に含めることはできません。';}
   function sync(){
     MV.ConstraintUI?.sync();MV.GroupConstraintUI?.sync();
-    try{syncInternal();}catch(e){message(e.message);for(const id of ['afirRun','afirCheck','afirExport','afirAddPair','afirAddFragment'])$(id).disabled=true;}
+    try{syncInternal();}catch(e){message(e.message);for(const id of ['afirRun','afirCheck','afirExport','afirAddPair','afirAddFragment','afirNearbyFind','afirNearbyRun'])$(id).disabled=true;}
   }
   function syncInternal(){
     if(!ready)return;const s=app().getState(),c=config();$('afirSelection').textContent=`選択中: ${s.selectedAtomIds.size}原子`;
+    if(nearby&&nearby.key!==nearbyKey(s))clearNearby();
+    $('afirNearbyFind').disabled=!!job||!s.selectedAtomIds.size;
+    $('afirNearbyRun').disabled=!!job||queuePosting||!nearby?.options.length||!MV.AFIRRunner?.available();
     $('afirAddFragment').disabled=!!job||!s.selectedAtomIds.size;
     const serialized=JSON.stringify(c),atoms=JSON.stringify(s.atoms.map(a=>[a.id,a.element]));
     if(serialized!==lastConfig||atoms!==lastAtoms){
@@ -76,27 +114,38 @@
     }
     let valid=false;try{const preview=MV.AFIR.evaluate(s.atoms,c,s.metadata.cell);valid=true;$('afirPreview').textContent=preview.pairs.map((p,i)=>`ペア${i+1}: 加重距離 ${p.distanceA.toFixed(3)} Å · α ${p.alphaEV_A.toFixed(4)} eV/Å`).join('\n');}catch(e){$('afirPreview').textContent=e.message;}
     $('afirExport').disabled=!valid||!!job;$('afirCheck').disabled=!valid||!!job;$('afirAddPair').disabled=c.fragments.length<2||!!job;
-    $('afirRun').disabled=!valid||!!job||!MV.AFIRRunner?.available();$('afirCancel').disabled=!job;
-    const connection=MV.EngineUI?.getConnection?.();$('afirConnectionStatus').textContent=connection?`${connection.info.engine} / ${connection.info.method} · ${MV.EngineUI.modelSummary()}`+(MV.AFIRRunner?.available()?' · AFIR対応':' · AFIRにはサービスの更新が必要です'):'未接続（設定・人工項の確認・入力保存は利用できます）';
-    $('afirRun').textContent=!job&&MV.EngineUI?.isBusy()&&(connection?.info.jobQueue||connection?.info.queue)?'AFIR計算をキューへ追加':'AFIR探索を開始';
+    $('afirRun').disabled=!valid||!!job||queuePosting||!MV.AFIRRunner?.available();$('afirCancel').disabled=!job;
+    const connection=MV.EngineUI?.getConnection?.();$('afirConnectionStatus').textContent=connection?`${connection.info.engine} / ${connection.info.uma?.model||connection.info.method} · ${MV.EngineUI.modelSummary()}`+(MV.AFIRRunner?.available()?' · AFIR対応':' · AFIRにはサービスの更新が必要です'):'未接続（設定・人工項の確認・入力保存は利用できます）';
+    const addToQueue=!job&&MV.EngineUI?.isBusy()&&(connection?.info.jobQueue||connection?.info.queue);
+    $('afirRun').textContent=addToQueue?'AFIR計算をキューへ追加':'AFIR探索を開始';
+    $('afirNearbyRun').textContent=addToQueue?'この1組をキューへ追加':'この1組でAFIR-MINを実行';
     MV.EngineUI?.syncModelBusy?.();$('afirLive').disabled=!!job;$('afirSettings').disabled=!!job;$('afirFragmentSettings').disabled=!!job;
     if(result)$('afirApply').disabled=!!job||!!result.applied||fingerprint(s)!==result.fingerprint||dirty();
   }
   function toggle(value){if((value??!visible)&&!job){try{app().useDisplayedStructure();}catch(e){message(e.message);app().setStatus(e.message,true);return;}}visible=value??!visible;$('afirPanel').hidden=!visible;document.querySelector('.mv-inspector').classList.toggle('mv-afir-active',visible);$('btnAFIR').setAttribute('aria-pressed',String(visible));
     MV.PanelLayout?.afirVisibilityChanged(visible);
     MV.Activity?.showMethod(visible?'AFIR-MIN':MV.EngineUI?.modeLabel?.($('engineMode').value));
-    if(visible){if(!job)$('toolSelect').click();$('multiSelect').checked=true;app().getState().viewSettings.afirOverlay=true;sync();}
+    if(visible){if($('engineDialog').open)$('engineDialog').close();if(!job)$('toolSelect').click();$('multiSelect').checked=true;app().getState().viewSettings.afirOverlay=true;sync();}
     else app().getState().viewSettings.afirOverlay=false;
     MV.EnergyProfile?.restore();app().renderer().renderState(app().getState(),true);
   }
   function download(payload,name,type='application/json'){const text=typeof payload==='string'?payload:JSON.stringify(payload,null,2),url=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
-  function exportInput(s,c){const out=MV.AFIR.exportInput(s,c);out.fixedAtoms=MV.Constraints.indices(s);out.fixedAtomIds=out.fixedAtoms.map(i=>s.atoms[i].id);const group=MV.GroupConstraints?.forJob(s,{mode:'afir',symbols:s.atoms.map(a=>a.element),images:[s.atoms.map(a=>[a.x,a.y,a.z])],cell:s.metadata.cell},null,MV.Geometry.atomicMass);if(group)out.groupConstraints=group;return out;}
+  function exportInput(s,c){
+    const out=MV.AFIR.exportInput(s,c),data={mode:'afir',symbols:s.atoms.map(a=>a.element),images:[s.atoms.map(a=>[a.x,a.y,a.z])],cell:s.metadata.cell};
+    out.fixedAtoms=MV.Constraints.indices(s);out.fixedAtomIds=out.fixedAtoms.map(i=>s.atoms[i].id);
+    const group=MV.GroupConstraints?.forJob(s,data,null,MV.Geometry.atomicMass);if(group)out.groupConstraints=group;
+    MV.Optimization?.forJob(s,data,null);
+    for(const key of ['rigidGroups','rigidGroupImages','fixedComponents'])if(data[key]?.length)out[key]=data[key];
+    return out;
+  }
   function exportFiles(){if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();MV.ConstraintUI.flush();const out={...exportInput(app().getState(),config()),...MV.EngineUI.modelInput(config().multiplicity)};download(out,'afir-input.json');message('原子ID・XYZ・フラグメント・ペア・Python用設定をJSONに保存しました。');}
   function check(){saveSettings();const s=app().getState(),b=MV.AFIR.evaluate(s.atoms,config(),s.metadata.cell);message(`人工項のみ評価: ${b.energyEV.toFixed(6)} eV。物理ポテンシャルのエネルギーではありません。座標は変更していません。`);}
-  async function run(){
-    if(job)return;const foregroundElsewhere=!!MV.EngineUI?.isBusy(),connection=MV.EngineUI?.getConnection();if(foregroundElsewhere&&!connection?.info.jobQueue&&!connection?.info.queue){message('外部エンジンの計算を終了してから実行してください。');return;}let j;
-    try{if(dirty())throw Error('編集中の座標を先に適用してください。');saveSettings();MV.ConstraintUI?.flush();MV.OptimizationUI?.captureInternal();const s=app().getState();MV.AFIR.validate(s.atoms,config(),s.metadata.cell);
-      j={original:MV.Model.cloneState(s),fingerprint:fingerprint(s),config:JSON.parse(JSON.stringify(config())),cancelled:false,livePreview:$('afirLive').checked,previewCursor:0,liveEnergies:[],liveBiases:[]};
+  async function run(useNearby=false){
+    if(job||queuePosting)return;const foregroundElsewhere=!!MV.EngineUI?.isBusy(),connection=MV.EngineUI?.getConnection();if(foregroundElsewhere&&!connection?.info.jobQueue&&!connection?.info.queue){message('外部エンジンの計算を終了してから実行してください。');return;}let j;
+    try{if(dirty())throw Error('編集中の座標を先に適用してください。');if(!useNearby)saveSettings();
+      MV.ConstraintUI?.flush();MV.OptimizationUI?.captureInternal();const s=app().getState(),c=useNearby?nearbyConfig(s):config();
+      MV.AFIR.validate(s.atoms,c,s.metadata.cell);
+      j={original:MV.Model.cloneState(s),fingerprint:fingerprint(s),config:JSON.parse(JSON.stringify(c)),cancelled:false,livePreview:$('afirLive').checked,previewCursor:0,liveEnergies:[],liveBiases:[]};
       if(j.livePreview&&!MV.EngineUI.getConnection()?.info.livePreview)throw Error('ライブ表示を使うにはbridge.pyを更新・再接続してください。');
       if(foregroundElsewhere){
         if(!MV.AFIRRunner.available())throw Error('AFIRに対応したローカルサービスへ接続してください。');
@@ -104,7 +153,7 @@
         j.groupConstraints=MV.GroupConstraints?.forJob(j.original,MV.AFIRRunner.input(j),connection.info,MV.Geometry.atomicMass);
         const data=MV.AFIRRunner.input(j);MV.EngineUI.validateEngineInput(data,connection.info);MV.Constraints?.forJob(j.original,data,connection.info);
         if(j.config.maxSteps>(connection.info.maxAFIRSteps??500))throw Error('指定したAFIRステップ数に対応したサーバーへ接続してください。');
-        data.livePreview=j.livePreview;const created=await MV.EngineUI.request(connection,'/api/jobs',data);
+        queuePosting=true;sync();data.livePreview=j.livePreview;const created=await MV.EngineUI.request(connection,'/api/jobs',data);
         if(!/^[a-f0-9]{32}$/.test(created.id))throw Error('計算IDが不正です。');
         message(`AFIR計算をキューへ追加しました（${created.id.slice(0,8)}）。現在の計算の進捗表示は継続します。結果は「計算履歴・キュー」から開けます。`);MV.JobHistoryUI?.changed();return;
       }
@@ -121,7 +170,7 @@
           MV.EnergyProfile.set({title:'AFIR · 計算中（評価済みの途中結果）',kind:'afir',energies:j.liveEnergies,biasEnergies:j.liveBiases,base:()=>base,positions:i=>i===p.next-1?p.positions:null},MV.EnergyProfile.following());
         }catch(e){j.livePreview=false;MV.EnergyProfile.restore();message(e.message+' ライブ表示を停止しました。計算は継続しています。');}
       });if(r){MV.AFIRRunner.validateResult(r,j);result={...j,result:r};showResult(r);}else {MV.EnergyProfile.restore();message('計算を中止しました。入力構造は保持しています。');}
-    }catch(e){if(job===j)MV.EnergyProfile.restore();message(e.message);}finally{if(job===j){job=null;MV.EnergyProfile.finish();}sync();}
+    }catch(e){if(job===j)MV.EnergyProfile.restore();message(e.message);}finally{queuePosting=false;if(job===j){job=null;MV.EnergyProfile.finish();}sync();}
   }
   function showResult(r){
     MV.ModelFUI?.showResult(r,MV.AFIRRunner.input(result),'afirModelFResult');
@@ -140,7 +189,7 @@
   function apply(){
     if(!result||dirty()||fingerprint(app().getState())!==result.fingerprint)throw Error('計算開始後に構造・設定が変わったため適用できません。結果JSONは保存できます。');
     const j=result,r=j.result;MV.AFIRRunner.validateResult(r,j);
-    const base=MV.Periodic.snapshot(j.original);const frames=r.images.map((positions,i)=>{const s=MV.Model.createState(base);s.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=positions[k];});delete s.metadata.externalCalculation;s.metadata.afirCalculation={...(j.modelInput?.llmlip?{llmlip:r.provenance.llmlip}:{}),...(j.modelInput?.solvation?{solvation:j.modelInput.solvation,umaDevice:j.modelInput.umaDevice}:{}),fixedAtoms:r.fixedAtoms||[],engine:r.engine,method:r.method,physicalEnergyEV:r.energies[i],biasEnergyEV:r.biasEnergies[i],step:i,validation:'biased-trajectory-not-ts',atomIds:r.atomIds};s.metadata.totalCharge=j.config.charge;s.metadata.multiplicity=j.config.multiplicity;MV.ModelF?.attach(s,j.modelInput||{},r,i);MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);});
+    const base=MV.Periodic.snapshot(j.original);const frames=r.images.map((positions,i)=>{const s=MV.Model.createState(base);s.atoms.forEach((a,k)=>{[a.x,a.y,a.z]=positions[k];});delete s.metadata.externalCalculation;s.metadata.afirCalculation={...(r.provenance?.uma?{uma:r.provenance.uma}:{}),...(j.modelInput?.llmlip?{llmlip:r.provenance.llmlip}:{}),...(j.modelInput?.solvation?{solvation:j.modelInput.solvation,umaDevice:j.modelInput.umaDevice}:{}),fixedAtoms:r.fixedAtoms||[],engine:r.engine,method:r.method,physicalEnergyEV:r.energies[i],biasEnergyEV:r.biasEnergies[i],step:i,validation:'biased-trajectory-not-ts',atomIds:r.atomIds};s.metadata.totalCharge=j.config.charge;s.metadata.multiplicity=j.config.multiplicity;MV.ModelF?.attach(s,j.modelInput||{},r,i);MV.Bonding.refreshInferredBonds(s);return MV.Periodic.snapshot(s);});
     const next=MV.Model.createState(frames[0]);MV.Bonding.refreshInferredBonds(next);next.metadata.trajectory=frames;next.metadata.frameIndex=0;next.viewSettings={...j.original.viewSettings,afirOverlay:visible};j.applied=true;j.trajectory=frames;app().change('AFIR trajectory',()=>next,true);$('dataReset').click();$('afirApply').disabled=true;showProfile(r,j);MV.Studio.play();message(frames.length>1?'構造列を適用し、FRAMESで再生しています。「戻す」で入力へ戻ります。推定結合は計算結果の各フレームで判定済みです。手動指定の結合は保持します。':'評価済みの構造が1点のためアニメーションはありません。「戻す」で入力へ戻ります。');
   }
   function init(){
@@ -154,7 +203,10 @@
     for(const id of ['afirA','afirB','afirMode','afirGamma'])$(id).addEventListener('change',()=>safe(pairHint));
     $('afirGamma').addEventListener('input',()=>safe(()=>{$('afirAlpha').textContent=`α = ${MV.AFIR.alphaFromGamma(readNumber('afirGamma')).toFixed(4)} eV/Å`;}));
     for(const [id,key] of [['afirCharge','charge'],['afirMultiplicity','multiplicity'],['afirSteps','maxSteps'],['afirFmax','fmax'],['afirMove','maxMove']])$(id).addEventListener('change',()=>safe(()=>edit(c=>{c[key]=readNumber(id);})));
-    $('afirRun').addEventListener('click',run);$('afirCancel').addEventListener('click',()=>{if(job){job.cancelled=true;MV.AFIRRunner?.cancel(job).catch(e=>message(e.message));}});
+    $('afirNearbyFind').addEventListener('click',()=>safe(findNearby));
+    for(const id of ['afirNearbyRadius','afirNearbyMode'])$(id).addEventListener('input',clearNearby);
+    $('afirNearbyRun').addEventListener('click',()=>run(true));
+    $('afirRun').addEventListener('click',()=>run());$('afirCancel').addEventListener('click',()=>{if(job){job.cancelled=true;MV.AFIRRunner?.cancel(job).catch(e=>message(e.message));}});
     $('afirProfile').addEventListener('click',()=>{if(result){showProfile(result.result,result);MV.EnergyProfile.reveal();}});
     $('afirDownload').addEventListener('click',()=>{if(result)download({schema:'molecule-afir-result/1',input:{...exportInput(result.original,result.config),...result.modelInput,...(result.groupConstraints?{groupConstraints:result.groupConstraints}:{}),...(result.internalConstraints?.length?{internalConstraints:result.internalConstraints}:{})},result:result.result},'afir-result.json');});
     $('afirXYZ').addEventListener('click',()=>{if(result)exportXYZ(result.result,result);});

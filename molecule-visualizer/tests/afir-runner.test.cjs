@@ -17,6 +17,17 @@ test('result acceptance independently checks all IDs, biases, budgets and conver
  const MV=boot(),{j,r}=sample();MV.AFIRRunner.validateResult(r,j);
  for(const modify of [v=>v.atomIds.reverse(),v=>v.biasEnergies[0]++,v=>v.converged=true,v=>v.charge=1,v=>v.steps=2,v=>v.images[0][1][0]=3,v=>v.forces[0][0][0]=NaN,v=>v.units.force='hartree/bohr']){const bad=structuredClone(r);modify(bad);assert.throws(()=>MV.AFIRRunner.validateResult(bad,j));}
 });
+test('result validation recomputes the periodic pair bias across a cell boundary',()=>{
+ const MV=boot(),{j,r}=sample();
+ const cell={vectors:[[8,0,0],[1,10,0],[0,0,14]],pbc:[true,true,true]};
+ j.original.metadata.cell=cell;
+ j.original.atoms[1].x+=8;
+ r.cell=cell;r.images[0][1][0]+=8;
+ MV.AFIRRunner.validateResult(r,j);
+ const isolated=A.evaluate(j.original.atoms,j.config).energyEV;
+ const wrong={...r,biasEnergies:[isolated],biasedEnergies:[isolated]};
+ assert.throws(()=>MV.AFIRRunner.validateResult(wrong,j),/人工項/);
+});
 test('10000-step jobs retain the budget in transport and old bridges get an update instruction',async()=>{
  const MV=boot(),{j}=sample(),calls=[],link={url:'http://127.0.0.1:8766',info:{modes:['afir']}};
  MV.EngineUI.getConnection=()=>link;

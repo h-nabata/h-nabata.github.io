@@ -1,7 +1,7 @@
 /* Periodic geometry and structural formats. Cell vectors are rows, in Å. */
 (function(global){
   'use strict';
-  const MV=global.MoleculeVisualizer, IO=MV.IO, M=MV.Model;
+  const MV=global.MoleculeVisualizer, IO=MV?.IO, M=MV?.Model;
   const dot=(a,b)=>a.reduce((s,x,i)=>s+x*b[i],0);
   const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
   const xyz=a=>[a.x,a.y,a.z];
@@ -11,6 +11,27 @@
     if(Math.abs(volume)<1e-6||v.some(r=>Math.hypot(...r)>10000))throw Error('セルが特異、極端に小さい、または大きすぎます。');
     if(!Array.isArray(pbc)||pbc.length!==3||pbc.some(x=>typeof x!=='boolean'))throw Error('周期境界は3方向の真偽値で指定してください。');
     return {vectors:v.map(r=>r.slice()),pbc:pbc.slice()};
+  }
+  function sameCell(a,b){
+    if(!a||!b)return !a&&!b;
+    return a.pbc.every((flag,i)=>flag===b.pbc[i]) &&
+      a.vectors.every((row,i)=>row.every((value,j)=>Math.abs(value-b.vectors[i][j])<=1e-6));
+  }
+  // Keep fractional image shifts separate from Cartesian coordinates. Already
+  // continuous trajectories then retain their coordinates exactly.
+  function continuousImages(images,c){
+    if(!c?.pbc.some(Boolean)||images.length<2)return images;
+    const closest=prepareMinimumImage(c), result=[images[0]];
+    for(const frame of images.slice(1)){
+      const previous=result[result.length-1];
+      result.push(frame.map((position,i)=>{
+        const {shift}=closest(position.map((value,j)=>value-previous[i][j]));
+        if(shift.every(n=>n===0))return position;
+        const translation=cartesian(shift,c);
+        return position.map((value,j)=>value+translation[j]);
+      }));
+    }
+    return result;
   }
   function reciprocal(c){const v=c.vectors,d=dot(v[0],cross(v[1],v[2]));return [cross(v[1],v[2]),cross(v[2],v[0]),cross(v[0],v[1])].map(r=>r.map(x=>x/d));}
   function fractional(p,c){return reciprocal(c).map(r=>dot(r,p));}
@@ -67,10 +88,19 @@
   function supercell(s,n){
     if(!s.metadata.cell)throw Error('周期セルがありません。');if(n.length!==3||n.some(x=>!Number.isInteger(x)||x<1||x>8)||s.atoms.length*n.reduce((a,b)=>a*b,1)>2000)throw Error('反復数は各1〜8、合計2000原子までです。');
     const result=M.cloneEditableState(s),c=s.metadata.cell;result.atoms=[];result.bonds=[];
+    const repeats=[];
     for(let a=0;a<n[0];a++)for(let b=0;b<n[1];b++)for(let d=0;d<n[2];d++){
       const offset=cartesian([a,b,d],c),map=new Map();s.atoms.forEach(atom=>{const next=M.createAtom({...atom,id:undefined,x:atom.x+offset[0],y:atom.y+offset[1],z:atom.z+offset[2]});map.set(atom.id,next.id);result.atoms.push(next);});
+      repeats.push(map);
       s.bonds.filter(b=>b.source!=='inferred').forEach(b=>result.bonds.push(M.createBond({...b,id:undefined,atom1:map.get(b.atom1),atom2:map.get(b.atom2)})));
     }
+    const fixed=result.metadata.constraints;
+    if(fixed)fixed.fixedAtomIds=repeats.flatMap(map=>fixed.fixedAtomIds.map(id=>map.get(id)).filter(Boolean));
+    const opt=result.metadata.optimization;
+    if(opt?.fixedComponents)opt.fixedComponents=repeats.flatMap(map=>opt.fixedComponents.filter(row=>map.has(row.atomId)).map(row=>{
+      const atomId=map.get(row.atomId);
+      return {...row,atomId,id:'repeat-'+atomId};
+    }));
     result.metadata.cell=cell(c.vectors.map((r,i)=>r.map(x=>x*n[i])),c.pbc);delete result.metadata.trajectory;delete result.metadata.frameIndex;result.metadata.suppressedBondKeys=[];result.selectedAtomIds.clear();result.selectedBondIds.clear();MV.Bonding.refreshInferredBonds(result);return result;
   }
   const number=x=>{const n=Number(String(x).replace(/[dD]/,'e'));if(!String(x).trim()||!Number.isFinite(n))throw Error('構造データに無効な数値があります。');return n;};
@@ -87,7 +117,7 @@
     const species=fields.find(x=>x.name==='species'&&x.size===1),pos=fields.find(x=>x.name==='pos'&&x.size===3);if(!species||!pos)throw Error('Propertiesにはspeciesとposが必要です。');
     const atoms=lines.slice(2).map(line=>{const p=line.trim().split(/\s+/);if(p.length!==offset)throw Error('XYZの列数がPropertiesと一致しません。');if(!IO.ELEMENTS.includes(p[species.offset]))throw Error('無効な元素記号です。');const v=p.slice(pos.offset,pos.offset+3).map(number);return M.createAtom({element:p[species.offset],x:v[0],y:v[1],z:v[2],xyzExtras:Object.fromEntries(fields.filter(f=>f!==species&&f!==pos).map(f=>[f.name,{type:f.type,values:p.slice(f.offset,f.offset+f.size)}]))});});
     const title=comment.replace(/\b(Lattice|pbc)="[^"]*"/gi,'').replace(/\bProperties=\S+/i,'').trim();
-    const s=M.createState({atoms,metadata:{title,sourceFormat:'xyz',cell:c}});MV.Bonding.refreshInferredBonds(s);return s;
+    const s=M.createState({atoms,metadata:{title,sourceFormat:'xyz',cell:c}});MV.Bonding.refreshInferredBonds(s);return readMoveMasks(s);
   }
   function snapshot(s){const {trajectory,frameIndex,measurements,...rest}=s.metadata;const metadata=JSON.parse(JSON.stringify(rest));return {atoms:JSON.parse(JSON.stringify(s.atoms)),bonds:JSON.parse(JSON.stringify(s.bonds)),metadata};}
   // Normalize Unicode whitespace without collapsing the XYZ comment line.
@@ -122,18 +152,62 @@
     if(frames.length){first.metadata.trajectory=frames;first.metadata.frameIndex=0;}
     return first;
   }
-  function toXYZ(s){
-    const c=s.metadata.cell, extras=s.atoms[0]?.xyzExtras||{},keys=Object.keys(extras);
+  function readMoveMasks(s) {
+    const whole=[],directions=[];
+    function locked(field,lengths) {
+      if(!field)return [];
+      if(field.type!=='L'||!lengths.includes(field.values.length))throw Error('XYZの移動可否列の型または長さが不正です。');
+      return field.values.map(raw=>{
+        if(!/^(t|f|true|false|0|1)$/i.test(raw))throw Error('XYZの移動可否はTまたはFで指定してください。');
+        return /^(f|false|0)$/i.test(raw);
+      });
+    }
+    for(const atom of s.atoms){
+      const cart=locked(atom.xyzExtras?.move_mask,[1,3]),frac=locked(atom.xyzExtras?.mv_fractional_move,[3]);
+      if(cart.length&&cart.every(Boolean)||frac.length&&frac.every(Boolean))whole.push(atom.id);
+      else if(cart.some(Boolean)||frac.some(Boolean)){
+        const fractional=frac.some(Boolean);
+        if(fractional&&(!s.metadata.cell||cart.some(Boolean)))throw Error('分率座標の移動可否にはセルと一意に定まる基底が必要です。');
+        directions.push({id:'import-direction-'+atom.id,atomId:atom.id,basis:fractional?'fractional':'cartesian',axes:fractional?frac:cart,enabled:true});
+      }
+      if(atom.xyzExtras){delete atom.xyzExtras.move_mask;delete atom.xyzExtras.mv_fractional_move;}
+    }
+    if(whole.length&&!s.metadata.constraints)s.metadata.constraints={schema:'molecule-fixed-atoms/1',enabled:true,fixedAtomIds:whole};
+    if(directions.length&&!s.metadata.optimization?.fixedComponents)s.metadata.optimization={...s.metadata.optimization,fixedComponents:directions};
+    return s;
+  }
+  function moveMaskColumns(s){
+    const c=s.metadata.constraints,fixed=new Set(c?.enabled?c.fixedAtomIds:[]);
+    const components=new Map((s.metadata.optimization?.fixedComponents||[]).filter(x=>x.enabled!==false&&!fixed.has(x.atomId)).map(x=>[x.atomId,x]));
+    const columns=[];
+    for(const basis of ['cartesian','fractional']){
+      const partial=[...components.values()].some(x=>(x.basis||'cartesian')===basis);
+      if(!partial&&!(basis==='cartesian'&&fixed.size))continue;
+      const name=basis==='cartesian'?'move_mask':'mv_fractional_move',size=partial?3:1;
+      columns.push({name,type:'L',size,values(atom){
+        const row=components.get(atom.id);
+        if(basis==='cartesian'&&fixed.has(atom.id))return Array(size).fill('F');
+        if(row&&(row.basis||'cartesian')===basis)return row.axes.map(lock=>lock?'F':'T');
+        return Array(size).fill('T');
+      }});
+    }
+    return columns;
+  }
+  function toXYZ(s,includeMasks=true){
+    const c=s.metadata.cell,extras=s.atoms[0]?.xyzExtras||{},keys=Object.keys(extras);
     if(s.atoms.some(a=>JSON.stringify(Object.keys(a.xyzExtras||{}))!==JSON.stringify(keys)))throw Error('拡張XYZの追加列が原子間で一致しません。プロジェクト形式で保存してください。');
+    const columns=keys.map(name=>({name,type:extras[name].type,size:extras[name].values.length,values:a=>a.xyzExtras[name].values}));
+    if(includeMasks)columns.push(...moveMaskColumns(s));
     let title=String(s.metadata.title||'').replace(/[\r\n]/g,' ');
-    if(c)title+=` Lattice="${c.vectors.flat().map(x=>x.toFixed(10)).join(' ')}" pbc="${c.pbc.map(x=>x?'T':'F').join(' ')}"`;
-    if(c||keys.length)title+=' Properties=species:S:1:pos:R:3'+keys.map(k=>`:${k}:${extras[k].type}:${extras[k].values.length}`).join('');
-    return [s.atoms.length,title.trim(),...s.atoms.map(a=>`${a.element} ${xyz(a).map(x=>x.toFixed(10)).join(' ')}${keys.length?' '+keys.flatMap(k=>a.xyzExtras[k].values).join(' '):''}`)].join('\n')+'\n';
+    if(c)title+=` Lattice="${c.vectors.flat().map(String).join(' ')}" pbc="${c.pbc.map(x=>x?'T':'F').join(' ')}"`;
+    if(c||columns.length)title+=' Properties=species:S:1:pos:R:3'+columns.map(x=>`:${x.name}:${x.type}:${x.size}`).join('');
+    const rows=s.atoms.map(a=>[a.element,...xyz(a).map(x=>x.toFixed(10)),...columns.flatMap(col=>col.values(a))].join(' '));
+    return [s.atoms.length,title.trim(),...rows].join('\n')+'\n';
   }
   // GRRM-style editor: TV rows are cell vectors, never atoms.
   function editorText(s,header=true){
     const copy=M.cloneEditableState(s),c=copy.metadata.cell;copy.metadata.cell=null;
-    const lines=toXYZ(copy).split('\n').slice(0,-1);
+    const lines=toXYZ(copy,false).split('\n').slice(0,-1);
     if(c)lines.push(...c.vectors.map(r=>'TV '+r.map(x=>x.toFixed(10)).join(' ')));
     return (header?lines:lines.slice(2)).join('\n')+'\n';
   }
@@ -145,22 +219,69 @@
     s.atoms.forEach(a=>{[a.x,a.y,a.z]=rotate(xyz(a));});
     const v=c.vectors.map(rotate);v[0][1]=v[0][2]=v[1][2]=0;s.metadata.cell=cell(v,c.pbc);
   }
+  function applySelectiveFlags(state,basis){
+    const whole=[],directions=[];
+    for(const atom of state.atoms){
+      if(!atom.selective)continue;
+      const axes=atom.selective.map(flag=>flag.toUpperCase()==='F');
+      if(axes.every(Boolean))whole.push(atom.id);
+      else if(axes.some(Boolean))directions.push({id:'import-direction-'+atom.id,atomId:atom.id,axes,basis,enabled:true});
+    }
+    if(whole.length&&!state.metadata.constraints)
+      state.metadata.constraints={schema:'molecule-fixed-atoms/1',enabled:true,fixedAtomIds:whole};
+    if(directions.length&&!state.metadata.optimization?.fixedComponents)
+      state.metadata.optimization={...state.metadata.optimization,fixedComponents:directions};
+    return state;
+  }
+  function selectiveForPOSCAR(s) {
+    const whole=s.metadata.constraints;
+    const directions=s.metadata.optimization?.fixedComponents;
+    if(!whole&&!directions)return s.atoms.map(atom=>atom.selective);
+    const fixed=new Set(whole?.enabled?whole.fixedAtomIds:[]),components=new Map();
+    for(const item of directions||[])if(item.enabled!==false)components.set(item.atomId,item);
+    return s.atoms.map(atom=>{
+      if(fixed.has(atom.id))return ['F','F','F'];
+      const item=components.get(atom.id);
+      if(!item)return null;
+      if(item.basis==='fractional')return item.axes.map(locked=>locked?'F':'T');
+      // A VASP flag selects direct lattice directions even in Cartesian input.
+      const free=s.metadata.cell.vectors.map(vector=>item.axes.every((locked,k)=>
+        !locked||Math.abs(vector[k])<=1e-12*Math.hypot(...vector)));
+      if(free.filter(Boolean).length!==item.axes.filter(locked=>!locked).length)
+        throw Error('このCartesian方向固定は格子方向のSelective dynamicsで表せません。プロジェクト形式で保存してください。');
+      return free.map(allowed=>allowed?'T':'F');
+    });
+  }
   function parsePOSCAR(text){
     const l=String(text).replace(/\r/g,'').trim().split('\n');if(l.length<8)throw Error('POSCARが短すぎます。');const scale=number(l[1]);if(!scale)throw Error('POSCARのスケールは0以外です。');const raw=l.slice(2,5).map(r=>r.trim().split(/\s+/).map(number));let c=cell(raw);const factor=scale>0?scale:Math.cbrt(-scale/Math.abs(dot(raw[0],cross(raw[1],raw[2]))));c=cell(raw.map(r=>r.map(x=>x*factor)));
     const names=l[5].trim().split(/\s+/),counts=l[6].trim().split(/\s+/).map(number);if(names.some(x=>!IO.ELEMENTS.includes(x))||names.length!==counts.length||counts.some(n=>!Number.isInteger(n)||n<0)||counts.reduce((a,b)=>a+b,0)>2000)throw Error('元素名のあるVASP 5形式のPOSCAR（2000原子以下）が必要です。');
     let index=7,selective=/^s/i.test(l[index].trim());if(selective)index++;const mode=l[index++].trim();if(!/^[dck]/i.test(mode))throw Error('DirectまたはCartesianを指定してください。');const atoms=[];
     names.forEach((element,i)=>{for(let j=0;j<counts[i];j++){const p=(l[index++]||'').trim().split(/\s+/);let v=p.slice(0,3).map(number);if(v.length!==3)throw Error('POSCAR座標が不足しています。');v=/^d/i.test(mode)?cartesian(v,c):v.map(x=>x*factor);const flags=selective?p.slice(3,6):null;if(selective&&(flags.length!==3||flags.some(x=>! /^[TF]$/i.test(x))))throw Error('Selective dynamicsの指定が不正です。');atoms.push(M.createAtom({element,x:v[0],y:v[1],z:v[2],selective:flags}));}});
     if(l.slice(index).some(x=>x.trim()))throw Error('速度・追加ブロックを含むPOSCARには未対応です。座標ブロックのみ読み込んでください。');
-    const s=M.createState({atoms,metadata:{title:l[0],cell:c,sourceFormat:'poscar'}});MV.Bonding.refreshInferredBonds(s);return s;
+    const s=M.createState({atoms,metadata:{title:l[0],cell:c,sourceFormat:'poscar'}});MV.Bonding.refreshInferredBonds(s);return applySelectiveFlags(s,'fractional');
   }
-  function toPOSCAR(s){const c=s.metadata.cell;if(!c||!c.pbc.every(Boolean))throw Error('POSCARには3方向すべてが周期的なセルが必要です。');const elements=[...new Set(s.atoms.map(a=>a.element))],selective=s.atoms.some(a=>a.selective);return [s.metadata.title||'Structure','1.0',...c.vectors.map(r=>r.join(' ')),elements.join(' '),elements.map(e=>s.atoms.filter(a=>a.element===e).length).join(' '),...(selective?['Selective dynamics']:[]),'Direct',...elements.flatMap(e=>s.atoms.filter(a=>a.element===e).map(a=>fractional(xyz(a),c).map(x=>x.toFixed(12)).join(' ')+(selective?' '+(a.selective||['T','T','T']).join(' '):'')))].join('\n')+'\n';}
+  function toPOSCAR(s){const c=s.metadata.cell;if(!c||!c.pbc.every(Boolean))throw Error('POSCARには3方向すべてが周期的なセルが必要です。');const elements=[...new Set(s.atoms.map(a=>a.element))],flags=selectiveForPOSCAR(s),selective=flags.some(Boolean),byId=new Map(s.atoms.map((a,i)=>[a.id,flags[i]]));return [s.metadata.title||'Structure','1.0',...c.vectors.map(r=>r.join(' ')),elements.join(' '),elements.map(e=>s.atoms.filter(a=>a.element===e).length).join(' '),...(selective?['Selective dynamics']:[]),'Direct',...elements.flatMap(e=>s.atoms.filter(a=>a.element===e).map(a=>fractional(xyz(a),c).map(x=>x.toFixed(12)).join(' ')+(selective?' '+(byId.get(a.id)||['T','T','T']).join(' '):'')))].join('\n')+'\n';}
+  if(typeof module==='object'&&module.exports){
+    module.exports={cell,prepareMinimumImage,minimumImage};
+    return;
+  }
   const oldAuto=IO.parseAuto, oldProject=IO.parseProject,oldMol=IO.stateToMolText;
   IO.normalizeXYZInput=normalizeXYZInput;
   IO.parseXYZToState=parseXYZ;IO.stateToXYZText=toXYZ;
   IO.parseXYZAtoms=t=>{const s=parseXYZ(t);if(s.metadata.cell||s.metadata.trajectory)throw Error('原子団の追加は単一の非周期XYZを使用してください。');return {atoms:s.atoms,title:s.metadata.title};};
-  IO.parseProject=t=>{const s=oldProject(t);if(s.metadata.cell)s.metadata.cell=cell(s.metadata.cell.vectors,s.metadata.cell.pbc);if(s.metadata.trajectory){if(!Array.isArray(s.metadata.trajectory)||s.metadata.trajectory.length>200)throw Error('軌跡データが不正です。');s.metadata.trajectory=s.metadata.trajectory.map(f=>snapshot(IO.parseProject(JSON.stringify({format:'molecule-studio',version:1,...f,metadata:{...f.metadata,trajectory:undefined}}))));if(!Number.isInteger(s.metadata.frameIndex)||s.metadata.frameIndex<0||s.metadata.frameIndex>=s.metadata.trajectory.length)throw Error('フレーム番号が不正です。');}return s;};
+  IO.parseProject=t=>{const s=oldProject(t);
+    if(s.metadata.cell)s.metadata.cell=cell(s.metadata.cell.vectors,s.metadata.cell.pbc);
+    if(s.atoms.some(a=>a.selective))applySelectiveFlags(s,s.metadata.sourceFormat==='espresso'?'cartesian':'fractional');
+    if(s.atoms.some(a=>a.xyzExtras?.move_mask||a.xyzExtras?.mv_fractional_move))readMoveMasks(s);
+    if(s.metadata.trajectory){
+      if(!Array.isArray(s.metadata.trajectory)||s.metadata.trajectory.length>200)throw Error('軌跡データが不正です。');
+      s.metadata.trajectory=s.metadata.trajectory.map(f=>snapshot(IO.parseProject(JSON.stringify({format:'molecule-studio',version:1,...f,metadata:{...f.metadata,trajectory:undefined}}))));
+      if(!Number.isInteger(s.metadata.frameIndex)||s.metadata.frameIndex<0||s.metadata.frameIndex>=s.metadata.trajectory.length)throw Error('フレーム番号が不正です。');
+    }
+    return s;
+  };
   IO.parseAuto=t=>String(t).trim().startsWith('{')?IO.parseProject(t):/V[23]000/.test(t)?oldAuto(t):/^\s*[+-]?(?:\d+\.?\d*|\.\d+)\s*$/.test(String(t).split('\n')[1]||'')&&!/^\d+\s*$/.test(String(t).split('\n')[0])?parsePOSCAR(t):parseXYZ(t);
   IO.stateToMolText=(s,version)=>{if(s.metadata.cell)throw Error('MOLは周期セルを保持できません。拡張XYZ・POSCAR・プロジェクトで保存してください。');return oldMol(s,version);};
   IO.stateToSDFText=s=>IO.stateToMolText(s)+(s.metadata.sdfProperties?String(s.metadata.sdfProperties)+'\n\n':'')+'$$$$\n';
-  MV.Periodic={cell,fractional,cartesian,minimumImage,prepareMinimumImage,wrap,supercell,parsePOSCAR,toPOSCAR,snapshot,xyz,editorText,lowerTriangular};
-})(window);
+  MV.Periodic={applySelectiveFlags,cell,sameCell,continuousImages,fractional,cartesian,minimumImage,prepareMinimumImage,wrap,supercell,parsePOSCAR,toPOSCAR,snapshot,xyz,editorText,lowerTriangular};
+})(typeof window!=='undefined'?window:globalThis);

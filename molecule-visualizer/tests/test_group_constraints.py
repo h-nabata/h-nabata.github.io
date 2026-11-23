@@ -168,4 +168,99 @@ class GroupCenters(unittest.TestCase):
         self.assertTrue(np.isfinite(result['energies']).all())
 
 
-if __name__=='__main__':unittest.main()
+
+
+class PeriodicGroups(unittest.TestCase):
+    cell = dict(vectors=[[8.,0.,0.],[1.5,7.,0.],[0.,0.,15.]],pbc=[True,True,True])
+    coords = np.array([[.3,1.,5.],[6.5,1.,5.],[1.4,2.,5.],[5.5,3.,5.],[7.,5.,7.]])
+
+    def raw(self):
+        return dict(mode='optimize',symbols=['He']*5,images=[self.coords.tolist()],cell=self.cell,
+                    optimizer='lbfgs',maxSteps=150,maxMove=.04,fmax=.00001)
+
+    def test_periodic_com_jacobian_tracks_chosen_images(self):
+        p=self.coords.copy()
+        for mode in ('distances','relative','absolute'):
+            config=dict(mode=mode,groups=[[0,2],[1,3]],masses=[1.,2.,3.,4.,5.],imageConvention='input-cartesian')
+            c=b.validate({**self.raw(),'groupConstraints':config},'tblite')['groupConstraints']
+            def value(x):
+                return b.group_coordinates(b.group_centers(x,c),c)
+            value0=value(p)
+            # The groups are more than half a cell apart along x.
+            self.assertGreater(c['referenceCenters'][1][0]-c['referenceCenters'][0][0],4.)
+            expected=b.group_distance_jacobian(p,c) if mode=='distances' else b.group_coordinate_matrix(c)
+            numeric=np.empty_like(expected)
+            for k in range(p.size):
+                plus=p.copy();minus=p.copy();plus.flat[k]+=1.e-5;minus.flat[k]-=1.e-5
+                numeric[:,k]=(value(plus)-value(minus))/2.e-5
+            np.testing.assert_allclose(numeric,expected,atol=1.e-10)
+            force=np.random.default_rng(2).normal(size=p.shape)
+            proj=b.internal_coordinate_constraint({**self.raw(),'groupConstraints':c})
+            from ase import Atoms
+            proj.adjust_forces(Atoms('He5',positions=p),force)
+            np.testing.assert_allclose(expected@force.ravel(),0.,atol=1.e-12)
+            np.testing.assert_allclose(value(proj.project(p+0.02*force)),value0,atol=1.e-8,rtol=0)
+            with self.assertRaisesRegex(ValueError,'input-cartesian'):
+                b.validate({**self.raw(),'groupConstraints':{**config,'imageConvention':'minimum-image'}},'tblite')
+            with self.assertRaisesRegex(ValueError,'可変セル'):
+                b.validate({**self.raw(),'groupConstraints':config,'cellOptimization':{'mode':'full'}},'tblite')
+
+    def test_mixed_rigid_planar_substrate_excludes_bending_forces(self):
+        from ase import Atoms
+        raw={**self.raw(),'rigidGroups':[[0,1,2,3]],'rigidGroupImages':'input-cartesian','fixedAtoms':[4]}
+        d=b.validate(raw,'tblite')
+        atoms=Atoms('He5',positions=self.coords)
+        proj=b.internal_coordinate_constraint(d)
+        self.assertEqual(proj.get_removed_dof(atoms),9)  # Three fixed + 12-6 rigid DOF.
+        force=np.zeros((5,3));force[:4,2]=[1.,-1.,-1.,1.]
+        proj.adjust_forces(atoms,force)
+        # z forces on a plane can only translate it or rotate it about x/y.
+        xyz=self.coords[:4];matrix=np.column_stack((np.ones(4),xyz[:,:2]))
+        normal_modes=matrix@np.linalg.lstsq(matrix,force[:4,2],rcond=None)[0]
+        np.testing.assert_allclose(force[:4,2],normal_modes,atol=1.e-12)
+        q=proj.project(self.coords+np.random.default_rng(3).normal(0,.1,self.coords.shape))
+        lengths=lambda p: np.linalg.norm(p[:4,None,:]-p[None,:4,:],axis=2)
+        np.testing.assert_allclose(lengths(q),lengths(self.coords),rtol=0,atol=2e-8)
+        self.assertGreater(lengths(q)[0,1],self.cell['vectors'][0][0]/2)
+        np.testing.assert_array_equal(q[4],self.coords[4])
+        for patch in ({'rigidGroupImages':None},{'cellOptimization':{'mode':'full'}}):
+            with self.assertRaises(ValueError):
+                b.validate({**raw,**patch},'tblite')
+
+    def test_scan_rigid_images_and_shortest_scan_coordinate(self):
+        raw={**self.raw(),'mode':'scan','rigidGroups':[[0,1]],'rigidGroupImages':'input-cartesian',
+             'scan':{'coordinates':[{'type':'distance','atoms':[0,4],'start':4.1,'stop':4.4,'points':3}]}}
+        d=b.validate(raw,'tblite')
+        def harmonic(i,p):
+            delta=p-self.coords
+            return float((delta*delta).sum()/2), -delta
+        with tempfile.TemporaryDirectory() as directory:
+            result=b.calculate_job(d,harmonic,directory)
+        self.assertTrue(result['converged'])
+        self.assertEqual(result['rigidGroupImages'],'input-cartesian')
+        for pos,node in zip(result['images'],result['scan']['nodes']):
+            p=np.asarray(pos)
+            self.assertAlmostEqual(np.linalg.norm(p[1]-p[0]),6.2,places=7)
+            self.assertAlmostEqual(b.find_mic(p[4]-p[0],self.cell['vectors'],self.cell['pbc'])[1],node['targets'][0],places=7)
+
+    def test_periodic_afir_keeps_chosen_rigid_images_and_com(self):
+        raw=request()
+        p=np.asarray(raw['images'][0],float);p[1,0]+=self.cell['vectors'][0][0]
+        raw.update(images=[p.tolist()],cell=self.cell,rigidGroups=[[0,1]],rigidGroupImages='input-cartesian',
+                   groupConstraints=dict(mode='absolute',groups=[[0,1]],masses=[16.,1.,1.],imageConvention='input-cartesian'))
+        d=b.validate(raw,'tblite')
+        def harmonic(i,coords):
+            delta=coords-p
+            return float((delta*delta).sum()/2),-delta
+        with tempfile.TemporaryDirectory() as directory:
+            r=b.calculate_job(d,harmonic,directory)
+        self.assertEqual(r['steps'],raw['maxSteps'])
+        self.assertEqual(r['groupConstraints']['imageConvention'],'input-cartesian')
+        self.assertEqual(r['rigidGroupImages'],'input-cartesian')
+        for frame in r['images']:
+            self.assertAlmostEqual(np.linalg.norm(np.asarray(frame[1])-frame[0]),np.linalg.norm(p[1]-p[0]),places=7)
+            self.assertLess(b.group_constraint_error(frame,r['groupConstraints']),1e-8)
+
+
+if __name__=='__main__':
+    unittest.main()

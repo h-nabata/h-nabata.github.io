@@ -22,3 +22,14 @@ test('variable-cell trajectories export the lattice for each frame and reject mi
  const xyz=T.xyz(source,[0,1]);assert.equal((xyz.match(/Lattice=/g)||[]).length,2);assert.ok(xyz.includes('7.000000')||xyz.includes('7"')||xyz.includes('1.4 7'));
  assert.throws(()=>T.validate({...source,cells:[cell()]}));
 });
+test('direction masks from imported frames reach the job and inconsistent bases are rejected',()=>{
+ const state=()=>({atoms:[{id:'a',element:'O'},{id:'b',element:'H'}],metadata:{}});
+ const view=state(),first=state(),last=state(),data={mode:'optimize',cell:cell(),symbols:['O','H']};
+ const masks={fixedComponents:[{atom:1,axes:[true,false,false],basis:'fractional'}]};
+ O.attach(first,masks);O.attach(last,masks);
+ const info={fractionalFixedComponents:true,advancedOptimization:true};
+ O.forJob(view,data,info,[first,last]);assert.deepEqual(data.fixedComponents,masks.fixedComponents);
+ last.metadata.optimization.fixedComponents[0].basis='cartesian';
+ assert.throws(()=>O.forJob(view,data,info,[first,last]),/異なります/);
+ const band={mode:'neb',fixedAtoms:[1]};O.forJob(view,band,info,[first,last]);assert.equal(band.fixedComponents,undefined);
+});

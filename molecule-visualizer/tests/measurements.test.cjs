@@ -82,3 +82,16 @@ test('aromatic rings and rigid small rings are protected, mixed unsaturated ring
  const triangle=state([[0,0,0],[1.5,0,0],[.75,1.3,0]]);triangle.bonds=[];for(let i=0;i<3;i++)M.addOrUpdateBond(triangle,triangle.atoms[i].id,triangle.atoms[(i+1)%3].id,1,'covalent','manual');assert.equal(C.moves(triangle,R.graph(triangle)).length,0);
  const mixed=cyclohexane(false);mixed.bonds[0].order=2;const moves=C.moves(mixed,R.graph(mixed));assert.ok(moves.length>0);assert.ok(moves.every(m=>![m.a,m.b].includes(0)&&![m.a,m.b].includes(1)));
 });
+
+test('constraint and scan targets use the nearest periodic bonds and the ASE torsion sign',()=>{
+  const mv=ctx.window.MoleculeVisualizer;
+  const cell=mv.Periodic.cell([[10,0,0],[2,8,0],[0,0,18]],[true,true,false]);
+  const atom=(x,y,z)=>({x,y,z});
+  const measure=mv.Measurements.constraintValue;
+  assert.ok(Math.abs(measure('distance',[atom(.4,0,0),atom(9.6,0,0)],cell)-.8)<1e-10);
+  const atoms=[atom(0,0,0),atom(1,0,0),atom(1,1,0),atom(1,1,1)];
+  assert.equal(measure('dihedral',atoms,null),90);
+  atoms[1].x+=10;
+  atoms[2].x+=2;atoms[2].y+=8;
+  assert.ok(Math.abs(measure('dihedral',atoms,cell)-90)<1e-10);
+});

@@ -4,14 +4,16 @@
   const MV=global.MoleculeVisualizer;
   function normalize(frames){
     if(!frames.length||frames.length>100)throw Error('一括最適化は1〜100構造です。');
-    const first=frames[0],symbols=JSON.stringify(first.atoms.map(a=>a.element)),cell=JSON.stringify(first.metadata.cell||null);
+    const first=frames[0],symbols=JSON.stringify(first.atoms.map(a=>a.element)),cell=first.metadata.cell;
     if(!first.atoms.length||first.atoms.length>500)throw Error('1構造は1〜500原子にしてください。');
     return frames.map((f,i)=>{
       if(f.atoms.some(a=>[a.x,a.y,a.z].some(x=>!Number.isFinite(x)||Math.abs(x)>10000)))throw Error(`構造${i+1}: 座標は±10000 Å以内の有限な数値にしてください。`);
       if(JSON.stringify(f.atoms.map(a=>a.element))!==symbols)throw Error(`構造${i+1}: エネルギー比較には全構造で同じ原子数・元素順序が必要です。ヘッダーなしの場合は空行や -- で構造を区切ってください。`);
-      if(JSON.stringify(f.metadata.cell||null)!==cell)throw Error(`構造${i+1}: 全構造で同じセル・周期方向を使用してください。`);
+      if(!MV.Periodic.sameCell(f.metadata.cell,cell))throw Error(`構造${i+1}: 全構造で同じセル・周期方向を使用してください。`);
       const s=MV.Model.createState(MV.Periodic.snapshot(f)),ids=new Map(s.atoms.map((a,k)=>[a.id,first.atoms[k].id]));
       s.atoms.forEach((a,k)=>{a.id=first.atoms[k].id;});s.bonds.forEach(b=>{b.atom1=ids.get(b.atom1);b.atom2=ids.get(b.atom2);});
+      if(s.metadata.constraints)s.metadata.constraints.fixedAtomIds=s.metadata.constraints.fixedAtomIds.map(id=>ids.get(id));
+      for(const row of s.metadata.optimization?.fixedComponents||[])row.atomId=ids.get(row.atomId);
       s.metadata.title=s.metadata.title||`構造 ${i+1}`;
       return MV.Periodic.snapshot(s);
     });

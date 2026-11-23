@@ -43,7 +43,6 @@
     if(!states.length)throw Error('衝突を避けた構造を生成できませんでした。元構造の結合と近接原子を確認してください。');
     return {state:series(states,{kind:'random',mode,seed:Number(options.seed)>>>0,rotors:torsions.length,ringMoves:rings.length,ringAngle}),message:`${states.length}構造を生成しました（非環状回転結合 ${torsions.length}本・環の可動区間 ${rings.length}組）。`+(states.length<n?' 衝突・重複または時間上限により指定数に達しませんでした。':'')+(mode==='both'&&!torsions.length&&!rings.length?' この構造では配向のみ変化します。':'')};
   }
-  function sameCell(a,b){return !a&&!b||a&&b&&a.pbc.every((v,i)=>v===b.pbc[i])&&a.vectors.every((v,i)=>v.every((x,j)=>Math.abs(x-b.vectors[i][j])<1e-6));}
   // One tangent in Cartesian 3N space, not independent per-atom projections.
   function tangent(images,k){
     const current=images[k].flat(),previous=images[k-1].flat(),forward=images[k+1].flat().map((v,i)=>v-current[i]),backward=current.map((v,i)=>v-previous[i]);
@@ -55,14 +54,22 @@
     const n=count(options.count,2),method=options.method||'distance';if(!['linear','distance'].includes(method))throw Error('経路生成方法が不正です。');check(a,method==='linear'?2000:300);check(b,method==='linear'?2000:300);
     if(a.metadata.trajectory||b.metadata.trajectory)throw Error('各端点には1構造を入力してください。');
     if(a.atoms.length!==b.atoms.length)throw Error('始点と終点の原子数が異なります。');a.atoms.forEach((atom,i)=>{if(atom.element!==b.atoms[i].element)throw Error(`File-order ${i+1}: ${atom.element} と ${b.atoms[i].element} が一致しません。原子順序を揃えてください。`);});
-    if(!sameCell(a.metadata.cell,b.metadata.cell))throw Error('周期系の経路生成には同じ格子ベクトル・周期方向を持つ2構造が必要です。');
+    if(!P.sameCell(a.metadata.cell,b.metadata.cell))throw Error('周期系の経路生成には同じ格子ベクトル・周期方向を持つ2構造が必要です。');
     const cell=a.metadata.cell,delta=(x,y)=>cell?P.minimumImage(sub(x,y),cell).vector:sub(x,y),start=a.atoms.map(xyz),end=b.atoms.map(xyz);
     if(options.minimumImage&&cell)for(let i=0;i<end.length;i++)end[i]=add(start[i],delta(end[i],start[i]));
+    const fixedStart=MV.Constraints?.indices(a)||[],fixedEnd=MV.Constraints?.indices(b)||[];
+    if(fixedStart.length&&fixedEnd.length&&fixedStart.join(',')!==fixedEnd.join(','))
+      throw Error('始点と終点の固定原子を同じ番号で指定してください。');
+    const fixed=new Set(fixedStart.length?fixedStart:fixedEnd);
+    for(const i of fixed){
+      if(norm(sub(start[i],end[i]))>1e-6)throw Error(`固定原子${i+1}の座標が両端で異なります。周期像と固定条件を確認してください。`);
+      end[i]=start[i].slice();
+    }
     const images=Array.from({length:n},(_,k)=>start.map((v,i)=>v.map((x,j)=>x+(end[i][j]-x)*k/(n-1)))),linear=images.map(p=>p.map(v=>v.slice()));let steps=0,maxTangentialStep=0;
     if(method==='distance'&&n>2&&start.some((p,i)=>norm(sub(p,end[i]))>1e-10)){
       const pairs=[];for(let i=0;i<start.length;i++)for(let j=i+1;j<start.length;j++){const d0=norm(delta(start[i],start[j])),d1=norm(delta(end[i],end[j]));if(Math.min(d0,d1)<.05)throw Error('端点に重なった原子があります。端点の座標を修正してください。');pairs.push([i,j,d0,d1]);}
       // Break exact collision symmetry while keeping endpoints untouched.
-      const random=rng(options.seed||1),noise=start.map(()=>[random()-.5,random()-.5,random()-.5]);
+      const random=rng(options.seed||1),noise=start.map((_,i)=>fixed.has(i)?[0,0,0]:[random()-.5,random()-.5,random()-.5]);
       for(let k=1;k<n-1;k++){const jitter=perpendicular(noise,tangent(linear,k));for(let i=0;i<start.length;i++)images[k][i]=images[k][i].map((v,j)=>v+.04*Math.sin(Math.PI*k/(n-1))*jitter[i][j]);}
       const evaluate=(p,k,gradient)=>{
         const g=gradient?p.map(()=>[0,0,0]):null;let energy=0;
@@ -72,6 +79,7 @@
         }
         // Temporal smoothing couples adjacent images, with a weak Cartesian tether.
         for(let i=0;i<p.length;i++)for(let dim=0;dim<3;dim++){const v=p[i][dim],l=v-images[k-1][i][dim],r=v-images[k+1][i][dim],t=v-linear[k][i][dim];energy+=.015*(l*l+r*r)+.00005*t*t;if(g)g[i][dim]+=.03*(l+r)+.0001*t;}
+        if(g)for(const i of fixed)g[i]=[0,0,0];
         return {energy,g};
       };
       const time=Date.now();for(;steps<250&&Date.now()-time<6000;steps++){
@@ -87,6 +95,8 @@
     }
     const states=images.map((p,k)=>{
       const next=coordinates(k===n-1?b:a,p,`Path ${k+1}/${n} · ${k/(n-1)}`);
+      if(fixed.size)MV.Constraints.attach(next,[...fixed]);
+      if(cell)next.metadata.cell=P.cell(cell.vectors,cell.pbc);
       if(k>0&&k<n-1){next.bonds=[];next.metadata.manualBondIds=[];next.metadata.suppressedBondKeys=[];B.refreshInferredBonds(next);}return next;
     });
     let closest=Infinity;for(const image of images)for(let i=0;i<image.length;i++)for(let j=i+1;j<image.length;j++)closest=Math.min(closest,norm(delta(image[i],image[j])));

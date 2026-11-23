@@ -14,7 +14,8 @@
   function forJob(state,data,info,massOf){
     const c=config(state);if(!c.enabled)return null;
     if(!['optimize','afir','scan'].includes(data.mode)||data.vibrations)throw Error('原子団の重心拘束はMIN・AFIR-MIN・緩和スキャン専用です。');
-    if(data.cell?.pbc.some(Boolean))throw Error('原子団の重心拘束は非周期系専用です。');
+    const periodic=data.cell?.pbc.some(Boolean);
+    if(periodic&&info&&info.periodicGroupImages!=='input-cartesian')throw Error('周期系の原子団拘束に対応するbridge.pyに更新して再接続してください。');
     if(info&&!info.groupConstraints)throw Error('原子団の重心拘束には最新のbridge.pyが必要です。差し替えて再起動・再接続してください。');
     if(JSON.stringify(state.atoms.map(a=>a.element))!==JSON.stringify(data.symbols))throw Error('重心拘束の原子対応には全構造の元素・File-orderの一致が必要です。');
     const ids=new Map(state.atoms.map((a,i)=>[a.id,i])),used=new Set();
@@ -23,6 +24,7 @@
     if(c.mode==='distances'&&!info?.advancedOptimization&&info)throw Error('重心間距離の固定にはbridge.py 1.12.0以降が必要です。');
     if(!groups.length)throw Error('重心拘束の対象原子団を1個以上有効にしてください。');
     const wire={mode:c.mode,groups,masses:state.atoms.map(massOf)};
+    if(periodic)wire.imageConvention='input-cartesian';
     centers(data.images[0],wire);return wire;
   }
   function checkPositions(images,data){
@@ -34,7 +36,7 @@
   function validateResult(result,data){
     const c=data.groupConstraints;if(!c)return;
     const r=result?.groupConstraints;
-    if(!r||r.mode!==c.mode||JSON.stringify(r.groups)!==JSON.stringify(c.groups)||JSON.stringify(r.masses)!==JSON.stringify(c.masses))throw Error('結果の原子団・質量・重心拘束条件が入力と一致しません。');
+    if(!r||r.mode!==c.mode||r.imageConvention!==c.imageConvention||JSON.stringify(r.groups)!==JSON.stringify(c.groups)||JSON.stringify(r.masses)!==JSON.stringify(c.masses))throw Error('結果の原子団・質量・重心拘束条件が入力と一致しません。');
     if(!Array.isArray(r.referenceCenters)||r.referenceCenters.length!==c.groups.length||r.referenceCenters.some(p=>!Array.isArray(p)||p.length!==3||!p.every(Number.isFinite)))throw Error('結果の重心拘束の参照座標が不正です。');
     const reference=values(centers(data.images[0],c),c),reported=values(r.referenceCenters,c);
     if(reference.some((p,i)=>p.some((v,k)=>Math.abs(v-reported[i][k])>1e-7)))throw Error('結果の重心拘束の参照座標が入力と一致しません。');
@@ -47,5 +49,22 @@
     state.metadata.groupConstraints={schema:'molecule-group-centers/1',enabled:true,mode:wire.mode,groups:wire.groups.map((indices,i)=>({id:'center-'+(i+1),label:'原子団 '+(i+1),enabled:true,atomIds:indices.map(k=>state.atoms[k].id)}))};
     return state;
   }
-  return {defaults,config,centers,values,forJob,checkPositions,validateResult,attach};
+  function gatherSelectedImages(state,prepareMinimumImage){
+    const cell=state.metadata.cell, atoms=state.atoms.filter(a=>state.selectedAtomIds.has(a.id));
+    if(!cell?.pbc.some(Boolean)||atoms.length<2)throw Error('周期セル内の原子を2個以上選択してください。');
+    const nearest=prepareMinimumImage(cell), origin=atoms[0];
+    let moved=0;
+    for(const atom of atoms.slice(1)){
+      const {shift}=nearest([atom.x-origin.x,atom.y-origin.y,atom.z-origin.z]);
+      if(shift.every(n=>n===0))continue;
+      for(let i=0;i<3;i++){
+        atom.x+=shift[i]*cell.vectors[i][0];
+        atom.y+=shift[i]*cell.vectors[i][1];
+        atom.z+=shift[i]*cell.vectors[i][2];
+      }
+      moved++;
+    }
+    return moved;
+  }
+  return {defaults,config,centers,values,forJob,checkPositions,validateResult,attach,gatherSelectedImages};
 });

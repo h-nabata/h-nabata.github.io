@@ -76,6 +76,32 @@ class AFIR(unittest.TestCase):
                 self.assertAlmostEqual(f[i,k],numerical,delta=1e-8)
         np.testing.assert_allclose(f.sum(axis=0),0,atol=1e-12)
 
+    def test_periodic_afir_energy_force_and_frozen_geometry(self):
+        source = request()
+        source['fixedAtoms'] = [0]
+        source['cell'] = {'vectors': [[7.,0.,0.], [2.,6.,0.], [0.,0.,16.]], 'pbc': [True]*3}
+        base = np.array(source['images'][0])
+        shifted = base.copy()
+        shifted[1] += source['cell']['vectors'][1]
+        source['images'] = [shifted.tolist()]
+        data = b.validate(source, 'tblite')
+        def bias(positions):
+            return b.afir_bias(positions, data['symbols'], data['atomIds'], data['afir'], cell=data['cell'])
+        energy, force = bias(shifted)
+        reference_energy, reference_force = bias(base)
+        self.assertAlmostEqual(energy, reference_energy, places=12)
+        np.testing.assert_allclose(force, reference_force, atol=1e-12)
+        for column in range(shifted.size):
+            d = np.zeros_like(shifted)
+            d.flat[column] = 1e-5
+            value = -(bias(shifted+d)[0]-bias(shifted-d)[0])/2e-5
+            self.assertAlmostEqual(value, force.flat[column], places=7)
+        result = b.afir_relax(data, lambda _,p:(float(((p-shifted)**2).sum()), -2*(p-shifted)))
+        for i,p in enumerate(np.array(result['images'])):
+            np.testing.assert_array_equal(p[0],base[0])
+            self.assertAlmostEqual(bias(p)[0],result['biasEnergies'][i],places=12)
+        np.testing.assert_allclose(np.array(result['energies'])+result['biasEnergies'],result['biasedEnergies'])
+
     def test_fire_separate_physical_bias_and_step_budget(self):
         data=b.validate(request(),'gxtb');initial=np.array(data['images'][0]);checkpoints=[]
         def physical(i,p):return float(((p-initial)**2).sum()),-2*(p-initial)

@@ -129,5 +129,12 @@
     }
     c.nextId=Math.max(1,...c.items.map(m=>Number(m.id.slice(1))+1));return state;
   };
-  MV.Measurements={TYPES,RADII,MAX_PINS,config,selectedIndices,selectedType,descriptor,bind,resolve,evaluate,pin,visible,transferSelection,csv,enclosingCone};
+  // The coordinate editor historically uses the opposite signed torsion
+  // convention. Constraint targets must use ASE's right-handed b->c axis.
+  function constraintValue(type,atoms,cell){
+    const p=unwrap(atoms,cell?.pbc.some(Boolean)?cell:null,type);
+    if(type==='dihedral')return -G.dihedral(...p);
+    return type==='angle'?G.angle(...p):G.distance(...p);
+  }
+  MV.Measurements={constraintValue,TYPES,RADII,MAX_PINS,config,selectedIndices,selectedType,descriptor,bind,resolve,evaluate,pin,visible,transferSelection,csv,enclosingCone};
 })(window);

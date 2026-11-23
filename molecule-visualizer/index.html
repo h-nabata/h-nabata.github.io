@@ -8,31 +8,31 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./geometry.js?v=group-centers-44"></script>
 <script defer src="./io.js?v=16"></script>
 <script defer src="./molfile.js?v=16"></script>
-<script defer src="./periodic.js?v=polymer-61"></script>
+<script defer src="./periodic.js?v=periodic-62"></script>
 <script defer src="./formats.js?v=16"></script>
-<script defer src="./structure-import.js?v=imports-42"></script>
-<script defer src="./measurements.js?v=efficiency-50"></script>
+<script defer src="./structure-import.js?v=periodic-62"></script>
+<script defer src="./measurements.js?v=periodic-62"></script>
 <script defer src="./history.js?v=model-f-48"></script>
 <script defer src="./fragment-clipboard.js?v=clipboard-36"></script>
-<script defer src="./constraints.js?v=research-38"></script>
-<script defer src="./constraints-ui.js?v=studio-54"></script>
-<script defer src="./group-constraints.js?v=model-f-48"></script>
-<script defer src="./group-constraints-ui.js?v=studio-54"></script>
-<script defer src="./optimization.js?v=ensembles-59"></script>
-<script defer src="./optimization-ui.js?v=ensembles-59"></script>
-<script defer src="./workflow-ui.js?v=path-symmetry-55"></script>
+<script defer src="./constraints.js?v=periodic-62"></script>
+<script defer src="./constraints-ui.js?v=periodic-62"></script>
+<script defer src="./group-constraints.js?v=periodic-62"></script>
+<script defer src="./group-constraints-ui.js?v=periodic-62"></script>
+<script defer src="./optimization.js?v=periodic-62"></script>
+<script defer src="./optimization-ui.js?v=periodic-62"></script>
+<script defer src="./workflow-ui.js?v=periodic-62"></script>
 <link rel="stylesheet" href="./optimization.css?v=model-f-48">
-<script defer src="./renderer3dmol.js?v=polymer-61"></script>
-<script defer src="./ui.js?v=ensembles-59"></script>
+<script defer src="./renderer3dmol.js?v=periodic-62"></script>
+<script defer src="./ui.js?v=periodic-62"></script>
 <script defer src="./studio.js?v=ensembles-59"></script>
 <script defer src="./advanced.js?v=dsafir-51"></script>
-<script defer src="./generator-ui.js?v=dsafir-51"></script>
+<script defer src="./generator-ui.js?v=periodic-62"></script>
 <script defer src="./trajectory.js?v=ensembles-59"></script>
-<script defer src="./trajectory-ui.js?v=ensembles-59"></script>
+<script defer src="./trajectory-ui.js?v=periodic-62"></script>
 <script defer src="./energy-profile.js?v=ensembles-59"></script>
-<script defer src="./batch.js?v=batch-33"></script>
+<script defer src="./batch.js?v=periodic-62"></script>
 <script defer src="./batch-ui.js?v=studio-54"></script>
-<script defer src="./research-ui.js?v=path-optimizer-57"></script>
+<script defer src="./research-ui.js?v=periodic-62"></script>
 <link rel="stylesheet" href="./job-history.css?v=studio-54">
 <script defer src="./job-history-ui.js?v=ensembles-59"></script>
 <script defer src="./structure-analysis.js?v=dsafir-52"></script>
@@ -46,14 +46,14 @@ title: 分子構造エディタ | Molecule Studio
 <script defer src="./activity-ui.js?v=ensembles-59"></script>
 <link rel="stylesheet" href="./calculation-panel.css?v=ensembles-59">
 <script defer src="./calculation-panel.js?v=ensembles-59"></script>
-<script defer src="./md-ui.js?v=ensembles-60"></script>
-<script defer src="./engine-ui.js?v=polymer-61"></script>
-<script defer src="./vibration-ui.js?v=constraints-34"></script>
-<script defer src="./path-refinement.js?v=path-optimizer-57"></script>
-<script defer src="./afir.js?v=17"></script>
-<script defer src="./afir-search.js?v=16"></script>
-<script defer src="./afir-runner.js?v=llmlip-49"></script>
-<script defer src="./afir-ui.js?v=studio-54"></script>
+<script defer src="./md-ui.js?v=periodic-62"></script>
+<script defer src="./engine-ui.js?v=periodic-62"></script>
+<script defer src="./vibration-ui.js?v=periodic-62"></script>
+<script defer src="./path-refinement.js?v=periodic-62"></script>
+<script defer src="./afir.js?v=periodic-62"></script>
+<script defer src="./afir-search.js?v=periodic-62"></script>
+<script defer src="./afir-runner.js?v=periodic-62"></script>
+<script defer src="./afir-ui.js?v=periodic-62"></script>
 <script defer src="./measurement-ui.js?v=constraints-34"></script>
 <script defer src="./panel-layout.js?v=studio-54"></script>
 <link rel="stylesheet" href="./workspace.css?v=studio-54">
@@ -177,7 +177,7 @@ title: 分子構造エディタ | Molecule Studio
           <button class="mv-btn" id="btnFullScreen">全画面</button>
         </div>
       </div>
-      <div class="mv-stage-toolbar"><div class="mv-toolbar" role="toolbar" aria-label="操作モード"><button class="mv-tool active" id="toolSelect" title="クリックで選択、ドラッグで回転 (V)">選択</button><button class="mv-tool" id="toolMove" title="選択原子をドラッグして移動 (M)">原子移動</button><button class="mv-tool" id="toolBond" title="原子を2つ順にクリックして結合（B: 選択内を削除、Shift+B: 選択内に生成）">結合</button><button class="mv-tool" id="toolBox" title="ドラッグした範囲の原子を現在の選択へ追加">範囲選択</button></div><details class="mv-popover" id="selectionTools"><summary>原子団のコピー</summary><div class="mv-popover-body"><div class="mv-clipboard-actions" role="group" aria-label="選択原子団のコピーと貼り付け"><button class="mv-btn" id="btnCopySelection" title="選択した原子と内部の結合をコピー (Ctrl / ⌘ C)" disabled>原子団をコピー</button><button class="mv-btn" id="btnPasteSelection" title="原子団を追加し、選択して移動 (Ctrl / ⌘ V)">原子団を貼付</button></div></div></details><div class="mv-history-actions"><button class="mv-btn" id="btnUndo" title="元に戻す (Ctrl / ⌘ Z)">↶ 戻す</button><button class="mv-btn" id="btnRedo" title="やり直す (Ctrl / ⌘ Shift Z)">↷ やり直す</button></div></div>
+      <div class="mv-stage-toolbar"><div class="mv-toolbar" role="toolbar" aria-label="操作モード"><button class="mv-tool active" id="toolSelect" title="クリックで選択、ドラッグで回転 (V)">選択</button><button class="mv-tool" id="toolMove" title="選択原子をドラッグして移動 (M)">原子移動</button><button class="mv-tool" id="toolBond" title="原子を2つ順にクリックして結合（B: 選択内を削除、Shift+B: 選択内に生成）">結合</button><button class="mv-tool" id="toolBox" title="ドラッグした範囲の原子を現在の選択へ追加">範囲選択</button><button class="mv-tool" id="toolFreeze" aria-pressed="false" title="画面に矩形を描いて範囲内の原子を固定。再度押すと終了">矩形で固定</button></div><details class="mv-popover" id="selectionTools"><summary>原子団のコピー</summary><div class="mv-popover-body"><div class="mv-clipboard-actions" role="group" aria-label="選択原子団のコピーと貼り付け"><button class="mv-btn" id="btnCopySelection" title="選択した原子と内部の結合をコピー (Ctrl / ⌘ C)" disabled>原子団をコピー</button><button class="mv-btn" id="btnPasteSelection" title="原子団を追加し、選択して移動 (Ctrl / ⌘ V)">原子団を貼付</button></div></div></details><div class="mv-history-actions"><button class="mv-btn" id="btnUndo" title="元に戻す (Ctrl / ⌘ Z)">↶ 戻す</button><button class="mv-btn" id="btnRedo" title="やり直す (Ctrl / ⌘ Shift Z)">↷ やり直す</button></div></div>
       <div class="mv-viewer-shell"><div id="viewer"></div><p id="profilePreview" class="mv-profile-preview" hidden></p><div class="mv-viewer-bottom"><span id="modeBadge">選択モード</span><span id="gestureHint">左ドラッグ：表示回転 · 右：範囲選択 · Alt＋左/右：原子団移動/回転</span></div><div id="viewerResizeHandle" class="mv-viewer-resize" role="separator" tabindex="0" aria-orientation="horizontal" aria-label="描画エリアの高さを変更" aria-controls="viewer" aria-valuemin="160" aria-valuemax="1600" title="上下にドラッグして高さを変更。上下キーでも調整できます。Enterで自動に戻します。"><span aria-hidden="true">↕ ドラッグで高さを変更</span></div></div>
       <div class="mv-trajectory"><span class="mv-eyebrow">構造列</span><button class="mv-btn" id="framePrev" aria-label="前のフレーム">‹</button><button class="mv-btn" id="framePlay">▶ 再生</button><input id="frameRange" type="range" min="0" max="0" value="0" aria-label="フレーム"><button class="mv-btn" id="frameNext" aria-label="次のフレーム">›</button><output id="frameLabel">1 / 1</output></div>
       <p id="mdFrameReadout" class="mv-small" hidden></p>
@@ -195,7 +195,7 @@ title: 分子構造エディタ | Molecule Studio
         <p id="vibrationSummary" class="mv-small"></p>
         <div class="mv-row"><label for="vibrationVectorScale">矢印の最大長（表示のみ）</label><input id="vibrationVectorScale" type="range" min="0.1" max="5" step="0.1" value="1"><output id="vibrationVectorValue" for="vibrationVectorScale">1.0 Å</output></div>
         <div class="mv-row"><label>動画・構造変位の最大振幅 (Å)<input id="vibrationAmplitude" class="mv-num" type="number" min="0" max="1" step="0.01" value="0.15"></label><button class="mv-btn" id="vibrationPlay">▶ モードをアニメーション</button><button class="mv-btn" id="vibrationRestore">プレビューを終了</button></div>
-        <details class="mv-help"><summary>詳しい説明</summary><p class="mv-small">矢印の長さは各原子の相対変位に比例し、IR強度を表すものではありません。行を選ぶと原子の変位方向を矢印で表示します。赤字・赤矢印は虚振動です。全3Nモードを表示し、並進・回転の射影除去はしていません。低振動数は数値誤差や残留力の影響を受けます。動画の速さ・振幅は説明用で、虚振動の時間発展を表すものではありません。</p></details>
+        <details class="mv-help"><summary>詳しい説明</summary><p class="mv-small">矢印の長さは各原子の相対変位に比例し、IR強度を表すものではありません。行を選ぶと原子の変位方向を矢印で表示します。赤字・赤矢印は虚振動です。周期セルでは可動原子のΓ点振動を表示します。全原子が可動なら剛体並進3方向を除きます。非周期分子では全3Nモードを表示します。低振動数は数値誤差や残留力の影響を受けます。動画の速さ・振幅は説明用で、虚振動の時間発展を表すものではありません。</p></details>
         <div class="mv-vibration-scroll"><table><thead><tr><th>モード</th><th>振動数 (cm⁻¹)</th><th>hν (meV)</th></tr></thead><tbody id="vibrationRows"></tbody></table></div>
         <div class="mv-row"><button class="mv-btn" id="vibrationMinus">−方向へ変位して入力に適用</button><button class="mv-btn" id="vibrationPlus">＋方向へ変位して入力に適用</button><button class="mv-btn" id="vibrationCSV">振動数表をCSV保存</button></div>
         <p id="vibrationMessage" class="mv-small" role="status"></p>
@@ -230,7 +230,8 @@ title: 分子構造エディタ | Molecule Studio
       <section class="mv-inspector-pane" id="inspector-constraints" role="tabpanel" aria-labelledby="inspector-tab-constraints" hidden>
       <details id="constraintPanel" class="mv-panel mv-constraints"><summary>原子固定 <span id="constraintSummary">オフ</span></summary>
           <div id="constraintFields">
-            <p class="mv-small">MIN・AFIR-MIN用。指定原子のX・Y・Z座標を計算開始時の位置に固定します。</p>
+            <p class="mv-small">表面を横から表示して下層を囲むと、その原子を固定できます。画面の奥で重なった原子も対象です。</p>
+            <div class="mv-row" role="group" aria-label="矩形で固定範囲を編集"><button class="mv-btn" id="constraintBoxAdd" aria-pressed="false">矩形で固定</button><button class="mv-btn" id="constraintBoxRemove" aria-pressed="false">矩形で解除</button></div>
             <label class="mv-check"><input id="constraintEnabled" type="checkbox">座標固定を有効にする</label>
             <div class="mv-row"><label for="constraintAtoms">原子番号（File-order）</label><input id="constraintAtoms" type="text" placeholder="1, 4-8" autocomplete="off"><button class="mv-btn" id="constraintApply">番号を適用</button></div>
             <div class="mv-row"><span id="constraintSelection"></span><button class="mv-btn" id="constraintAddSelected">選択原子を追加</button><button class="mv-btn" id="constraintRemoveSelected">選択原子を除外</button></div>
@@ -238,7 +239,7 @@ title: 分子構造エディタ | Molecule Studio
             <div class="mv-row"><button class="mv-btn" id="constraintSelect">固定原子を選択</button><button class="mv-btn" id="constraintClear">すべて解除</button></div>
           </div>
           <p class="mv-small" id="constraintStatus" role="status"></p>
-          <details class="mv-help"><summary>適用範囲</summary><p class="mv-small">収束判定には可動原子の有効力を使います。一括最適化では、現在の構造と同じ元素・原子順序の各入力に同じ番号を適用し、それぞれの初期位置に固定します。MIN・AFIR-MIN・緩和スキャンでは距離・結合角・二面角の拘束と併用できます。内部座標の拘束は「計算設定」で通常の単一構造最適化を選び、「距離・角度・二面角の拘束」から設定します。TS・IRC・経路計算・振動解析との併用は対象外です。原子固定条件はプロジェクトと結果JSONに保存されます。</p></details>
+          <details class="mv-help"><summary>適用範囲</summary><p class="mv-small">収束判定には可動原子の有効力を使います。一括最適化では、現在の構造と同じ元素・原子順序の各入力に同じ番号を適用し、それぞれの初期位置に固定します。MIN・AFIR-MIN・緩和スキャンでは距離・結合角・二面角の拘束と併用できます。内部座標の拘束は「計算設定」で通常の単一構造最適化を選び、「距離・角度・二面角の拘束」から設定します。固定セルの経路緩和では全像の同じ基板原子を固定します。原子固定に対応する計算は接続中のブリッジに従います。原子固定条件はプロジェクトと結果JSONに保存されます。</p></details>
         </details>
         <details id="groupConstraintPanel" class="mv-panel mv-constraints"><summary>原子団の重心拘束 <span id="groupConstraintSummary">オフ</span></summary>
           <div id="groupConstraintFields">
@@ -246,6 +247,7 @@ title: 分子構造エディタ | Molecule Studio
             <label class="mv-check"><input id="groupConstraintEnabled" type="checkbox">重心拘束を有効にする</label>
             <label>固定する位置<select id="groupConstraintMode"><option value="relative">原子団間の相対位置（全体の並進は自由）</option><option value="absolute">各原子団の重心を計算開始位置に固定</option></select></label>
             <p class="mv-small">相対位置は重心間のX・Y・Z差を保ちます。対象が1原子団の場合は、その重心を開始位置に固定します。</p>
+            <details class="mv-help" id="groupImageSettings" hidden><summary>重心・剛体に使用する周期像</summary><p class="mv-small">入力座標にある周期像を使用します。境界で分かれた小分子は、分子全体を選択して近い周期像にまとめてから拘束を設定してください。各原子を選択中で最も番号の小さい原子に近づけます。セルをまたいで長く延びた原子団は、必要な像の座標を直接入力してください。</p><button class="mv-btn" id="groupGatherImages" type="button">選択原子を近い周期像にまとめる</button></details>
             <div class="mv-row"><button class="mv-btn" id="groupConstraintAddSelected">選択を1原子団として追加</button></div>
             <div class="mv-row"><label for="groupConstraintAFIR">AFIR原子団</label><select id="groupConstraintAFIR"></select><button class="mv-btn" id="groupConstraintAddAFIR">重心拘束へ追加</button></div>
             <div id="groupConstraintRows"></div>
@@ -280,6 +282,18 @@ title: 分子構造エディタ | Molecule Studio
           <div class="mv-afir-pair"><label>最大ステップ<input id="afirSteps" type="number" min="1" max="10000" step="1" value="10000"></label><label>収束 (eV/Å)<input id="afirFmax" type="number" min="0" max="10" step="0.01" value="0.05" title="0.00001〜10。上下ボタンは0.01刻み。より小さな値は直接入力できます。"></label></div>
           <label>1ステップの最大変位 (Å)<input id="afirMove" type="number" min="0" max="0.2" step="0.01" value="0.04" title="0.001〜0.2。上下ボタンは0.01刻み。"></label>
         </fieldset>
+        <details id="afirNearby" class="mv-help">
+          <summary>選択した活性部位から近接ペアを探す</summary>
+          <p class="mv-afir-note">描画上で吸着種や反応点を選択します。選択原子を含むペアを距離順に表示します。周期境界を越える相手も対象です。</p>
+          <div class="mv-afir-pair"><label>候補の作用<select id="afirNearbyMode"><option value="attract">接近 · 結合線のないペア</option><option value="repel">解離 · 結合・配位線のあるペア</option></select></label><label>探索半径 (Å)<input id="afirNearbyRadius" type="number" min="0.1" max="10" step="0.1" value="4"></label></div>
+          <button type="button" class="mv-btn" id="afirNearbyFind">選択原子の近傍を検索</button>
+          <p id="afirNearbyStatus" class="mv-afir-note" role="status">描画上で活性部位を選び、近傍を検索してください。</p>
+          <div id="afirNearbyResults" hidden>
+            <div class="mv-afir-pair"><label>原子ペア<select id="afirNearbyPair"></select></label><label>γ (kJ/mol)<input id="afirNearbyGamma" type="number" min="0" max="1000" step="1" value="100"></label></div>
+            <p class="mv-afir-note">上の探索条件と固定原子を使い、この1組だけに人工力を加えます。手動登録した原子団とペアは保持します。</p>
+            <button type="button" class="mv-btn" id="afirNearbyRun" disabled>この1組でAFIR-MINを実行</button>
+          </div>
+        </details>
         <p id="afirPreview" class="mv-afir-note"></p>
         <div class="mv-row"><button class="mv-btn" id="afirCheck" disabled>人工項を確認</button><button class="mv-btn" id="afirExport" disabled>入力JSONを保存</button><button class="mv-btn" id="afirReset">AFIR設定を初期化</button></div>
         <div id="afirEngine"><button class="mv-btn" id="afirConnect">このPCの計算エンジンに接続</button><p id="afirConnectionStatus" class="mv-afir-note">未接続</p><p class="mv-afir-note">NEBと同じ接続を使用します。探索時だけ、このPCのlocalhostへ座標・電荷・スピンを渡します。外部サーバーへは送信しません。<a href="./local-engine/README.md" target="_blank" rel="noopener">導入手順</a></p></div>
@@ -547,7 +561,7 @@ H 1.0 0 0
       <div><label for="pathStart">始点</label><textarea id="pathStart" rows="10" spellcheck="false"></textarea><div class="mv-row"><button class="mv-btn" id="pathStartCurrent">現在の構造を使用</button><label class="mv-small">ファイル<input id="pathStartFile" type="file"></label></div></div>
       <div><label for="pathEnd">終点</label><textarea id="pathEnd" rows="10" spellcheck="false"></textarea><div class="mv-row"><button class="mv-btn" id="pathEndCurrent">現在の構造を使用</button><label class="mv-small">ファイル<input id="pathEndFile" type="file"></label></div></div>
     </div>
-    <label for="pathMethod">生成方法</label><select id="pathMethod"><option value="distance">距離補間＋直交方向の衝突緩和（最大300原子）</option><option value="linear">Cartesian直線補間（最大2000原子）</option></select><label class="mv-check"><input id="pathMinimumImage" type="checkbox">周期系で終点の最小像を使う（終点は周期等価な座標へ移動）</label>
+    <label for="pathMethod">生成方法</label><select id="pathMethod"><option value="distance">距離補間＋直交方向の衝突緩和（最大300原子）</option><option value="linear">Cartesian直線補間（最大2000原子）</option></select><label class="mv-check"><input id="pathMinimumImage" type="checkbox" checked>周期系で終点の最小像を使う（終点は周期等価な座標へ移動）</label>
     <details class="mv-help"><summary>詳しい説明</summary><p class="mv-small">既定では入力した端点座標を保持します。周期系は両端点のセルが同一であることが必要です。衝突緩和は3N次元の局所接線に直交する方向のみです。生成後は「計算設定」で実際のエネルギー・力を使って調整できます。生成列はエネルギー未評価のinitial guessで、最小エネルギー経路や遷移状態を保証しません。結合の生成・切断を含む経路は原子衝突と原子対応を確認してください。</p></details>
   </section>
   <p class="mv-small">生成後は描画領域下のFRAMESで順に確認できます。保存・書き出しの「全フレームXYZ」で一括保存できます。未適用の座標編集は先に適用してください。</p>
@@ -624,12 +638,13 @@ H 1.0 0 0
     <h3 id="dsafirTitle">反応物と生成物</h3>
     <div class="mv-grid"><label>反応物 A<select id="dsafirStart"></select></label><label>生成物 B<select id="dsafirEnd"></select></label></div>
     <p class="mv-small" id="dsafirEndpointHelp"></p>
-    <p class="mv-small"><a href="./examples/ammonia-inversion.xyz" download>入力例をダウンロード（NH₃の反転・XYZ）</a> · <a href="./examples/malonaldehyde-proton-transfer.xyz" download>マロンアルデヒドのプロトン移動（XYZ）</a> · <a href="./DS-AFIR.md" target="_blank" rel="noopener">計算条件と接続判定</a></p>
+    <label id="dsafirImageLabel" hidden>周期セル内の生成物の位置<select id="dsafirImage"><option value="nearest">各原子を反応物に最も近い周期像へ移す</option><option value="input">入力座標で指定した移動方向・周期像を使う</option></select></label>
+    <p class="mv-small"><a href="./examples/ammonia-inversion.xyz" download>入力例をダウンロード（NH₃の反転・XYZ）</a> · <a href="./examples/malonaldehyde-proton-transfer.xyz" download>マロンアルデヒドのプロトン移動（XYZ）</a> · <a href="./examples/graphene-li-dsafir.xyz" download>グラフェン上のLi拡散（3軸周期・電荷0・多重度2）</a> · <a href="./DS-AFIR.md" target="_blank" rel="noopener">計算条件と接続判定</a></p>
     <details class="mv-help"><summary>DS-AFIRの探索条件</summary><div class="mv-grid">
       <label>経路方向の駆動力 δ (eV/Å)<input id="dsafirDelta" type="number" min="0.0001" max="50" step="any" value="1.5"></label>
       <label>全座標のステップ幅 (Å)<input id="dsafirStep" type="number" min="0.001" max="0.2" step="any" value="0.10"></label>
       <label>両側の接続距離 (Å)<input id="dsafirThreshold" type="number" min="0.001" max="1" step="any" value="0.12"></label>
-    </div><p class="mv-small">接続距離は全原子のCartesian座標の差のノルムです。生成物を反応物に重ね合わせた後、エネルギーの低い側から一歩ずつ探索します。</p></details>
+    </div><p class="mv-small">接続距離は可動原子のCartesian座標の差のノルムです。周期系では格子の向きを保ちます。固定原子を含まない非周期分子では、両端点を重ね合わせてから探索します。</p></details>
   </section>
   <section id="batchInput" hidden>
     <label>入力元<select id="batchSource"><option value="text">テキスト / XYZファイル</option><option value="frames">読み込み済みの全フレーム</option></select></label>
@@ -647,12 +662,17 @@ H -0.3 1.0 0"></textarea>
   <section id="engineIRCSettings" hidden><h3>IRC</h3><div class="mv-grid">
     <label>方向<select id="ircDirection"><option value="both">両方向</option><option value="forward">正方向</option><option value="reverse">逆方向</option></select></label>
     <label>質量重み付きステップ幅 (Å√amu)<input id="ircStepSize" type="number" min=".005" max=".5" step="0.01" value="0.1"></label>
+    <label id="ircGammaOptions" hidden>Γ点の虚振動判定 (cm⁻¹)<input id="ircGammaThreshold" type="number" min="0" max="1000" value="20" step="1"></label>
     <label class="mv-check"><input id="ircRelaxEndpoints" type="checkbox" checked>到達した両端をMINで緩和する</label>
-    </div><p class="mv-small">現在の構造をTS候補として使用します。最大ステップ数は各方向に適用されます。入力の力が収束閾値以下であることが必要です。正逆の符号自体に反応方向の意味はありません。上の最大原子変位は端点MINに適用します。</p></section>
+    </div><p class="mv-small">現在の構造をTS候補として使用します。最大ステップ数は各方向に適用されます。入力の力が収束閾値以下であることが必要です。周期系は開始時と収束端点で可動原子のΓ点Hessianを計算します。設定閾値を超える虚振動がちょうど1本の構造から追跡します。正逆の符号自体に反応方向の意味はありません。上の最大原子変位は端点MINに適用します。 <a href="./examples/graphene-li-surface-ts.vasp" download>入力例：グラフェン上のLiのTS（POSCAR、電荷0、多重度2、C固定）</a></p></section>
   <section id="engineScanSettings" hidden><h3>緩和スキャン</h3><div id="scanCoordinateRows"></div>
     <button class="mv-btn" id="scanCoordinateAdd" type="button">2本目の座標を追加</button>
     <label class="mv-check"><input id="scanStopOnFailure" type="checkbox" checked>未収束の点が出たら停止する</label>
     <p class="mv-small">距離・結合角・二面角から1本または2本を選び、開始値・終了値・両端を含む点数を指定します。各点では指定座標を固定し、残りの自由度を最適化します。1軸2〜100点、合計400点まで。二面角で180度をまたぐ例は170→190度（190度と−170度は同じ二面角）です。最大ステップ数は各点に適用されます。同じ座標を上の拘束欄にも重複して指定しないでください。</p></section>
+  <section id="engineImageSettings" hidden>
+    <label class="mv-check"><input id="enginePathNearest" type="checkbox" checked>隣接ノードの最小像を使って経路を連続にする</label>
+    <p class="mv-small">セル内に折り返された軌跡に使います。1区間で半セル以上移動する経路など、入力した周期像を指定したい場合は解除してください。</p>
+  </section>
   <section id="engineEndpointSettings" hidden>
     <label>反応物と生成物の端点<select id="engineEndpointMode" aria-describedby="engineEndpointHelp"><option value="relax">両端を極小構造へ緩和</option><option value="fixed">入力座標に固定</option></select></label>
     <p class="mv-small" id="engineEndpointHelp"></p>
@@ -673,8 +693,9 @@ H -0.3 1.0 0"></textarea>
     </div>
   </section>
   <fieldset id="engineModelSettings" hidden><legend>ポテンシャル・溶媒</legend>
-    <div id="engineUMAFields"><div class="mv-grid"><label id="engineUMADeviceLabel">UMAの実行デバイス<select id="engineUMADevice"></select></label>
+    <div id="engineUMAFields"><div class="mv-grid"><label id="engineUMATaskLabel">UMAで計算する対象<select id="engineUMATask" aria-describedby="engineUMATaskHelp"><option value="omol">孤立分子（OMol）</option><optgroup label="表面・吸着系"><option value="oc20">触媒表面（OC20）</option><option value="oc22">酸化物表面（OC22）</option><option value="oc25">電解液・触媒界面（OC25）</option></optgroup><optgroup label="3方向周期の材料"><option value="omat">無機バルク材料（OMat）</option><option value="omc">分子結晶（OMC）</option><option value="odac">MOFのCO₂・水吸着（ODAC）</option></optgroup></select></label><label id="engineUMADeviceLabel">UMAの実行デバイス<select id="engineUMADevice"></select></label>
       <label class="mv-check"><input id="engineAnySolv" type="checkbox">AnySolvで溶媒補正する</label></div>
+    <p id="engineUMATaskHelp" class="mv-small" role="status"></p>
     <div id="engineAnySolvFields" hidden class="mv-grid">
       <label>溶媒<select id="engineSolvent"></select></label>
       <label>AnySolvモデル<select id="engineAnySolvModel"></select></label>
@@ -716,8 +737,12 @@ H -0.3 1.0 0"></textarea>
   </details>
   <div id="engineVibrationOptions" hidden><label id="engineVibrationCheckLabel" class="mv-check"><input id="engineVibrationCheck" type="checkbox">最適化後に振動解析を行う（未収束時も実行・既定オフ）</label>
     <div class="mv-grid"><label>有限差分の変位幅 (Å)<input id="engineVibrationDelta" type="number" min="0" max="0.1" step="0.001" value="0.001"></label><label>差分点数<select id="engineVibrationNfree"><option value="2">2点（±δ）</option><option value="4">4点（±δ, ±2δ）</option></select></label><label>虚振動を数える閾値 (cm⁻¹)<input id="engineVibrationThreshold" type="number" min="0" max="1000" step="1" value="20"></label></div>
-    <details class="mv-help"><summary>詳しい説明</summary><p class="mv-small">ASE Vibrationsによる全原子の有限差分。最大200原子・非周期分子。2点法は約6N、4点法は約12N回の力計算が必要です。表には閾値以下の虚振動も表示します。TS収束の判定と虚振動の本数は別に確認してください。</p></details></div>
+    <details class="mv-help"><summary>詳しい説明</summary><p class="mv-small">ASEによる有限差分（構造は最大200原子）。可動原子がN個なら、2点法は6N+1回、4点法は12N+1回の力を評価します。周期構造では固定セルのΓ点を計算します。表には閾値以下の虚振動も表示します。TS収束の判定と虚振動の本数は別に確認してください。</p></details></div>
   <details id="engineAdditionalOptions" class="mv-calc-disclosure"><summary>拘束・ModelF・追加の計算</summary>
+  <section id="gammaThermoSettings" hidden><details><summary>Γ点振動の熱力学量</summary>
+    <label class="mv-check"><input id="gammaThermoEnabled" type="checkbox">振動解析からZPE・振動自由エネルギー・振動エントロピーを求める</label>
+    <div class="mv-grid"><label>温度 (K)<input id="gammaTemperature" type="number" min="1" max="5000" value="298.15"></label><label>除外する低波数の上限 (cm⁻¹)<input id="gammaCutoff" type="number" min=".001" max="1000" value="10"></label></div>
+    <p class="mv-small">この固定スーパーセルの可動原子のΓ点モードを用います。虚振動と指定した上限以下の実振動を除き、採用したモードの寄与をセルあたりで表示します。</p></details></section>
   <section id="engineThermoSettings" hidden><details><summary>熱化学量・自由エネルギー</summary>
     <label class="mv-check"><input id="thermoEnabled" type="checkbox">振動解析後に熱化学量を計算する</label>
     <div class="mv-grid"><label>温度 (K)<input id="thermoTemperature" type="number" min="1" max="5000" step="1" value="298.15"></label><label>圧力 (Pa)<input id="thermoPressure" type="number" min=".001" max="1000000000" step="100" value="101325"></label><label>回転対称数<input id="thermoSymmetry" type="number" min="1" max="10000" step="1" value="1"></label><label>構造の種類<select id="thermoState"><option value="minimum">極小構造</option><option value="ts">一次鞍点（TS）</option></select></label><label>標準状態<select id="thermoStandardState"><option value="gas">指定圧力の理想気体</option><option value="1M">1 mol/L</option></select></label><label>低振動数の扱い<select id="thermoLowFrequency"><option value="harmonic">調和振動子</option><option value="floor">エントロピー計算に下限を設定</option></select></label><label>エントロピー用の振動数下限 (cm⁻¹)<input id="thermoCutoff" type="number" min="1" max="1000" step="10" value="100"></label></div>
@@ -743,7 +768,7 @@ H -0.3 1.0 0"></textarea>
   <div class="mv-row"><span class="mv-small" id="engineConstraintSummary"></span><button class="mv-btn" id="engineConstraints">原子固定を設定</button></div>
   <div class="mv-row"><span class="mv-small" id="engineGroupConstraintSummary"></span><button class="mv-btn" id="engineGroupConstraints">原子団の重心拘束を設定</button></div>
   <details class="mv-help"><summary>計算機能・保存と再開の説明</summary><p class="mv-small"><a href="https://h-nabata.github.io/molecule-visualizer/RESEARCH" target="_blank" rel="noopener">IRC・拘束スキャン・熱化学・履歴管理の使い方</a></p></details>
-  <details class="mv-help"><summary>詳しい説明</summary><p class="mv-small">最大500原子・100構造。経路は同じ元素順序・固定セルが必要です。周期境界をまたぐ経路は連続したCartesian座標で入力してください。原子固定はMIN・AFIR-MINに対応。可変セルには対応していません。Sellaは非周期系の一次鞍点探索で、初期信頼半径は計算中に自動調整されます。L-BFGSは極小化専用です。</p></details>
+  <details class="mv-help"><summary>詳しい説明</summary><p class="mv-small">最大500原子・100構造。経路は同じ元素順序・固定セルが必要です。セル内に折り返した経路は、計算設定で前後のフレームを最も近い周期像につなげます。固定セルでは基板の原子を固定したまま経路を緩和できます。応力に対応するエンジンでは3方向周期の格子最適化も選べます。Sellaは固定セルの周期構造・非周期分子の一次鞍点を探索し、初期信頼半径は計算中に自動調整されます。L-BFGSは極小化専用です。</p></details>
   </details>
   </fieldset>
   <details class="mv-calc-disclosure"><summary>設定の保存・計算手順</summary><div id="engineSavedSettings"></div></details>
@@ -757,11 +782,12 @@ H -0.3 1.0 0"></textarea>
     <label>接続トークン<input id="engineToken" type="password" autocomplete="off" spellcheck="false"></label>
   </div><div class="mv-row"><button class="mv-btn" id="engineConnect">接続を確認</button><span id="engineConnected" class="mv-small">未接続</span></div></fieldset>
   <details class="mv-engine-setup"><summary>初回のセットアップ・計算エンジンの選択</summary>
-    <p><a href="./local-engine/bridge.py?v=1.22.1" download>bridge.pyをダウンロード</a>し、使いたいエンジンの手順で起動してください。tblite / g-xTBはPython 3.10以上、UMA / llmlip.rsはPython 3.12の専用環境を推奨します。</p>
+    <p><a href="./local-engine/bridge.py?v=1.23.0" download>bridge.pyをダウンロード</a>し、使いたいエンジンの手順で起動してください。tblite / g-xTBはPython 3.10以上、UMA / llmlip.rsはPython 3.12の専用環境を推奨します。</p>
+    <p><a href="https://github.com/h-nabata/h-nabata.github.io/blob/main/molecule-visualizer/PERIODIC.md" target="_blank" rel="noopener">表面・バルク計算の手順と対応表</a></p>
     <ul>
-      <li><strong>tblite</strong>：GFN2-xTB（既定）、GFN1-xTB、IPEA1-xTBを利用します。このアプリでは非周期系と周期系に対応し、3方向周期のセルではNPT分子動力学も実行できます。</li>
+      <li><strong>tblite</strong>：GFN2-xTB（既定）、GFN1-xTB、IPEA1-xTBを利用します。非周期系と3方向周期系に対応します。3方向周期のセルではNPTも実行できます。面内だけを周期的にする表面には、部分周期に対応するエンジンを選んでください。</li>
       <li><strong>g-xTB</strong>：公式のg-xTB対応実行ファイルを別途用意します。このアプリでは非周期系に対応します。tbliteのPythonパッケージは不要です。</li>
-      <li><strong>UMA</strong>：fairchem-coreの学習済みモデルをローカルで実行します。この接続は非周期分子用のomolタスクです。CPU / CUDAを選べます。</li>
+      <li><strong>UMA</strong>：fairchem-coreの学習済みモデルをローカルで実行します。孤立分子はOMol、表面・吸着系はOC20、バルク材料はOMatを選択します。CPU / CUDAを選べます。</li>
       <li><strong>llmlip.rs（CPU・β版）</strong>：変換済みモデルをローカルCPUで実行します。推論時のPyTorch・CUDAは不要で、対応元素・周期条件は登録モデルごとに確認します。</li>
     </ul>
     <p>通常配布版tblite 0.7.0はg-xTBに対応していません（2026年10月15日確認）。g-xTBを使いたい場合は、下の「g-xTBを使う」を選んでください。両方をインストールする必要はありません。</p>
@@ -800,7 +826,7 @@ python -m pip install "numpy&gt;=1.24,&lt;3" "ase&gt;=3.25,&lt;4" "psutil&gt;=5.
 python bridge.py --engine gxtb --binary /absolute/path/to/xtb --allow-origin https://h-nabata.github.io</pre>
       <p>tblite用の環境を既に作っている場合は、そのPython環境を再利用してg-xTB対応実行ファイルを指定することもできます。起動時の <code>--engine gxtb</code> で使用するエンジンが決まります。</p>
     </details>
-    <details><summary>UMAを使う（fairchem-core / 分子用omol）</summary>
+    <details><summary>UMAを使う（fairchem-core / 分子・表面・バルク）</summary>
       <p><a href="https://huggingface.co/facebook/UMA" target="_blank" rel="noopener">Hugging FaceのUMAモデル</a>で利用申請・承認を済ませ、下記を実行してください。Linux / WSL2のPython 3.12環境を推奨します。g-xTB用の実行ファイルは使いません。</p>
       <pre>python3.12 -m venv .venv-uma
 source .venv-uma/bin/activate
@@ -809,7 +835,7 @@ python -m pip install "fairchem-core&gt;=2.23,&lt;3" "ase&gt;=3.25,&lt;4" "psuti
 hf auth login
 python bridge.py --engine uma --uma-model uma-s-1p2p1 --uma-device cpu --uma-precision float64 --allow-origin https://h-nabata.github.io</pre>
       <p>対応するNVIDIA GPUとPyTorch環境では <code>--uma-device cuda</code> を指定します。Hugging Faceの認証トークンは端末でのみ使用してください。このページには起動後に表示されるbridgeの接続Tokenを入力します。</p>
-      <details class="mv-help"><summary>モデル・精度・初回読み込み</summary><p class="mv-small">モデルは <code>uma-s-1p2p1</code>（既定）、<code>uma-s-1p2</code>、<code>uma-s-1p1</code>、<code>uma-m-1p1</code> から選べます。既定はfloat64・TF32無効。<code>--uma-precision float32</code> はメモリを節約しますが、TS・微小変位の振動解析ではfloat64を推奨します。電荷と多重度はページで指定します。GFN法・SCF設定・実行ファイルの指定は不要です。エネルギーは選択したモデルのomol基準なので、tbliteやg-xTBの値と直接比較しないでください。</p>
+      <details class="mv-help"><summary>モデル・精度・初回読み込み</summary><p class="mv-small">モデルは <code>uma-s-1p2p1</code>（既定）、<code>uma-s-1p2</code>、<code>uma-s-1p1</code>、<code>uma-m-1p1</code> から選べます。既定はfloat64・TF32無効。<code>--uma-precision float32</code> はメモリを節約しますが、TS・微小変位の振動解析ではfloat64を推奨します。OMolの電荷と多重度は計算画面で指定します。材料・表面タスクでは電荷0、多重度欄1を使い、モデルには分子のスピン多重度を渡しません。モデルを既に入手している場合は、起動時に <code>--uma-checkpoint /path/to/uma-s-1p2p1.pt</code> を指定できます。GFN法・SCF設定・実行ファイルの指定は不要です。経路のエネルギー差は同じタスク・モデル・精度で評価した構造から求めます。</p>
       <p class="mv-small">初回の計算で重みをダウンロードします。同じモデル・デバイスの連続計算では、重みをメモリに保持して再利用します。設定の変更時は読み直します。「計算履歴・キュー」から常駐モデルを解放できます。初回取得に時間がかかる場合は <code>--job-timeout 7200</code> などで上限を延長できます。モデルのキャッシュは通常 <code>~/.cache/fairchem</code> に残ります。分子の座標は外部へ送信しません。<a href="https://facebookresearch.github.io/fairchem/install/" target="_blank" rel="noopener">公式導入手順</a></p></details>
     </details>
     <details><summary>llmlip.rs（CPU・β版）を使う</summary>
@@ -839,7 +865,7 @@ python bridge.py --engine rdkit --allow-origin https://h-nabata.github.io</pre><
     <p>起動時に表示されるURLとTokenを上の接続欄に入力します。端末は利用中開いたままにしてください。ブラウザが要求した場合は、このサイトからのローカルネットワーク接続を許可します。WSLではサービスも計算エンジンと同じWSL環境で起動します。</p>
     <p><a href="https://github.com/h-nabata/h-nabata.github.io/blob/main/molecule-visualizer/local-engine/README.md" target="_blank" rel="noopener">導入・周期系・計算方式の詳しい説明</a></p>
   </details>
-  <section id="engineUMADetails" hidden><h3>UMAの接続条件</h3><p id="engineUMASummary" class="mv-small"></p><p class="mv-small">分子用omol・非周期系。電荷と多重度は下の計算条件を使用します。接続確認だけではモデルの読み込みは行いません。</p></section>
+  <section id="engineUMADetails" hidden><h3>UMAの接続条件</h3><p id="engineUMASummary" class="mv-small"></p><p class="mv-small">計算対象は「ポテンシャル・溶媒」で選択します。接続確認だけではモデルの読み込みは行いません。</p></section>
   </section>
   <section id="enginePaneResults" class="mv-calc-pane" role="tabpanel" aria-labelledby="engineTabResults" tabindex="0" hidden>
   <p id="engineResultsEmpty">計算結果はここに表示されます。</p>
@@ -904,6 +930,7 @@ python bridge.py --engine rdkit --allow-origin https://h-nabata.github.io</pre><
   <p id="jobHistoryMessage" role="status"></p>
 </dialog>
 <dialog id="refineDialog" class="mv-engine-dialog" aria-labelledby="refineTitle"><h2 id="refineTitle">経路のノードを補間・追加</h2>
+  <label class="mv-check" id="refineImageSettings" hidden><input type="checkbox" id="refineNearest" checked>隣接ノードを最小像で連続にしてから補間する</label>
   <p id="refineSummary"></p><div class="mv-grid"><label>区間の始点（構造番号）<input id="refineFrom" type="number" min="1" step="1" value="1"></label><label>区間の終点（構造番号）<input id="refineTo" type="number" min="2" step="1" value="2"></label><label>各隣接ペアの間に追加する数<input id="refineEach" type="number" min="1" max="98" step="1" value="1"></label></div>
   <details class="mv-help"><summary>詳しい説明</summary><p class="mv-small">指定区間の各隣接ノード間をCartesian座標で線形補間します。既存ノードと両端点はそのまま残し、合計100ノードまで追加できます。複数の候補付近を増やす場合は区間を分けて繰り返してください。周期系の座標は折り返しません。</p></details>
   <details class="mv-help"><summary>詳しい説明</summary><p class="mv-small">実行中のCI-NEB・LUP系計算は、最後に全ノードの評価が完了した経路で停止します。補間後は速度・最適化履歴・CI開始ステップをリセットして新しい計算を開始します。追加ノードのエネルギーは再評価が必要です。</p></details>

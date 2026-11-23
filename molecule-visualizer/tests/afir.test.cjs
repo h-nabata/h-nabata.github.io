@@ -31,13 +31,55 @@ test('ID resolution survives reorder and export has explicit 1-based corresponde
   close(A.evaluate(reordered,c).energyEV,original.energyEV);
   const out=A.exportInput({atoms:reordered,metadata:{}},c);assert.deepEqual(out.atomIds,['c1','h2','h1','o1']);assert.deepEqual(out.pythonConfig.fragments.F1.indices,[3]);assert.deepEqual(out.pythonConfig.fragments.F2.indices,[2]);assert.match(out.xyz,/^4\n/);assert.equal(out.config.schema,'molecule-afir/1');
 });
-test('overlap, pair reversal, aliased duplicate pairs, stale IDs and periodic structures fail closed',()=>{
+test('overlap, pair reversal, aliased duplicate pairs, stale IDs and invalid cells fail closed',()=>{
   let c=config();c.pairs.push({a:'b',b:'a',mode:'repel',gamma:10});assert.throws(()=>A.validate(atoms,c),/重複/);
   c=config();c.fragments.push({id:'alias',label:'same A',atomIds:['h1']});c.pairs.push({a:'alias',b:'b',mode:'attract',gamma:10});assert.throws(()=>A.validate(atoms,c),/重複/);
   c=config();c.fragments[1].atomIds.push('h1');assert.throws(()=>A.validate(atoms,c),/重ならない/);
   c=config();c.fragments[1].atomIds=['deleted'];assert.throws(()=>A.validate(atoms,c),/原子ID/);
-  assert.throws(()=>A.validate(atoms,config(),{pbc:[true,false,false]}),/非周期/);
+  assert.throws(()=>A.validate(atoms,config(),{pbc:[true,false,false]}),/セル/);
   const duplicate=structuredClone(atoms);duplicate[1].id=duplicate[0].id;assert.throws(()=>A.validate(duplicate,config()),/原子ID/);
   const collision=structuredClone(atoms);collision[1].x=.01;assert.throws(()=>A.evaluate(collision,config()),/衝突/);
   assert.throws(()=>A.validate(atoms.map(a=>({...a,element:'Bk'})),config()),/未定義/);
+});
+
+test('periodic fragment bias uses skew minimum images, energy gradients and exported cell',()=>{
+  const cell={vectors:[[8,0,0],[2,6,0],[0,0,17]],pbc:[true,true,false]};
+  const c=config(),unwrapped=structuredClone(atoms);
+  unwrapped[1].x+=cell.vectors[0][0]+cell.vectors[1][0];
+  unwrapped[1].y+=cell.vectors[1][1];
+  const result=A.evaluate(unwrapped,c,cell),ref=A.evaluate(atoms,c,cell);
+  close(result.energyEV,ref.energyEV);
+  close(result.pairs[0].distanceA,2);
+  close(result.forcesEV_A[1][0],ref.forcesEV_A[1][0]);
+  unwrapped[1].x+=1e-5;
+  const plus=A.evaluate(unwrapped,c,cell).energyEV;
+  unwrapped[1].x-=2e-5;
+  const minus=A.evaluate(unwrapped,c,cell).energyEV;
+  close(-(plus-minus)/2e-5,result.forcesEV_A[1][0]);
+  unwrapped[1].z+=17;
+  assert.ok(A.evaluate(unwrapped,c,cell).pairs[0].distanceA>17);
+  const exported=A.exportInput({atoms,metadata:{cell}},c);
+  assert.deepEqual(exported.cell,cell);
+  assert.match(exported.xyz,/pbc="T T F"/);
+});
+
+test('active-region proposals use true skew-slab images, the bond graph, and mobile partners',()=>{
+  const cell={vectors:[[3,0,0],[2.8,1,0],[0,0,9]],pbc:[true,true,false]};
+  const state={metadata:{cell},atoms:[
+    {id:'a',element:'Pt',x:0,y:0,z:0},
+    {id:'b',element:'O',x:2.842,y:.49,z:0},
+    {id:'c',element:'H',x:0,y:0,z:.8},
+    {id:'d',element:'Pt',x:0,y:0,z:.9},
+    {id:'e',element:'O',x:0,y:0,z:8.5}
+  ],bonds:[{atom1:'a',atom2:'b',type:'coordination_candidate'},{atom1:'a',atom2:'c',type:'hydrogen'}]};
+  const fixed=[0,3],active=['a'];
+  const bonded=A.nearbyPairs(state,active,fixed,1,'repel');
+  assert.deepEqual(bonded.map(p=>[p.i,p.j,p.mode]),[[0,1,'repel']]);
+  close(bonded[0].distance,Math.hypot(.042,-.51));
+  assert.deepEqual(A.nearbyPairs(state,active,fixed,1,'attract'),[{i:0,j:2,mode:'attract',distance:.8}]);
+  state.atoms[1].x+=3;
+  close(A.nearbyPairs(state,['a','b'],fixed,1,'repel')[0].distance,bonded[0].distance);
+  state.bonds=[];
+  assert.deepEqual(A.nearbyPairs(state,active,fixed,1,'attract').map(p=>p.j),[1,2]);
+  assert.throws(()=>A.nearbyPairs(state,[],fixed,1,'attract'),/原子を選択/);
 });

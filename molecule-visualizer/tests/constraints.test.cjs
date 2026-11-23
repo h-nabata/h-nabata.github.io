@@ -18,3 +18,10 @@ test('result acceptance rejects moved fixed atoms, omitted constraints and corru
  C.validateResult(r,data);
  for(const mutate of [r=>r.fixedAtoms=[],r=>r.images[0][0][0]=1e-15,r=>r.trajectory.images[0][0][2]=.01]){const bad=structuredClone(r);mutate(bad);assert.throws(()=>C.validateResult(bad,data));}
 });
+test('independently loaded frames preserve imported fixed atom masks and reject conflicting common masks',()=>{
+ const empty=state(),first=state(),last=state();C.attach(first,[1]);C.attach(last,[1]);
+ const job={mode:'neb',symbols:['O','H','H']},info={fixedAtoms:true,fixedAtomModes:['neb']};
+ assert.deepEqual(C.forFrames(empty,[first,last],job,info),[1]);
+ C.attach(last,[2]);assert.throws(()=>C.forFrames(empty,[first,last],job,info),/異なります/);
+ assert.deepEqual(C.forFrames(empty,[first,last],{...job,mode:'evaluate'},info),[]);
+});

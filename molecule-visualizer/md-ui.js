@@ -38,9 +38,15 @@
   function availableBaths(info){
     return info ? info.molecularDynamics?.thermostats || ['langevin'] : Object.keys(bathNames);
   }
+  function frozenCount(frame){
+    const c=frame.metadata?.constraints;
+    return c?.enabled?c.fixedAtomIds.length:0;
+  }
+  let unanchoredCOM=null;
   function pressureSupport(info,cell,model){
     if(!info)return '圧力を扱うには、周期系の応力を計算できるエンジンに接続してください。';
     if(!info.molecularDynamics?.pressureMeasurement)return '接続中のエンジンは圧力計算に対応していません。';
+    if(info.uma&&!info.uma.stressTasks?.includes($('engineUMATask')?.value))return 'UMAで圧力を扱うには無機バルク（OMat）または分子結晶（OMC）を選択してください。';
     if(info.llmlip){
       const m=info.llmlip.models.find(m=>m.id===model?.model);
       if(!m?.available||!m.stress||m.periodic==='none'||(m.architecture==='uma-v1'&&model.head==='omol'))
@@ -56,19 +62,24 @@
     if(!active)return;
     const state=MV.App.getState(),info=MV.EngineUI.getConnection()?.info;
     const ensemble=$('mdEnsemble').value, heat=ensemble!=='nve', npt=ensemble==='npt';
-    const explicit=$('mdVelocitySource').value==='explicit',single=state.atoms.length===1,rdkit=info?.engine==='rdkit';
+    const frozen=frozenCount(state);
+    const explicit=$('mdVelocitySource').value==='explicit',single=state.atoms.length-frozen<=1,rdkit=info?.engine==='rdkit';
     const available=availableBaths(info),picker=$('mdThermostat');
     if(!chosenThermostat)picker.value=available.includes('nose-hoover-chain')?'nose-hoover-chain':info?.molecularDynamics?.defaultThermostat||available[0]||'';
     for(const option of picker.options)option.disabled=!available.includes(option.value);
     const bath=picker.value,legacy=info&&!info.molecularDynamics?.thermostats;
-    const pressureIssue=pressureSupport(info,state.metadata.cell,MV.LLMLIPUI?.input().llmlip);
+    const pressureIssue=frozen?'固定原子を含むMDはNVEまたはNVTを選んでください。圧力計算には全原子を可動にします。':pressureSupport(info,state.metadata.cell,MV.LLMLIPUI?.input().llmlip);
     const nptIssue=pressureIssue||(!info?.molecularDynamics?.ensembles?.includes('npt')?'接続中のエンジンはNPTに対応していません。':'');
     for(const option of $('mdEnsemble').options)option.disabled=option.value==='npt'&&!!nptIssue;
     $('mdTemperatureLabel').textContent=heat?(explicit?'熱浴温度 (K)':'初期温度・熱浴温度 (K)'):'初期温度 (K)';
     $('mdTemperature').closest('label').hidden=explicit&&!heat;
     $('mdSeed').closest('label').hidden=explicit&&!npt&&(!heat||bath==='nose-hoover-chain');
     $('mdVelocityHelp').textContent=(explicit?'入力した速度から開始します。重心の並進運動を除く設定では、全原子の速度から重心速度を差し引きます。':'初期速度はMaxwell–Boltzmann分布から生成します。別の初期速度で比較するにはシードを変更します。')+(single?' 単原子では重心の並進運動を残します。':'');
-    $('mdRemoveCOM').disabled=single;
+    const com=$('mdRemoveCOM');
+    if(frozen&&unanchoredCOM===null){unanchoredCOM=com.checked;com.checked=false;}
+    else if(!frozen&&unanchoredCOM!==null){com.checked=unanchoredCOM;unanchoredCOM=null;}
+    com.disabled=single;
+    if(frozen)$('mdVelocityHelp').textContent='固定原子の速度はゼロとし、可動原子だけを積分します。初速度を指定する場合は固定原子の行を 0 0 0 と入力してください。';
     $('mdVelocitiesLabel').hidden=!explicit;
     $('mdThermostatLabel').hidden=!heat;
     $('mdFrictionLabel').hidden=!heat||bath!=='langevin';
@@ -110,7 +121,7 @@
     const bath=$('mdThermostat').value,npt=ensemble==='npt';
     const md={ensemble,timestepFs:tv,temperatureK:explicit&&ensemble==='nve'?0:number('mdTemperature','温度 (K)',0,10000),
       seed:explicit&&!npt&&(ensemble==='nve'||bath==='nose-hoover-chain')?0:number('mdSeed','乱数シード',0,4294967295,true),
-      sampleEvery:number('mdStride','軌跡の保存間隔',1,100000,true),removeCOM:frame.atoms.length>1&&$('mdRemoveCOM').checked};
+      sampleEvery:number('mdStride','軌跡の保存間隔',1,100000,true),removeCOM:frame.atoms.length-frozenCount(frame)>1&&$('mdRemoveCOM').checked};
     if(ensemble!=='nve'){
       if(!availableBaths(info).includes(bath))throw Error('選択した熱浴を接続中のbridgeで実行できません。対応する熱浴を選択してください。');
       if((npt||bath!=='langevin')&&md.temperatureK<=0)throw Error('この計算では0 Kより高い熱浴温度を指定してください。');
@@ -118,7 +129,7 @@
       if(bath==='langevin')md.frictionPerPs=number('mdFriction','摩擦係数 (ps⁻¹)',.001,1000);
       else md.thermostatTimeFs=number('mdThermostatTime','熱浴の緩和時間 (fs)',.001,100000);
     }
-    const pressureIssue=pressureSupport(info,data.cell,data.llmlip||MV.LLMLIPUI?.input().llmlip);
+    const pressureIssue=frozenCount(frame)?'固定原子を含むMDではNPTと圧力記録を利用できません。':pressureSupport(info,data.cell,data.llmlip||MV.LLMLIPUI?.input().llmlip);
     if(npt){
       if(pressureIssue)throw Error(pressureIssue);
       md.barostat='mc-isotropic';
