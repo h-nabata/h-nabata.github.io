@@ -121,6 +121,7 @@
     return selected.map((i,k)=>{
       let comment=`MoleculeStudio frame=${k+1}/${selected.length} source_frame=${i+1}/${source.images.length} selection=${method}`;
       if(source.kind==='md'&&source.md)comment+=' method=MD step='+source.stepNumbers[i]+' time_fs='+source.md.timeFs[i]+' temperature_K='+source.md.temperatureK[i]+' kinetic_eV='+source.md.kineticEV[i]+' total_eV='+source.md.totalEV[i];
+      if(source.kind==='md'&&source.md?.pressureBar)comment+=' volume_A3='+source.md.volumeA3[i]+' pressure_bar='+source.md.pressureBar[i];
       if(source.kind==='dsafir')comment+=' method=DS-AFIR';
       if(source.kind==='afir'||source.kind==='optimize')comment+=` step=${source.stepNumbers?.[i]??i}`;
       if(source.energies)comment+=` energy_eV=${source.energies[i].toPrecision(15)}`;

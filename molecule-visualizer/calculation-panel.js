@@ -23,10 +23,11 @@
     $('enginePanelConnection').dataset.connected=String(!!info);
     const selection=$('engineMode').selectedOptions[0];
     let description=MV.EngineUI.modeLabel(mode)||selection?.textContent||'';
+    if(mode==='md')description+=' · '+MV.MDUI.formMethod();
     if(!$('enginePathSymmetry').hidden&&$('engineMirror').checked)description+=' · 鏡映拘束';
     if(results){
       const result=MV.EngineUI.getResult()?.result;
-      description=MV.EngineUI.isBusy()&&trackedLabel?trackedLabel:result?MV.EngineUI.modeLabel(result.mode)+(result.pathSymmetry?' · 鏡映拘束':''):$('batchResult').hidden?'':'一括最適化';
+      description=MV.EngineUI.isBusy()&&trackedLabel?trackedLabel:result?MV.EngineUI.modeLabel(result.mode)+(result.md?' · '+MV.MDUI.methodLabel(result.md):'')+(result.pathSymmetry?' · 鏡映拘束':''):$('batchResult').hidden?'':'一括最適化';
     }
     setText('enginePanelMethod',results?description:'設定中 · '+description);
     const empty=$('engineResult').hidden&&$('batchResult').hidden;
@@ -82,5 +83,5 @@
     });
     show('setup');
   }
-  MV.CalculationPanel={init,show,sync,completed,beginJob:(mode,pathSymmetry)=>{editingJob=false;trackedLabel=mode==='batch'?'一括最適化':MV.EngineUI.modeLabel(mode)+(pathSymmetry?' · 鏡映拘束':'');}};
+  MV.CalculationPanel={init,show,sync,completed,beginJob:(mode,pathSymmetry,md)=>{editingJob=false;trackedLabel=mode==='batch'?'一括最適化':MV.EngineUI.modeLabel(mode)+(md?' · '+MV.MDUI.methodLabel(md):'')+(pathSymmetry?' · 鏡映拘束':'');}};
 })(window);

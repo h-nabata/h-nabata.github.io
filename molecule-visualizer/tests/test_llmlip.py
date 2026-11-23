@@ -50,6 +50,53 @@ class FakeModel:
 
 
 class Contract(unittest.TestCase):
+    def test_pressure_requires_selected_periodic_stress_model_and_head(self):
+        cell = {'vectors':(12*np.eye(3)).tolist(), 'pbc':[True]*3}
+        for settings in ({'ensemble':'npt'}, {'ensemble':'nvt', 'recordPressure':True}):
+            data = b.validate({**WATER, 'mode':'md', 'md':settings, 'cell':cell}, 'llmlip')
+            with self.assertRaisesRegex(ValueError, '応力'):
+                b.job_config(data, config())
+            item = {**MODEL, 'architecture':'uma-v1', 'heads':['omol','omat'],
+                    'defaultHead':'omol', 'stress':True}
+            self.assertTrue(b.md_capabilities(config(item))['pressureMeasurement'])
+            with self.assertRaisesRegex(ValueError, '周期'):
+                b.job_config(data, config(item))
+            selected = {**data, 'llmlip':selection(head='omat')}
+            self.assertTrue(b.job_config(selected, config(item))['llmlipCapabilities']['stress'])
+        for item in (MODEL, {**item,'heads':['omol']}, {**item,'periodic':'none'}):
+            caps = b.md_capabilities(config(item))
+            self.assertNotIn('npt', caps['ensembles'])
+            self.assertFalse(caps['pressureMeasurement'])
+            self.assertEqual(caps['barostats'], [])
+
+    def test_variable_lattice_prediction_owns_forces_and_tensile_stress(self):
+        cell = {'vectors':(12*np.eye(3)).tolist(), 'pbc':[True]*3}
+        data = b.validate({**WATER,'mode':'md','md':{'ensemble':'npt'},'cell':cell}, 'llmlip')
+        with patch.object(b,'llmlip_model_class',return_value=FakeModel), patch.object(b,'llmlip_artifact',return_value='a'*64):
+            calc = b.LLMLIPEngine(data, config({**MODEL,'stress':True}), None)
+            xyz = np.array(data['images'][0])
+            trial_cell = np.array(cell['vectors']) * 1.01
+            stress = np.diag([.1, -.2, .3])
+            prediction = SimpleNamespace(energy=3., forces=-xyz, stress=stress)
+            with patch.object(calc.model, 'predict', return_value=prediction) as predict:
+                energy, force, tensor = calc.with_cell(1, xyz, trial_cell)
+                request = predict.call_args.kwargs
+                self.assertEqual(energy, 3.)
+                self.assertEqual(request['pbc'], (True,)*3)
+                self.assertTrue(request['stress'])
+                self.assertFalse(request['virial'])
+                np.testing.assert_array_equal(request['cell'], trial_cell)
+                np.testing.assert_array_equal(tensor, stress)
+                self.assertFalse(np.shares_memory(tensor, stress))
+                self.assertFalse(np.shares_memory(force, prediction.forces))
+                calc(0, xyz)
+                self.assertFalse(predict.call_args.kwargs['stress'])
+                np.testing.assert_array_equal(predict.call_args.kwargs['cell'], cell['vectors'])
+                for invalid in (None, np.full((3,3), np.nan), np.zeros(6)):
+                    prediction.stress = invalid
+                    with self.assertRaisesRegex(ValueError, '応力'):
+                        calc.with_cell(1, xyz, trial_cell)
+
     def test_strict_inputs_and_engine_separation(self):
         for value in (None, [], {'model':'/tmp/model'}, {'model':'x','path':'/tmp'}, {'model':'x','threads':True}, {'model':'x','dtype':'model-native'}):
             with self.subTest(value=value), self.assertRaises(ValueError):
@@ -176,6 +223,56 @@ class Contract(unittest.TestCase):
                 if data['mode']=='irc':
                     distances=[np.linalg.norm(np.diff(p,axis=0)) for p in (result['images'][0],result['images'][-1])]
                     np.testing.assert_allclose(sorted(distances),[1-1/np.sqrt(2),1+1/np.sqrt(2)],atol=.003)
+
+
+@unittest.skipUnless(os.environ.get('LLMLIP_STRESS_TEST_MODEL'), 'requires native stress-capable H/O model')
+class NativePressure(unittest.TestCase):
+    def test_periodic_stress_and_npt_trajectory(self):
+        from ase import Atoms, units
+        from llmlip.ase import LlmlipCalculator
+
+        model_path = str(Path(os.environ['LLMLIP_STRESS_TEST_MODEL']).resolve())
+        paths, models = b.llmlip_catalog(['water=' + model_path])
+        self.assertTrue(models[0].get('stress'), models[0])
+        cfg = config(llmlipPaths=paths, llmlipModels=models)
+        lattice = np.array([[14., 0., 0.], [.2, 15., 0.], [.1, .3, 16.]])
+        xyz = np.array(WATER['images'][0])
+        xyz[1] += lattice[0]  # Force the native periodic neighbor list to wrap a bond.
+        md = dict(ensemble='npt', temperatureK=300., pressureBar=1., thermostat='bussi',
+                  barostatInterval=1, volumeStepPercent=.05, sampleEvery=2, removeCOM=False,
+                  timestepFs=.1, seed=1234)
+        source = dict(WATER, mode='md', images=[xyz.tolist()], maxSteps=12, md=md,
+                      cell={'vectors':lattice.tolist(), 'pbc':[True]*3})
+        data = b.validate(source, 'llmlip')
+        with tempfile.TemporaryDirectory() as tmp:
+            calc = b.LLMLIPEngine(data, cfg, tmp)
+            energy, forces, stress = calc.with_cell(0, xyz, lattice)
+            atoms = Atoms(data['symbols'], positions=xyz, cell=lattice, pbc=True)
+            atoms.calc = LlmlipCalculator(model_path, backend='direct', dtype='float64',
+                                          head=calc.config['llmlipSelection']['head'])
+            self.assertAlmostEqual(energy, atoms.get_potential_energy(), places=9)
+            np.testing.assert_allclose(forces, atoms.get_forces(), atol=1e-9)
+            np.testing.assert_allclose(stress, atoms.get_stress(voigt=False), atol=1e-10)
+            eps = 1e-4
+            scales = np.exp(np.array([eps, -eps])/3.)
+            e_hi, e_lo = [calc.with_cell(1, xyz*scale, lattice*scale)[0] for scale in scales]
+            derivative = (e_hi-e_lo)/(2*eps)
+            self.assertGreater(abs(derivative), 1e-5)
+            self.assertAlmostEqual(atoms.get_volume()*np.trace(stress)/3, derivative,
+                                   delta=max(5e-6, abs(derivative)*1e-4))
+            result = b.calculate_job(data, calc, tmp)
+            tr = result['trajectory']
+            self.assertEqual(tr['stepNumbers'], [0, 2, 4, 6, 8, 10, 12])
+            self.assertGreater(result['volumeAccepted'], 0)
+            self.assertGreater(np.ptp(tr['volumeA3']), 0.)
+            for frame, p, v, e, kinetic, pressure in zip(tr['cells'], tr['images'], tr['volumeA3'],
+                                                          tr['energies'], tr['kineticEV'], tr['pressureBar']):
+                h = np.array(frame['vectors'])
+                current_e, _, tensor = calc.with_cell(0, np.array(p), h)
+                self.assertAlmostEqual(current_e, e, places=9)
+                self.assertAlmostEqual(v, abs(np.linalg.det(h)), places=8)
+                self.assertAlmostEqual(pressure, (2*kinetic/v - np.trace(tensor))/(3*units.bar),
+                                       delta=1.e-4)
 
 
 @unittest.skipUnless(os.environ.get('LLMLIP_TEST_MODEL'),'native llmlip model not supplied; set LLMLIP_TEST_MODEL (synthetic != chemical validation)')

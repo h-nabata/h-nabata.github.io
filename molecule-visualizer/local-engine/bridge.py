@@ -39,7 +39,7 @@ from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 from scipy.spatial import cKDTree
 
-VERSION = '1.21.0'
+VERSION = '1.22.0'
 KJ_MOL_PER_EV = 96.48533212331002
 RDKIT_FORCE_FIELDS = ('MMFF94', 'MMFF94s', 'UFF')
 UMA_MODELS = ('uma-s-1p2p1', 'uma-s-1p2', 'uma-s-1p1', 'uma-m-1p1')
@@ -131,6 +131,8 @@ def validate(data, engine):
         if any(key in data for key in ('optimizer', 'fmax', 'spring', 'maxMove', 'climbAfter')):
             raise ValueError('MDには時間刻みと積分ステップ数を指定してください。')
         validate_md(data, result)
+        if md_needs_stress(result) and engine not in ('tblite', 'llmlip'):
+            raise ValueError('NPTと固定体積での圧力測定には、周期応力を計算できるエンジンが必要です。')
     elif mode == 'dsafir':
         result['maxSteps'] = number(data.get('maxSteps', 300), 'maxSteps', 1, 9999, True)
         if any(k in data for k in ('fmax', 'maxMove', 'spring', 'climbAfter')):
@@ -2747,11 +2749,30 @@ def vibration_analysis(data, calculate, directory, progress=lambda p: None):
         vibrations.clean()
 
 
+@lru_cache(maxsize=1)
+def md_nose_hoover_class():
+    # 3.23 has no chain, and 3.24 cannot adjust its target for removed COM motion.
+    from inspect import signature
+    try:
+        from ase.md.nose_hoover_chain import NoseHooverChainThermostat
+    except ImportError:
+        return None
+    return NoseHooverChainThermostat if 'num_atoms_global' in signature(NoseHooverChainThermostat).parameters else None
+
+
+def md_thermostats():
+    if md_nose_hoover_class() is None:
+        return ['langevin', 'bussi']
+    return ['nose-hoover-chain', 'bussi', 'langevin']
+
+
 def validate_md(data, result):
     """Validate clock, output and thermostat settings independently of the potential."""
     options = data.get('md', {})
     allowed = {'ensemble', 'timestepFs', 'temperatureK', 'frictionPerPs', 'sampleEvery',
-               'seed', 'removeCOM', 'massesAmu', 'initialVelocitiesAngstromPerFs'}
+               'seed', 'removeCOM', 'massesAmu', 'initialVelocitiesAngstromPerFs',
+               'thermostat', 'thermostatTimeFs', 'barostat', 'pressureBar', 'barostatInterval',
+               'volumeStepPercent', 'recordPressure'}
     if not isinstance(options, dict) or set(options) - allowed:
         raise ValueError('MDの設定項目を確認してください。')
     n_atoms = len(result['symbols'])
@@ -2761,8 +2782,8 @@ def validate_md(data, result):
     if frame_count > 1000 or n_atoms * frame_count > 100000:
         raise ValueError('軌跡は1000フレーム、延べ100000原子までです。保存間隔を広げてください。')
     ensemble = options.get('ensemble', 'nve')
-    if ensemble not in ('nve', 'nvt'):
-        raise ValueError('MDのアンサンブルはnveまたはnvtです。')
+    if ensemble not in ('nve', 'nvt', 'npt'):
+        raise ValueError('MDのアンサンブルにはNVE、NVT、NPTを指定してください。')
     remove = options.get('removeCOM', True)
     if type(remove) is not bool:
         raise ValueError('重心運動の除去には真偽値を指定してください。')
@@ -2771,10 +2792,30 @@ def validate_md(data, result):
                     temperatureK=number(options.get('temperatureK', 300), '温度 (K)', 0, 10000),
                     seed=number(options.get('seed', 42), '乱数シード', 0, 2**32 - 1, True),
                     removeCOM=remove and n_atoms > 1)
-    if ensemble == 'nvt':
-        settings['frictionPerPs'] = number(options.get('frictionPerPs', 10), '摩擦係数 (/ps)', .001, 1000)
-    elif 'frictionPerPs' in options:
-        raise ValueError('摩擦係数はLangevin NVTの設定です。')
+    if ensemble == 'nve':
+        if any(key in options for key in ('thermostat', 'thermostatTimeFs', 'frictionPerPs')):
+            raise ValueError('NVEには熱浴の設定を指定できません。')
+    else:
+        # 1.21 normalized NVT jobs always saved a Langevin friction coefficient.
+        legacy = ensemble == 'nvt' and 'frictionPerPs' in options
+        baths = md_thermostats()
+        thermostat = options.get('thermostat', 'langevin' if legacy else baths[0])
+        if thermostat == 'nose-hoover-chain' and thermostat not in baths:
+            raise ValueError('Nosé–Hoover鎖にはASE 3.25以降が必要です。'
+                             'ブリッジの環境で python -m pip install "ase>=3.25,<4" を実行してください。')
+        if thermostat not in baths:
+            raise ValueError('MDの熱浴にはNosé–Hoover鎖、Langevin、Bussiを指定してください。')
+        settings['thermostat'] = thermostat
+        if thermostat == 'langevin':
+            if 'thermostatTimeFs' in options:
+                raise ValueError('Langevin熱浴には摩擦係数を指定してください。')
+            settings['frictionPerPs'] = number(options.get('frictionPerPs', 10), '摩擦係数 (/ps)', .001, 1000)
+        else:
+            if 'frictionPerPs' in options or settings['temperatureK'] <= 0:
+                raise ValueError('Nosé–Hoover鎖とBussi熱浴には正の温度と熱浴の緩和時間を指定してください。')
+            settings['thermostatTimeFs'] = number(options.get('thermostatTimeFs', 100),
+                                                   '熱浴の緩和時間 (fs)', .001, 100000)
+    validate_md_pressure(options, settings, result)
     if 'massesAmu' in options:
         values = options['massesAmu']
         if not isinstance(values, list) or len(values) != n_atoms:
@@ -2790,6 +2831,31 @@ def validate_md(data, result):
     result.update(maxSteps=steps, md=settings)
 
 
+def validate_md_pressure(options, settings, result):
+    npt = settings['ensemble'] == 'npt'
+    record = options.get('recordPressure', False)
+    if type(record) is not bool:
+        raise ValueError('圧力の記録には真偽値を指定してください。')
+    if npt or record:
+        if not result.get('cell') or not all(result['cell']['pbc']):
+            raise ValueError('圧力の計算には3方向が周期的なセルが必要です。')
+    if 'recordPressure' in options:
+        settings['recordPressure'] = npt or record
+    choices = ('barostat', 'pressureBar', 'barostatInterval', 'volumeStepPercent')
+    if not npt:
+        if any(k in options for k in choices):
+            raise ValueError('圧力浴の設定はNPT専用です。')
+        return
+    if settings['temperatureK'] <= 0:
+        raise ValueError('NPTの熱浴には正の温度が必要です。')
+    if options.get('barostat', 'mc-isotropic') != 'mc-isotropic':
+        raise ValueError('NPTの圧力浴には等方Monte Carloを指定してください。')
+    settings['barostat'] = 'mc-isotropic'
+    settings['pressureBar'] = number(options.get('pressureBar', 1), '目標圧力 (bar)', 1e-6, 1e7)
+    settings['barostatInterval'] = number(options.get('barostatInterval', 25), '体積試行間隔', 1, 100000, True)
+    settings['volumeStepPercent'] = number(options.get('volumeStepPercent', 1), '対数体積の試行幅 (%)', .001, 30)
+
+
 def md_masses(data):
     masses = [atomic_masses[atomic_numbers[s]] for s in data['symbols']]
     for i, mass in enumerate(data['md'].get('massesAmu', [])):
@@ -2798,25 +2864,51 @@ def md_masses(data):
     return np.asarray(masses, dtype=float)
 
 
+def md_needs_stress(data):
+    settings = data.get('md', {})
+    return settings.get('ensemble') == 'npt' or settings.get('recordPressure', False)
+
+
+def md_capabilities(config):
+    pressure = config['engine'] == 'tblite' or (config['engine'] == 'llmlip' and any(
+        model.get('available') and model.get('stress') and model['periodic'] != 'none'
+        and (model['architecture'] != 'uma-v1' or any(head != 'omol' for head in model['heads']))
+        for model in config['llmlipModels']))
+    baths = md_thermostats()
+    return dict(ensembles=['nve', 'nvt', 'npt'] if pressure else ['nve', 'nvt'],
+                defaultThermostat=baths[0], thermostats=baths,
+                barostats=['mc-isotropic'] if pressure else [], pressureMeasurement=pressure,
+                maxSteps=100000, maxFrames=1000, maxAtomFrames=100000)
+
+
 def md_result(data, frames, reason):
     """Assemble an exact measured trajectory, also used for interrupted jobs."""
     last = frames[-1]
     history = [dict(step=p['step'], timeFs=p['timeFs'], potentialEnergyEV=p['energy'],
                     kineticEnergyEV=p['kineticEnergyEV'], totalEnergyEV=p['totalEnergyEV'],
-                    temperatureK=p['temperatureK'], evaluations=p['step'] + 1) for p in frames]
+                    temperatureK=p['temperatureK'], evaluations=p.get('evaluations', p['step'] + 1),
+                    **{key:p[key] for key in ('volumeA3','pressureBar','volumeAttempts','volumeAccepted') if key in p})
+               for p in frames]
     keys = {'images':'positions', 'energies':'energy', 'stepNumbers':'step', 'timeFs':'timeFs',
             'kineticEV':'kineticEnergyEV', 'totalEV':'totalEnergyEV', 'temperatureK':'temperatureK'}
+    pressure_result = {}
+    if 'cell' in last:
+        keys.update(cells='cell', volumeA3='volumeA3', pressureBar='pressureBar')
+        pressure_result = {key:last[key] for key in ('cell','volumeA3','pressureBar','volumeAttempts','volumeAccepted') if key in last}
+        pressure_result['cells'] = [last['cell']]
     trajectory = {name:[p[key] for p in frames] for name, key in keys.items()}
     trajectory.update(checkpoint_components(frames))
     settings = data['md']
-    return dict(mode='md', md=settings, steps=last['step'], evaluations=last['step'] + 1,
+    return dict(mode='md', md=settings, steps=last['step'], evaluations=last.get('evaluations', last['step'] + 1),
                 reason=reason, converged=False, images=[last['positions']], energies=[last['energy']],
                 forces=[last['force']], imageFmax=[last['fmax']], effectiveFmax=last['fmax'],
                 masses=md_masses(data).tolist(), velocitiesAngstromPerFs=last['velocitiesAngstromPerFs'],
                 degreesOfFreedom=3 * (len(data['symbols']) - int(settings['removeCOM'])),
                 trajectory=trajectory, history=history, climbingImage=None,
                 units={'time':'fs', 'length':'angstrom', 'energy':'eV', 'force':'eV/angstrom',
-                       'velocity':'angstrom/fs', 'temperature':'K', 'mass':'u'},
+                       'velocity':'angstrom/fs', 'temperature':'K', 'mass':'u',
+                       **({'volume':'angstrom^3','pressure':'bar'} if pressure_result else {})},
+                **pressure_result,
                 **({'forceField':copy.deepcopy(data['forceField'])} if 'forceField' in data else {}),
                 **({'surfaceInterpretation':'amf-model-surface-not-state-transition-dynamics'} if 'modelF' in data else {}),
                 **checkpoint_components([last]))
@@ -2831,8 +2923,72 @@ def append_md_sample(frames, frame):
     frames.append(frame)
 
 
+def md_global_thermostat(settings, masses, dof, rng):
+    """Build the half-step propagator acting on the thermostatted velocities."""
+    kT = ase_units.kB * settings['temperatureK']
+    dt = settings['timestepFs'] * ase_units.fs / 2
+    tau = settings['thermostatTimeFs'] * ase_units.fs
+    if settings['thermostat'] == 'nose-hoover-chain':
+        chain_class = md_nose_hoover_class()
+        if chain_class is None:
+            raise ValueError('Nosé–Hoover鎖にはASE 3.25以降が必要です。')
+        # ASE uses 3*num_atoms_global only for the target kinetic energy and
+        # first chain mass. Each mass and momentum still belongs to a real atom.
+        chain = chain_class(num_atoms_global=dof // 3, masses=masses,
+                            temperature_K=settings['temperatureK'], tdamp=tau)
+
+        def propagate(v):
+            with np.errstate(over='raise', invalid='raise', divide='raise'):
+                try:
+                    return chain.integrate_nhc(v * masses, dt) / masses
+                except FloatingPointError as error:
+                    raise ValueError('Nosé–Hoover鎖の積分が発散しました。時間刻みを小さくするか、'
+                                     '熱浴の緩和時間を長くしてください。') from error
+        return propagate
+
+    # Exact finite-time kinetic-energy transition of Bussi et al. (2007).
+    # The sign follows Bussi et al. (2009), App. A, Eq. A6d (relevant to small systems).
+    c = math.exp(-dt / tau)
+    variance = -math.expm1(-dt / tau) * kT
+
+    def propagate(v):
+        twice_kinetic = float(np.sum(masses * v**2))
+        if twice_kinetic == 0.:
+            # At rest the old direction is undefined. Draw an isotropic direction
+            # together with the exact central chi-square kinetic energy.
+            trial = np.sqrt(variance / masses) * rng.standard_normal(v.shape)
+            if settings['removeCOM']:
+                trial -= np.sum(trial * masses, axis=0) / np.sum(masses)
+            return trial
+        parallel = math.sqrt(c * twice_kinetic) + math.sqrt(variance) * rng.standard_normal()
+        perpendicular_sq = variance * rng.chisquare(dof - 1)
+        scale = math.copysign(math.hypot(parallel, math.sqrt(perpendicular_sq)), parallel)
+        return v * (scale / math.sqrt(twice_kinetic))
+    return propagate
+
+
+def md_log_volume_acceptance(n_atoms, log_ratio, volume, energy_change, target_pressure, kT):
+    # Uniform proposals in ln V require the spatial Jacobian V**N AND the
+    # dV = V d(ln V) measure. No position/COM coordinate is constrained.
+    pv_change = target_pressure * volume * math.expm1(log_ratio)
+    return (n_atoms + 1) * log_ratio - (energy_change + pv_change) / kT
+
+
+def md_pressure_observation(settings, dof, lattice, stress, thermo):
+    volume = abs(float(np.linalg.det(lattice)))
+    kinetic_term = 2 * thermo['kineticEnergyEV']
+    if settings['ensemble'] == 'npt' and settings['removeCOM']:
+        # Restore the kinetic pressure of the integrated-out COM translation.
+        # Keep the correct finite-system NPT estimator even for small cells.
+        kinetic_term = ase_units.kB * (dof * thermo['temperatureK'] + 3 * settings['temperatureK'])
+    pressure = (kinetic_term / volume - float(np.trace(stress))) / (3 * ase_units.bar)
+    if not math.isfinite(pressure):
+        raise ValueError('MDセルの計算圧力が有限値ではありません。')
+    return dict(volumeA3=volume, pressureBar=pressure)
+
+
 def molecular_dynamics(data, calculate, progress=lambda _: None):
-    """Velocity Verlet (NVE) and Langevin BAOAB (NVT), in ASE mechanical units."""
+    """Integrate classical Cartesian motion in ASE mechanical units."""
     settings = data['md']
     positions = np.array(data['images'][0], dtype=float)
     masses = md_masses(data)[:, None]
@@ -2854,20 +3010,49 @@ def molecular_dynamics(data, calculate, progress=lambda _: None):
         velocity = sigma * rng.standard_normal(positions.shape)
     if remove_com:
         velocity -= com_velocity(velocity)
-    thermostat = settings['ensemble'] == 'nvt'
-    if thermostat:
+    thermostat = settings.get('thermostat', 'langevin' if settings['ensemble'] == 'nvt' else None)
+    global_bath = None
+    if thermostat in ('nose-hoover-chain', 'bussi'):
+        propagate = md_global_thermostat(settings, masses, dof, rng)
+        def global_bath(v):
+            if not remove_com:
+                return propagate(v)
+            center = com_velocity(v)
+            return center + propagate(v - center)
+    if thermostat == 'langevin':
         exponent = settings['frictionPerPs'] * dt_fs / 1000.
         damping = math.exp(-exponent)
         noise_scale = sigma * math.sqrt(-math.expm1(-2 * exponent))
 
-    def evaluate(x):
+    npt = settings['ensemble'] == 'npt'
+    lattice = None
+    accepted_volumes = 0
+    if npt or settings.get('recordPressure'):
+        lattice = np.array(data['cell']['vectors'], dtype=float)
+        if not hasattr(calculate, 'with_cell'):
+            raise ValueError('この接続ではセル応力を評価できません。')
+    if npt:
+        log_width = settings['volumeStepPercent'] / 100
+        target_pressure = settings['pressureBar'] * ase_units.bar
+        kT = settings['temperatureK'] * ase_units.kB
+
+    def evaluate(x, box, index=0):
         if not np.isfinite(x).all() or np.max(np.abs(x)) > 1e4:
             raise ValueError('MD座標が有限値または10000 Åの範囲を超えました。時間刻みを確認してください。')
-        energy, force = calculate(0, x)
+        stress = None
+        if box is None:
+            energy, force = calculate(index, x)
+        else:
+            if not np.isfinite(box).all() or np.max(np.abs(box)) > 1e4 or abs(np.linalg.det(box)) < 1e-6:
+                raise ValueError('MDのセルが計算可能な数値範囲を超えました。')
+            energy, force, stress = calculate.with_cell(index, x, box)
+            stress = np.asarray(stress, dtype=float)
+            if stress.shape != (3, 3) or not np.isfinite(stress).all():
+                raise ValueError('MDのセル応力が不正です。')
         force = np.asarray(force, dtype=float)
         if not np.isfinite(energy) or force.shape != x.shape or not np.isfinite(force).all():
             raise ValueError('MDのポテンシャルエネルギーまたは力が不正です。')
-        return float(energy), force
+        return float(energy), force, stress
 
     def thermodynamics(v, potential):
         kinetic = .5 * np.sum(masses * v**2)
@@ -2881,29 +3066,47 @@ def molecular_dynamics(data, calculate, progress=lambda _: None):
                     temperatureK=float(2 * thermal / (dof * ase_units.kB)))
 
     frames = []
-    energy, force = evaluate(positions)
+    energy, force, stress = evaluate(positions, lattice)
+    if thermostat == 'nose-hoover-chain' and not npt and not np.any(velocity) and not np.any(force):
+        raise ValueError('全原子の速度と力がゼロのため、決定論的なNosé–Hoover鎖では運動が始まりません。'
+                         '初速度をMaxwell–Boltzmann分布から生成するか、BussiまたはLangevin熱浴を選んでください。')
     thermo = thermodynamics(velocity, energy)
 
     def report(step, sample):
         event = dict(phase='md', step=step, timeFs=step * dt_fs, potentialEnergyEV=energy,
                      evaluations=step + 1, **thermo)
+        if lattice is not None:
+            event.update(md_pressure_observation(settings, dof, lattice, stress, thermo))
+        if npt:
+            attempts = step // settings['barostatInterval']
+            event.update(evaluations=step + 1 + attempts, volumeAttempts=attempts, volumeAccepted=accepted_volumes)
         if sample:
             xyz = positions.tolist()
             frame = dict(step=step, timeFs=step * dt_fs, positions=xyz, energy=energy,
                          force=force.tolist(), fmax=force_max(force),
                          velocitiesAngstromPerFs=(velocity * ase_units.fs).tolist(), **thermo)
+            if lattice is not None:
+                frame.update(cell={'vectors':lattice.tolist(), 'pbc':[True]*3},
+                             volumeA3=event['volumeA3'], pressureBar=event['pressureBar'])
+            if npt:
+                frame.update(evaluations=event['evaluations'], volumeAttempts=attempts, volumeAccepted=accepted_volumes)
             append_md_sample(frames, frame)
             event['mdCheckpoint'] = frame
             if data.get('livePreview'):
-                event['preview'] = dict(step=step, images=[xyz], energies=[energy])
+                event['preview'] = dict(step=step, images=[xyz], energies=[energy], timeFs=[event['timeFs']],
+                                        temperatureK=[thermo['temperatureK']])
+                if lattice is not None:
+                    event['preview'].update(cell=frame['cell'], cells=[frame['cell']],
+                                            pressureBar=[frame['pressureBar']], volumeA3=[frame['volumeA3']])
         progress(event)
 
     report(0, True)
     for step in range(1, data['maxSteps'] + 1):
         try:
             # B (half kick). The OU update lies between the two half drifts in BAOAB.
-            half = velocity + .5 * dt * force / masses
-            if thermostat:
+            starting = global_bath(velocity) if global_bath else velocity
+            half = starting + .5 * dt * force / masses
+            if thermostat == 'langevin':
                 trial = positions + .5 * dt * half
                 noise = noise_scale * rng.standard_normal(positions.shape)
                 if remove_com:
@@ -2916,8 +3119,25 @@ def molecular_dynamics(data, calculate, progress=lambda _: None):
                 trial += .5 * dt * half
             else:
                 trial = positions + dt * half
-            trial_energy, trial_force = evaluate(trial)
+            trial_lattice = lattice
+            trial_energy, trial_force, trial_stress = evaluate(trial, trial_lattice)
             trial_velocity = half + .5 * dt * trial_force / masses
+            if global_bath:
+                trial_velocity = global_bath(trial_velocity)
+            accepted = False
+            if npt and step % settings['barostatInterval'] == 0:
+                log_ratio = rng.uniform(-log_width, log_width)
+                scale = math.exp(log_ratio / 3)
+                proposed_lattice, proposed_positions = scale * lattice, scale * trial
+                # Use a separate calculator index for candidate electronic states.
+                # A rejected trial cannot change the propagation lane's SCF restart.
+                proposed_energy, proposed_force, proposed_stress = evaluate(proposed_positions, proposed_lattice, 1)
+                log_accept = md_log_volume_acceptance(len(masses), log_ratio, abs(np.linalg.det(lattice)),
+                                                       proposed_energy - trial_energy, target_pressure, kT)
+                if math.log1p(-rng.random()) <= min(0., log_accept):
+                    trial_lattice, trial = proposed_lattice, proposed_positions
+                    trial_energy, trial_force, trial_stress = proposed_energy, proposed_force, proposed_stress
+                    accepted = True
             trial_thermo = thermodynamics(trial_velocity, trial_energy)
         except Exception:
             # Preserve the last fully integrated state if a force call fails off stride.
@@ -2925,6 +3145,8 @@ def molecular_dynamics(data, calculate, progress=lambda _: None):
                 report(step - 1, True)
             raise
         positions, velocity, energy, force, thermo = trial, trial_velocity, trial_energy, trial_force, trial_thermo
+        lattice, stress = trial_lattice, trial_stress
+        accepted_volumes += int(accepted)
         report(step, step % settings['sampleEvery'] == 0 or step == data['maxSteps'])
     return md_result(data, frames, 'completed')
 
@@ -3618,7 +3840,8 @@ def llmlip_inspect(path):
                 defaultHead='omol' if architecture=='uma-v1' and 'omol' in heads else heads[0] if heads else None,
                 periodic=pbc, charge=bool(caps.input_requirements.total_charge),
                 spin=bool(caps.input_requirements.spin_multiplicity), synthetic=architecture.startswith('synthetic-'),
-                stress=False, available=True, sha256=llmlip_artifact(path, digest=True))
+                stress=pbc != 'none' and bool(getattr(caps, 'supports_stress', False)),
+                available=True, sha256=llmlip_artifact(path, digest=True))
 
 
 def llmlip_catalog(specs):
@@ -3671,6 +3894,8 @@ def llmlip_job_config(data, config):
         policy = 'none' if conditioned else item['periodic']
         if any(pbc) and (policy=='none' or (policy=='full' and not all(pbc))):
             raise ValueError('選択したllmlipモデル/headは指定の周期境界条件に対応していません。')
+        if md_needs_stress(data) and (not item.get('stress') or not all(pbc)):
+            raise ValueError('NPTと固定体積での圧力測定には3次元周期セルと応力に対応したllmlipモデルが必要です。')
         if dtype!='float64' and (data['mode'] in ('ts', 'irc', 'vibrations') or data.get('vibrations')):
             raise ValueError('llmlip.rs β版のTS・IRC・有限差分振動解析にはfloat64を指定してください。')
         if data.get('modelF') or data.get('cellOptimization', {}).get('mode', 'fixed')!='fixed':
@@ -3709,16 +3934,26 @@ class LLMLIPEngine:
         self.data, self.config = data, config
 
     def __call__(self, index, positions):
+        return self._predict(positions)
+
+    def with_cell(self, index, positions, lattice):
+        return self._predict(positions, lattice)
+
+    def _predict(self, positions, lattice=None):
         data, config = self.data, self.config
         p = np.asarray(positions, dtype=np.float64)
         if p.shape != (len(data['symbols']), 3) or not np.isfinite(p).all():
             raise ValueError('llmlipへ渡す座標が不正です。')
         cell = data.get('cell'); settings = config['llmlipSelection']
+        need_stress = lattice is not None
+        if need_stress and (not config['llmlipCapabilities'].get('stress') or not cell or not all(cell['pbc'])):
+            raise ValueError('選択したllmlipモデルはこのセルで応力を計算できません。')
+        vectors = lattice if need_stress else cell['vectors'] if cell else None
         try:
             prediction = self.model.predict(species=data['symbols'], positions=p,
-                cell=np.asarray(cell['vectors'], dtype=np.float64) if cell else None,
+                cell=np.asarray(vectors, dtype=np.float64) if vectors is not None else None,
                 pbc=tuple(cell['pbc']) if cell else (False, False, False),
-                energy=True, forces=True, stress=False, virial=False,
+                energy=True, forces=True, stress=need_stress, virial=False,
                 dtype=settings['dtype'], head=settings['head'],
                 total_charge=float(data['charge']) if config['llmlipCharge'] else None,
                 spin_multiplicity=float(data['multiplicity']) if config['llmlipSpin'] else None)
@@ -3729,6 +3964,12 @@ class LLMLIPEngine:
             raise ValueError('llmlipの推論に失敗しました（'+type(error).__name__+'）。モデルの実装・適用範囲・入力条件を確認してください。') from error
         if not math.isfinite(energy) or force.shape != p.shape or not np.isfinite(force).all():
             raise ValueError('llmlipが不正なエネルギー・力を返しました。計算を停止しました。')
+        if need_stress:
+            # Native Cauchy stress uses ASE's tensile-positive convention in eV/Å³.
+            stress = np.asarray(getattr(prediction, 'stress', None), dtype=float)
+            if stress.shape != (3, 3) or not np.isfinite(stress).all():
+                raise ValueError('llmlipが不正な応力テンソルを返しました。計算を停止しました。')
+            return energy, force.copy(), stress.copy()
         return energy, force.copy()  # Already eV and -dE/dR in eV/angstrom.
 
 
@@ -4473,10 +4714,22 @@ class Jobs:
         return {'steps':result.get('steps',job.get('progress',{}).get('step',0)),
                 'hasResult':bool(result),'optimizerState':bool(result.get('optimizerState'))}
 
+    @staticmethod
+    def _input_summary(data):
+        small = {'mode':data.get('mode', 'evaluate'), 'symbols':data.get('symbols', [])}
+        if small['mode'] == 'md':
+            settings = data['md']
+            ensemble = settings['ensemble']
+            small['md'] = {'ensemble':ensemble}
+            if ensemble != 'nve':
+                # Journals from 1.21 recorded Langevin friction but no thermostat name.
+                small['md']['thermostat'] = settings.get('thermostat', 'langevin')
+        return small
+
     def _write_summary(self,job):
         path=self.history_dir/(job['id']+'.json');stat=path.stat()
         small={k:job[k] for k in self.SAVED_KEYS if k in job and k not in ('result','checkpoints','bandCheckpoint','structureCheckpoint','diagnosticsHistory')}
-        small['data']={'mode':job['data'].get('mode','evaluate'),'symbols':job['data'].get('symbols',[])}
+        small['data']=self._input_summary(job['data'])
         small['_resultSummary']=self._summary(job)
         self._atomic_record(path.with_suffix('.summary'),{'size':stat.st_size,'mtime':stat.st_mtime_ns,'job':small})
 
@@ -4490,7 +4743,9 @@ class Jobs:
                         summary=self._read_record(path.with_suffix('.summary'));stat=path.stat()
                         if summary['size']==stat.st_size and summary['mtime']==stat.st_mtime_ns:
                             small=summary['job']
-                            if small['id']==path.stem and small['status'] in self.TERMINAL:
+                            # Rebuild pre-1.22 MD indexes from the original ensemble settings once.
+                            if (small['id']==path.stem and small['status'] in self.TERMINAL and
+                                    (small['data']['mode'] != 'md' or 'md' in small['data'])):
                                 job={**small,'_lazy':True}
                     except (OSError,ValueError,KeyError,TypeError):pass # rebuild from the authoritative record
                 if job is None:job=self._read_job(path)
@@ -4502,7 +4757,7 @@ class Jobs:
                     self._write_summary(job)
                     job['_resultSummary']=self._summary(job)
                     for k in ('result','checkpoints','bandCheckpoint','structureCheckpoint','diagnosticsHistory'):job.pop(k,None)
-                    job['data']={'mode':job['data'].get('mode','evaluate'),'symbols':job['data'].get('symbols',[])}
+                    job['data']=self._input_summary(job['data'])
                     job['_lazy']=True
                 self.jobs[job['id']]=job
             except (OSError,ValueError,KeyError,TypeError):
@@ -4516,7 +4771,7 @@ class Jobs:
             if not (self.history_dir/(job['id']+'.summary')).exists():continue
             job['_resultSummary']=self._summary(job)
             for key in ('result','checkpoints','bandCheckpoint','structureCheckpoint','diagnosticsHistory','preview'):job.pop(key,None)
-            job['data']={'mode':job['data'].get('mode','evaluate'),'symbols':job['data'].get('symbols',[])}
+            job['data']=self._input_summary(job['data'])
             job['_lazy']=True
 
     def _persist(self, job, force=False):
@@ -4696,6 +4951,8 @@ class Jobs:
                 row.update(mode=job['data']['mode'], atoms=len(job['data']['symbols']),
                            steps=summary.get('steps',0),
                            hasResult=summary.get('hasResult',False), resumable=job['status'] in self.TERMINAL and not job.get('_active'))
+                if row['mode'] == 'md':
+                    row['md'] = self._input_summary(job['data'])['md']
                 row['resumeKind'] = ('optimizer_state' if summary.get('optimizerState') else 'scan_remaining' if job['data']['mode']=='scan' and summary.get('hasResult') else
                                      'geometry' if job['data']['mode'] in ('optimize','afir','ts', *PATH_MODES) and summary.get('hasResult') else 'restart')
                 if job.get('_active') and job['status'] in self.TERMINAL:
@@ -4810,7 +5067,7 @@ class Jobs:
             reason = {'cancelled':'cancelled', 'interrupted':'interrupted'}.get(job['status'], 'failed')
             result = md_result(data, job['checkpoints'], reason)
             identity = {'data':data, 'identity':job.get('configFingerprint') or calculation_identity(data, self.config)}
-            job['result'] = dict(result, symbols=data['symbols'], cell=data['cell'], charge=data['charge'],
+            job['result'] = dict(result, symbols=data['symbols'], cell=result.get('cell', data['cell']), charge=data['charge'],
                                  multiplicity=data['multiplicity'], error=job.get('error'),
                                  conditionId=hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest(),
                                  **self._record_identity(job))
@@ -5095,7 +5352,7 @@ class Handler(BaseHTTPRequestHandler):
                                    'checkpointSHA256':config.get('anysolvHashes', {}),
                                    'device':config.get('anysolvDevice'), 'precision':config['umaPrecision']},
                         'maxMultiplicity':100, 'maxAtomicNumber':83} if config['engine']=='uma' else {}),
-                    'molecularDynamics':{'ensembles':['nve','nvt'], 'maxSteps':100000, 'maxFrames':1000, 'maxAtomFrames':100000},
+                    'molecularDynamics':md_capabilities(config),
                     'sellaVersion':sella_version(), 'vibrations':1, 'maxVibrationAtoms':200, 'pathCheckpoint':1, 'fixedAtoms':True,
                     'irc':bool(sella_version()), 'thermochemistry':True, 'internalConstraints':True, 'groupConstraints':True, 'scan':True, 'resourceOptimization':1, 'evaluationWorkers':config.get('workers',1), 'advancedOptimization':True, 'optimizerRestart':True, 'cellOptimization':config['engine']=='tblite',
                     'adaptiveNEB':True, 'pathSplit':True, 'history':True, 'queue':True, 'residentModels':True,

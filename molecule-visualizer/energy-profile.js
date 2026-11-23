@@ -12,7 +12,10 @@
     return 40+500*i/Math.max(1,series.energies.length-1);
   }
   function mdLabel(series,i){
-    return 'ステップ '+series.stepNumbers[i]+' · '+Number(series.timeFs[i].toPrecision(7))+' fs';
+    const values=['ステップ '+series.stepNumbers[i],Number(series.timeFs[i].toPrecision(7))+' fs'];
+    for(const [key,unit] of [['temperatureK','K'],['volumeA3','Å³'],['pressureBar','bar']])
+      if(Number.isFinite(series[key]?.[i]))values.push(Number(series[key][i].toPrecision(6))+' '+unit);
+    return values.join(' · ');
   }
   function element(tag,attrs,text){const e=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));if(text)e.textContent=text;return e;}
   function restore(draw=true,deferred=false){

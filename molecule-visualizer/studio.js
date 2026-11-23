@@ -13,6 +13,15 @@
     const s=state(),c=s.metadata.cell,frames=s.metadata.trajectory||[];
     MV.EnergyProfile?.sync();
     $('cellStatus').textContent=c?`周期境界 ${c.pbc.map((x,i)=>x?'abc'[i]:'—').join('')} · ${Math.abs(determinant(c.vectors)).toFixed(3)} Å³`:'非周期構造';
+    const md=s.metadata.externalCalculation,readout=$('mdFrameReadout');
+    readout.hidden=md?.mode!=='md'||!Number.isFinite(md.timeFs);
+    if(!readout.hidden){
+      const values=[MV.MDUI.methodLabel(md)];
+      for(const [key,unit] of [['timeFs','fs'],['temperatureK','K'],['volumeA3','Å³'],['pressureBar','bar']]){
+        if(Number.isFinite(md[key]))values.push(Number(md[key].toPrecision(6))+' '+unit);
+      }
+      readout.textContent=values.filter(Boolean).join(' · ');
+    }
     $('frameRange').max=Math.max(0,frames.length-1);$('frameRange').value=s.metadata.frameIndex||0;$('frameLabel').textContent=`${(s.metadata.frameIndex||0)+1} / ${frames.length||1}`;
     ['framePrev','frameNext','framePlay','frameRange','allFrames'].forEach(id=>$(id).disabled=frames.length<2);
     const chosen=[...s.selectedAtomIds].map(id=>s.atoms.find(a=>a.id===id));

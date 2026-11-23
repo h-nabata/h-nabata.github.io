@@ -2,7 +2,7 @@
 
 ## 分子動力学とRDKitの古典力場（1.21.0）
 
-単一ファイルの `bridge.py` を更新・再起動して接続します。g-xTB、tblite、UMA、llmlip.rsの既存接続では、その接続のエネルギーと力を使ってNVE・Langevin NVTを実行できます。RDKit接続では、同じPython環境に `python -m pip install rdkit` で追加し、`python bridge.py --engine rdkit --allow-origin https://h-nabata.github.io` で起動します。[MDの操作と力場の選び方](../MD.md)
+`bridge.py`を1.22.0以降、ASEを3.25以降に更新・再起動して接続します。g-xTB、tblite、UMA、llmlip.rsでNVE・NVTを実行できます。NVTの既定熱浴はNosé–Hoover鎖で、BussiとLangevinも選択できます。tbliteと周期系の応力に対応するllmlip.rsモデルでは、NPTまたは固定セルでの圧力記録も利用できます。RDKit接続では、同じPython環境に `python -m pip install rdkit` で追加し、`python bridge.py --engine rdkit --allow-origin https://h-nabata.github.io` で起動します。[MDの操作と力場の選び方](../MD.md)
 
 ## 1.16.0への更新とCPU配分
 
@@ -242,7 +242,7 @@ Windows用の対応wheelが見つからないと、pipは `tblite-….tar.gz` �
 ```sh
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install "numpy>=1.24,<3" "ase>=3.23,<4" "psutil>=5.9,<8"
+python -m pip install "numpy>=1.24,<3" "ase>=3.25,<4" "psutil>=5.9,<8"
 python -m pip install --only-binary=:all: 'tblite>=0.4,<1'
 python -c "import numpy, ase, psutil; from tblite.interface import Calculator; print('OK')"
 python bridge.py --engine tblite --allow-origin https://h-nabata.github.io
@@ -263,7 +263,7 @@ Python 3.10以上を用意し、bridge.pyの保存先で専用環境を作りま
 ```bat
 cd /d "C:\Users\ユーザー名\Downloads"
 python -m venv .venv-gxtb
-.venv-gxtb\Scripts\python.exe -m pip install "numpy>=1.24,<3" "ase>=3.23,<4" "psutil>=5.9,<8"
+.venv-gxtb\Scripts\python.exe -m pip install "numpy>=1.24,<3" "ase>=3.25,<4" "psutil>=5.9,<8"
 set "PATH=C:\path\to\g-xtb\bin;%PATH%"
 "C:\path\to\g-xtb\bin\xtb.exe" --help
 .venv-gxtb\Scripts\python.exe bridge.py --engine gxtb --binary "C:\path\to\g-xtb\bin\xtb.exe" --allow-origin https://h-nabata.github.io
@@ -276,7 +276,7 @@ set "PATH=C:\path\to\g-xtb\bin;%PATH%"
 ```sh
 python3 -m venv .venv-gxtb
 source .venv-gxtb/bin/activate
-python -m pip install "numpy>=1.24,<3" "ase>=3.23,<4" "psutil>=5.9,<8"
+python -m pip install "numpy>=1.24,<3" "ase>=3.25,<4" "psutil>=5.9,<8"
 /absolute/path/to/xtb --help
 python bridge.py --engine gxtb --binary /absolute/path/to/xtb --allow-origin https://h-nabata.github.io
 ```

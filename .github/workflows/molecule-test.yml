@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install -r molecule-visualizer/local-engine/requirements.txt 'rdkit>=2024.3'
+      - run: python -m pip install -r molecule-visualizer/local-engine/requirements.txt 'rdkit>=2024.3' 'tblite>=0.4,<1'
       - name: Download and verify the official g-xTB Linux release
         working-directory: ${{ runner.temp }}
         run: |
@@ -54,6 +54,7 @@ jobs:
     timeout-minutes: 20
     env:
       LLMLIP_TEST_MODEL: ${{ github.workspace }}/.llmlip-upstream/examples/model.e3rs
+      LLMLIP_STRESS_TEST_MODEL: ${{ github.workspace }}/molecule-visualizer/tests/fixtures/npt-scalar.e3rs
       OMP_NUM_THREADS: '1'
       OPENBLAS_NUM_THREADS: '1'
     steps:
