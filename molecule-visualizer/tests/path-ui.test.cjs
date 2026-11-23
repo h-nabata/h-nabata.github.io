@@ -30,8 +30,8 @@ test('browser connects to the currently distributed bridge version',async()=>{
 });
 test('LUP path form keeps CI-NEB defaults and sends current unsaved method settings without a spring',async()=>{
  const {M,nodes,select}=await boot();M.EngineUI.prepareNEB();assert.equal(nodes.get('engineMode').value,'cineb');assert.equal(nodes.get('engineSteps').value,'100');
- select('lup');assert.equal(nodes.get('lupOptimizer').value,'lbfgs');assert.equal(nodes.get('engineScope').value,'all');assert.equal(nodes.get('engineScope').disabled,true);assert.equal(nodes.get('engineSpringLabel').hidden,true);assert.equal(nodes.get('engineClimbLabel').hidden,false);assert.equal(nodes.get('engineLUPSettings').hidden,false);assert.equal(nodes.get('engineAdaptiveSettings').hidden,false);
- for(const [id,value] of Object.entries({engineSteps:'72',engineFmax:'.025',engineMove:'.02',engineClimb:'7',lupOptimizer:'lbfgs',lupRedistributeEvery:'3',lupRedistributionTolerance:'.0007',engineSpring:'invalid-but-hidden'}))nodes.get(id).value=value;
+ select('lup');assert.equal(nodes.get('enginePathOptimizer').value,'auto');assert.equal(nodes.get('engineScope').value,'all');assert.equal(nodes.get('engineScope').disabled,true);assert.equal(nodes.get('engineSpringLabel').hidden,true);assert.equal(nodes.get('engineClimbLabel').hidden,false);assert.equal(nodes.get('engineLUPSettings').hidden,false);assert.equal(nodes.get('engineAdaptiveSettings').hidden,false);
+ for(const [id,value] of Object.entries({engineSteps:'72',engineFmax:'.025',engineMove:'.02',engineClimb:'7',enginePathOptimizer:'lbfgs',lupRedistributeEvery:'3',lupRedistributionTolerance:'.0007',engineSpring:'invalid-but-hidden'}))nodes.get(id).value=value;
  nodes.get('adaptiveEnabled').checked=true;nodes.get('adaptiveMaxImages').value='7';nodes.get('pathSplitEnabled').checked=true;
  const {data}=M.EngineUI.input();assert.equal(data.mode,'lup');assert.equal(data.images.length,3);assert.equal(data.maxSteps,72);assert.equal(data.fmax,.025);assert.equal(data.maxMove,.02);assert.equal(data.climbAfter,7);assert.equal(data.optimizer,'lbfgs');assert.equal(data.spring,undefined);assert.equal(JSON.stringify(data.lup),JSON.stringify({redistributeEvery:3,redistributionTolerance:.0007}));assert.equal(data.adaptiveNEB.maxImages,7);assert.equal(data.pathSplit.enabled,true);assert.equal(JSON.stringify(data.nodeIds),'["n0","n1","n2"]');
  select('cineb');assert.equal(nodes.get('engineSteps').value,'100');assert.equal(nodes.get('engineSpringLabel').hidden,false);assert.equal(nodes.get('engineLUPSettings').hidden,true);M.EngineUI.prepareNEB();assert.equal(nodes.get('engineMode').value,'cineb');
@@ -39,16 +39,17 @@ test('LUP path form keeps CI-NEB defaults and sends current unsaved method setti
 test('LUP refuses invalid redistribution, missing capability, too few images and mismatched endpoints',async()=>{
  const {M,nodes,info,select}=await boot('1.9.0');select('lup');nodes.get('engineEndpointMode').value='fixed';nodes.get('lupRedistributeEvery').value='0';assert.throws(()=>M.EngineUI.input(),/1〜100/);nodes.get('lupRedistributeEvery').value='5';nodes.get('lupRedistributionTolerance').value='0';assert.throws(()=>M.EngineUI.input(),/0.00001/);nodes.get('lupRedistributionTolerance').value='.001';
  const j=M.EngineUI.input(),r={mode:'lup',symbols:j.data.symbols,cell:j.data.cell,images:structuredClone(j.data.images),energies:[0,.2,0],effectiveFmax:.01,imageFmax:[0,.01,0],units:{energy:'eV',length:'angstrom'}};M.EngineUI.validateResult(r,j);r.images[0][0][0]+=.1;assert.throws(()=>M.EngineUI.validateResult(r,j),/端点/);
- info.modes=info.modes.filter(x=>x!=='lup');assert.throws(()=>M.EngineUI.input(),/LUP系/);info.modes.push('lup');info.pathOptimizers.lup=['fire'];nodes.get('lupOptimizer').value='lbfgs';assert.throws(()=>M.EngineUI.input(),/アルゴリズム/);nodes.get('lupOptimizer').value='fire';M.App.getState().metadata.trajectory.length=2;assert.throws(()=>M.EngineUI.input(),/3〜100/);
+ info.modes=info.modes.filter(x=>x!=='lup');assert.throws(()=>M.EngineUI.input(),/LUP系/);info.modes.push('lup');info.pathOptimizers.lup=['fire'];nodes.get('enginePathOptimizer').value='lbfgs';assert.throws(()=>M.EngineUI.input(),/アルゴリズム/);nodes.get('enginePathOptimizer').value='fire';M.App.getState().metadata.trajectory.length=2;assert.throws(()=>M.EngineUI.input(),/3〜100/);
 });
 test('LUP history restores its optimizer, redistribution and path scope across reopen',async()=>{
- const {M,nodes,select}=await boot();select('lup');nodes.get('engineSteps').value='61';nodes.get('lupOptimizer').value='lbfgs';nodes.get('lupRedistributeEvery').value='9';nodes.get('lupRedistributionTolerance').value='.0008';const {data}=M.EngineUI.input();select('optimize');M.EngineUI.restoreJob({id:'a'.repeat(32),data},true);M.EngineUI.open();assert.equal(nodes.get('engineMode').value,'lup');assert.equal(nodes.get('engineScope').value,'all');assert.equal(Number(nodes.get('engineSteps').value),61);assert.equal(nodes.get('lupOptimizer').value,'lbfgs');assert.equal(Number(nodes.get('lupRedistributeEvery').value),9);assert.equal(Number(nodes.get('lupRedistributionTolerance').value),.0008);assert.equal(M.EngineUI.input().data.lup.redistributionTolerance,.0008);
+ const {M,nodes,select}=await boot();select('lup');nodes.get('engineSteps').value='61';nodes.get('enginePathOptimizer').value='lbfgs';nodes.get('lupRedistributeEvery').value='9';nodes.get('lupRedistributionTolerance').value='.0008';const {data}=M.EngineUI.input();select('optimize');M.EngineUI.restoreJob({id:'a'.repeat(32),data},true);M.EngineUI.open();assert.equal(nodes.get('engineMode').value,'lup');assert.equal(nodes.get('engineScope').value,'all');assert.equal(Number(nodes.get('engineSteps').value),61);assert.equal(nodes.get('enginePathOptimizer').value,'lbfgs');assert.equal(Number(nodes.get('lupRedistributeEvery').value),9);assert.equal(Number(nodes.get('lupRedistributionTolerance').value),.0008);assert.equal(M.EngineUI.input().data.lup.redistributionTolerance,.0008);
 });
 
 test('manual node insertion keeps LUP mode and existing node identities',async()=>{
- const {M,nodes}=await boot(),frames=M.EngineUI.frames(M.App.getState(),'all');
+ const {M,nodes,info}=await boot(),frames=M.EngineUI.frames(M.App.getState(),'all');
+ info.pathOptimizers.lup.push('band-lbfgs');
  const refined=M.PathRefinement.refine(frames,0,2,1);assert.equal(refined.length,5);assert.equal(JSON.stringify([refined[0],refined[2],refined[4]].map(f=>f.metadata.pathNodeId)),'["n0","n1","n2"]');assert.equal(new Set(refined.map(f=>f.metadata.pathNodeId)).size,5);
- M.PathRefinement.init();M.PathRefinement.open(frames,'lup');assert.match(nodes.get('refineNEB').textContent,/LUP系/);await nodes.get('refineNEB').click();assert.equal(nodes.get('engineMode').value,'lup');assert.equal(M.App.getState().metadata.trajectory.length,5);assert.equal(new Set(M.EngineUI.input().data.nodeIds).size,5);
+ M.PathRefinement.init();M.PathRefinement.open(frames,'lup',null,{mode:'lup',optimizer:'band-lbfgs',maxMove:.011});assert.match(nodes.get('refineNEB').textContent,/LUP系/);await nodes.get('refineNEB').click();assert.equal(nodes.get('engineMode').value,'lup');assert.equal(M.App.getState().metadata.trajectory.length,5);const refinedJob=M.EngineUI.input().data;assert.equal(new Set(refinedJob.nodeIds).size,5);assert.equal(refinedJob.optimizer,'band-lbfgs');assert.equal(refinedJob.maxMove,.011);assert.equal(refinedJob.pathSymmetry,undefined);
  M.PathRefinement.open();assert.match(nodes.get('refineNEB').textContent,/CI-NEB/);
 });
 
@@ -396,6 +397,17 @@ test('energy/force inconsistency remains visible on saved paths and does not blo
  assert.equal(nodes.get('engineApply').disabled,false);
  M.EngineUI.showResult({...r,pathConsistencyWarning:undefined},j);
  assert.equal(nodes.get('enginePathWarning').hidden,true);
+ for(const [mode,optimizer] of [['neb','fire'],['lup','lbfgs'],['cineb','band-lbfgs']]){
+  const data={...d,mode,optimizer},saved={...r,mode,optimizer,scfStepRetries:3,scfFailedStep:5,reason:'failed'};
+  if(mode!=='neb'){
+   data.endpointMode=saved.endpointMode='fixed';
+   saved.diagnostics={endpointPhysicalFmax:[0,0]};
+  }
+  M.EngineUI.restoreJob({id:'a'.repeat(32),data,result:saved});
+  assert.match(nodes.get('engineResultSummary').textContent,/刻み幅を縮めた回数 3回.*ステップ5でSCF未収束/);
+ }
+ M.EngineUI.showResult(r,j);
+ assert.doesNotMatch(nodes.get('engineResultSummary').textContent,/刻み幅を縮めた回数/);
 });
 
 test('initial mirror correction is optional, bounded and reproduced in saved path settings',async()=>{
@@ -424,4 +436,34 @@ test('initial mirror correction is optional, bounded and reproduced in saved pat
  assert.equal(Number(limit.value),.05);
  assert.equal(nodes.get('engineMirrorOptions').open,false);
  assert.equal(M.EngineUI.input().data.pathSymmetry.maxInitialCorrection,undefined);
+});
+
+test('unrestricted path relaxation sends the selected whole-band optimizer and displacement, across modes and history',async()=>{
+ const {M,nodes,info,select}=await boot();
+ info.modes.push('neb');
+ for(const mode of ['neb','cineb','lup'])info.pathOptimizers[mode]=['band-lbfgs','fire',...(mode==='lup'?['lbfgs']:[])];
+ for(const mode of ['neb','cineb','lup']){
+  select(mode);
+  nodes.get('enginePathOptimizer').value='band-lbfgs';
+  nodes.get('engineMove').value='.013';
+  const data=M.EngineUI.input().data;
+  assert.equal(data.optimizer,'band-lbfgs');assert.equal(data.maxMove,.013);
+  assert.equal(data.pathSymmetry,undefined);assert.equal(data.fixedAtoms,undefined);
+  assert.equal(nodes.get('enginePathOptimizerLabel').hidden,false);
+  M.EngineUI.restoreInput({...data,optimizer:undefined});
+  assert.equal(nodes.get('enginePathOptimizer').value,mode==='lup'?'lbfgs':'fire');
+  M.EngineUI.restoreInput(data);
+  assert.equal(M.EngineUI.input().data.optimizer,'band-lbfgs');
+ }
+ select('optimize');
+ assert.equal(nodes.get('enginePathOptimizerLabel').hidden,true);
+ assert.notEqual(M.EngineUI.input().data.optimizer,'band-lbfgs');
+ select('cineb');
+ assert.equal(nodes.get('enginePathOptimizer').value,'band-lbfgs');
+ assert.equal(Number(nodes.get('engineMove').value),.013);
+ info.pathOptimizers.cineb=['fire'];
+ assert.throws(()=>M.EngineUI.input(),/経路アルゴリズム/);
+ assert.equal(nodes.get('enginePathOptimizer').value,'band-lbfgs');
+ M.EngineUI.restoreInput({mode:'cineb',optimizer:'band-lbfgs',endpointMode:'fixed'});
+ assert.throws(()=>M.EngineUI.input(),/経路アルゴリズム/);
 });

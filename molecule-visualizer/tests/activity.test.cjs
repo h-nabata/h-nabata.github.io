@@ -154,3 +154,14 @@ test('the modal footer keeps the submitted method and active phase while another
   activity.recordJob(c,{id:'job',status:'completed',result:{reason:'connected'}},'dsafir');
   assert.equal(hidden('engineActivityStatus'),true);
 });
+
+test('native path SCF retries identify the attempted step without a live structure preview', () => {
+  const {activity,output} = workspace(), c = {info:{engine:'gxtb'}};
+  activity.connect(c);
+  activity.submitted(c,{id:'trial',status:'queued'},'cineb');
+  for(const phase of ['path_step_retry','path_step_failed']){
+    activity.recordJob(c,{id:'trial',status:'running',progress:{phase,step:19,scfStepRetries:3}},'cineb');
+    assert.match(output('activityJobDetail'), /ステップ19.*刻み幅.*通算3回/);
+    assert.match(output('engineActivityStatus'), /ステップ19.*通算3回/);
+  }
+});

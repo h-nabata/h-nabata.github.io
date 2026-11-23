@@ -27,8 +27,7 @@
     if(data.mode==='scan'){if(!info.modes.includes('scan'))throw Error('接続中のサーバーは緩和スキャンに対応していません。');const rows=coordinates($('scanCoordinateRows'),state.atoms.length,true);if(rows.length<1||rows.length>2||rows.reduce((p,r)=>p*r.points,1)>400)throw Error('1〜2本の座標を指定し、合計400点以内にしてください。');data.scan={coordinates:rows,stopOnFailure:$('scanStopOnFailure').checked};}
     if(data.mode==='lup'){
       if(!info.modes.includes('lup'))throw Error('接続中のサーバーはLUP系（CI-String）に対応していません。');
-      const optimizer=$('lupOptimizer').value;if(!['fire','lbfgs'].includes(optimizer)||info.pathOptimizers?.lup&&!info.pathOptimizers.lup.includes(optimizer))throw Error('接続中のサーバーで利用できる経路アルゴリズムを選択してください。');
-      data.optimizer=optimizer;data.lup={redistributeEvery:numeric('lupRedistributeEvery',1,100,true),redistributionTolerance:numeric('lupRedistributionTolerance',.00001,.1)};
+      data.lup={redistributeEvery:numeric('lupRedistributeEvery',1,100,true),redistributionTolerance:numeric('lupRedistributionTolerance',.00001,.1)};
     }
     if(['cineb','lup'].includes(data.mode)){
       if($('adaptiveEnabled').checked){if(!info.adaptiveNEB)throw Error('接続中のサーバーは自動ノード追加に対応していません。');data.adaptiveNEB={enabled:true,maxImages:numeric('adaptiveMaxImages',data.images.length,100,true),interval:numeric('adaptiveInterval',1,10000,true),maxSpacing:numeric('adaptiveMaxSpacing',.01,20),energyGap:numeric('adaptiveEnergyGap',.0001,100)};}
@@ -46,7 +45,7 @@
     if(data.dsafir){
       $('dsafirDelta').value=data.dsafir.delta;$('dsafirStep').value=data.dsafir.stepSize;$('dsafirThreshold').value=data.dsafir.threshold;
     }
-    if(data.mode==='lup')$('lupOptimizer').value=data.optimizer||'lbfgs';if(data.lup){$('lupRedistributeEvery').value=data.lup.redistributeEvery;$('lupRedistributionTolerance').value=data.lup.redistributionTolerance;}
+    if(data.lup){$('lupRedistributeEvery').value=data.lup.redistributeEvery;$('lupRedistributionTolerance').value=data.lup.redistributionTolerance;}
     if(data.irc){$('ircDirection').value=data.irc.direction;$('ircStepSize').value=data.irc.stepSize;$('ircRelaxEndpoints').checked=data.irc.relaxEndpoints;}
     if(data.scan){$('scanCoordinateRows').replaceChildren();for(const c of data.scan.coordinates)coordinateRow($('scanCoordinateRows'),true,c);$('scanStopOnFailure').checked=data.scan.stopOnFailure;}
     $('adaptiveEnabled').checked=!!data.adaptiveNEB?.enabled;for(const [key,id] of Object.entries({maxImages:'adaptiveMaxImages',interval:'adaptiveInterval',maxSpacing:'adaptiveMaxSpacing',energyGap:'adaptiveEnergyGap'}))if(data.adaptiveNEB?.[key]!=null)$(id).value=data.adaptiveNEB[key];
@@ -57,8 +56,14 @@
   function table(head,rows){const t=el('table'),thead=el('thead'),tr=el('tr');for(const x of head)tr.append(el('th',{},x));thead.append(tr);t.append(thead);const b=el('tbody');for(const row of rows){const tr=el('tr');for(const x of row)tr.append(el('td',{},x));b.append(tr);}t.append(b);const wrap=el('div',{class:'mv-table-scroll'});wrap.append(t);return wrap;}
   function showResult(r,j){
     const out=$('researchResult');out.replaceChildren();
+    const bandOptimizer=(r.optimizer||j.data.optimizer)==='band-lbfgs';
+    if(bandOptimizer){
+      const radius=r.diagnostics?.stepRadius;
+      out.append(el('p',{class:'mv-small'},'経路全体のL-BFGS · 設定した最大原子変位 '+j.data.maxMove+' Å'
+        +(Number.isFinite(radius)?' · 最終反復の変位上限 '+radius.toPrecision(3)+' Å':'')));
+    }
     if(r.mode==='lup'){
-      const d=r.diagnostics||{},settings=r.lup||j.data.lup;out.append(el('p',{class:'mv-small'},`LUP系（CI-String） · ${(r.optimizer||j.data.optimizer||'lbfgs').toUpperCase()} · 再分布残差 ${Number.isFinite(d.redistributionResidual)?d.redistributionResidual.toPrecision(5)+' Å':'未取得'}${settings?' / 閾値 '+settings.redistributionTolerance+' Å':''}${Number.isFinite(d.redistributionMove)?' · 再分布による最大変位 '+d.redistributionMove.toPrecision(5)+' Å':''}。CIの最高点はTS候補です。TS最適化・振動解析で別途確認できます。`));
+      const d=r.diagnostics||{},settings=r.lup||j.data.lup;out.append(el('p',{class:'mv-small'},`LUP系（CI-String） · ${bandOptimizer?'':(r.optimizer||j.data.optimizer||'lbfgs').toUpperCase()+' · '}再分布残差 ${Number.isFinite(d.redistributionResidual)?d.redistributionResidual.toPrecision(5)+' Å':'未取得'}${settings?' / 閾値 '+settings.redistributionTolerance+' Å':''}${Number.isFinite(d.redistributionMove)?' · 再分布による最大変位 '+d.redistributionMove.toPrecision(5)+' Å':''}。CIの最高点はTS候補です。TS最適化・振動解析で別途確認できます。`));
     }
     if(r.mode==='irc'){out.append(el('h3',{},'IRCの到達状態'));const rows=Object.entries(r.branches||{}).map(([name,b])=>[name==='forward'?'正方向':'逆方向',b.steps,b.converged?'IRC収束':'IRC未収束',b.endpointConverged?'端点の力は収束':j.data.irc?.relaxEndpoints?'端点の力は未収束':'端点MIN未実施']);out.append(table(['方向','ステップ','IRC','端点'],rows));out.append(el('p',{class:'mv-small'},`経路中のTS入力: 構造${(r.tsIndex??0)+1}。端点構造を確認して反応物・生成物との接続を判断してください。`));}
     if(r.mode==='scan'&&r.scan){out.append(el('h3',{},'スキャン結果'));const rows=(r.scan.nodes||[]).map((n,i)=>[i+1,n.direction==='reverse'?'復路':'往路',JSON.stringify(n.targets),JSON.stringify(n.actual),n.converged?'収束':'未収束',n.steps,r.energies[i]]);const heads=['点','方向','指定座標','実際の座標','状態','ステップ','E (eV)'];out.append(table(heads,rows));const b=el('button',{class:'mv-btn'},'スキャン表をCSV保存');b.onclick=()=>downloadCSV('relaxed-scan.csv',[heads,...rows]);out.append(b);}

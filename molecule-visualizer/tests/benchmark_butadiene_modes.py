@@ -1,4 +1,10 @@
-"""Check the unrestricted vibrational modes of a saved butadiene benchmark peak."""
+"""Check the unrestricted vibrational modes of a saved butadiene benchmark peak.
+
+For each frequency below −20 cm⁻¹ report the two signed terminal-angle slopes
+(°/Å), with the largest atom displacement normalized to 1 Å and the left
+slope chosen positive if appreciable. Their signs describe the local motion,
+not the endpoints reached by the path. Nearly degenerate modes can mix.
+"""
 import argparse
 import json
 import os
@@ -9,7 +15,22 @@ import numpy as np
 from ase import Atoms, units
 from scipy.linalg import null_space
 
-from benchmark_butadiene import MIRROR, bridge
+from benchmark_butadiene import MIRROR, bridge, terminal_angles
+
+
+def terminal_angular_response(positions, mode):
+    """Terminal angle derivatives per Å of largest Cartesian atom displacement."""
+    direction = mode / bridge.force_max(mode)
+    half_width = .001
+    left = np.asarray(terminal_angles(positions - half_width*direction))
+    right = np.asarray(terminal_angles(positions + half_width*direction))
+    # Wrapping the difference also works when a labelled H crosses ±180°.
+    slopes = ((right - left + 180.) % 360. - 180.) / (2.*half_width)
+    # Eigenvector sign is arbitrary. Fix the phase for reproducible presentation.
+    reference = slopes[0] if abs(slopes[0]) > 1e-8*max(abs(slopes)) else slopes[1]
+    if reference < 0:
+        slopes *= -1
+    return slopes
 
 
 def peak_modes(row, delta):
@@ -48,20 +69,30 @@ def peak_modes(row, delta):
     to_wavenumber = units._hbar * 1e10 / np.sqrt(units._e * units._amu) / units.invcm
     frequencies = np.sign(values)*np.sqrt(np.abs(values))*to_wavenumber
 
+    mass_modes = (internal @ vectors).T.reshape(-1, len(atoms), 3)
+    # An individual eigenvector can mix with neighbours at (near) degeneracy.
+    # Opposite/same derivatives measure only the local response of each end.
+    angular_response = []
+    for i in np.flatnonzero(frequencies < -20):
+        cartesian = mass_modes[i] / np.sqrt(masses)[:, None]
+        slopes = terminal_angular_response(positions, cartesian)
+        angular_response.append(dict(frequencyCM=float(frequencies[i]),
+                                     terminalSlopesDegPerA=slopes.tolist()))
+
     # The benchmark accepts C4H6 in the x=0 reference frame. Only a mirror-
     # symmetric peak admits a physical even/odd label in this frame.
     reflection = np.array([-1, 1, 1])
     mirror_error = bridge.force_max(positions - positions[MIRROR]*reflection)
     parity = None
     if mirror_error < 1e-6:
-        modes = (internal @ vectors).T.reshape(-1, len(atoms), 3)
-        parity = np.sum(modes * modes[:, MIRROR] * reflection, axis=(1, 2))[:3].tolist()
+        parity = np.sum(mass_modes * mass_modes[:, MIRROR] * reflection, axis=(1, 2))[:3].tolist()
 
     return dict(engine=row['engine'], mode=row['mode'], case=row['case'], deltaA=delta,
                 energyEV=energy, physicalFmaxEVPerA=bridge.force_max(force),
                 forceEnergyErrorEVPerA=float(np.max(np.abs(force.ravel() + energy_gradient))),
                 relativeHessianAsymmetry=float(np.linalg.norm(hessian-hessian.T)/np.linalg.norm(hessian)),
                 imaginaryBelowMinus20CM=int(np.sum(frequencies < -20)),
+                imaginaryModeAngularResponse=angular_response,
                 lowestSignedFrequenciesCM=frequencies[:3].tolist(), lowestModeMirrorParity=parity)
 
 

@@ -6,22 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { clickWorkspaceCommand, openDetails, openCalculationPane } = require('./workspace-commands.cjs');
 
-async function startupToken(engine) {
-  let output = '', errors = '';
-  engine.stderr.on('data', chunk => { errors += chunk; });
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(Error('Bridge startup timeout: ' + errors)), 20000);
-    engine.stdout.on('data', chunk => {
-      output += chunk;
-      const match = /Token: (\S+)/.exec(output);
-      if (match) { clearTimeout(timer); resolve(match[1]); }
-    });
-    engine.once('exit', code => {
-      clearTimeout(timer);
-      reject(Error('Bridge exited ' + code + ': ' + errors));
-    });
-  });
-}
+const {startupToken} = require('./native-bridge-test.cjs');
 
 async function run() {
   const root = path.resolve(__dirname, '..');
@@ -301,6 +286,21 @@ async function run() {
     await openCalculationPane(page, 'setup');
     await page.selectOption('#engineMode', 'lup');
     await page.selectOption('#engineEndpointMode', 'relax');
+    await openDetails(page, '#engineNumericOptions');
+    await page.selectOption('#enginePathOptimizer', 'band-lbfgs');
+    await page.fill('#engineMove', '0.013');
+    await page.fill('#engineSteps', '2');
+    await page.fill('#engineClimb', '0');
+    const unrestricted = (await submitAndRead()).result;
+    assert.equal(jobs.at(-1).optimizer, 'band-lbfgs');
+    assert.equal(jobs.at(-1).maxMove, .013);
+    assert.equal(jobs.at(-1).endpointMode, 'relax');
+    assert.equal(jobs.at(-1).pathSymmetry, undefined);
+    assert.equal(unrestricted.optimizer, 'band-lbfgs');
+    assert.ok(unrestricted.diagnostics.stepRadius > 0 && unrestricted.diagnostics.stepRadius <= .013);
+    assert.match(await page.locator('#researchResult').innerText(), /経路全体のL-BFGS/);
+    await openCalculationPane(page, 'setup');
+    await page.selectOption('#enginePathOptimizer', 'lbfgs');
     const pairs = '1-4, 2-3, 5-9, 6-10, 7-8';
     await page.check('#engineMirror');
     assert.ok(await page.locator('#engineMirrorPairs').isVisible());

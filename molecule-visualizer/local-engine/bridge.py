@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 import base64
 from collections import OrderedDict
-from functools import lru_cache
+from functools import lru_cache, partial
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import ContextVar
 import copy
@@ -38,7 +38,7 @@ from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 from scipy.spatial import cKDTree
 
-VERSION = '1.19.0'
+VERSION = '1.20.0'
 KJ_MOL_PER_EV = 96.48533212331002
 UMA_MODELS = ('uma-s-1p2p1', 'uma-s-1p2', 'uma-s-1p1', 'uma-m-1p1')
 ANYSOLV_MODELS = ('model_compact', 'model_moe')
@@ -157,7 +157,7 @@ def validate(data, engine):
             raise ValueError('全原子の一意なIDが必要です。')
         result['atomIds'] = ids[:]
     optimizer = data.get('optimizer', 'sella-prfo' if mode == 'ts' else 'lbfgs' if mode == 'lup' else 'fire')
-    choices = ('sella-prfo', 'sella-rfo') if mode == 'ts' else ('fire', 'lbfgs', 'bfgs', 'staged', 'precon-lbfgs') if mode in ('optimize', 'scan') else ('fire', 'lbfgs') if mode == 'lup' else ('fire',)
+    choices = ('sella-prfo', 'sella-rfo') if mode == 'ts' else ('fire', 'lbfgs', 'bfgs', 'staged', 'precon-lbfgs') if mode in ('optimize', 'scan') else ('fire', 'lbfgs', 'band-lbfgs') if mode == 'lup' else ('fire', 'band-lbfgs') if mode in ('neb', 'cineb') else ('fire',)
     if mode == 'dsafir':
         optimizer, choices = data.get('optimizer', 'ds-steepest'), ('ds-steepest',)
     if optimizer not in choices:
@@ -341,7 +341,12 @@ class ModelFEngine:
                 components.append(copy.copy(calculator.components.get(calculator.key(positions),{})) if isinstance(calculator,SolvatedUMAEngine) else {})
                 with self.lock:self.state_calls[state]+=1
             except Exception as error:
-                raise ValueError(f'ModelF 状態{state+1}（多重度{self.settings["multiplicities"][state]}）の評価に失敗しました。{error}') from error
+                message = f'ModelF 状態{state+1}（多重度{self.settings["multiplicities"][state]}）の評価に失敗しました。{error}'
+                if isinstance(error, SCFConvergenceError):
+                    with self.lock:
+                        self.state_calls[state] += 1
+                    raise SCFConvergenceError(message) from error
+                raise ValueError(message) from error
         row=model_f_components(answers[0][0],answers[1][0],self.settings)
         if self.settings['alphaKJMol']/KJ_MOL_PER_EV==0 and abs(row['gapEV'])<=1e-12 and (not np.allclose(answers[0][1],answers[1][1],atol=1e-10,rtol=0) or (lattice is not None and not np.allclose(answers[0][2],answers[1][2],atol=1e-10,rtol=0))):
             raise ValueError('ModelF α=0の交差点では力が一意に定まりません。αを正の値にして再計算してください。')
@@ -1370,7 +1375,7 @@ def lup_redistribute(images, climbing=None):
     return sample_string(images, arc, target)
 
 
-def lup_bounded_update(images, displacement, climbing, redistribute, max_move, cell):
+def lup_bounded_update(images, displacement, climbing, redistribute, max_move, cell, max_fraction=1.):
     """Limit both the physical step and travel *along* the string before resampling."""
     cost = np.linalg.norm(displacement, axis=2).max(axis=1)
     if redistribute:
@@ -1384,7 +1389,7 @@ def lup_bounded_update(images, displacement, climbing, redistribute, max_move, c
         goal = np.interp(target, arc, travel)
         goal[target == arc] = travel[target == arc]
         cost += np.abs(goal-travel)
-    factor = min(1., max_move/max(float(cost.max()), 1e-15))
+    factor = min(max_fraction, max_move/max(float(cost.max()), 1e-15))
     for _ in range(7):
         advanced = images + factor*displacement
         if redistribute:
@@ -1454,6 +1459,72 @@ def lup_lbfgs_direction(images, effective, tangents, climbing, states, relax_end
     return directions
 
 
+class BandLBFGS:
+    """Limited-memory inverse-curvature update for the full coupled band force."""
+    def __init__(self, max_move, saved=None):
+        self.limit = max_move
+        self.radius = max_move
+        self.pairs = []
+        self.position = self.force = None
+        if saved:
+            self.radius = saved['radius']
+            self.pairs = [(np.asarray(s), np.asarray(y)) for s, y in saved['pairs']]
+            if saved.get('position') is not None:
+                self.position = np.asarray(saved['position'])
+                self.force = np.asarray(saved['force'])
+
+    def snapshot(self):
+        return {'radius': self.radius, 'pairs': [(s.tolist(), y.tolist()) for s, y in self.pairs],
+                'position': self.position.tolist() if self.position is not None else None,
+                'force': self.force.tolist() if self.force is not None else None}
+
+    def direction(self, positions, forces, tangents, climbing, string):
+        x, f = positions.ravel(), forces.ravel()
+        if self.position is not None:
+            step, change = x - self.position, self.force - f
+            sy = np.dot(step, change)
+            scale = np.linalg.norm(step) * np.linalg.norm(change)
+            if sy > max(1e-14, 1e-6*scale):
+                self.pairs.append((step, change))
+                # Bound checkpoint and IPC size for the supported 500-atom,
+                # 100-image bands. Small bands retain eight secants.
+                capacity = min(8, max(1, 200_000 // x.size))
+                self.pairs = self.pairs[-capacity:]
+            elif scale > 1e-14:
+                self.pairs.clear()
+            # A reversed force after the step indicates overshoot. Decrease the
+            # next trust radius, then allow it to recover when forces align.
+            cosine = np.dot(f, self.force) / max(np.linalg.norm(f)*np.linalg.norm(self.force), 1e-30)
+            if cosine < -.1:
+                self.radius = max(.05*self.limit, .5*self.radius)
+                self.pairs.clear()
+            elif cosine > .5:
+                self.radius = min(self.limit, 1.25*self.radius)
+        self.position, self.force = x.copy(), f.copy()
+        v = f.copy()
+        coefficients = []
+        for s, y in reversed(self.pairs):
+            a = np.dot(s, v) / np.dot(s, y)
+            v -= a*y
+            coefficients.append(a)
+        initial = .02
+        if self.pairs:
+            s, y = self.pairs[-1]
+            initial = float(np.clip(np.dot(s, y)/np.dot(y, y), 1e-4, 1.))
+        v *= initial
+        for (s, y), a in zip(self.pairs, reversed(coefficients)):
+            v += s*(a-np.dot(y, v)/np.dot(s, y))
+        step = v.reshape(positions.shape)
+        if string:
+            for i in range(1, len(step)-1):
+                if i != climbing:
+                    step[i] = perpendicular(step[i], tangents[i])
+        if np.sum(step*forces) <= 0:
+            self.pairs.clear()
+            step = .02*forces
+        return step
+
+
 def path_work_discrepancy(displacement, energy_change, previous_force, force, node_id, step):
     """Flag large energy changes unexplained by the raw forces at two nearby evaluations."""
     move = force_max(displacement)
@@ -1501,6 +1572,14 @@ def relax(data, calculate, progress=lambda _: None):
     check_work = mode in ('neb', 'cineb', 'lup')
     resumed=data.get('_optimizerResume');offset=0
     mirror = None
+    quasi_newton = retry_plan = None
+    if optimizer_method == 'band-lbfgs':
+        quasi_newton = BandLBFGS(data['maxMove'], (resumed or {}).get('bandLBFGS'))
+    if check_work:
+        path_fields['optimizer'] = optimizer_method
+        path_fields['scfStepRetries'] = (resumed or {}).get('scfStepRetries', data.get('_scfRetriesResume', 0))
+    if resumed and resumed.get('optimizer', optimizer_method) != optimizer_method:
+        raise ValueError('再開時の経路オプティマイザが保存時と一致しません。')
     if resumed and resumed.get('pathSymmetry') != data.get('pathSymmetry'):
         raise ValueError('再開時の鏡映条件が保存時と一致しません。')
     if 'pathSymmetry' in data:
@@ -1541,24 +1620,65 @@ def relax(data, calculate, progress=lambda _: None):
         insertion_events=copy.deepcopy(resumed.get('insertions',[]))
     for local_step in range((0 if mode == 'evaluate' else max_steps) + 1):
         step=local_step+offset
-        if mirror and local_step:
-            # Reproject optimizer and arc-length updates before any engine evaluation.
-            # Preserve exact coordinates (and cache keys) for already-symmetric nodes.
-            coordinates = images[moving]
-            projected = mirror.positions(coordinates)
-            drifted = np.max(np.abs(projected - coordinates), axis=(1, 2)) > 1e-13
-            coordinates[drifted] = projected[drifted]
-        pending=[]
-        for i in range(len(images)):
-            if local_step and mode != 'optimize' and not relax_endpoints and i in (0, len(images)-1):
-                if mode == 'lup': cache_hits += 1
-                continue
-            if mode == 'lup' and node_ids[i] in lup_cache and np.array_equal(images[i], lup_cache[node_ids[i]][0]):
-                _, energies[i], physical[i] = lup_cache[node_ids[i]]
-                cache_hits += 1
-                continue
-            pending.append((i,images[i]))
-        answers=evaluate_many(calculate,pending)
+        for attempt in range(5):
+            if mirror and local_step:
+                # Reproject optimizer and arc-length updates before any engine evaluation.
+                # Preserve exact coordinates (and cache keys) for already-symmetric nodes.
+                coordinates = images[moving]
+                projected = mirror.positions(coordinates)
+                drifted = np.max(np.abs(projected - coordinates), axis=(1, 2)) > 1e-13
+                coordinates[drifted] = projected[drifted]
+            pending=[]
+            for i in range(len(images)):
+                if local_step and mode != 'optimize' and not relax_endpoints and i in (0, len(images)-1):
+                    if mode == 'lup': cache_hits += 1
+                    continue
+                if mode == 'lup' and node_ids[i] in lup_cache and np.array_equal(images[i], lup_cache[node_ids[i]][0]):
+                    _, energies[i], physical[i] = lup_cache[node_ids[i]]
+                    cache_hits += 1
+                    continue
+                pending.append((i,images[i]))
+            if not check_work or local_step == 0:
+                answers = evaluate_many(calculate, pending)
+                break
+            if isinstance(calculate, ExactEvaluationCache):
+                answers = calculate.map(pending, capture_scf=True)
+            elif hasattr(calculate, 'map'):
+                # A separate batch evaluator owns its worker synchronization.
+                # Preserve its batch contract rather than invoking it image by image.
+                try:
+                    answers = calculate.map(pending)
+                except SCFConvergenceError as error:
+                    answers = [error]
+            else:
+                answers = [evaluate_scf_trial(calculate, i, p) for i, p in pending]
+            failure = next((value for value in answers if isinstance(value, SCFConvergenceError)), None)
+            if failure is None:
+                break
+            evaluations += len(pending)
+            exhausted = attempt == 4
+            path_fields['scfStepRetries'] += int(not exhausted)
+            progress({'step':step, 'phase':'path_step_failed' if exhausted else 'path_step_retry',
+                      'evaluations':evaluations, 'scfStepRetries':path_fields['scfStepRetries']})
+            if exhausted:
+                raise failure
+            # Retry the same physical and redistribution proposal along its
+            # original polyline. No partial band contributes energy or secants.
+            if retry_plan is None:
+                # Ordinary FIRE NEB has already capped each image's step.
+                # Construct its retry proposal only on an actual SCF failure.
+                origin = np.asarray([previous_positions[node] for node in node_ids])
+                retry_plan = (origin, images-origin, None, False, data['maxMove'], 1.)
+            origin, proposal, old_climb, redistribute, radius, accepted_factor = retry_plan
+            fraction = .5**(attempt+1)
+            images, _, redistribution_move = lup_bounded_update(
+                origin, proposal, old_climb, redistribute, radius, data.get('cell'), accepted_factor*fraction)
+            velocity.fill(0.)
+            dt, alpha, positive = max(1e-5, .5*min(dt, .05)), .1, 0
+            lup_states.clear()
+            if quasi_newton:
+                quasi_newton = BandLBFGS(data['maxMove'])
+                quasi_newton.radius = max(.05*data['maxMove'], fraction*radius)
         for (i,positions),(energy,force) in zip(pending,answers):
             force = np.asarray(force, dtype=float)
             if not np.isfinite(energy) or force.shape != positions.shape or not np.isfinite(force).all():
@@ -1634,6 +1754,8 @@ def relax(data, calculate, progress=lambda _: None):
                 velocity = np.zeros_like(images)
                 dt, alpha, positive, previous_climbing = .05, .1, 0, None
                 lup_states.clear()
+                if quasi_newton:
+                    quasi_newton = BandLBFGS(data['maxMove'])
                 climbing = int(np.argmax(energies[1:-1]))+1 if step >= data['climbAfter'] else None
                 effective, tangents, components, diagnostics = band_state(climbing)
         diagnostics['energyChangeEV'] = max((abs(float(energies[i])-previous_energies[identifier])
@@ -1645,6 +1767,8 @@ def relax(data, calculate, progress=lambda _: None):
         if check_work:
             previous_forces = {identifier: physical[i].copy() for i, identifier in enumerate(node_ids)}
         maximum = force_max(effective)
+        if quasi_newton:
+            diagnostics['stepRadius'] = quasi_newton.radius
         redistribution_residual = force_max(lup_redistribute(images, climbing)-images) if mode == 'lup' else 0.
         if mode == 'lup':
             diagnostics.update(redistributionResidual=redistribution_residual,
@@ -1681,6 +1805,8 @@ def relax(data, calculate, progress=lambda _: None):
         optimizer_state={'schema':1,'implementation':'band',**path_fields,'velocity':velocity.tolist(),'dt':dt,'alpha':alpha,
             'positive':positive,'previousClimbing':previous_climbing,'step':step,'lupStates':serial_arrays(lup_states),
             'redistributions':lup_redistributions,'nextId':next_id,'insertions':copy.deepcopy(insertion_events)}
+        if quasi_newton:
+            optimizer_state['bandLBFGS'] = quasi_newton.snapshot()
         if mirror:
             optimizer_state['mirrorPlane'] = {'origin': mirror.origin.tolist(), 'normal': mirror.normal.tolist()}
         checkpoint = {}
@@ -1715,6 +1841,20 @@ def relax(data, calculate, progress=lambda _: None):
             dt, alpha, positive = .05, .1, 0
             previous_climbing = climbing
             lup_states.clear()
+            if quasi_newton:
+                quasi_newton = BandLBFGS(data['maxMove'])
+        if quasi_newton:
+            displacement = quasi_newton.direction(images, effective, tangents, climbing, mode == 'lup')
+            displacement *= min(1., quasi_newton.radius/max(force_max(displacement), 1e-15))
+            redistribute = mode == 'lup' and ((step+1) % lup['redistributeEvery'] == 0 or maximum <= data['fmax'])
+            candidate, factor, redistribution_move = lup_bounded_update(
+                images, displacement, climbing, redistribute, quasi_newton.radius, data.get('cell'))
+            retry_plan = (images, displacement, climbing, redistribute, quasi_newton.radius, factor)
+            if redistribution_move > 1e-12:
+                lup_redistributions += 1
+                quasi_newton = BandLBFGS(data['maxMove'])
+            images = candidate
+            continue
         if mode == 'lup':
             if optimizer_method == 'lbfgs':
                 displacement = lup_lbfgs_direction(images, effective, tangents, climbing, lup_states, relax_endpoints)
@@ -1745,6 +1885,7 @@ def relax(data, calculate, progress=lambda _: None):
             redistribute = (step+1) % lup['redistributeEvery'] == 0 or maximum <= data['fmax']
             candidate, factor, redistribution_move = lup_bounded_update(
                 images, displacement, climbing, redistribute, data['maxMove'], data.get('cell'))
+            retry_plan = (images, displacement, climbing, redistribute, data['maxMove'], factor)
             if redistribution_move > 1e-12:
                 lup_redistributions += 1
                 lup_states.clear()
@@ -1781,6 +1922,7 @@ def relax(data, calculate, progress=lambda _: None):
             images[i] += displacement
             images[i, fixed] = anchors[i, fixed]
             velocity[i, fixed] = 0
+        retry_plan = None
         if not np.isfinite(images).all() or np.max(np.abs(images)) > 1e4:
             raise ValueError('座標が数値範囲を超えました。初期構造を確認してください。')
 
@@ -2965,6 +3107,10 @@ def parse_gradient(text, symbols, positions):
     return energy, force
 
 
+class SCFConvergenceError(ValueError):
+    """The electronic solve did not converge at this geometry."""
+
+
 class GXTBEngine:
     def __init__(self, data, config, directory):
         self.data, self.config, self.directory = data, config, Path(directory)
@@ -2986,6 +3132,8 @@ class GXTBEngine:
                 size = log.tell()
                 log.seek(max(0, size-16000))
                 output = log.read()
+            if re.search(r'\bSCF\s+(?:not\s+converged|failed\s+to\s+converge)\b', output, re.I):
+                raise SCFConvergenceError('g-xTB計算に失敗しました。'+output[-1500:])
             if completed.returncode != 0 or re.search(r'(?:failed\s+to\s+converge|not\s+converged|abnormal\s+termination|SCF\s+NOT\s+CONVERGED)', output, re.I):
                 raise ValueError('g-xTB計算に失敗しました。'+output[-1500:])
             gradient = work/'gradient'
@@ -3657,7 +3805,13 @@ class ExactEvaluationCache:
                 if hasattr(self.calculate,'note_cache_hit'):self.calculate.note_cache_hit(index,array,energy)
                 return energy, force.copy()
         started = time.perf_counter()
-        energy, force = self.calculate(index, positions)
+        try:
+            energy, force = self.calculate(index, positions)
+        except SCFConvergenceError:
+            with self.lock:
+                self.calls += 1
+                self.seconds += time.perf_counter() - started
+            raise
         seconds = time.perf_counter()-started
         force = np.asarray(force, dtype=float)
         with self.lock:
@@ -3669,14 +3823,15 @@ class ExactEvaluationCache:
                     self.values.popitem(last=False)
         return energy, force.copy()
 
-    def map(self, evaluations):
+    def map(self, evaluations, capture_scf=False):
         # Never schedule the same calculator index concurrently. Each index owns
         # its SCC restart state; ordering of the returned results is deterministic.
         items=list(evaluations)
         if len({i for i,p in items})!=len(items):
             raise ValueError('並列評価には独立した構造番号が必要です。')
-        if self.pool is None: return [self(i,p) for i,p in items]
-        futures=[self.pool.submit(self,i,p) for i,p in items]
+        single = partial(evaluate_scf_trial, self) if capture_scf else self
+        if self.pool is None: return [single(i,p) for i,p in items]
+        futures=[self.pool.submit(single,i,p) for i,p in items]
         try:
             return [f.result() for f in futures]
         except BaseException:
@@ -3696,6 +3851,13 @@ class ExactEvaluationCache:
 
     def close(self):
         if self.pool is not None:self.pool.shutdown(wait=True,cancel_futures=True)
+
+
+def evaluate_scf_trial(calculate, index, positions):
+    try:
+        return calculate(index, positions)
+    except SCFConvergenceError as error:
+        return error
 
 
 def evaluate_many(calculate, items):
@@ -4340,6 +4502,14 @@ class Jobs:
     def partial_structure(self, job):
         data = job['data']
         result = copy.deepcopy(job.get('structureCheckpoint') or job['bandCheckpoint'])
+        if 'scfStepRetries' in result and 'scfStepRetries' in job.get('progress', {}):
+            latest = job['progress']
+            result['scfStepRetries'] = latest['scfStepRetries']
+            if latest.get('phase') == 'path_step_failed':
+                result['scfFailedStep'] = latest['step']
+            result['evaluations'] = max(result['evaluations'], latest.get('evaluations', 0))
+            if 'optimizerState' in result:
+                result['optimizerState']['scfStepRetries'] = result['scfStepRetries']
         if 'structureCheckpoint' in job and 'vibrations' in data:
             result['vibrations'] = {'status':'cancelled' if job['status']=='cancelled' else 'failed',
                                     'error':job.get('error', '振動解析を中止しました。構造の結果は保持しています。')}
@@ -4435,6 +4605,7 @@ class Jobs:
             data.pop('_scanResume', None)
             data.pop('_optimizerResume', None)
             data.pop('_pathWarningResume', None)
+            data.pop('_scfRetriesResume', None)
             data.pop('_initialSymmetryCorrectionResume', None)
             if job.get('configFingerprint') != calculation_identity(data, self.config):
                 raise RuntimeError('保存時とエンジン・モデル・パッケージ・計算設定が異なります。同じ環境で再開するか、結果を新しい入力として実行してください。')
@@ -4457,6 +4628,8 @@ class Jobs:
                     # before the new geometry has a complete optimizer state.
                     if 'pathConsistencyWarning' in result:
                         data['_pathWarningResume'] = copy.deepcopy(result['pathConsistencyWarning'])
+                    if 'scfStepRetries' in result:
+                        data['_scfRetriesResume'] = result['scfStepRetries']
                     if 'initialSymmetryCorrection' in result:
                         data['_initialSymmetryCorrectionResume'] = result['initialSymmetryCorrection']
             elif result and data['mode']=='scan' and result.get('scan', {}).get('nodes'):
@@ -4589,7 +4762,7 @@ class Handler(BaseHTTPRequestHandler):
                     'irc':bool(sella_version()), 'thermochemistry':True, 'internalConstraints':True, 'groupConstraints':True, 'scan':True, 'resourceOptimization':1, 'evaluationWorkers':config.get('workers',1), 'advancedOptimization':True, 'optimizerRestart':True, 'cellOptimization':config['engine']=='tblite',
                     'adaptiveNEB':True, 'pathSplit':True, 'history':True, 'queue':True, 'residentModels':True,
                     'modelF':{'version':1,'models':['amf'],'surfaces':['lower','upper'],'defaultAlphaKJMol':30,'sameCharge':True,'stateSelection':'multiplicity'},
-                    'lup':True, 'pathOptimizers':{'cineb':['fire'], 'lup':['fire','lbfgs']},
+                    'lup':True, 'pathOptimizers':{'neb':['band-lbfgs','fire'], 'cineb':['band-lbfgs','fire'], 'lup':['band-lbfgs','lbfgs','fire']},
                     'pathEndpointModes':['fixed','relax'], 'pathSymmetryTypes':['mirror'],
                     'persistentHistory':bool(self.server.jobs.history_dir), 'jobQueue':True, 'modelResidency':True,
                     'modes': MODES, 'compactPolling':1, 'livePreview': 1, 'optimizationTrajectory': 1, 'maxSteps': 10000, 'maxAFIRSteps': 10000, 'jobTimeout': config['jobTimeout'],

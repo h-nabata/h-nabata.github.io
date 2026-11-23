@@ -77,6 +77,13 @@
     const node = text('activityConnection', [label, connection && engineDescription(connection.info)].filter(Boolean).join(' · '));
     if (node) node.dataset.state = connection ? (reachable ? 'connected' : 'unknown') : 'disconnected';
   }
+  function pathSCFPhase(progress) {
+    if (!['path_step_retry', 'path_step_failed'].includes(progress.phase)) return '';
+    const step = Number.isInteger(progress.step) ? 'ステップ' + progress.step + ' · ' : '';
+    const count = Number.isInteger(progress.scfStepRetries) ? '（通算' + progress.scfStepRetries + '回）' : '';
+    const action = progress.phase === 'path_step_retry' ? 'SCF未収束のため刻み幅を縮めて再試行' : '刻み幅を縮めてもSCF未収束';
+    return step + action + count;
+  }
   function progressDetail(status, p, result, listStep) {
     if (status === 'queued' || status === 'unknown') return '';
     if (!terminal.has(status) && p.phase === 'loading_model') return 'モデル読込中';
@@ -84,7 +91,11 @@
       return Number.isInteger(p.vibrationDone) && Number.isInteger(p.vibrationTotal)
         ? '振動解析 · 力の評価 ' + p.vibrationDone + '/' + p.vibrationTotal : '振動解析中';
     }
+    const retry = pathSCFPhase(p);
+    if (!terminal.has(status) && retry) return retry;
     const fields = [];
+    if (Number.isInteger(result?.scfFailedStep)) fields.push('ステップ'+result.scfFailedStep+'でSCF未収束');
+    if (result?.scfStepRetries>0) fields.push('刻み幅を縮めて再試行 '+result.scfStepRetries+'回');
     const step = result?.steps ?? p.step ?? (listStep > 0 ? listStep : null);
     if (Number.isInteger(step)) fields.push(step + 'ステップ');
     if (!terminal.has(status) && p.phase === 'dsafir') {
@@ -121,10 +132,10 @@
     if (status === 'unknown') details.push('履歴・キューで再確認');
     if (status === 'partial') details.push(state.result.vibrations?.status === 'failed' ? '振動解析が未完了' : '熱化学量の計算が未完了');
     if (status === 'error' && state.error) details.push(String(state.error).split('\n')[0].slice(0,100));
-    const phaseLabel = status === 'running' && (p.phase === 'loading_model' ? 'モデル読込中' :
+    const phaseLabel = status === 'running' && (pathSCFPhase(p) || (p.phase === 'loading_model' ? 'モデル読込中' :
       p.phase === 'dsafir' && p.side === 'reactant' ? '反応物側を探索' :
       p.phase === 'dsafir' && p.side === 'product' ? '生成物側を探索' :
-      p.phase === 'vibrations' ? '振動解析中' : Number.isInteger(p.step) ? p.step + 'ステップ' : '');
+      p.phase === 'vibrations' ? '振動解析中' : Number.isInteger(p.step) ? p.step + 'ステップ' : ''));
     saveRecord(id, {label, status, phaseLabel, detail:details.filter(Boolean).join(' · '), engine, surface,
       detached: detached ?? previous?.detached ?? true, context: context || previous?.context}, state.updatedAt || Date.now());
     if (!fromListing) { render(); schedule(); }
@@ -189,7 +200,7 @@
   function pollFailed(j) {
     recordJob(j.connection, {id:j.id,status:'unknown'}, j.data?.mode, true, j.activityLabel);
   }
-  MV.Activity = {update, connect, submitted, recordJob, pollFailed,
+  MV.Activity = {update, connect, submitted, recordJob, pollFailed, pathSCFPhase,
     showMethod:label => { if (label) text('activityMethod',label); },
     showEditor:label => text('activityEditor',label)};
 })(window);
