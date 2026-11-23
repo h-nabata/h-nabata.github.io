@@ -9,18 +9,24 @@
     if(!value||value.converged!==true||value.conditionId!==conditionId||JSON.stringify(value.atomIds)!==JSON.stringify(request.atomIds))throw Error('物理計算の収束状態・計算条件・原子IDが一致しません。');
     if(!Number.isFinite(value.energyEV)||!Array.isArray(value.forcesEV_A)||value.forcesEV_A.length!==request.atomIds.length||value.forcesEV_A.some(f=>!Array.isArray(f)||f.length!==3||!f.every(Number.isFinite)))throw Error('物理計算が有限のエネルギー・力を返しませんでした。');
   }
-  async function optimize({atoms,config,potential,signal,onProgress=()=>{}}){
-    const resolved=A.validate(atoms,config),reference=JSON.parse(JSON.stringify(atoms)),settings=JSON.parse(JSON.stringify(config));
+  async function optimize({atoms,config,potential,cell=null,fixedAtoms=[],signal,onProgress=()=>{}}){
+    cell=cell?JSON.parse(JSON.stringify(cell)):null;
+    const fixed=new Set(fixedAtoms);
+    if(fixed.size!==fixedAtoms.length||fixed.size===atoms.length||fixedAtoms.some(i=>!Number.isInteger(i)||i<0||i>=atoms.length))throw Error('固定する原子番号を確認してください。');
+    const resolved=A.validate(atoms,config,cell),reference=JSON.parse(JSON.stringify(atoms)),settings=JSON.parse(JSON.stringify(config));
     if(!potential||typeof potential.evaluate!=='function'||!potential.conditionId||!potential.name||!potential.method||potential.units?.energy!=='eV'||potential.units?.force!=='eV/angstrom'||potential.units?.length!=='angstrom')throw Error('物理ポテンシャルの識別情報・eV/Å単位の評価器が必要です。');
     const conditionId=potential.conditionId,velocity=atoms.map(()=>[0,0,0]);let dt=.05,mix=.1,positive=0,current=reference.map(a=>({...a})),reason='step_limit';
     const images=[],energies=[],biasEnergies=[],biasedEnergies=[],forces=[],imageFmax=[],physicalFmax=[];
     for(let step=0;step<=settings.maxSteps;step++){
       if(signal?.aborted){reason='cancelled';break;}
-      for(let i=0;i<current.length;i++)for(let j=i+1;j<current.length;j++)if(Math.hypot(current[i].x-current[j].x,current[i].y-current[j].y,current[i].z-current[j].z)<.1)throw Error('探索中に0.1 Å未満の原子衝突を検出しました。');
-      const request={atomIds:resolved.atomIds.slice(),symbols:current.map(a=>a.element),positions:current.map(a=>[a.x,a.y,a.z]),charge:settings.charge,multiplicity:settings.multiplicity};
+      for(let i=0;i<current.length;i++)for(let j=i+1;j<current.length;j++){
+        const raw=['x','y','z'].map(k=>current[i][k]-current[j][k]);
+        if((resolved.minimumImage?resolved.minimumImage(raw).distance:Math.hypot(...raw))<.1)throw Error('探索中に0.1 Å未満の原子衝突を検出しました。');
+      }
+      const request={cell,atomIds:resolved.atomIds.slice(),symbols:current.map(a=>a.element),positions:current.map(a=>[a.x,a.y,a.z]),charge:settings.charge,multiplicity:settings.multiplicity};
       const physical=await potential.evaluate(JSON.parse(JSON.stringify(request)),{signal});checkPhysical(physical,request,conditionId);
       if(potential.conditionId!==conditionId)throw Error('探索中に物理ポテンシャルの計算条件が変更されました。');
-      const bias=A.evaluate(current,settings),effective=physical.forcesEV_A.map((f,i)=>f.map((v,k)=>v+bias.forcesEV_A[i][k]));
+      const bias=A.evaluate(current,settings,cell),effective=physical.forcesEV_A.map((f,i)=>fixed.has(i)?[0,0,0]:f.map((v,k)=>v+bias.forcesEV_A[i][k]));
       const fmax=Math.max(...effective.map(f=>Math.hypot(...f)));
       images.push(request.positions);energies.push(physical.energyEV);biasEnergies.push(bias.energyEV);biasedEnergies.push(physical.energyEV+bias.energyEV);forces.push(physical.forcesEV_A.map(f=>f.slice()));imageFmax.push(fmax);physicalFmax.push(Math.max(...physical.forcesEV_A.map(f=>Math.hypot(...f))));
       await onProgress({step,energyEV:physical.energyEV,biasEnergyEV:bias.energyEV,effectiveFmax:fmax});
@@ -34,7 +40,7 @@
       current=current.map((a,i)=>({...a,x:a.x+dt*velocity[i][0]*scale,y:a.y+dt*velocity[i][1]*scale,z:a.z+dt*velocity[i][2]*scale}));
       await new Promise(resolve=>setTimeout(resolve,0));
     }
-    return {schema:'molecule-afir-trajectory/1',engine:potential.name,method:potential.method,conditionId,atomIds:resolved.atomIds,symbols:reference.map(a=>a.element),charge:settings.charge,multiplicity:settings.multiplicity,
+    return {schema:'molecule-afir-trajectory/1',engine:potential.name,method:potential.method,conditionId,cell,fixedAtoms:[...fixed],atomIds:resolved.atomIds,symbols:reference.map(a=>a.element),charge:settings.charge,multiplicity:settings.multiplicity,
       images,energies,biasEnergies,biasedEnergies,forces,imageFmax,physicalFmax,effectiveFmax:imageFmax.at(-1)??null,steps:Math.max(0,images.length-1),evaluations:images.length,reason,converged:reason==='converged',validation:'biased-trajectory-not-ts',units:{length:'angstrom',energy:'eV',force:'eV/angstrom'}};
   }
   const api={optimize,checkPhysical};if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.MoleculeVisualizer.AFIRSearch=api;

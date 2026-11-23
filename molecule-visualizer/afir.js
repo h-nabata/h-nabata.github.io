@@ -17,6 +17,38 @@
     return gamma*KJMOL_TO_EV/(R0*Math.pow(2,-1/6)*(-Math.expm1(-logRatio/6)));
   }
   const defaults=()=>({schema:'molecule-afir/1',fragments:[],pairs:[],charge:0,multiplicity:1,maxSteps:10000,fmax:.05,maxMove:.04});
+  function minimumImageFor(cell){
+    if(!cell)return null;
+    const periodic=typeof module!=='undefined'&&module.exports?require('./periodic.js'):root.MoleculeVisualizer.Periodic;
+    const geometry=periodic.cell(cell.vectors,cell.pbc);
+    return geometry.pbc.some(Boolean)?periodic.prepareMinimumImage(geometry):null;
+  }
+  // Single-atom fragment pairs touching the active region. Bonding intent comes
+  // from the current editable covalent/coordination graph, including user edits.
+  function nearbyPairs(state,activeIds,fixedIndices,cutoff,mode){
+    number(cutoff,'候補距離 (Å)',.1,10);
+    if(!['attract','repel'].includes(mode))throw Error('候補の作用を選んでください。');
+    const {atoms,bonds}=state;
+    if(atoms.length<2||atoms.length>500)throw Error('AFIRの原子数は2〜500にしてください。');
+    const active=new Set(activeIds),fixed=new Set(fixedIndices);
+    if(!active.size)throw Error('描画エリアで探索の中心となる原子を選択してください。');
+    const indices=new Map(atoms.map((a,i)=>[a.id,i])),bonded=new Set();
+    for(const bond of bonds){
+      if(bond.type==='hydrogen')continue;
+      const i=indices.get(bond.atom1),j=indices.get(bond.atom2);
+      bonded.add(Math.min(i,j)*atoms.length+Math.max(i,j));
+    }
+    const minimumImage=minimumImageFor(state.metadata?.cell),pairs=[];
+    for(let i=0;i<atoms.length;i++)for(let j=i+1;j<atoms.length;j++){
+      const a=atoms[i],b=atoms[j];
+      if(!active.has(a.id)&&!active.has(b.id)||fixed.has(i)&&fixed.has(j))continue;
+      if(bonded.has(i*atoms.length+j)!==(mode==='repel'))continue;
+      const d=[b.x-a.x,b.y-a.y,b.z-a.z];
+      const distance=minimumImage?minimumImage(d).distance:Math.hypot(...d);
+      if(distance>=.1&&distance<=cutoff)pairs.push({i,j,distance,mode});
+    }
+    return pairs.sort((a,b)=>a.distance-b.distance||a.i-b.i||a.j-b.j);
+  }
   function validate(atoms,config,cell=null){
     if(!Array.isArray(atoms)||atoms.length<2||atoms.length>500)throw Error('AFIRの原子数は2〜500にしてください。');
     const index=new Map();atoms.forEach((a,i)=>{
@@ -24,7 +56,7 @@
       index.set(a.id,i);if(!Object.hasOwn(radii,a.element))throw Error(`AFIR半径が未定義の元素です: ${a.element}`);
       for(const k of ['x','y','z'])number(a[k],'座標 (Å)',-10000,10000);
     });
-    if(cell?.pbc?.some(Boolean))throw Error('このAFIR実装は非周期分子用です。周期セルの設定を解除してください。');
+    const minimumImage=minimumImageFor(cell);
     if(!config||config.schema!=='molecule-afir/1')throw Error('AFIR設定の形式が一致しません。');
     if(!Array.isArray(config.fragments)||config.fragments.length<2||config.fragments.length>64)throw Error('フラグメントを2〜64個指定してください。');
     if(!Array.isArray(config.pairs)||config.pairs.length<1||config.pairs.length>128)throw Error('フラグメントのペアを1〜128組指定してください。');
@@ -42,13 +74,14 @@
     });
     number(config.charge,'電荷',-100,100,true);number(config.multiplicity,'多重度',1,101,true);
     number(config.maxSteps,'最大ステップ数',1,10000,true);number(config.fmax,'収束しきい値 (eV/Å)',.00001,10);number(config.maxMove,'最大変位 (Å)',.001,.2);
-    return {terms,atomIds:atoms.map(a=>a.id)};
+    return {terms,atomIds:atoms.map(a=>a.id),minimumImage};
   }
   function evaluate(atoms,config,cell=null){
-    const {terms}=validate(atoms,config,cell),forces=atoms.map(()=>[0,0,0]),pairs=[];let energy=0;
+    const {terms,minimumImage}=validate(atoms,config,cell),forces=atoms.map(()=>[0,0,0]),pairs=[];let energy=0;
     for(const term of terms){
       const distances=[];for(const i of term.a)for(const j of term.b){
-        const d=['x','y','z'].map(k=>atoms[i][k]-atoms[j][k]),r=Math.hypot(...d);
+        const raw=['x','y','z'].map(k=>atoms[i][k]-atoms[j][k]);
+        const d=minimumImage?minimumImage(raw).vector:raw,r=Math.hypot(...d);
         if(r<.1)throw Error('人工力の適用先で0.1 Å未満の原子衝突があります。');
         distances.push({i,j,d,r,logw:6*Math.log((radii[atoms[i].element]+radii[atoms[j].element])/r)});
       }
@@ -66,10 +99,12 @@
     const generic={schema:'enb-general-afir/1',charge:config.charge,multiplicity:config.multiplicity,
       fragments:Object.fromEntries(config.fragments.map(f=>[names.get(f.id),{indices:f.atomIds.map(id=>atomIds.indexOf(id)+1)}])),
       pairs:config.pairs.map((p,i)=>({name:`pair-${i+1}`,fragments:[names.get(p.a),names.get(p.b)],mode:p.mode,gamma_kJ_mol:p.gamma}))};
-    const xyz=`${state.atoms.length}\nAFIR input; atom order matches atomIds in JSON; positions in angstrom\n`+state.atoms.map(a=>`${a.element} ${a.x.toFixed(12)} ${a.y.toFixed(12)} ${a.z.toFixed(12)}`).join('\n')+'\n';
-    return {schema:'molecule-afir-input/1',atomIds,xyz,config:JSON.parse(JSON.stringify(config)),pythonConfig:generic,units:{length:'angstrom',gamma:'kJ/mol',alpha:'eV/angstrom'},reference:{R0_A:R0,epsilon_kJ_mol:EPSILON,power:6}};
+    const cell=state.metadata?.cell;
+    const header=cell?`Lattice="${cell.vectors.flat().join(' ')}" pbc="${cell.pbc.map(v=>v?'T':'F').join(' ')}" Properties=species:S:1:pos:R:3`:'AFIR input; atom order matches atomIds in JSON; positions in angstrom';
+    const xyz=`${state.atoms.length}\n${header}\n`+state.atoms.map(a=>`${a.element} ${a.x.toFixed(12)} ${a.y.toFixed(12)} ${a.z.toFixed(12)}`).join('\n')+'\n';
+    return {schema:'molecule-afir-input/1',atomIds,xyz,...(cell?{cell:JSON.parse(JSON.stringify(cell))}:{}),config:JSON.parse(JSON.stringify(config)),pythonConfig:generic,units:{length:'angstrom',gamma:'kJ/mol',alpha:'eV/angstrom'},reference:{R0_A:R0,epsilon_kJ_mol:EPSILON,power:6}};
   }
-  const api={alphaFromGamma,validate,evaluate,exportInput,defaults,radii:Object.freeze(radii),palette,KJMOL_TO_EV,R0,EPSILON};
+  const api={alphaFromGamma,nearbyPairs,validate,evaluate,exportInput,defaults,radii:Object.freeze(radii),palette,KJMOL_TO_EV,R0,EPSILON};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   else(root.MoleculeVisualizer=root.MoleculeVisualizer||{}).AFIR=api;
 })(typeof window!=='undefined'?window:globalThis);

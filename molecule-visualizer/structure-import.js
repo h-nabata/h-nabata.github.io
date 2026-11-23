@@ -43,7 +43,13 @@
     if(!list.length)throw Error('対応する座標ブロックが見つかりません。');
     const first=list[0],signature=s=>s.atoms.map(a=>a.element).join(','),same=list.every(s=>signature(s)===signature(first));
     // File-order correspondence only; never guess a permutation or align geometries.
-    if(same)for(const s of list.slice(1)){const ids=new Map(s.atoms.map((a,i)=>[a.id,first.atoms[i].id]));s.atoms.forEach((a,i)=>a.id=first.atoms[i].id);s.bonds.forEach(b=>{b.atom1=ids.get(b.atom1);b.atom2=ids.get(b.atom2);});if(s.metadata.constraints)s.metadata.constraints.fixedAtomIds=s.metadata.constraints.fixedAtomIds.map(id=>ids.get(id));}
+    if(same)for(const s of list.slice(1)){
+      const ids=new Map(s.atoms.map((a,i)=>[a.id,first.atoms[i].id]));
+      s.atoms.forEach((a,i)=>a.id=first.atoms[i].id);
+      s.bonds.forEach(b=>{b.atom1=ids.get(b.atom1);b.atom2=ids.get(b.atom2);});
+      if(s.metadata.constraints)s.metadata.constraints.fixedAtomIds=s.metadata.constraints.fixedAtomIds.map(id=>ids.get(id));
+      for(const row of s.metadata.optimization?.fixedComponents||[])row.atomId=ids.get(row.atomId);
+    }
     const warnings=[...new Set(list.flatMap(s=>s.metadata.importWarnings||[]))];
     if(!same)warnings.push('構造間で原子数・元素順序が異なります。経路計算には原子の対応が必要です。');
     first.metadata.importWarnings=warnings;return F.frames(list);
@@ -316,7 +322,7 @@
     for(let i=0;i<lines.length;i++)if(/^\s*ATOMIC_POSITIONS\b/i.test(lines[i])){
       const unit=units(lines[i]);if(!['angstrom','bohr','alat','crystal'].includes(unit))throw Error('QEのATOMIC_POSITIONS単位が未対応です。');
       const atoms=lines.slice(i+1,i+1+nat).map(l=>{const p=tokens(l);if(![4,7].includes(p.length))throw Error('QE原子行の列数が不正です。');const a=atom(p[0],unit==='crystal'?P.cartesian(p.slice(1,4).map(num),c):p.slice(1,4),unit==='crystal'?1:scale(unit));if(p.length===7){if(p.slice(4).some(x=>!['0','1'].includes(x)))throw Error('QEの固定フラグが不正です。');a.selective=p.slice(4).map(x=>x==='1'?'T':'F');}return a;});
-      if(atoms.length!==nat)throw Error('QEの原子行が不足しています。');collect(all,state(atoms,'Quantum ESPRESSO','espresso',{cell:c,importWarnings:['座標・セル・移動可否フラグを読み込みました。計算条件は適用しません。']}));i+=nat;
+      if(atoms.length!==nat)throw Error('QEの原子行が不足しています。');collect(all,P.applySelectiveFlags(state(atoms,'Quantum ESPRESSO','espresso',{cell:c,importWarnings:['座標・セル・固定条件を読み込みました。']}),'cartesian'));i+=nat;
     }return finish(all);
   }
 

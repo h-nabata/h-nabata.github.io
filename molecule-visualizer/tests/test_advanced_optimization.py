@@ -20,6 +20,20 @@ class Advanced(unittest.TestCase):
             self.assertAlmostEqual(p[0][2],0,places=12)
             self.assertAlmostEqual(np.linalg.norm(np.array(p[1])-p[0]),np.linalg.norm(np.array(d['images'][0][1])-d['images'][0][0]),places=7)
         self.assertGreater(abs(result['images'][0][0][0]),.01)
+    def test_fractional_lock_on_skew_cell_uses_reciprocal_lattice(self):
+        lattice = np.array([[4., 0., 0.], [1.7, 5., 0.], [.2, .4, 8.]])
+        cell = dict(vectors=lattice.tolist(), pbc=[True]*3)
+        direction = dict(atom=0, axes=[True, False, False], basis='fractional')
+        d = data(cell=cell, fixedComponents=[direction], fixedAtoms=[1], optimizer='lbfgs')
+        result = b.calculate_job(d, potential, tempfile.gettempdir())
+        self.assertTrue(result['converged'])
+        start = np.array(d['images'][0])
+        for xyz in np.asarray(result['trajectory']['images']):
+            self.assertAlmostEqual(((xyz-start) @ np.linalg.inv(lattice))[0,0], 0., places=9)
+            np.testing.assert_array_equal(xyz[1],start[1])
+        self.assertGreater(abs(xyz[0,0]-start[0,0]),.01)
+        with self.assertRaises(ValueError):data(fixedComponents=[direction])
+
     def test_center_distances_allow_rotations(self):
         d=data(groupConstraints={'mode':'distances','groups':[[0],[1]],'masses':[1.,2.]},optimizer='lbfgs')
         p=np.array(d['images'][0]);j=b.group_distance_jacobian(p,d['groupConstraints']);numeric=np.zeros_like(j)

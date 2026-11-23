@@ -39,14 +39,20 @@ from ase.geometry import find_mic
 from ase.units import Bohr, Hartree
 from scipy.spatial import cKDTree
 
-VERSION = '1.22.1'
+VERSION = '1.23.0'
 KJ_MOL_PER_EV = 96.48533212331002
 RDKIT_FORCE_FIELDS = ('MMFF94', 'MMFF94s', 'UFF')
+UMA_BASE_TASKS = ('omol', 'oc20', 'omat', 'omc', 'odac')
+UMA_SURFACE_TASKS = ('oc20', 'oc22', 'oc25')
+UMA_STRESS_TASKS = ('omat', 'omc')
+UMA_TASKS = UMA_BASE_TASKS + ('oc22', 'oc25')
 UMA_MODELS = ('uma-s-1p2p1', 'uma-s-1p2', 'uma-s-1p1', 'uma-m-1p1')
 ANYSOLV_MODELS = ('model_compact', 'model_moe')
 MAX_BODY = 8 * 1024 * 1024
 MODES = ('evaluate', 'optimize', 'perpendicular', 'neb', 'cineb', 'lup', 'afir', 'dsafir', 'ts', 'vibrations', 'irc', 'scan', 'md')
 PATH_MODES = ('perpendicular', 'neb', 'cineb', 'lup')
+GROUP_IMAGE_CONVENTION = 'input-cartesian'
+FIXED_ATOM_MODES = ('optimize', 'afir', 'scan', 'dsafir', *PATH_MODES, 'md', 'ts', 'vibrations', 'irc')
 
 
 def number(value, name, lo, hi, integer=False):
@@ -57,11 +63,41 @@ def number(value, name, lo, hi, integer=False):
     return int(value) if integer else float(value)
 
 
+def normalize_band_anchors(images, fixed, cell):
+    """Every image represents the same frozen sites, including equivalent periodic replicas."""
+    anchors = images[0, fixed, :]
+    delta = (images[:, fixed, :] - anchors).reshape(-1, 3)
+    changed = np.linalg.norm(delta, axis=1) > 1e-7
+    if np.any(changed):
+        if cell and any(cell['pbc']):
+            _, distances = find_mic(delta[changed], cell['vectors'], cell['pbc'])
+            changed[changed] = distances > 1e-7
+        if np.any(changed):
+            image, index = divmod(int(np.flatnonzero(changed)[0]), len(fixed))
+            raise ValueError(f'固定原子{fixed[index]+1}の位置が構造{image+1}で異なります。'
+                             '経路全体で同じ固定位置を指定してください。')
+    images[:, fixed, :] = anchors
+    if any(np.linalg.norm(b-a) < 1e-10 for a, b in zip(images, images[1:])):
+        raise ValueError('固定原子の周期像をそろえると隣接構造が同一です。可動原子の異なる経路を指定してください。')
+
+
+def check_electronic_state(symbols, charge, multiplicity):
+    electrons = sum(atomic_numbers[s] for s in symbols) - charge
+    if electrons < multiplicity-1 or electrons <= 0 or (electrons-multiplicity+1) % 2:
+        raise ValueError('電子数・電荷・スピン多重度の偶奇または大きさが一致しません。')
+
+
+def check_tblite_pbc(cell):
+    # With tblite 0.8 any enabled axis triggers the full 3D lattice sum.
+    if cell and any(cell['pbc']) and not all(cell['pbc']):
+        raise ValueError('このtblite接続は部分周期境界に対応していません。真空層を持つ3方向周期セル、または部分周期対応のエンジンを明示してください。')
+
+
 def validate(data, engine):
     allowed = {'symbols', 'images', 'cell', 'charge', 'multiplicity', 'mode', 'md',
                'maxSteps', 'fmax', 'spring', 'maxMove', 'climbAfter', 'atomIds', 'afir', 'dsafir', 'livePreview',
-               'optimizer', 'trustRadius', 'vibrations', 'fixedAtoms', 'umaDevice', 'solvation', 'endpointMode',
-               'irc', 'thermochemistry', 'internalConstraints', 'groupConstraints', 'scan', 'adaptiveNEB', 'pathSplit', 'nodeIds', 'lup', 'fixedComponents', 'rigidGroups', 'cellOptimization', 'stagedOptimization', 'modelF', 'llmlip', 'pathSymmetry', 'forceField'}
+               'optimizer', 'trustRadius', 'vibrations', 'fixedAtoms', 'umaDevice', 'umaTask', 'solvation', 'endpointMode',
+               'irc', 'thermochemistry', 'internalConstraints', 'groupConstraints', 'scan', 'adaptiveNEB', 'pathSplit', 'nodeIds', 'lup', 'fixedComponents', 'rigidGroups', 'rigidGroupImages', 'cellOptimization', 'stagedOptimization', 'modelF', 'llmlip', 'pathSymmetry', 'forceField'}
     if not isinstance(data, dict) or set(data) - allowed:
         raise ValueError('未定義の入力項目があります。コマンド・パス指定は受け付けません。')
     if type(data.get('livePreview', False)) is not bool:
@@ -88,9 +124,17 @@ def validate(data, engine):
         raise ValueError('dsafir設定はDS-AFIR専用です。')
     charge = number(data.get('charge', 0), '電荷', -100, 100, True)
     multiplicity = number(data.get('multiplicity', 1), '多重度', 1, 100 if engine == 'uma' else 101, True)
-    electrons = sum(atomic_numbers[s] for s in symbols) - charge
-    if electrons < multiplicity - 1 or electrons <= 0 or (electrons - multiplicity + 1) % 2:
-        raise ValueError('電子数・電荷・スピン多重度の偶奇または大きさが一致しません。')
+    uma_task = data.get('umaTask', 'omol')
+    if 'umaTask' in data and (engine != 'uma' or uma_task not in UMA_TASKS):
+        raise ValueError('使用できるUMAタスクは '+', '.join(UMA_TASKS)+' です。')
+    periodic_uma = engine == 'uma' and uma_task != 'omol'
+    if periodic_uma:
+        if charge != 0 or multiplicity != 1 or data.get('modelF') or data.get('solvation'):
+            raise ValueError('UMAの材料・表面タスクはスピン状態を指定しません。電荷0・多重度欄1とし、Model FとAnySolvを解除してください。')
+    elif engine != 'llmlip':
+        check_electronic_state(symbols, charge, multiplicity)
+    # llmlip spin conditioning is a property of the selected model/head.
+    # Its physical multiplicity can only be checked after resolving the catalog.
     cell = data.get('cell')
     if cell is not None:
         if not isinstance(cell, dict) or set(cell) != {'vectors', 'pbc'}:
@@ -101,15 +145,25 @@ def validate(data, engine):
             raise ValueError('格子が退化しているか、数値範囲を超えています。')
         if not isinstance(pbc, list) or len(pbc) != 3 or any(type(v) is not bool for v in pbc):
             raise ValueError('pbcには3つの真偽値が必要です。')
+        if engine == 'tblite':
+            check_tblite_pbc(cell)
         if any(pbc) and engine == 'gxtb':
             raise ValueError('このg-xTBアダプタは非周期系専用です。周期系にはtbliteを選んで起動してください。')
-        if any(pbc) and engine == 'uma':
-            raise ValueError('このUMA接続は分子用omol・非周期系専用です。周期系には対応していません。')
+        if any(pbc) and engine == 'uma' and uma_task == 'omol':
+            raise ValueError('周期系では構造と物質の種類に合うUMAの材料・表面タスクを選択してください。')
+    if periodic_uma:
+        periodic_axes = sum(cell['pbc']) if cell else 0
+        if uma_task in UMA_SURFACE_TASKS and periodic_axes < 2:
+            raise ValueError('UMAの表面タスクには面内2方向または真空層を設けた3方向周期のセルが必要です。')
+        if uma_task not in UMA_SURFACE_TASKS and periodic_axes != 3:
+            raise ValueError('選択したUMAの材料タスクには3方向周期のセルが必要です。')
     for image in images:
         if has_atomic_collision(image, cell):
             raise ValueError('0.1 Å未満で重なった原子があります。初期経路の衝突を解消してください。')
     result = dict(symbols=symbols, images=images.tolist(), cell=cell, charge=charge,
                   multiplicity=multiplicity, mode=mode, livePreview=data.get('livePreview', False))
+    if engine == 'uma' and 'umaTask' in data:
+        result['umaTask'] = uma_task
     if engine == 'rdkit':
         result['forceField'] = validate_force_field(data.get('forceField'), result)
     elif 'forceField' in data:
@@ -131,27 +185,27 @@ def validate(data, engine):
         if any(key in data for key in ('optimizer', 'fmax', 'spring', 'maxMove', 'climbAfter')):
             raise ValueError('MDには時間刻みと積分ステップ数を指定してください。')
         validate_md(data, result)
-        if md_needs_stress(result) and engine not in ('tblite', 'llmlip'):
+        if md_needs_stress(result) and not (engine in ('tblite', 'llmlip') or (engine == 'uma' and uma_task in UMA_STRESS_TASKS)):
             raise ValueError('NPTと固定体積での圧力測定には、周期応力を計算できるエンジンが必要です。')
     elif mode == 'dsafir':
         result['maxSteps'] = number(data.get('maxSteps', 300), 'maxSteps', 1, 9999, True)
         if any(k in data for k in ('fmax', 'maxMove', 'spring', 'climbAfter')):
             raise ValueError('DS-AFIRには積分刻みstepSizeと接続距離thresholdを指定してください。ばね・CI・力の収束条件は使用しません。')
-        if cell and any(cell['pbc']):
-            raise ValueError('DS-AFIRは非周期分子用です。')
-        aligned = dsafir_align(images[0], images[1])
-        if np.linalg.norm(aligned - images[0]) <= 1e-8:
-            raise ValueError('重ね合わせると両端点が同一です。異なる2構造を指定してください。')
-        if np.max(np.abs(aligned)) > 1e4:
-            raise ValueError('重ね合わせ後の座標が10000 Åの範囲を超えています。')
         config = data.get('dsafir', {})
-        if not isinstance(config, dict) or set(config) - {'delta', 'stepSize', 'threshold'}:
+        if not isinstance(config, dict) or set(config) - {'delta', 'stepSize', 'threshold', 'endpointImage'}:
             raise ValueError('DS-AFIRの設定が不正です。')
         result['dsafir'] = {
             'delta': number(config.get('delta', 1.5), 'DS-AFIRの駆動力 (eV/Å)', .0001, 50),
             'stepSize': number(config.get('stepSize', .1), 'DS-AFIRの積分刻み (Å)', .001, .2),
             'threshold': number(config.get('threshold', .12), '両端の接続距離 (Å)', .001, 1),
         }
+        if cell and any(cell['pbc']):
+            image_mode = config.get('endpointImage', 'nearest')
+            if image_mode not in ('nearest', 'input'):
+                raise ValueError('周期DS-AFIRの生成物像はnearestまたはinputを指定してください。')
+            result['dsafir']['endpointImage'] = image_mode
+        elif 'endpointImage' in config:
+            raise ValueError('生成物の周期像は周期セルで指定してください。')
     else:
         step_default, step_limit = (10000 if mode == 'afir' else 100 if mode == 'lup' else 150), 10000
         for key, default, low, high, integer in [('maxSteps', step_default, 1, step_limit, True), ('fmax', .05, .00001, 10, False),
@@ -186,7 +240,7 @@ def validate(data, engine):
     if mode == 'vibrations' and vibration is None:
         vibration = {}
     if vibration is not None:
-        if mode not in ('ts', 'optimize', 'vibrations') or not isinstance(vibration, dict) or set(vibration)-{'delta','nfree','imaginaryThreshold'}:
+        if mode not in ('ts', 'optimize', 'vibrations') or not isinstance(vibration, dict) or set(vibration)-{'delta','nfree','imaginaryThreshold','harmonicThermo'}:
             raise ValueError('振動解析設定が不正です。単一構造に対して指定してください。')
         if len(symbols)>200:
             raise ValueError('振動解析は最大200原子です（有限差分の計算回数に注意してください）。')
@@ -195,17 +249,48 @@ def validate(data, engine):
             raise ValueError('有限差分点数は2または4です。')
         result['vibrations'] = dict(delta=number(vibration.get('delta', .001), '振動解析の変位幅', .0001, .1), nfree=nfree,
             imaginaryThreshold=number(vibration.get('imaginaryThreshold', 20), '虚振動の判定閾値', 0, 1000))
-    if (mode=='ts' or vibration is not None) and cell and any(cell['pbc']):
-        raise ValueError('Sella TS探索・振動モード表示は非周期分子用です。')
+        if 'harmonicThermo' in vibration:
+            thermo = vibration['harmonicThermo']
+            if not (cell and any(cell['pbc'])) or not isinstance(thermo, dict) or set(thermo)-{'temperatureK','cutoffCM'}:
+                raise ValueError('Γ点の調和振動寄与には周期セル、温度と下限波数を指定してください。')
+            result['vibrations']['harmonicThermo'] = {
+                'temperatureK': number(thermo.get('temperatureK',298.15), '振動温度 (K)', 1, 5000),
+                'cutoffCM': number(thermo.get('cutoffCM',10.), '採用する正の振動数の下限 (cm⁻¹)', .001, 1000)}
+    if mode in ('ts', 'irc') and cell and any(cell['pbc']) and len(symbols) == 1:
+        raise ValueError('単原子の固定周期セルには並進以外の自由度がありません。スーパーセルを使用してください。')
     if 'fixedAtoms' in data:
         fixed = data['fixedAtoms']
         if not isinstance(fixed, list) or any(type(i) is not int or not 0 <= i < len(symbols) for i in fixed) or len(set(fixed)) != len(fixed):
             raise ValueError('fixedAtomsは重複のない0始まりの原子インデックス配列にしてください。')
-        if fixed and (mode not in ('optimize', 'afir', 'scan') or vibration is not None):
-            raise ValueError('原子固定はMIN・AFIR-MIN専用です。TS・経路計算・振動解析との併用には対応していません。')
+        if fixed and mode not in FIXED_ATOM_MODES:
+            raise ValueError('この計算モードには原子固定を指定できません。')
+        if fixed and (mode in ('ts', 'vibrations', 'irc') or vibration is not None) and not (cell and any(cell['pbc'])):
+            raise ValueError('固定原子を含むTS・振動解析・IRCには周期セルが必要です。')
         if len(fixed) == len(symbols):
             raise ValueError('全原子は固定できません。可動原子を1個以上残してください。')
         result['fixedAtoms'] = sorted(fixed)
+        if fixed and mode in PATH_MODES:
+            images = images.copy()
+            normalize_band_anchors(images, fixed, cell)
+            if 'pathSymmetry' in data:
+                # Reflection and freezing can only coexist if the frozen set and
+                # its coordinates are invariant under the same affine operation.
+                if (set(symmetry.partner[fixed]) != set(fixed)
+                        or force_max(symmetry.positions(images)[:, fixed, :] - images[:, fixed, :]) > 1e-12):
+                    raise ValueError('固定する原子と座標を、指定した鏡映操作で不変な組にしてください。')
+            result['images'] = images.tolist()
+        if fixed and mode == 'md':
+            settings = result['md']
+            if md_needs_stress(result):
+                raise ValueError('固定原子を含むMDは固定セルのNVE・NVTに対応します。NPT・圧力記録は無効にしてください。')
+            initial_velocities = settings.get('initialVelocitiesAngstromPerFs')
+            if initial_velocities is not None and np.any(np.array(initial_velocities)[fixed]):
+                raise ValueError('固定原子にはゼロの初速度を指定してください。')
+            # A frozen substrate breaks translational invariance. COM removal
+            # is opt-in for the mobile subsystem, and requires at least two atoms.
+            settings['removeCOM'] = data.get('md', {}).get('removeCOM', False) and len(symbols)-len(fixed) > 1
+    if mode == 'dsafir':
+        dsafir_product(result, images[0], images[1])
     if 'umaDevice' in data:
         if engine != 'uma':
             raise ValueError('umaDeviceはUMA専用です。')
@@ -452,18 +537,27 @@ def validate_advanced_optimization(raw, data, engine):
         if not isinstance(rows,list) or len(rows)>len(data['symbols']):
             raise ValueError('方向固定の原子指定が不正です。')
         for row in rows:
-            if (not isinstance(row,dict) or set(row)!={'atom','axes'} or type(row['atom']) is not int or
+            if (not isinstance(row,dict) or set(row)-{'atom','axes','basis'} or not {'atom','axes'} <= set(row) or type(row['atom']) is not int or
                 not 0<=row['atom']<len(data['symbols']) or row['atom'] in used or not isinstance(row['axes'],list) or
                 len(row['axes'])!=3 or any(type(x) is not bool for x in row['axes']) or not any(row['axes'])):
                 raise ValueError('方向固定は原子とXYZの真偽値3個を指定してください。')
+            if row.get('basis','cartesian') not in ('cartesian','fractional'):
+                raise ValueError('方向固定の基底はCartesianまたは分率座標にしてください。')
+            if row.get('basis')=='fractional' and not data.get('cell'):
+                raise ValueError('分率座標の方向固定にはセルが必要です。')
             used.add(row['atom'])
         data['fixedComponents']=copy.deepcopy(rows)
+    periodic_groups = bool(raw.get('rigidGroups') and data.get('cell') and any(data['cell']['pbc']))
+    if periodic_groups:
+        if raw.get('rigidGroupImages') != GROUP_IMAGE_CONVENTION:
+            raise ValueError('周期セルの剛体には入力時の周期像を使います。rigidGroupImages に input-cartesian を指定してください。')
+        data['rigidGroupImages'] = GROUP_IMAGE_CONVENTION
+    elif 'rigidGroupImages' in raw:
+        raise ValueError('rigidGroupImages は周期セルで剛体原子団を使う場合に指定してください。')
     if 'rigidGroups' in raw:
         groups=raw['rigidGroups']; used=set(); count=0
         if not isinstance(groups,list) or len(groups)>50:
             raise ValueError('剛体原子団は50個以下にしてください。')
-        if groups and data.get('cell') and any(data['cell']['pbc']):
-            raise ValueError('剛体原子団は非周期系専用です。')
         for g in groups:
             if (not isinstance(g,list) or not 2<=len(g)<=50 or any(type(i) is not int or not 0<=i<len(data['symbols']) for i in g)
                 or len(set(g))!=len(g) or used.intersection(g)):
@@ -487,8 +581,9 @@ def validate_advanced_optimization(raw, data, engine):
         raise ValueError('未対応のセル自由度です。')
     if mode=='fixed':
         data['cellOptimization']={'mode':'fixed'};return
-    if data['mode']!='optimize' or engine!='tblite' or not data.get('cell') or not all(data['cell']['pbc']):
-        raise ValueError('可変セルMINには3方向周期セルと応力対応tbliteが必要です。')
+    if (data['mode'] != 'optimize' or not data.get('cell') or not all(data['cell']['pbc']) or
+            not (engine == 'tblite' or (engine == 'uma' and data.get('umaTask') in UMA_STRESS_TASKS))):
+        raise ValueError('可変セルMINには3方向周期セルと、tbliteまたは応力を計算できるUMAタスク（OMat・OMC）が必要です。')
     if any(data.get(k) for k in ('fixedAtoms','fixedComponents','rigidGroups','groupConstraints','internalConstraints','vibrations')):
         raise ValueError('可変セルMINと原子・内部座標・重心・剛体拘束または振動解析の併用には対応していません。')
     if data.get('optimizer') not in ('fire','lbfgs'):raise ValueError('可変セルではFIREまたはL-BFGSを指定してください。')
@@ -721,8 +816,6 @@ def validate_afir(data, normalized):
             raise ValueError('AFIRと計算条件が一致しません: '+key)
     if len(ids)<2 or any(atomic_numbers[s]>96 for s in normalized['symbols']):
         raise ValueError('AFIRは2〜500原子、H〜Cmです。')
-    if normalized['cell'] and any(normalized['cell']['pbc']):
-        raise ValueError('AFIRは非周期分子用です。')
     if not isinstance(c['fragments'], list) or not 2 <= len(c['fragments']) <= 64 or not isinstance(c['pairs'], list) or not 1 <= len(c['pairs']) <= 128:
         raise ValueError('AFIRには2〜64原子団と1〜128ペアが必要です。')
     groups = {}
@@ -824,11 +917,16 @@ def has_atomic_collision(positions, cell=None, threshold=.1):
     return bool(np.any(np.linalg.norm(p[a]-p[b],axis=1) < threshold))
 
 
-def afir_bias(positions, symbols, ids, config, prepared=None):
+def afir_bias(positions, symbols, ids, config, prepared=None, cell=None):
     terms = prepare_afir(symbols, ids, config) if prepared is None else prepared
     total, forces = 0., np.zeros_like(positions)
     for a, b, radius_sum, coefficient in terms:
         vectors = positions[a]-positions[b]
+        if cell and any(cell['pbc']):
+            # Limit the candidate-image arrays for large, skew periodic fragments.
+            for start in range(0, len(vectors), 4096):
+                block = vectors[start:start+4096]
+                block[:] = find_mic(block, cell['vectors'], cell['pbc'])[0]
         distances = np.linalg.norm(vectors, axis=1)
         if np.min(distances)<.1:
             raise ValueError('AFIRの原子団に0.1 Å未満の衝突があります。')
@@ -850,6 +948,35 @@ def dsafir_align(reactant, product):
     if np.linalg.det(u @ vh) < 0:
         u[:, -1] *= -1
     return centered @ (u @ vh) + a.mean(axis=0)
+
+
+def dsafir_product(data, reactant, product):
+    """Choose a fixed laboratory frame and a continuous image for each endpoint atom."""
+    cell = data.get('cell')
+    fixed = data.get('fixedAtoms', [])
+    if cell and any(cell['pbc']):
+        displacement = product - reactant
+        nearest, _ = find_mic(displacement, cell['vectors'], cell['pbc'])
+        if data['dsafir'].get('endpointImage', 'nearest') == 'nearest':
+            product = reactant + nearest
+        else:
+            product = product.copy()
+        # A frozen site may be represented by different lattice translations.
+        if fixed:
+            product[fixed] = reactant[fixed] + nearest[fixed]
+    elif fixed:
+        product = product.copy()
+    else:
+        product = dsafir_align(reactant, product)
+    if fixed:
+        if not np.allclose(product[fixed], reactant[fixed], rtol=0., atol=1e-7):
+            raise ValueError('DS-AFIRの両端で固定原子の位置を一致させてください。')
+        product[fixed] = reactant[fixed]
+    if np.linalg.norm(product - reactant) <= 1e-8:
+        raise ValueError('端点の座標を対応させると同一です。異なる2構造を指定してください。')
+    if np.max(np.abs(product)) > 1e4:
+        raise ValueError('DS-AFIRの生成物座標が10000 Åの範囲を超えています。')
+    return product
 
 
 def dsafir_force(q, p, reference, physical_force, delta, diagnostics=None):
@@ -890,9 +1017,10 @@ def dsafir_result(data, frames, reason):
     gap = float(np.linalg.norm(np.subtract(left[-1]['positions'], right[-1]['positions'])))
     connected = gap <= data['dsafir']['threshold']
     ordered = left + right[::-1]
-    return dict(mode='dsafir', optimizer='ds-steepest', steps=len(frames)-2,
+    return dict(mode='dsafir', optimizer='ds-steepest', cell=data.get('cell'), steps=len(frames)-2,
                 evaluations=len(frames), converged=connected, reason=reason,
                 dsafir={**data['dsafir'], 'gap':gap, 'connected':connected, 'joinIndex':len(left)-1},
+                fixedAtoms=data.get('fixedAtoms', []),
                 images=[f['positions'] for f in ordered], energies=[f['energy'] for f in ordered],
                 forces=[f['force'] for f in ordered], imageFmax=[f['fmax'] for f in ordered],
                 history=[f['advance'] for f in frames if 'advance' in f],
@@ -904,7 +1032,9 @@ def dsafir_result(data, frames, reason):
 def dsafir_search(data, calculate, progress):
     settings = data['dsafir']
     a, b = np.asarray(data['images'], dtype=float)
-    fronts = [a, dsafir_align(a, b)]
+    fronts = [a, dsafir_product(data, a, b)]
+    mobile = np.ones(len(a), dtype=bool)
+    mobile[data.get('fixedAtoms', [])] = False
     references = fronts.copy()
     branches = [[], []]
     frames = []
@@ -914,7 +1044,7 @@ def dsafir_search(data, calculate, progress):
     def evaluate(side, positions, advance=None):
         if not np.isfinite(positions).all() or np.max(np.abs(positions)) > 1e4:
             raise ValueError('DS-AFIR探索点の座標が範囲外です。')
-        if has_atomic_collision(positions):
+        if has_atomic_collision(positions, data.get('cell')):
             raise ValueError('DS-AFIR探索中に0.1 Å未満の原子衝突を検出しました。積分刻みを小さくしてください。')
         energy, force = calculate(side, positions)
         force = np.asarray(force, dtype=float)
@@ -954,8 +1084,8 @@ def dsafir_search(data, calculate, progress):
         side = min(range(2), key=lambda i: (branches[i][-1]['energy'], len(branches[i])))
         energy = branches[side][-1]['energy']
         advance = dict(step=step+1, side=names[side], gapBefore=gap, physicalEnergyEV=energy)
-        effective = dsafir_force(fronts[side], fronts[1-side], references[side],
-                                 forces[side], settings['delta'], advance)
+        effective = dsafir_force(fronts[side][mobile], fronts[1-side][mobile], references[side][mobile],
+                                 forces[side][mobile], settings['delta'], advance)
         advance['biasedEnergyEV'] = energy + advance['artificialEnergyEV']
         length = np.linalg.norm(effective)
         if not math.isfinite(length) or length == 0:
@@ -964,7 +1094,8 @@ def dsafir_search(data, calculate, progress):
         # Leave distinct nodes at the seam, even if a large requested step
         # points exactly down the separation vector. NEB/LUP need a tangent.
         step_length = min(settings['stepSize'], gap - .5 * settings['threshold'])
-        positions = fronts[side] + step_length * (effective / length)
+        positions = fronts[side].copy()
+        positions[mobile] += step_length * (effective / length)
         frame = evaluate(side, positions, advance)
 
 
@@ -984,13 +1115,13 @@ def afir_relax(data, calculate, progress=lambda p:None):
         units={'length':'angstrom','energy':'eV','force':'eV/angstrom'})
     bias_terms = prepare_afir(data['symbols'], data['atomIds'], data['afir'])
     for step in range(data['maxSteps']+1):
-        if has_atomic_collision(positions):
+        if has_atomic_collision(positions, data.get('cell')):
             raise ValueError('AFIR探索中に0.1 Å未満の原子衝突を検出しました。')
         energy, force = calculate(0, positions)
         force = np.asarray(force, dtype=float)
         if not math.isfinite(energy) or force.shape!=positions.shape or not np.isfinite(force).all():
             raise ValueError('物理計算から有限のエネルギー・力を取得できません。')
-        bias, artificial = afir_bias(positions, data['symbols'], data['atomIds'], data['afir'], bias_terms)
+        bias, artificial = afir_bias(positions, data['symbols'], data['atomIds'], data['afir'], bias_terms, data.get('cell'))
         effective = force+artificial
         effective[fixed] = 0
         constraint_correction = effective - force - artificial
@@ -1093,7 +1224,7 @@ def validate_adaptive_neb(data, normalized):
     return normalized
 
 
-def path_segments(energies, physical, node_ids, settings, fmax):
+def path_segments(energies, physical, node_ids, settings, fmax, mobile=slice(None)):
     """Suggest minima boundaries; a profile minimum is not a verified intermediate.
 
     The moving mean only selects valleys. Original energies and coordinates are
@@ -1144,12 +1275,13 @@ def path_segments(energies, physical, node_ids, settings, fmax):
             prominence_by_index[index] = prominence
     chosen.sort()
     force_values = [force_max(force) for force in physical]
+    active_values = [force_max(force[mobile]) for force in physical]
     minima = [{'index': index, 'nodeId': node_ids[index], 'energyEV': float(values[index]),
                'smoothedEnergyEV': float(smooth[index]), 'prominenceEV': prominence_by_index[index],
-               'physicalFmax': force_values[index], 'stationaryCandidate': force_values[index] <= fmax}
+               'physicalFmax': force_values[index], 'activeFmax': active_values[index], 'stationaryCandidate': active_values[index] <= fmax}
               for index in chosen[1:-1]]
     segments = [{'start': start, 'end': end,
-                 'needsEndpointOptimization': force_values[start] > fmax or force_values[end] > fmax}
+                 'needsEndpointOptimization': active_values[start] > fmax or active_values[end] > fmax}
                 for start, end in zip(chosen, chosen[1:])]
     return {'schema': 'molecule-path-segments/1', 'settings': settings.copy(), 'indices': chosen,
             'minima': minima, 'segments': segments,
@@ -1249,6 +1381,9 @@ def band_force_components(images, energies, physical, mode, spring, climbing, fi
     """An additive decomposition of the actual optimizer force, in eV/Å."""
     removal, springs, correction, constraints = (np.zeros_like(physical) for _ in range(4))
     band_physical = physical if allowed is None else allowed
+    if fixed:
+        band_physical = band_physical.copy()
+        band_physical[:, fixed] = 0
     perpendicular_force = band_physical.copy()
     if mode in PATH_MODES:
         if not relax_endpoints:
@@ -1267,11 +1402,8 @@ def band_force_components(images, energies, physical, mode, spring, climbing, fi
                 if mode in ('neb', 'cineb'):
                     springs[i] = spring*(np.linalg.norm(images[i+1]-images[i])-np.linalg.norm(images[i]-images[i-1]))*tau
     effective = band_physical+removal+springs+correction+constraints
-    if allowed is not None:
-        constraints += allowed - physical
-    if fixed:
-        constraints[:, fixed, :] -= effective[:, fixed, :]
-        effective[:, fixed, :] = 0
+    if allowed is not None or fixed:
+        constraints += band_physical - physical
     components = {'physical': physical, 'tangentRemoval': removal, 'spring': springs,
                   'climbingCorrection': correction, 'constraintCorrection': constraints, 'effective': effective}
     active_forces = effective[1:-1] if mode in PATH_MODES and not relax_endpoints else effective
@@ -1288,9 +1420,9 @@ def band_force_components(images, energies, physical, mode, spring, climbing, fi
                            climbingBracketed=climbing_peak_bracketed(energies, climbing) if climbing is not None else None)
     if allowed is not None:
         diagnostics['symmetryRemovedFmax'] = force_max(physical - allowed)
-        if mode in ('cineb', 'lup'):
-            diagnostics.update(endpointAllowedFmax=[force_max(allowed[i]) for i in (0, -1)],
-                               climbingAllowedFmax=force_max(allowed[climbing]) if climbing is not None else None)
+    if mode in ('cineb', 'lup') and (allowed is not None or fixed):
+        diagnostics.update(endpointAllowedFmax=[force_max(band_physical[i]) for i in (0, -1)],
+                           climbingAllowedFmax=force_max(band_physical[climbing]) if climbing is not None else None)
     return components, diagnostics
 
 
@@ -1565,7 +1697,9 @@ def relax(data, calculate, progress=lambda _: None):
     No saddle claim follows from a profile peak or an unrelaxed valley.
     """
     images = np.array(data['images'], float)
-    fixed, anchors = data.get('fixedAtoms', []), images.copy()
+    fixed = data.get('fixedAtoms', [])
+    anchors = images[0, fixed].copy()
+    mobile = np.flatnonzero(~np.isin(np.arange(images.shape[1]), fixed)) if fixed else slice(None)
     energies, physical = np.zeros(len(images)), np.zeros_like(images)
     velocity = np.zeros_like(images)
     mode, max_steps = data['mode'], data['maxSteps']
@@ -1599,6 +1733,10 @@ def relax(data, calculate, progress=lambda _: None):
         path_fields['scfStepRetries'] = (resumed or {}).get('scfStepRetries', data.get('_scfRetriesResume', 0))
     if resumed and resumed.get('optimizer', optimizer_method) != optimizer_method:
         raise ValueError('再開時の経路オプティマイザが保存時と一致しません。')
+    if resumed and resumed.get('fixedAtoms', []) != fixed and mode in PATH_MODES:
+        raise ValueError('再開時の固定原子が保存時と一致しません。')
+    if fixed and mode in PATH_MODES:
+        path_fields['fixedAtoms'] = fixed
     if resumed and resumed.get('pathSymmetry') != data.get('pathSymmetry'):
         raise ValueError('再開時の鏡映条件が保存時と一致しません。')
     if 'pathSymmetry' in data:
@@ -1647,6 +1785,8 @@ def relax(data, calculate, progress=lambda _: None):
                 projected = mirror.positions(coordinates)
                 drifted = np.max(np.abs(projected - coordinates), axis=(1, 2)) > 1e-13
                 coordinates[drifted] = projected[drifted]
+            if fixed:
+                images[:, fixed] = anchors
             pending=[]
             for i in range(len(images)):
                 if local_step and mode != 'optimize' and not relax_endpoints and i in (0, len(images)-1):
@@ -1718,7 +1858,7 @@ def relax(data, calculate, progress=lambda _: None):
         preliminary_converged = force_max(effective) <= data['fmax']
         if (adaptive_on and not (resumed and local_step==0) and local_step < max_steps and len(images) < adaptive['maxImages']
                 and (step % adaptive['interval'] == 0 or preliminary_converged)):
-            candidates = adaptive_intervals(images, energies, adaptive)
+            candidates = adaptive_intervals(images[:, mobile], energies, adaptive)
             interpolation_images = mirror.positions(images) if mirror else images
             additions = {}
             for left in candidates:
@@ -1752,6 +1892,8 @@ def relax(data, calculate, progress=lambda _: None):
                     if i in additions:
                         midpoint, identifier = additions[i]
                         index = len(new_images)
+                        if fixed:
+                            midpoint[fixed] = anchors
                         progress({'step': step, 'phase': 'adaptive_insertion', 'image': index+1,
                                   'images': len(images)+len(additions), 'evaluations': evaluations})
                         energy, force = calculate(index, midpoint)
@@ -1769,7 +1911,6 @@ def relax(data, calculate, progress=lambda _: None):
                                                  'left': node_ids[i], 'right': node_ids[i+1]})
                 images, energies, physical = np.array(new_images), np.array(new_energies), np.array(new_forces)
                 node_ids = new_ids
-                anchors = images.copy()
                 velocity = np.zeros_like(images)
                 dt, alpha, positive, previous_climbing = .05, .1, 0, None
                 lup_states.clear()
@@ -1792,7 +1933,7 @@ def relax(data, calculate, progress=lambda _: None):
         if mode == 'lup':
             diagnostics.update(redistributionResidual=redistribution_residual,
                 redistributionMove=redistribution_move, redistributions=lup_redistributions, cacheHits=cache_hits)
-        remaining = adaptive_intervals(images, energies, adaptive) if adaptive_on else []
+        remaining = adaptive_intervals(images[:, mobile], energies, adaptive) if adaptive_on else []
         # An unresolved interval requests a further insertion before convergence,
         # unless the node cap is reached or every interval is geometrically blocked.
         refinable = adaptive_on and len(images) < adaptive['maxImages'] and any(
@@ -1815,7 +1956,7 @@ def relax(data, calculate, progress=lambda _: None):
                                              'nodeLimitReached': bool(adaptive_on and len(images) >= adaptive['maxImages']),
                                              'blockedIntervals': copy.deepcopy(blocked_intervals)}}
             if data.get('pathSplit', {}).get('enabled'):
-                band_extra['pathSegments'] = path_segments(energies, physical, node_ids, data['pathSplit'], data['fmax'])
+                band_extra['pathSegments'] = path_segments(energies, physical, node_ids, data['pathSplit'], data['fmax'], mobile)
             if mode == 'lup':
                 band_extra.update(pathMethod='lup-ci-string', optimizer=optimizer_method, lup=lup.copy(),
                     lupStatus={'redistributions':lup_redistributions, 'cacheHits':cache_hits,
@@ -1939,7 +2080,7 @@ def relax(data, calculate, progress=lambda _: None):
             if mode == 'perpendicular':
                 max_parallel_step = max(max_parallel_step, abs(float(np.sum(displacement*tangents[i]))))
             images[i] += displacement
-            images[i, fixed] = anchors[i, fixed]
+            images[i, fixed] = anchors
             velocity[i, fixed] = 0
         retry_plan = None
         if not np.isfinite(images).all() or np.max(np.abs(images)) > 1e4:
@@ -2011,12 +2152,15 @@ def group_coordinate_matrix(config):
 
 def validate_group_constraints(config, data):
     required = {'mode', 'groups', 'masses'}
-    if not isinstance(config, dict) or not required <= set(config) or set(config)-required-{'referenceCenters'}:
+    if not isinstance(config, dict) or not required <= set(config) or set(config)-required-{'referenceCenters','imageConvention'}:
         raise ValueError('原子団の重心拘束にはmode・groups・massesが必要です。')
     if data['mode'] not in ('optimize','afir','scan') or data.get('vibrations') is not None:
         raise ValueError('原子団の重心拘束はMIN・AFIR-MIN・緩和スキャン専用です。')
-    if data.get('cell') and any(data['cell']['pbc']):
-        raise ValueError('原子団の重心拘束は非周期系専用です。周期境界をまたぐ重心は扱いません。')
+    periodic = bool(data.get('cell') and any(data['cell']['pbc']))
+    if periodic and config.get('imageConvention') != GROUP_IMAGE_CONVENTION:
+        raise ValueError('周期セルの重心拘束には入力時の周期像を使います。imageConvention に input-cartesian を指定してください。')
+    if not periodic and 'imageConvention' in config:
+        raise ValueError('重心拘束の imageConvention は周期セルを使う場合に指定してください。')
     if config['mode'] not in ('relative','absolute','distances'):
         raise ValueError('重心拘束はrelativeまたはabsoluteを指定してください。')
     groups, masses, count = config['groups'], config['masses'], len(data['symbols'])
@@ -2035,6 +2179,8 @@ def validate_group_constraints(config, data):
         raise ValueError('重心の計算に使う全原子の質量が必要です。')
     masses = [number(m, '原子質量 (u)', .1, 400) for m in masses]
     result = dict(mode=config['mode'], groups=copy.deepcopy(groups), masses=masses)
+    if periodic:
+        result['imageConvention'] = GROUP_IMAGE_CONVENTION
     centers = group_centers(data['images'][0], result)
     reference = config.get('referenceCenters', centers.tolist())
     if (not isinstance(reference, list) or len(reference)!=len(groups) or
@@ -2176,6 +2322,24 @@ def internal_coordinate_jacobian(positions, coordinates, cell=None, columns=None
     return result
 
 
+def rigid_fit(centered_reference, positions):
+    center = positions.mean(axis=0)
+    left, _, right = np.linalg.svd(centered_reference.T @ (positions-center))
+    left[:,-1] *= np.sign(np.linalg.det(left @ right))
+    rotation = left @ right
+    return centered_reference @ rotation + center, rotation
+
+
+def rigid_basis(centered, normals=False):
+    """Rigid translations and rotations, or their orthogonal complement."""
+    matrix = np.empty((len(centered),3,6))
+    matrix[:,:,:3] = np.eye(3)
+    matrix[:,:,3:] = np.stack([np.cross(axis,centered) for axis in np.eye(3)],axis=-1)
+    u, singular, _ = np.linalg.svd(matrix.reshape(-1,6),full_matrices=normals)
+    rank = np.count_nonzero(singular > singular[0]*1e-10)
+    return u[:,rank:] if normals else u[:,:rank]
+
+
 def rigid_only_constraint(data):
     """Exact rigid retraction and six-column Euclidean tangent projection.
 
@@ -2194,10 +2358,7 @@ def rigid_only_constraint(data):
             bases=[]
             for g in groups:
                 q=positions[g]-positions[g].mean(axis=0)
-                matrix=np.empty((len(g),3,6));matrix[:,:,:3]=np.eye(3)
-                matrix[:,:,3:]=np.stack([np.cross(axis,q) for axis in np.eye(3)],axis=-1)
-                u,s,_=np.linalg.svd(matrix.reshape(-1,6),full_matrices=False)
-                bases.append(u[:,s>s[0]*1e-10])
+                bases.append(rigid_basis(q))
             self.cached=(positions.copy(),bases)
             return bases
         def get_removed_dof(self,atoms):
@@ -2206,10 +2367,7 @@ def rigid_only_constraint(data):
         def project(self,positions):
             out=np.array(positions,copy=True)
             for g,ref in zip(groups,centered):
-                target=out[g];center=target.mean(axis=0)
-                u,_,vt=np.linalg.svd(ref.T@(target-center))
-                correction=np.eye(3);correction[-1,-1]=np.linalg.det(u@vt)
-                out[g]=ref@(u@correction@vt)+center
+                out[g], _ = rigid_fit(ref, out[g])
             return out
         def adjust_positions(self,atoms,newpositions):
             delta=newpositions-atoms.positions
@@ -2244,16 +2402,36 @@ def internal_coordinate_constraint(data):
     if data.get('rigidGroups') and not any(data.get(k) for k in ('fixedAtoms','fixedComponents','internalConstraints','groupConstraints')):
         return rigid_only_constraint(data)
     coordinates = copy.deepcopy(data.get('internalConstraints', []))
-    for group_indices in data.get('rigidGroups',[]):
-        for ii,i in enumerate(group_indices):
-            for j in group_indices[ii+1:]:
-                coordinates.append({'type':'distance','atoms':[i,j],'value':float(np.linalg.norm(np.array(data['images'][0][i])-data['images'][0][j]))})
+    # A rigid body keeps its input images, including distances beyond half a cell.
+    # Fitting the proper rotation also gives a regular tangent for planar and
+    # linear groups, where pair-distance Jacobians alone admit spurious bending.
+    rigid_reference = np.asarray(data.get('_rigidReference', data['images'][0]))
+    rigid = []
+    for indices in data.get('rigidGroups',[]):
+        indices = np.asarray(indices,int)
+        centered = rigid_reference[indices] - rigid_reference[indices].mean(axis=0)
+        normals = rigid_basis(centered,normals=True).T.reshape(-1,len(indices),3)
+        rigid.append((indices, centered, normals))
     fixed = data.get('fixedAtoms', [])
     anchors = np.array(data['images'][0], dtype=float)
     cell = data.get('cell')
     free = np.ones(anchors.shape, dtype=bool); free[fixed] = False
+    scaled_rows = []
+    scaled_atoms = set()
+    reciprocal = np.linalg.inv(cell['vectors']).T if cell else None
     for item in data.get('fixedComponents',[]):
-        free[item['atom'],np.array(item['axes'],dtype=bool)]=False
+        atom = item['atom']
+        axes = np.array(item['axes'], dtype=bool)
+        if item.get('basis') == 'fractional':
+            # ds_i = dr . reciprocal[i]. Normalizing the row gives an Å residual.
+            for normal in reciprocal[axes]:
+                row = np.zeros_like(anchors)
+                row[atom] = normal / np.linalg.norm(normal)
+                scaled_rows.append(row.ravel())
+            scaled_atoms.add(atom)
+        else:
+            free[atom,axes]=False
+    scaled = np.asarray(scaled_rows).reshape(-1, anchors.size)
     fixed_mask=~free
     free = free.ravel()
     group = data.get('groupConstraints')
@@ -2262,10 +2440,15 @@ def internal_coordinate_constraint(data):
     targets = group_coordinates(group.get('referenceCenters',group_centers(anchors,group)),group) if group else np.empty(0)
     # COM derivatives are constant: factorize once for COM-only optimizations.
 
-    involved = set(i for c in coordinates for i in c['atoms'])
+    involved = scaled_atoms.union(i for c in coordinates for i in c['atoms'])
+    for indices, _, _ in rigid:
+        involved.update(indices)
     if group: involved.update(i for g in group['groups'] for i in g)
     active = free & np.repeat([i in involved for i in range(len(anchors))],3)
-    constant = not coordinates and not distance_groups
+    constant = not coordinates and not rigid and not distance_groups
+    lookup = np.full(anchors.size,-1,int)
+    lookup[active] = np.arange(np.count_nonzero(active))
+    rigid_columns = [lookup[(indices[:,None]*3+np.arange(3)).ravel()] for indices, _, _ in rigid]
 
     class InternalConstraint(FixConstraint):
         factor_cache = None
@@ -2280,14 +2463,39 @@ def internal_coordinate_constraint(data):
             self.factor_cache=(positions.copy(),scales,u,s,vt)
             return scales,u,s,vt
 
+        rigid_cache = None
+        def rigid_system(self, positions):
+            if self.rigid_cache is not None and np.array_equal(self.rigid_cache[0],positions):
+                return self.rigid_cache[1:]
+            jacobians, residuals = [], []
+            for (indices, ref, normals), columns in zip(rigid, rigid_columns):
+                fitted, rotation = rigid_fit(ref, positions[indices])
+                rotated = (normals @ rotation).reshape(len(normals),-1)
+                residuals.append(rotated @ (positions[indices]-fitted).ravel())
+                rows = np.zeros((len(normals),np.count_nonzero(active)))
+                movable = columns>=0
+                rows[:,columns[movable]] = rotated[:,movable]
+                rows[np.abs(rows)<1e-14] = 0.
+                jacobians.append(rows)
+            self.rigid_cache = (positions.copy(), np.vstack(jacobians), np.concatenate(residuals))
+            return self.rigid_cache[1:]
+
         def jacobian(self, positions):
-            return np.vstack((internal_coordinate_jacobian(positions, coordinates, cell, active), (group_distance_jacobian(positions,group) if distance_groups else linear)[:,active]))
+            rows = [internal_coordinate_jacobian(positions, coordinates, cell, active)]
+            if rigid:
+                rows.append(self.rigid_system(positions)[0])
+            groups = group_distance_jacobian(positions,group) if distance_groups else linear
+            return np.vstack([*rows, groups[:,active], scaled[:,active]])
 
         def get_removed_dof(self, atoms):
             return int(fixed_mask.sum())+len(self.factor(atoms.positions)[2])
 
         def residual(self, positions):
-            return np.concatenate((internal_coordinate_residual(internal_coordinate_values(positions, coordinates, cell), coordinates), (group_coordinates(group_centers(positions,group),group) if distance_groups else linear@np.asarray(positions).ravel())-targets))
+            rows = [internal_coordinate_residual(internal_coordinate_values(positions, coordinates, cell), coordinates)]
+            if rigid:
+                rows.append(self.rigid_system(positions)[1])
+            groups = group_coordinates(group_centers(positions,group),group) if distance_groups else linear@np.asarray(positions).ravel()
+            return np.concatenate([*rows, groups-targets, scaled@(np.asarray(positions)-anchors).ravel()])
 
         @measured('constraint')
         def project(self, positions):
@@ -2421,7 +2629,7 @@ def constrained_minimize(data, calculate, directory=None, progress=lambda p: Non
     def evaluate(index, positions):
         energy, force = calculate(index, positions)
         force = np.asarray(force,dtype=float)
-        bias, artificial = afir_bias(positions,data['symbols'],data['atomIds'],data['afir'],bias_terms) if afir else (0.,np.zeros_like(force))
+        bias, artificial = afir_bias(positions,data['symbols'],data['atomIds'],data['afir'],bias_terms,data.get('cell')) if afir else (0.,np.zeros_like(force))
         last.update(positions=positions.copy(),energy=float(energy),force=force.copy(),bias=float(bias),artificial=artificial)
         return energy+bias, force+artificial
 
@@ -2481,6 +2689,8 @@ def constrained_minimize(data, calculate, directory=None, progress=lambda p: Non
                  'constraintProjection':projection,'componentFmax':summary['componentFmax'],
                  'fixedComponents':data.get('fixedComponents',[]),'rigidGroups':data.get('rigidGroups',[]),
                  'optimizerState':optimizer_state()}
+        if 'rigidGroupImages' in data:
+            saved['rigidGroupImages'] = data['rigidGroupImages']
         if group:
             saved['groupConstraints'] = copy.deepcopy(group)
         progress({**summary,'phase':'optimization','checkpoint':saved,
@@ -2512,6 +2722,8 @@ def constrained_minimize(data, calculate, directory=None, progress=lambda p: Non
         fixedComponents=data.get('fixedComponents',[]),rigidGroups=data.get('rigidGroups',[]),
         forceComponents=force_components,forceComponentImageIndices=[0],
         units={'length':'angstrom','energy':'eV','force':'eV/angstrom','angle':'degree'})
+    if 'rigidGroupImages' in data:
+        result['rigidGroupImages'] = data['rigidGroupImages']
     if group:
         result.update(groupConstraints=copy.deepcopy(group),groupConstraintError=group_constraint_error(result['images'][0],group))
     if afir:
@@ -2562,8 +2774,9 @@ def relaxed_scan(data, calculate, directory, progress=lambda p: None):
         forceComponents={key:[] for key in ('physical','artificial','effective','constraintCorrection')},
         scan={**copy.deepcopy(config),'nodes':[],'totalNodes':len(plan),'order':'serpentine','plan':copy.deepcopy(plan)},
         units={'length':'angstrom','energy':'eV','force':'eV/angstrom','angle':'degree'},validation='constrained-minima-not-ts')
-    if data.get('groupConstraints'):
-        result['groupConstraints'] = copy.deepcopy(data['groupConstraints'])
+    for key in ('groupConstraints', 'rigidGroups', 'rigidGroupImages', 'fixedComponents'):
+        if data.get(key):
+            result[key] = copy.deepcopy(data[key])
     seed = copy.deepcopy(data['images'][0])
     resume = data.get('_scanResume')
     if resume:
@@ -2605,6 +2818,8 @@ def relaxed_scan(data, calculate, directory, progress=lambda p: None):
         constraints = copy.deepcopy(data.get('internalConstraints',[]))+[
             {'type':c['type'],'atoms':c['atoms'],'value':value} for c,value in zip(coordinates,targets)]
         node_data = {**data,'mode':'optimize','images':[seed],'internalConstraints':constraints}
+        if data.get('rigidGroups'):
+            node_data['_rigidReference'] = data['images'][0]
         def node_progress(value):
             public = {k:v for k,v in value.items() if k not in ('checkpoint','structureCheckpoint')}
             public.update(phase='scan',scanNode=index,scanTotal=len(plan),scanTargets=targets)
@@ -2657,8 +2872,10 @@ def ase_optimize(data, calculate, progress=lambda p: None):
             from sella import Sella
         except ImportError as error:
             raise ValueError('SellaをこのPython環境に導入してください: python -m pip install "sella>=2.6,<3"') from error
+        # Periodic rotations are physical. A pinned slab also breaks global translation.
+        projections = dict(proj_rot=False, proj_trans=not bool(data.get('fixedAtoms'))) if any(atoms.pbc) else {}
         optimizer = Sella(atoms, order=1, method=data['optimizer'].removeprefix('sella-'),
-                          delta0=data['trustRadius'], internal=False, logfile=None, trajectory=None)
+                          delta0=data['trustRadius'], internal=False, logfile=None, trajectory=None, **projections)
     else:
         from ase.optimize import LBFGS, BFGS
         optimizer = (LBFGS if data['optimizer']=='lbfgs' else BFGS)(atoms, maxstep=data['maxMove'], logfile=None)
@@ -2695,11 +2912,12 @@ def ase_optimize(data, calculate, progress=lambda p: None):
         units={'length':'angstrom', 'energy':'eV', 'force':'eV/angstrom'})
 
 
-def vibration_analysis(data, calculate, directory, progress=lambda p: None):
-    """Central force differences; ASE mass-weighted Hessian, all 3N modes retained."""
+def finite_difference_vibrations(data, calculate, directory, progress):
+    """Fixed-cell Cartesian force differences for exactly the movable atoms."""
     from ase.vibrations import Vibrations
     settings = data['vibrations']
-    total = 1 + len(data['symbols'])*3*settings['nfree']
+    movable = [i for i in range(len(data['symbols'])) if i not in data.get('fixedAtoms', [])]
+    total = 1 + len(movable)*3*settings['nfree']
     done = 0
 
     def evaluate(index, positions):
@@ -2710,7 +2928,8 @@ def vibration_analysis(data, calculate, directory, progress=lambda p: None):
         return answer
 
     atoms = ase_atoms(data, evaluate)
-    vibrations = Vibrations(atoms, name=str(Path(directory)/'vibrations'), delta=settings['delta'], nfree=settings['nfree'])
+    vibrations = Vibrations(atoms, indices=movable, name=str(Path(directory)/'vibrations'),
+                            delta=settings['delta'], nfree=settings['nfree'])
     try:
         if hasattr(calculate,'prepare_vibrations'):calculate.prepare_vibrations(atoms.positions)
         if getattr(calculate,'workers',1)>1:
@@ -2731,22 +2950,94 @@ def vibration_analysis(data, calculate, directory, progress=lambda p: None):
                     progress({'phase':'vibrations','vibrationDone':done,'vibrationTotal':total})
         else:
             vibrations.run()
-        modes = vibrations.get_vibrations()
-        frequencies, energies = modes.get_frequencies(), modes.get_energies()
-        vectors = modes.get_modes(all_atoms=True)
-        if not np.isfinite(frequencies).all() or not np.isfinite(energies).all() or not np.isfinite(vectors).all():
-            raise ValueError('振動解析の結果が非有限値です。')
-        imaginary = frequencies.imag>0
-        return dict(schema='molecule-vibrations/1', status='completed', settings=settings,
-            frequenciesCM=[float(abs(f)) for f in frequencies], imaginary=imaginary.tolist(),
-            quantaMEV=[float(abs(e)*1000) for e in energies], modes=vectors.tolist(), masses=atoms.get_masses().tolist(),
-            significantImaginaryCount=int(np.sum(frequencies.imag>settings['imaginaryThreshold'])),
-            evaluations=done, positions=atoms.positions.tolist(), symbols=data['symbols'],
-            units={'frequency':'cm^-1', 'quantum':'meV', 'displacement':'ASE Cartesian normal modes'},
-            note='全3Nモード。並進・回転を射影除去していません。表示振幅は任意で、虚振動の動画は実時間の振動ではありません。')
+        return atoms, vibrations.get_vibrations(), done
     finally:
         if hasattr(calculate,'finish_vibrations'):calculate.finish_vibrations()
         vibrations.clean()
+
+
+class GammaCoordinates:
+    """Orthonormal coordinates in movable mass-weighted space at fixed lattice."""
+    def __init__(self, atoms, indices):
+        from scipy.linalg import null_space
+        self.indices = np.asarray(indices, dtype=int)
+        self.mass_sqrt = np.repeat(np.sqrt(atoms.get_masses()[self.indices]), 3)
+        if len(indices) == len(atoms):
+            translations = np.tile(np.eye(3), (len(atoms), 1)) * self.mass_sqrt[:, None]
+            self.basis = null_space(translations.T)
+        else:
+            # When atoms are fixed, rigid translations of just the movable region cost energy.
+            self.basis = None
+
+    def reduce(self, cartesian):
+        weighted = cartesian / self.mass_sqrt
+        return weighted if self.basis is None else self.basis.T @ weighted
+
+    def expand(self, weighted):
+        vector = weighted if self.basis is None else self.basis @ weighted
+        return (vector / self.mass_sqrt).reshape(-1, 3)
+
+    def hessian(self, cartesian):
+        weighted = cartesian / np.outer(self.mass_sqrt, self.mass_sqrt)
+        return weighted if self.basis is None else self.basis.T @ weighted @ self.basis
+
+
+def gamma_quanta(eigenvalues):
+    from ase import units
+    conversion = units._hbar * units.m / np.sqrt(units._e * units._amu)
+    return conversion * np.sqrt(eigenvalues.astype(complex))
+
+
+def gamma_harmonic_thermo(energies, settings):
+    """Independent oscillators in this supercell, using only retained positive frequencies."""
+    from ase.units import invcm, kB
+    real = energies.imag == 0
+    retained = real & (energies.real > settings['cutoffCM'] * invcm)
+    quanta = energies.real[retained]
+    kT = kB * settings['temperatureK']
+    x = quanta / kT
+    # exp(-x) and expm1 remain well-conditioned at both large and small x.
+    denominator = -np.expm1(-x)
+    log_partition_term = np.log(denominator)
+    zpe = .5 * quanta.sum()
+    entropy = kB * np.sum(x * np.exp(-x) / denominator - log_partition_term)
+    return dict(**settings, includedModes=int(retained.sum()), omittedImaginary=int((~real).sum()),
+                omittedLowOrZero=int((real & ~retained).sum()), zpeEV=float(zpe),
+                vibrationalHelmholtzEV=float(zpe + kT*log_partition_term.sum()),
+                entropyEVPerK=float(entropy))
+
+
+def vibration_analysis(data, calculate, directory, progress=lambda p: None):
+    from ase.units import invcm
+    settings = data['vibrations']
+    atoms, modes, done = finite_difference_vibrations(data, calculate, directory, progress)
+    metadata = {}
+    if any(atoms.pbc):
+        coords = GammaCoordinates(atoms, modes.get_indices())
+        eigenvalues, eigenvectors = np.linalg.eigh(coords.hessian(modes.get_hessian_2d()))
+        energies = gamma_quanta(eigenvalues)
+        frequencies = energies / invcm
+        vectors = np.zeros((len(energies), len(atoms), 3))
+        for i, axis in enumerate(eigenvectors.T):
+            vectors[i, coords.indices] = coords.expand(axis)
+        projected = 3 if coords.basis is not None else 0
+        metadata = dict(spectrum='gamma', activeAtoms=coords.indices.tolist(), projectedTranslations=projected)
+        if 'harmonicThermo' in settings:
+            metadata['harmonicThermo'] = gamma_harmonic_thermo(energies, settings['harmonicThermo'])
+        note = '固定セルのΓ点。可動原子のHessianを使用し、全原子可動時は剛体並進3方向を除きます。'
+    else:
+        frequencies, energies = modes.get_frequencies(), modes.get_energies()
+        vectors = modes.get_modes(all_atoms=True)
+        note = '全3Nモード。並進・回転を射影除去していません。表示振幅は任意です。'
+    if not np.isfinite(frequencies).all() or not np.isfinite(energies).all() or not np.isfinite(vectors).all():
+        raise ValueError('振動解析の結果が非有限値です。')
+    return dict(schema='molecule-vibrations/1', status='completed', settings=settings,
+        frequenciesCM=np.abs(frequencies).tolist(), imaginary=(frequencies.imag>0).tolist(),
+        quantaMEV=(np.abs(energies)*1000).tolist(), modes=vectors.tolist(), masses=atoms.get_masses().tolist(),
+        significantImaginaryCount=int(np.sum(frequencies.imag>settings['imaginaryThreshold'])),
+        evaluations=done, positions=atoms.positions.tolist(), symbols=data['symbols'],
+        units={'frequency':'cm^-1', 'quantum':'meV', 'displacement':'ASE Cartesian normal modes'},
+        note=note, **metadata)
 
 
 @lru_cache(maxsize=1)
@@ -2870,7 +3161,7 @@ def md_needs_stress(data):
 
 
 def md_capabilities(config):
-    pressure = config['engine'] == 'tblite' or (config['engine'] == 'llmlip' and any(
+    pressure = config['engine'] in ('tblite', 'uma') or (config['engine'] == 'llmlip' and any(
         model.get('available') and model.get('stress') and model['periodic'] != 'none'
         and (model['architecture'] != 'uma-v1' or any(head != 'omol' for head in model['heads']))
         for model in config['llmlipModels']))
@@ -2878,7 +3169,7 @@ def md_capabilities(config):
     return dict(ensembles=['nve', 'nvt', 'npt'] if pressure else ['nve', 'nvt'],
                 defaultThermostat=baths[0], thermostats=baths,
                 barostats=['mc-isotropic'] if pressure else [], pressureMeasurement=pressure,
-                maxSteps=100000, maxFrames=1000, maxAtomFrames=100000)
+                maxSteps=100000, maxFrames=1000, maxAtomFrames=100000, fixedAtoms=True)
 
 
 def md_result(data, frames, reason):
@@ -2903,7 +3194,8 @@ def md_result(data, frames, reason):
                 reason=reason, converged=False, images=[last['positions']], energies=[last['energy']],
                 forces=[last['force']], imageFmax=[last['fmax']], effectiveFmax=last['fmax'],
                 masses=md_masses(data).tolist(), velocitiesAngstromPerFs=last['velocitiesAngstromPerFs'],
-                degreesOfFreedom=3 * (len(data['symbols']) - int(settings['removeCOM'])),
+                degreesOfFreedom=3 * (len(data['symbols']) - len(data.get('fixedAtoms', [])) - int(settings['removeCOM'])),
+                fixedAtoms=data.get('fixedAtoms', []),
                 trajectory=trajectory, history=history, climbingImage=None,
                 units={'time':'fs', 'length':'angstrom', 'energy':'eV', 'force':'eV/angstrom',
                        'velocity':'angstrom/fs', 'temperature':'K', 'mass':'u',
@@ -2991,7 +3283,9 @@ def molecular_dynamics(data, calculate, progress=lambda _: None):
     """Integrate classical Cartesian motion in ASE mechanical units."""
     settings = data['md']
     positions = np.array(data['images'][0], dtype=float)
-    masses = md_masses(data)[:, None]
+    fixed = data.get('fixedAtoms', [])
+    mobile = np.flatnonzero(~np.isin(np.arange(len(positions)), fixed)) if fixed else slice(None)
+    masses = md_masses(data)[mobile, None]
     total_mass = np.sum(masses)
     dt_fs = settings['timestepFs']
     dt = dt_fs * ase_units.fs
@@ -3005,9 +3299,9 @@ def molecular_dynamics(data, calculate, progress=lambda _: None):
 
     # Sampling a Maxwell distribution preserves the fluctuations in instantaneous K.
     if 'initialVelocitiesAngstromPerFs' in settings:
-        velocity = np.array(settings['initialVelocitiesAngstromPerFs'], dtype=float) / ase_units.fs
+        velocity = np.array(settings['initialVelocitiesAngstromPerFs'], dtype=float)[mobile] / ase_units.fs
     else:
-        velocity = sigma * rng.standard_normal(positions.shape)
+        velocity = sigma * rng.standard_normal((len(masses), 3))
     if remove_com:
         velocity -= com_velocity(velocity)
     thermostat = settings.get('thermostat', 'langevin' if settings['ensemble'] == 'nvt' else None)
@@ -3067,7 +3361,7 @@ def molecular_dynamics(data, calculate, progress=lambda _: None):
 
     frames = []
     energy, force, stress = evaluate(positions, lattice)
-    if thermostat == 'nose-hoover-chain' and not npt and not np.any(velocity) and not np.any(force):
+    if thermostat == 'nose-hoover-chain' and not npt and not np.any(velocity) and not np.any(force[mobile]):
         raise ValueError('全原子の速度と力がゼロのため、決定論的なNosé–Hoover鎖では運動が始まりません。'
                          '初速度をMaxwell–Boltzmann分布から生成するか、BussiまたはLangevin熱浴を選んでください。')
     thermo = thermodynamics(velocity, energy)
@@ -3082,9 +3376,13 @@ def molecular_dynamics(data, calculate, progress=lambda _: None):
             event.update(evaluations=step + 1 + attempts, volumeAttempts=attempts, volumeAccepted=accepted_volumes)
         if sample:
             xyz = positions.tolist()
+            stored_velocity = velocity * ase_units.fs
+            if fixed:
+                stored_velocity = np.zeros_like(positions)
+                stored_velocity[mobile] = velocity * ase_units.fs
             frame = dict(step=step, timeFs=step * dt_fs, positions=xyz, energy=energy,
-                         force=force.tolist(), fmax=force_max(force),
-                         velocitiesAngstromPerFs=(velocity * ase_units.fs).tolist(), **thermo)
+                         force=force.tolist(), fmax=force_max(force[mobile]),
+                         velocitiesAngstromPerFs=stored_velocity.tolist(), **thermo)
             if lattice is not None:
                 frame.update(cell={'vectors':lattice.tolist(), 'pbc':[True]*3},
                              volumeA3=event['volumeA3'], pressureBar=event['pressureBar'])
@@ -3105,23 +3403,24 @@ def molecular_dynamics(data, calculate, progress=lambda _: None):
         try:
             # B (half kick). The OU update lies between the two half drifts in BAOAB.
             starting = global_bath(velocity) if global_bath else velocity
-            half = starting + .5 * dt * force / masses
+            half = starting + .5 * dt * force[mobile] / masses
+            trial = positions.copy()
             if thermostat == 'langevin':
-                trial = positions + .5 * dt * half
-                noise = noise_scale * rng.standard_normal(positions.shape)
+                trial[mobile] += .5 * dt * half
+                noise = noise_scale * rng.standard_normal(half.shape)
                 if remove_com:
-                    # Couple the bath only to relative velocities. No atom is anchored.
+                    # Couple the bath to the relative velocities of the mobile atoms.
                     center = com_velocity(half)
                     noise -= com_velocity(noise)
                     half = center + damping * (half - center) + noise
                 else:
                     half = damping * half + noise
-                trial += .5 * dt * half
+                trial[mobile] += .5 * dt * half
             else:
-                trial = positions + dt * half
+                trial[mobile] += dt * half
             trial_lattice = lattice
             trial_energy, trial_force, trial_stress = evaluate(trial, trial_lattice)
-            trial_velocity = half + .5 * dt * trial_force / masses
+            trial_velocity = half + .5 * dt * trial_force[mobile] / masses
             if global_bath:
                 trial_velocity = global_bath(trial_velocity)
             accepted = False
@@ -3195,20 +3494,67 @@ def validate_irc_settings(data, normalized):
             raise ValueError('irc設定はIRC計算専用です。')
         return
     settings = data.get('irc', {})
-    if not isinstance(settings, dict) or set(settings)-{'direction', 'stepSize', 'relaxEndpoints'}:
+    if not isinstance(settings, dict) or set(settings)-{'direction', 'stepSize', 'relaxEndpoints', 'imaginaryThreshold'}:
         raise ValueError('IRC設定が不正です。')
     direction = settings.get('direction', 'both')
     if direction not in ('both', 'forward', 'reverse') or type(settings.get('relaxEndpoints', True)) is not bool:
         raise ValueError('IRC方向はboth/forward/reverse、端点緩和は真偽値で指定してください。')
     if len(normalized['images']) != 1 or len(normalized['symbols']) > 200:
         raise ValueError('IRCは200原子以下の単一TS候補構造から開始します。')
-    if normalized.get('fixedAtoms') or data.get('internalConstraints') or data.get('constraints') or data.get('afir') or data.get('vibrations'):
+    cell = normalized.get('cell')
+    periodic = bool(cell and any(cell['pbc']))
+    if (normalized.get('fixedAtoms') and not periodic) or data.get('internalConstraints') or data.get('constraints') or data.get('afir') or data.get('vibrations'):
         raise ValueError('IRCには拘束・人工力・同時振動解析を指定できません。')
-    if normalized.get('cell') and any(normalized['cell']['pbc']):
-        raise ValueError('IRCは非周期分子用です。')
     normalized['irc'] = dict(direction=direction,
         stepSize=number(settings.get('stepSize', .1), 'IRCステップ幅 (Å√amu)', .005, .5),
         relaxEndpoints=settings.get('relaxEndpoints', True))
+    if periodic:
+        normalized['irc']['imaginaryThreshold'] = number(settings.get('imaginaryThreshold', 20), 'Γ点虚振動閾値', 0, 1000)
+    elif 'imaginaryThreshold' in settings:
+        raise ValueError('IRCの虚振動閾値指定は周期セルのΓ点検証用です。')
+
+
+def periodic_irc_optimizer(atoms, modes, initial_hessian, settings):
+    """Run Sella IRC in a Euclidean basis of physical mass-weighted displacements.
+
+    ASE's solver-facing triples are coordinates in that basis. Every energy and
+    force is evaluated on the complete original structure with its original cell.
+    """
+    from ase import Atoms
+    from ase.calculators.calculator import Calculator, all_changes
+    from sella import IRC
+
+    origin = atoms.positions.copy()
+    weighted = Atoms(numbers=[1]*(len(initial_hessian)//3))
+    weighted.set_masses(np.ones(len(weighted)))
+
+    def synchronize():
+        atoms.positions[modes.indices] = origin[modes.indices] + modes.expand(weighted.positions.ravel())
+
+    class WeightedCalculator(Calculator):
+        implemented_properties = ['energy', 'forces']
+
+        def calculate(self, atoms=None, properties=('energy','forces'), system_changes=all_changes):
+            super().calculate(atoms, properties, system_changes)
+            synchronize()
+            self.results = dict(energy=physical.get_potential_energy(),
+                                forces=modes.reduce(physical.get_forces()[modes.indices].ravel()).reshape(-1, 3))
+
+    physical = atoms
+    weighted.calc = WeightedCalculator()
+
+    class PeriodicIRC(IRC):
+        def converged(self, forces=None):
+            if self.first:
+                return False
+            synchronize()
+            curvatures = self.pes.H.evals
+            return (curvatures is not None and curvatures[0] > 0 and
+                    force_max(physical.get_forces()) <= self.fmax)
+
+    optimizer = PeriodicIRC(weighted, dx=settings['stepSize'], ninner_iter=50, keep_going=False,
+                            hessian_function=lambda _: initial_hessian.copy(), logfile=None, trajectory=None)
+    return optimizer, synchronize
 
 
 def irc_calculation(data, calculate, directory, progress=lambda p: None):
@@ -3225,9 +3571,11 @@ def irc_calculation(data, calculate, directory, progress=lambda p: None):
     force0 = np.asarray(force0, dtype=float)
     if not math.isfinite(energy0) or force0.shape != initial.shape or not np.isfinite(force0).all():
         raise ValueError('IRC初期構造のエネルギー・力が不正です。')
-    if force_max(force0) > data['fmax']:
+    movable = [i for i in range(len(initial)) if i not in data.get('fixedAtoms', [])]
+    origin_fmax = force_max(force0[movable])
+    if origin_fmax > data['fmax']:
         raise ValueError('IRC初期構造の最大力が収束閾値を超えています。先にTS最適化を収束させてください。')
-    origin = dict(positions=initial.tolist(), energy=float(energy0), force=force0.tolist(), fmax=force_max(force0), phase='ts')
+    origin = dict(positions=initial.tolist(), energy=float(energy0), force=force0.tolist(), fmax=origin_fmax, phase='ts')
     branch_frames = {direction:[copy.deepcopy(origin)] for direction in directions}
     branches, history = {}, []
     atoms = ase_atoms(data, calculate)
@@ -3235,8 +3583,31 @@ def irc_calculation(data, calculate, directory, progress=lambda p: None):
     # branches. Calling irun again restores the TS Hessian and coordinates
     # before applying the opposite sign to that same initial mode.
     atoms.set_masses(atoms.get_masses())
-    optimizer = IRC(atoms, dx=settings['stepSize'], ninner_iter=50,
-                    keep_going=False, logfile=None, trajectory=None)
+    periodic = any(atoms.pbc)
+    hessian_evaluations = 0
+    if periodic:
+        from ase.units import invcm
+        gamma_settings = dict(nfree=2, delta=.004, imaginaryThreshold=settings['imaginaryThreshold'])
+
+        def curvature_at_current_geometry(stage):
+            nonlocal hessian_evaluations
+            vib_input = {**data, 'images':[atoms.positions.tolist()], 'vibrations':gamma_settings}
+            _, vibrations, count = finite_difference_vibrations(
+                vib_input, calculate, directory, lambda update: progress({**update, 'ircGammaStage':stage}))
+            hessian_evaluations += count
+            coordinates = GammaCoordinates(atoms, vibrations.get_indices())
+            hessian = coordinates.hessian(vibrations.get_hessian_2d())
+            frequencies = gamma_quanta(np.linalg.eigvalsh(hessian)) / invcm
+            imaginary = frequencies.imag[frequencies.imag > settings['imaginaryThreshold']]
+            return coordinates, hessian, imaginary.tolist()
+
+        coordinates, hessian, saddle_imaginary = curvature_at_current_geometry('saddle')
+        if len(saddle_imaginary) != 1:
+            raise ValueError(f'周期IRCには有意なΓ点虚振動が1本のTSが必要です（検出 {len(saddle_imaginary)} 本）。')
+        optimizer, synchronize = periodic_irc_optimizer(atoms, coordinates, hessian, settings)
+    else:
+        optimizer = IRC(atoms, dx=settings['stepSize'], ninner_iter=50,
+                        keep_going=False, logfile=None, trajectory=None)
 
     def force_diagnostics(force):
         maximum = force_max(force)
@@ -3252,29 +3623,32 @@ def irc_calculation(data, calculate, directory, progress=lambda p: None):
         endpoints = sorted(set((0, len(frames)-1)))
         return dict(mode='irc', images=[f['positions'] for f in frames], energies=[f['energy'] for f in frames],
             forces=[f['force'] for f in frames], imageFmax=[f['fmax'] for f in frames],
-            effectiveFmax=max(end_forces), steps=sum(len(items)-1 for items in branch_frames.values()), evaluations=1+atoms.calc.evaluations,
+            effectiveFmax=max(end_forces), steps=sum(len(items)-1 for items in branch_frames.values()), evaluations=1+atoms.calc.evaluations+hessian_evaluations,
             converged=reason == 'converged', reason=reason, climbingImage=None, tsIndex=ts_index,
-            history=copy.deepcopy(history), branches=copy.deepcopy(branches), irc=settings, fixedAtoms=[],
+            history=copy.deepcopy(history), branches=copy.deepcopy(branches), irc=settings, fixedAtoms=data.get('fixedAtoms', []),
             diagnostics=copy.deepcopy(history[-1]['diagnostics']) if history else force_diagnostics(force0),
             forceComponents={'physical':[frames[i]['force'] for i in endpoints]}, forceComponentImageIndices=endpoints,
             forceComponentNote='物理力のみ。IRCの質量重み付き経路追跡による更新方向ではありません。',
             framePhases=[f['phase'] for f in frames], masses=atoms.get_masses().tolist(),
             validation='irc-from-stationary-saddle-candidate-endpoint-identities-not-verified',
+            **({'saddleGammaImaginaryCM':saddle_imaginary, 'gammaDisplacementA':gamma_settings['delta']} if periodic else {}),
             units={'length':'angstrom', 'energy':'eV', 'force':'eV/angstrom', 'ircStep':'angstrom*sqrt(amu)'})
 
     def checkpoint():
+        if periodic and phase == 'irc':
+            synchronize()
         p = atoms.positions.tolist()
-        f, e = atoms.get_forces(), float(atoms.get_potential_energy())
+        f, e = atoms.get_forces(apply_constraint=False), float(atoms.get_potential_energy())
         if p == branch_frames[direction][-1]['positions']:
             return
-        maximum = force_max(f)
+        maximum = force_max(f[movable])
         previous = branch_frames[direction][-1]
         diagnostics = force_diagnostics(f)
         diagnostics.update(energyChangeEV=abs(e-previous['energy']),
             maxDisplacement=force_max(np.asarray(p)-previous['positions']))
         branch_frames[direction].append(dict(positions=p, energy=e, force=f.tolist(), fmax=maximum, phase=phase))
         history.append(dict(step=len(history)+1, phase=phase, direction=direction,
-            fmax=maximum, energies=[e], evaluations=1+atoms.calc.evaluations, diagnostics=diagnostics))
+            fmax=maximum, energies=[e], evaluations=1+atoms.calc.evaluations+hessian_evaluations, diagnostics=diagnostics))
         partial = assembled()
         progress({**history[-1], 'structureCheckpoint':partial,
             **({'preview':dict(step=partial['steps'], images=partial['images'], energies=partial['energies'])} if data.get('livePreview') else {})})
@@ -3296,6 +3670,8 @@ def irc_calculation(data, calculate, directory, progress=lambda p: None):
             if type(error).__name__ == 'IRCInnerLoopConvergenceFailure':
                 raise ValueError('IRCの内部反復が収束しませんでした。直前までの経路を保持しています。TSの収束と虚振動を確認し、IRCステップ幅を調整して再実行してください。') from error
             raise
+        if periodic:
+            synchronize()
         irc_steps = len(branch_frames[direction])-1
         # Endpoint minimization is separate from the IRC and clearly tagged.
         endpoint_converged = bool(converged)
@@ -3312,8 +3688,14 @@ def irc_calculation(data, calculate, directory, progress=lambda p: None):
             endpointConverged=endpoint_converged, endpointSteps=endpoint_steps,
             endpoint=copy.deepcopy(branch_frames[direction][-1]),
             endpointVerifiedMinimum=False)
+        if periodic and endpoint_converged and irc_steps:
+            _, _, endpoint_imaginary = curvature_at_current_geometry(direction)
+            branches[direction].update(endpointGammaImaginaryCM=endpoint_imaginary,
+                                       endpointVerifiedMinimum=not endpoint_imaginary)
         progress({'phase':'irc', 'direction':direction, 'structureCheckpoint':assembled()})
-    completed = all(branches[d]['converged'] for d in directions)
+    completed = all(branches[d]['converged'] and branches[d]['endpointConverged'] for d in directions)
+    if periodic and completed and not all(branches[d]['endpointVerifiedMinimum'] for d in directions):
+        return assembled('endpoint_not_minimum')
     return assembled('converged' if completed else 'step_limit')
 
 
@@ -3561,6 +3943,7 @@ class RDKitEngine:
 
 class TBLiteEngine:
     def __init__(self, data, config, directory):
+        check_tblite_pbc(data.get('cell'))
         from tblite.interface import Calculator
         self.Calculator, self.data, self.config = Calculator, data, config
         self.calculators, self.results = {}, {}
@@ -3887,6 +4270,8 @@ def llmlip_job_config(data, config):
     if data.get('symbols'):
         if set(data['symbols'])-set(item['species']):
             raise ValueError('選択したllmlipモデルの対応外元素が含まれています。')
+        if spin:
+            check_electronic_state(data['symbols'], data['charge'], data['multiplicity'])
         if (not charge and data['charge']!=0) or (not spin and data['multiplicity']!=1):
             raise ValueError('このllmlipモデル/headは電荷・スピンを指定できません。電荷0・多重度1の入力だけを受け付けます（スピン状態の識別はしません）。')
         pbc = data.get('cell', {}).get('pbc', [False]*3) if data.get('cell') else [False]*3
@@ -3973,12 +4358,20 @@ class LLMLIPEngine:
         return energy, force.copy()  # Already eV and -dE/dR in eV/angstrom.
 
 
+def uma_model_tasks(model):
+    return UMA_TASKS if model in ('uma-s-1p2', 'uma-s-1p2p1') else UMA_BASE_TASKS
+
+
 def job_config(data, config):
     result = dict(config)
     if config['engine'] == 'rdkit' and 'forceField' in data:
         result['rdkitModel'] = data['forceField']['model']
     if config['engine'] == 'llmlip':
         result = llmlip_job_config(data, result)
+    if 'umaTask' in data:
+        if data['umaTask'] not in uma_model_tasks(config['umaModel']):
+            raise ValueError('選択したタスクはこのUMAモデルでは使用できません。OC22・OC25にはUMA 1.2系が必要です。')
+        result['umaTask'] = data['umaTask']
     if 'umaDevice' in data:
         if data['umaDevice'] not in [d['id'] for d in config.get('devices', [])]:
             raise ValueError('選択したUMAデバイスを利用できません。再接続してください。')
@@ -4181,7 +4574,7 @@ class SolvatedUMAEngine:
 def uma_settings(config):
     # A fixed numerical surface across MIN, AFIR, CI-NEB, TS and finite differences.
     # Do not use the changing upstream default/turbo presets or direct-force models.
-    return dict(tf32=False, compile=False, merge_mole=False,
+    return dict(tf32=False, compile=False, merge_mole=False, auto_add_default_untrained_tasks=False,
                 base_precision_dtype=config['umaPrecision'], execution_mode='general',
                 torch_num_threads=config['threads'])
 
@@ -4204,28 +4597,35 @@ def uma_packages(config):
     return torch, FAIRChemCalculator, pretrained_mlip, InferenceSettings
 
 
-def uma_failure(error):
+def uma_failure(error, local=False):
     # Upstream HTTP errors can contain credentials/URLs. Never send those to the UI/export.
     name = type(error).__name__
     if 'outofmemory' in name.lower() or 'out of memory' in str(error).lower():
         return 'UMAのメモリが不足しました。原子数を減らすか、--uma-device cpu を選んで再起動してください。'
+    if local:
+        return ('指定したUMAチェックポイントで計算を開始できません。--uma-model と重みの対応、'
+                'fairchem-core・PyTorchのバージョン、実行デバイスを確認してください。')
     return ('UMAのモデル読み込み・計算に失敗しました。Hugging Faceのfacebook/UMA利用承認と、'
             '同じ端末環境での hf auth login、モデルのキャッシュ・通信・PyTorchの導入を確認してください。'
             '認証情報はページへ入力しないでください。')
 
 
 class UMAEngine:
-    """Local conservative UMA/OMol inference; ASE returns eV and eV/angstrom already."""
+    """Use the same conservative UMA predictor for molecular, surface and bulk heads."""
     def __init__(self, data, config, directory):
         from ase import Atoms
         torch, Calculator, pretrained, Settings = uma_packages(config)
         torch.set_num_threads(config['threads'])
         os.environ['HF_HUB_DISABLE_TELEMETRY'] = '1'
         try:
-            self.predictor = pretrained.get_predict_unit(config['umaModel'],
-                device=config.get('umaRuntimeDevice', config['umaDevice']), inference_settings=Settings(**uma_settings(config)))
+            options = dict(device=config.get('umaRuntimeDevice', config['umaDevice']),
+                           inference_settings=Settings(**uma_settings(config)))
+            if config.get('umaCheckpoint'):
+                self.predictor = pretrained.load_predict_unit(config['umaCheckpoint'], **options)
+            else:
+                self.predictor = pretrained.get_predict_unit(config['umaModel'], **options)
         except Exception as error:
-            raise ValueError(uma_failure(error)) from error
+            raise ValueError(uma_failure(error, bool(config.get('umaCheckpoint')))) from error
         self.Atoms, self.Calculator, self.data = Atoms, Calculator, data
         self.atoms = {}
 
@@ -4238,25 +4638,50 @@ class UMAEngine:
         other.reset(data,config,directory)
         return other
 
-    def __call__(self, index, positions):
+    def _evaluate(self, index, positions, lattice=None):
+        cell = self.data['cell']
+        task = self.data.get('umaTask', 'omol')
+        if hasattr(self.predictor, 'dataset_to_tasks') and task not in self.predictor.dataset_to_tasks:
+            raise ValueError(f'指定したチェックポイントにUMAタスク {task} が含まれていません。')
         try:
             if index not in self.atoms:
-                cell = self.data['cell']
                 atoms = self.Atoms(self.data['symbols'], positions=positions,
-                    cell=None if cell is None else cell['vectors'], pbc=False)
-                # UMA spin is 2S+1, NOT g-xTB's number of unpaired electrons (2S).
-                atoms.info.update(charge=self.data['charge'], spin=self.data['multiplicity'])
-                atoms.calc = self.Calculator(self.predictor, task_name='omol')
+                                   cell=cell['vectors'] if cell else None, pbc=cell['pbc'] if cell else False)
+                if task == 'omol':
+                    atoms.info.update(charge=self.data['charge'], spin=self.data['multiplicity'])
+                # Materials heads use the upstream defaults charge=0, spin=0.
+                atoms.calc = self.Calculator(self.predictor, task_name=task)
                 self.atoms[index] = atoms
             atoms = self.atoms[index]
+            if cell:
+                atoms.set_cell(cell['vectors'] if lattice is None else lattice)
             atoms.set_positions(positions)
-            # Autograd must remain enabled for the conservative forces.
-            energy, force = float(atoms.get_potential_energy()), np.asarray(atoms.get_forces(), dtype=float)
+            energy = float(atoms.get_potential_energy())
+            force = np.asarray(atoms.get_forces(), dtype=float)
+            stress = None
+            if lattice is not None:
+                if 'stress' not in atoms.calc.implemented_properties:
+                    raise NotImplementedError('stress')
+                stress = np.asarray(atoms.get_stress(voigt=False), dtype=float)
+        except NotImplementedError as error:
+            raise ValueError('このUMAタスクまたはチェックポイントには要求した物理量がありません。応力には学習済み応力を含むOMatまたはOMC対応の重みが必要です。') from error
         except Exception as error:
-            raise ValueError(uma_failure(error)) from error
+            if 'out of memory' in str(error).lower() or 'outofmemory' in type(error).__name__.lower():
+                raise ValueError(uma_failure(error)) from error
+            raise ValueError(f'UMAの {task} タスクでエネルギー・力の計算に失敗しました。構造と選択した重みを確認してください。') from error
         if not math.isfinite(energy) or force.shape != (len(self.data['symbols']), 3) or not np.isfinite(force).all():
             raise ValueError('UMAが不正なエネルギー・力を返しました。計算を停止しました。')
+        if stress is not None:
+            if stress.shape != (3, 3) or not np.isfinite(stress).all():
+                raise ValueError('UMAから有限な3×3の応力テンソルを取得できません。')
+            return energy, force.copy(), stress.copy()
         return energy, force.copy()
+
+    def __call__(self, index, positions):
+        return self._evaluate(index, positions)
+
+    def with_cell(self, index, positions, lattice):
+        return self._evaluate(index, positions, lattice)
 
 
 def engine_method(config, data=None):
@@ -4264,7 +4689,7 @@ def engine_method(config, data=None):
         config = job_config(data, config)
     if config['engine'] == 'uma':
         s = config.get('solvation')
-        return f"UMA / {config['umaModel']} / omol" + (f" + AnySolv / {s['model']} / {s['solvent']}" if s else '')
+        return f"UMA / {config['umaModel']} / {config.get('umaTask', 'omol')}" + (f" + AnySolv / {s['model']} / {s['solvent']}" if s else '')
     if config['engine'] == 'llmlip':
         s = config.get('llmlipSelection', {})
         return 'llmlip.rs（CPU・β） / '+s.get('model', config['llmlipDefaultModel'])+((' / '+s['head']) if s.get('head') else '')
@@ -4307,6 +4732,7 @@ def residency_key(data, config):
     identity = {'engine':c['engine'], 'model':c.get('umaModel'), 'device':c.get('umaDevice'),
                 'llmlip':c.get('llmlipSelection'), 'llmlipHash':c.get('llmlipCapabilities', {}).get('sha256'),
                 'modelF':bool(data.get('modelF')),
+                'umaCheckpointSHA256':c.get('umaCheckpointSHA256'),
                 'precision':c.get('umaPrecision'), 'threads':c['threads'],
                 'llmlipRuntimeThreads':cpu_plan(data,c)['threadsPerEvaluation'] if c['engine']=='llmlip' else None,
                 'cudaMasks':c.get('cudaMasks', {}),
@@ -4578,7 +5004,8 @@ def provenance(config, data=None):
         'threads':config['threads'], 'workers':config.get('workers',1), 'solvent':s['solvent'] if s else 'gas', 'aseVersion':importlib.metadata.version('ase'),
         **({'cpuPlan':cpu_plan(data,config)} if data is not None else {}),
         'numpyVersion':np.__version__, 'sellaVersion':sella_version(),
-        **({'uma':{'model':config['umaModel'], 'task':'omol', 'device':config['umaDevice'],
+        **({'uma':{'model':config['umaModel'], 'task':config.get('umaTask', 'omol'), 'device':config['umaDevice'],
+                   **({'checkpointSHA256':config['umaCheckpointSHA256']} if config.get('umaCheckpointSHA256') else {}),
                    'inference':uma_settings(config), 'fairchemVersion':package_version('fairchem-core'),
                    'torchVersion':package_version('torch')}} if config['engine']=='uma' else {}),
         **({'anysolv':{**s, 'version':package_version('anysolv'), 'precision':config['umaPrecision'],
@@ -5126,7 +5553,7 @@ class Jobs:
         last = frames[-1]
         return dict(mode=data['mode'], optimizer=data.get('optimizer','fire'), **self._record_identity(job),
             fixedAtoms=data.get('fixedAtoms', []),
-            **{k:copy.deepcopy(last[k]) for k in ('internalConstraints','groupConstraints','constraintProjection','optimizerState','fixedComponents','rigidGroups') if k in last},
+            **{k:copy.deepcopy(last[k]) for k in ('internalConstraints','groupConstraints','constraintProjection','optimizerState','fixedComponents','rigidGroups','rigidGroupImages') if k in last},
             **({'atomIds':data['atomIds']} if 'atomIds' in data else {}),
             symbols=data['symbols'], cell=last.get('cell',data['cell']), charge=data['charge'], multiplicity=data['multiplicity'],
             **{k:copy.deepcopy(last[k]) for k in ('cells','stresses','cellOptimization','stressResidual','enthalpies') if k in last},
@@ -5146,7 +5573,7 @@ class Jobs:
         energies, biases = [p['energy'] for p in frames], [p['bias'] for p in frames]
         return dict(schema='molecule-afir-trajectory/1', mode='afir', **self._record_identity(job),
             fixedAtoms=data.get('fixedAtoms', []),
-            **{k:copy.deepcopy(frames[-1][k]) for k in ('internalConstraints','groupConstraints','constraintProjection','optimizerState','fixedComponents','rigidGroups') if k in frames[-1]},
+            **{k:copy.deepcopy(frames[-1][k]) for k in ('internalConstraints','groupConstraints','constraintProjection','optimizerState','fixedComponents','rigidGroups','rigidGroupImages') if k in frames[-1]},
             atomIds=data['atomIds'],
             symbols=data['symbols'], cell=data['cell'], charge=data['charge'], multiplicity=data['multiplicity'],
             images=[p['positions'] for p in frames], energies=energies, biasEnergies=biases,
@@ -5343,8 +5770,10 @@ class Handler(BaseHTTPRequestHandler):
                 self.response(200, {'version': VERSION, 'engine': config['engine'],
                     'method': engine_method(config),
                     **({'binarySHA256':config['binarySHA256']} if config.get('binarySHA256') else {}),
-                    'periodic': config['engine'] == 'tblite', 'maxAtoms': 500, 'maxImages': 100,
-                    **({'uma':{'model':config['umaModel'], 'task':'omol', 'device':config['umaDevice'],
+                    'periodic': config['engine'] in ('tblite', 'uma'), 'maxAtoms': 500, 'maxImages': 100,
+                    **({'uma':{'model':config['umaModel'], 'task':'omol', 'tasks':list(uma_model_tasks(config['umaModel'])), 'stressTasks':list(UMA_STRESS_TASKS),
+                               **({'checkpointSHA256':config['umaCheckpointSHA256']} if config.get('umaCheckpointSHA256') else {}),
+                               'device':config['umaDevice'],
                                'precision':config['umaPrecision'], 'tf32':False, 'compile':False, 'mergeMole':False},
                         'devices':config.get('devices', []),
                         'anysolv':{'enabled':bool(config.get('anysolv')), 'models':list(config.get('anysolvPaths', {})),
@@ -5353,8 +5782,8 @@ class Handler(BaseHTTPRequestHandler):
                                    'device':config.get('anysolvDevice'), 'precision':config['umaPrecision']},
                         'maxMultiplicity':100, 'maxAtomicNumber':83} if config['engine']=='uma' else {}),
                     'molecularDynamics':md_capabilities(config),
-                    'sellaVersion':sella_version(), 'vibrations':1, 'maxVibrationAtoms':200, 'pathCheckpoint':1, 'fixedAtoms':True,
-                    'irc':bool(sella_version()), 'thermochemistry':True, 'internalConstraints':True, 'groupConstraints':True, 'scan':True, 'resourceOptimization':1, 'evaluationWorkers':config.get('workers',1), 'advancedOptimization':True, 'optimizerRestart':True, 'cellOptimization':config['engine']=='tblite',
+                    'sellaVersion':sella_version(), 'vibrations':1, 'periodicGammaPoint':True, 'maxVibrationAtoms':200, 'pathCheckpoint':1, 'fixedAtoms':True, 'fixedAtomModes':list(FIXED_ATOM_MODES),
+                    'irc':bool(sella_version()), 'thermochemistry':True, 'internalConstraints':True, 'groupConstraints':True, 'scan':True, 'resourceOptimization':1, 'evaluationWorkers':config.get('workers',1), 'advancedOptimization':True, 'fractionalFixedComponents':True, 'periodicGroupImages':GROUP_IMAGE_CONVENTION, 'optimizerRestart':True, 'cellOptimization':config['engine'] in ('tblite', 'uma'),
                     'adaptiveNEB':True, 'pathSplit':True, 'history':True, 'queue':True, 'residentModels':True,
                     'modelF':{'version':1,'models':['amf'],'surfaces':['lower','upper'],'defaultAlphaKJMol':30,'sameCharge':True,'stateSelection':'multiplicity'},
                     'lup':True, 'pathOptimizers':{'neb':['band-lbfgs','fire'], 'cineb':['band-lbfgs','fire'], 'lup':['band-lbfgs','lbfgs','fire']},
@@ -5371,7 +5800,7 @@ class Handler(BaseHTTPRequestHandler):
                     **({'forceFields':list(RDKIT_FORCE_FIELDS), 'engineVersion':package_version('rdkit'),
                         'modes':['md'], 'maxAtomicNumber':118, 'maxMultiplicity':1, 'periodic':False,
                         'modelF':None, 'vibrations':False, 'irc':False, 'thermochemistry':False,
-                        'fixedAtoms':False, 'internalConstraints':False, 'groupConstraints':False,
+                        'fixedAtoms':True, 'fixedAtomModes':['md'], 'internalConstraints':False, 'groupConstraints':False,
                         'scan':False, 'adaptiveNEB':False, 'pathSplit':False, 'lup':False,
                         'advancedOptimization':False, 'pathOptimizers':{}, 'pathSymmetryTypes':[],
                         'residentModels':False} if config['engine']=='rdkit' else {})})
@@ -5478,7 +5907,8 @@ def main():
     parser.add_argument('--llmlip-model', action='append', default=[], metavar='ID=/absolute/path/model.e3rs', help='llmlip CPU beta; repeat to register local converted models')
     parser.add_argument('--method', choices=('GFN1-xTB', 'GFN2-xTB', 'IPEA1-xTB'), help='tblite only; default GFN2-xTB')
     parser.add_argument('--binary', help='Absolute path to the locally installed xtb with --gxtb --grad support')
-    parser.add_argument('--uma-model', choices=UMA_MODELS, help='UMA only; default uma-s-1p2p1 (molecular omol task)')
+    parser.add_argument('--uma-model', choices=UMA_MODELS, help='UMA only; default uma-s-1p2p1')
+    parser.add_argument('--uma-checkpoint', type=Path, help='Optional trusted local UMA .pt file matching --uma-model, loaded without a model download')
     parser.add_argument('--uma-device', type=device_name, help='UMA only; cpu (default), cuda:0, cuda:1, ...')
     parser.add_argument('--uma-precision', choices=('float32', 'float64'), help='UMA only; default float64 for TS/finite differences; float32 uses less memory')
     parser.add_argument('--anysolv', action='store_true', help='Enable optional AnySolv solvent correction for UMA')
@@ -5499,11 +5929,11 @@ def main():
     if bool(args.llmlip_model) != (args.engine=='llmlip'):
         parser.error('--engine llmlipには--llmlip-model ID=/absolute/path/model.e3rsが必要です。他のエンジンには指定できません。')
     if args.engine != 'tblite' and args.method is not None:
-        parser.error('--method is for tblite only. UMA uses --uma-model and the molecular omol task.')
+        parser.error('--method is for tblite only. UMA uses --uma-model and a per-job task.')
     if args.engine != 'gxtb' and args.binary is not None:
         parser.error('--binary is for gxtb only. UMA uses the locally installed fairchem-core package.')
-    if args.engine != 'uma' and any(x is not None for x in (args.uma_model, args.uma_device, args.uma_precision)):
-        parser.error('--uma-model/--uma-device/--uma-precision require --engine uma')
+    if args.engine != 'uma' and any(x is not None for x in (args.uma_model, args.uma_device, args.uma_precision, args.uma_checkpoint)):
+        parser.error('--uma-model/--uma-device/--uma-precision/--uma-checkpoint require --engine uma')
     if args.anysolv and args.engine != 'uma':
         parser.error('--anysolv requires --engine uma')
     if not args.anysolv and any(x is not None for x in (args.anysolv_model, args.anysolv_checkpoint, args.anysolv_device)):
@@ -5545,6 +5975,15 @@ def main():
     if args.engine == 'uma':
         config.update(umaModel=args.uma_model or 'uma-s-1p2p1', umaDevice=args.uma_device or 'cpu',
                       umaPrecision=args.uma_precision or 'float64')
+        if args.uma_checkpoint:
+            path = args.uma_checkpoint.expanduser().resolve()
+            if not path.is_file() or path.suffix.lower() != '.pt':
+                parser.error('--uma-checkpoint requires a readable local .pt file')
+            digest = hashlib.sha256()
+            with path.open('rb') as stream:
+                for block in iter(lambda: stream.read(4 * 1024 * 1024), b''):
+                    digest.update(block)
+            config.update(umaCheckpoint=str(path), umaCheckpointSHA256=digest.hexdigest())
         config['method'] = engine_method(config)
         try:
             torch, *_ = uma_packages(config)  # No weights or molecular inference at startup.
@@ -5575,7 +6014,7 @@ def main():
     server = make_server(config, token, args.port, args.allow_origin, args.site_dir)
     print(f'Molecule Studio bridge {VERSION}\nURL: http://127.0.0.1:{args.port}\nToken: {token}\nEngine: {args.engine}', flush=True)
     if args.engine == 'uma':
-        print(f"Model: {config['umaModel']} / omol / {config['umaDevice']} / {config['umaPrecision']} (TF32 off)\n"
+        print(f"Model: {config['umaModel']} / {', '.join(uma_model_tasks(config['umaModel']))} / {config['umaDevice']} / {config['umaPrecision']} (TF32 off)\n"
               'Models stay loaded between compatible jobs unless --no-resident-models is set. First use may download weights.\n'
               'Hugging Face credentials stay in the local environment; do not enter them in the web page.', flush=True)
     print('History: '+(config['historyDir'] or 'disabled (memory only)'), flush=True)

@@ -120,6 +120,28 @@ jobs:
           OMP_NUM_THREADS: '1'
           OPENBLAS_NUM_THREADS: '1'
         run: python -m unittest test_anysolv.NativeAnySolv -v
+  periodic-surfaces:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install -r molecule-visualizer/local-engine/requirements.txt 'tblite>=0.4,<1' 'sella>=2.6,<3'
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Exercise frozen slabs, path relaxation and Gamma-point IRC in Chromium
+        run: |
+          node molecule-visualizer/tests/surface-constraints-browser.cjs
+          node molecule-visualizer/tests/periodic-dsafir-browser.cjs
+          node molecule-visualizer/tests/periodic-irc-browser.cjs
   browser:
     runs-on: ubuntu-24.04
     timeout-minutes: 15

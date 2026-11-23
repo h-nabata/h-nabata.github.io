@@ -263,13 +263,53 @@ class DoubleSphere(unittest.TestCase):
             server.server_close()
             service.join()
 
-    def test_reject_bad_endpoint_count_periodicity_controls_and_extraneous_mode(self):
+    def test_reject_bad_endpoint_count_image_controls_and_extraneous_mode(self):
         q, p = mb_geometry(-.558, 1.442), mb_geometry(-.050, .467)
         good = endpoints(q, p)
         cell = {'vectors': (np.eye(3)*10).tolist(), 'pbc': [True]*3}
         for patch in ({'images': [q.tolist()]}, {'images': good['images'] + [q.tolist()]},
-                      {'cell': cell}, {'dsafir': {'delta': 0}}, {'dsafir': {'stepSize': -1}},
+                      {'cell': cell, 'dsafir': {'endpointImage': 'wrap'}}, {'dsafir': {'endpointImage': 'input'}}, {'dsafir': {'delta': 0}}, {'dsafir': {'stepSize': -1}},
                       {'dsafir': {'threshold': float('nan')}}, {'dsafir': {'gamma': 2}},
                       {'mode': 'evaluate', 'dsafir': {}}, {'atomIds': ['H']*4}):
             with self.subTest(patch=patch), self.assertRaises(ValueError):
                 bridge.validate({**good, **patch}, 'tblite')
+
+    def test_periodic_dsafir_keeps_lattice_frame_winding_and_frozen_sites(self):
+        cell = {'vectors': [[8.,0.,0.], [2.,6.,0.], [0.,0.,18.]], 'pbc': [True]*3}
+        start = np.array([[1.,1.,2.], [4.,3.,2.], [7.5,1.,4.], [5.,4.,1.]])
+        end = start.copy()
+        end[0] += cell['vectors'][1]
+        end[2,0] = .5
+        req = dict(endpoints(start, end), cell=cell, fixedAtoms=[0, 1, 3])
+        def physical(side, position):
+            force = np.zeros_like(position)
+            force[[0, 1, 3], :] = 25.
+            return 0., force
+
+        for image, expected_tip in [('nearest', 8.5), ('input', .5)]:
+            with self.subTest(image=image):
+                r = run(dict(req, dsafir={'endpointImage': image}), physical)
+                self.assertTrue(r['converged'])
+                self.assertEqual(r['cell'], cell)
+                self.assertEqual(r['atomIds'], req['atomIds'])
+                path = np.array(r['images'])
+                fixed = r['fixedAtoms']
+                np.testing.assert_array_equal(path[:,fixed], np.broadcast_to(start[fixed],path[:,fixed].shape))
+                self.assertAlmostEqual(path[-1,2,0], expected_tip, places=10)
+                self.assertLessEqual(np.abs(np.diff(path[:,2,0])).max(), .12000001)
+                d = path[:,2,0] - 7.5
+                self.assertTrue(np.all(d>=-1e-8) if image=='nearest' else np.all(d<=1e-8))
+                for info in r['history']:
+                    self.assertAlmostEqual(info['biasedEnergyEV'], info['artificialEnergyEV'] + info['physicalEnergyEV'])
+        end[0,0] += .01
+        with self.assertRaisesRegex(ValueError, '固定原子'):
+            bridge.validate(dict(req, images=[start.tolist(), end.tolist()]), 'tblite')
+
+    def test_periodic_equivalent_dsafir_endpoints_rejected_for_nearest_image(self):
+        a = np.array([[.1,0.,0.], [1.4,.2,0.]])
+        b = a.copy()
+        b[0] += [8.,0.,0.]
+        req = dict(endpoints(a,b), cell={'vectors': (8*np.eye(3)).tolist(), 'pbc': [True]*3})
+        with self.assertRaisesRegex(ValueError, '同一'):
+            bridge.validate(req,'tblite')
+        self.assertEqual(bridge.validate(dict(req,dsafir={'endpointImage':'input'}),'tblite')['dsafir']['endpointImage'],'input')

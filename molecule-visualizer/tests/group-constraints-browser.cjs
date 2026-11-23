@@ -12,6 +12,18 @@ const C=require('../group-constraints.js');
   const download=async selector=>{const pending=page.waitForEvent('download');await page.click(selector);return fs.readFileSync(await (await pending).path(),'utf8');};
   const select=async indices=>{await page.click('#btnClearSel');for(const i of indices){const p=await page.evaluate(i=>{const a=MoleculeVisualizer.App.renderer().projectedAtoms.find(a=>a.index===i+1);return{x:a.x,y:a.y};},i);await page.locator('canvas').click({position:p});}};
   const done=()=>page.waitForFunction(()=>!MoleculeVisualizer.EngineUI.isBusy()&&!document.getElementById('engineResult').hidden,{},{timeout:60000});
+  await page.evaluate(()=>{
+    const M=MoleculeVisualizer;
+    M.App.change('wrapped periodic molecule',()=>{
+      const s=M.IO.parseXYZToState('3\nLattice="5 0 0 1 7 0 0 0 15" pbc="T T F"\nO .1 .1 6\nH 4.2 .3 6\nH 1 .2 6');
+      s.selectedAtomIds=new Set(s.atoms.map(a=>a.id));return s;
+    },true);
+  });
+  await clickWorkspaceCommand(page,'#btnGroupConstraints');await page.locator('#groupImageSettings summary').click();
+  await page.click('#groupGatherImages');
+  assert.match(await page.locator('#groupConstraintStatus').textContent(),/1個/);
+  assert.ok(Math.abs(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[1].x)+.8)<1e-12);
+  await page.click('#btnUndo');assert.equal(await page.evaluate(()=>MoleculeVisualizer.App.getState().atoms[1].x),4.2);
   await page.evaluate(()=>{const M=MoleculeVisualizer;M.App.change('public water dimer',()=>{const s=M.IO.parseXYZToState('O 0 0 0\nH 1.2 0 0\nH -.24 .93 0\nO 3.5 .3 .4\nH 4.7 .3 .4\nH 3.26 1.23 .4');s.atoms[0].xyzExtras={mass:{type:'R',values:['18']}};return s;},true);});
   await clickWorkspaceCommand(page, '#btnGroupConstraints');await select([0,1,2]);await page.click('#groupConstraintAddSelected');
   assert.equal(await page.locator('#groupConstraintRows > div').count(),1);assert.match(await page.locator('#groupConstraintSummary').textContent(),/位置を固定/);

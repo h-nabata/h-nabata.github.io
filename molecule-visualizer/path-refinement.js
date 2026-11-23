@@ -3,13 +3,21 @@
   'use strict';
   const MV=global.MoleculeVisualizer,$=id=>document.getElementById(id);
   const fingerprint=s=>JSON.stringify([s.atoms,s.bonds,s.metadata]);
-  function refine(frames,from,to,each){
+  function refine(frames,from,to,each,nearest=false){
     if(!Array.isArray(frames)||frames.length<3||frames.length>100)throw Error('3〜100ノードの経路が必要です。');
     if(!Number.isInteger(from)||!Number.isInteger(to)||!Number.isInteger(each)||from<0||to>=frames.length||from>=to||each<1||frames.length+(to-from)*each>100)throw Error('区間と追加数を確認してください（始点 < 終点、合計100ノードまで）。');
-    const symbols=frames[0].atoms.map(a=>a.element),cell=JSON.stringify(frames[0].metadata.cell||null);
+    const symbols=frames[0].atoms.map(a=>a.element),cell=frames[0].metadata.cell;
     for(const frame of frames){
-      if(JSON.stringify(frame.atoms.map(a=>a.element))!==JSON.stringify(symbols)||JSON.stringify(frame.metadata.cell||null)!==cell)throw Error('全ノードの原子順序・セルを一致させてください。');
+      if(JSON.stringify(frame.atoms.map(a=>a.element))!==JSON.stringify(symbols)||!MV.Periodic.sameCell(frame.metadata.cell,cell))throw Error('全ノードの原子順序・セルを一致させてください。');
       if(frame.atoms.some(a=>![a.x,a.y,a.z].every(Number.isFinite)))throw Error('不正な座標です。');
+    }
+    if(nearest&&cell?.pbc.some(Boolean)){
+      const images=MV.Periodic.continuousImages(frames.map(f=>f.atoms.map(MV.Periodic.xyz)),cell);
+      frames=frames.map((frame,k)=>{
+        const copy=MV.Periodic.snapshot(frame);
+        copy.atoms.forEach((atom,i)=>{[atom.x,atom.y,atom.z]=images[k][i];});
+        return copy;
+      });
     }
     const out=[],nodeIds=new Set(frames.map(f=>f.metadata.pathNodeId));let insertionId=0;const identified=nodeIds.size===frames.length&&frames.every(f=>typeof f.metadata.pathNodeId==='string'&&f.metadata.pathNodeId);
     frames.forEach((frame,i)=>{
@@ -48,6 +56,7 @@
     if(source.length<3)throw Error('先に3ノード以上の経路を読み込むか、経路計算の結果を取得してください。');
     guard=fingerprint(MV.App.getState());$('refineNEB').textContent=`補間して${MV.EngineUI.modeLabel(pathMode)}再開の設定へ`;
     $('refineSummary').textContent=`対象：${source.length}ノード · ${source[0].atoms.length}原子`;
+    $('refineImageSettings').hidden=!source[0].metadata.cell?.pbc.some(Boolean);
     $('refineFrom').value=1;$('refineTo').value=source.length;$('refineEach').value=1;
     $('refineFrom').max=source.length-1;$('refineTo').max=source.length;count();$('refineDialog').showModal();
   }
@@ -55,11 +64,11 @@
     try{
       if(MV.EngineUI.isBusy()||MV.AFIRUI?.isBusy?.())throw Error('計算中は経路を置き換えられません。');
       if(guard!==fingerprint(MV.App.getState())||/未適用|編集中/.test($('xyzEditStatus').textContent))throw Error('入力構造が変更されています。ノード追加を開き直してください。');
-      const out=refine(source,Number($('refineFrom').value)-1,Number($('refineTo').value)-1,Number($('refineEach').value));
+      const out=refine(source,Number($('refineFrom').value)-1,Number($('refineTo').value)-1,Number($('refineEach').value),$('refineNearest').checked);
       const next=MV.Model.createState(out[0]);next.metadata.trajectory=out;next.metadata.frameIndex=0;next.viewSettings={...MV.App.getState().viewSettings};
       MV.Studio.stop();MV.EnergyProfile.reset();MV.App.change('insert path nodes',()=>next,true);$('dataReset').click();$('refineDialog').close();
       if(toNEB)MV.EngineUI.prepareNEB(pathMode,sourceSymmetry,sourceSettings);
-      MV.App.setStatus(`${out.length}ノードへ補間しました。既存ノードと端点は保持しています。「戻す」で元の経路に戻せます。`);
+      MV.App.setStatus(`${out.length}ノードへ補間しました。原子の対応と周期経路の設定を保持しました。「戻す」で元の経路に戻せます。`);
     }catch(e){$('refineMessage').textContent=e.message;}
   }
   function init(){

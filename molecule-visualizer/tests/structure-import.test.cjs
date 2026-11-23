@@ -114,6 +114,8 @@ test('SIESTA XV and STRUCT_OUT: Bohr vs fractional in Angstrom cell',()=>{
 test('Quantum ESPRESSO crystal / alat / Bohr and selective flags, no variable-cell guess',()=>{
  const t='&SYSTEM\nibrav=0, nat=1, celldm(1)=2\n/\nCELL_PARAMETERS alat\n1 0 0\n0 1 0\n0 0 1\nATOMIC_POSITIONS crystal\nH 0 0 .5 1 0 1\n';
  const s=parse(t,'auto','pw.in');close(s.atoms[0].z,.529177210903);assert.deepEqual(plain(s.atoms[0].selective),['T','F','T']);
+ assert.equal(s.metadata.optimization.fixedComponents[0].basis,'cartesian');
+ assert.equal(s.metadata.optimization.fixedComponents[0].atomId,s.atoms[0].id);
  assert.throws(()=>parse(t.replace('ibrav=0','ibrav=2')));assert.throws(()=>parse(t+t),/可変セル/);
 });
 test('XSF animated cells and non-periodic ATOMS; FHI-aims fractional',()=>{

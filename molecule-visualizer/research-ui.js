@@ -23,7 +23,8 @@
     if(data.mode==='dsafir')data.dsafir={
       delta:numeric('dsafirDelta',.0001,50),stepSize:numeric('dsafirStep',.001,.2),threshold:numeric('dsafirThreshold',.001,1)
     };
-    if(data.mode==='irc'){if(data.symbols.length>200)throw Error('IRCは最大200原子です。');if(!info.modes.includes('irc')||!info.sellaVersion)throw Error('IRCにはSellaを導入した対応サーバーが必要です。');data.irc={direction:$('ircDirection').value,stepSize:numeric('ircStepSize',.005,.5),relaxEndpoints:$('ircRelaxEndpoints').checked};}
+    if(data.mode==='dsafir'&&data.cell?.pbc.some(Boolean))data.dsafir.endpointImage=$('dsafirImage').value;
+    if(data.mode==='irc'){if(data.symbols.length>200)throw Error('IRCは最大200原子です。');if(!info.modes.includes('irc')||!info.sellaVersion)throw Error('IRCにはSellaを導入した対応サーバーが必要です。');data.irc={direction:$('ircDirection').value,stepSize:numeric('ircStepSize',.005,.5),relaxEndpoints:$('ircRelaxEndpoints').checked};if(data.cell?.pbc.some(Boolean))data.irc.imaginaryThreshold=numeric('ircGammaThreshold',0,1000);}
     if(data.mode==='scan'){if(!info.modes.includes('scan'))throw Error('接続中のサーバーは緩和スキャンに対応していません。');const rows=coordinates($('scanCoordinateRows'),state.atoms.length,true);if(rows.length<1||rows.length>2||rows.reduce((p,r)=>p*r.points,1)>400)throw Error('1〜2本の座標を指定し、合計400点以内にしてください。');data.scan={coordinates:rows,stopOnFailure:$('scanStopOnFailure').checked};}
     if(data.mode==='lup'){
       if(!info.modes.includes('lup'))throw Error('接続中のサーバーはLUP系（CI-String）に対応していません。');
@@ -34,19 +35,19 @@
       if($('pathSplitEnabled').checked&&info.pathSplit){const width=numeric('pathSplitSmooth',1,21,true);if(!(width%2))throw Error('平滑化の幅は奇数にしてください。');data.pathSplit={enabled:true,prominence:numeric('pathSplitProminence',0,100),minSeparation:numeric('pathSplitSeparation',2,99,true),smoothingWindow:width};}
       if(state.metadata.trajectory?.length===data.images.length){const ids=state.metadata.trajectory.map(f=>f.metadata?.pathNodeId);if(ids.every(id=>typeof id==='string'&&id)&&new Set(ids).size===ids.length)data.nodeIds=ids;}
     }
-    if(!options.batch&&$('thermoEnabled').checked&&['optimize','ts','vibrations'].includes(data.mode)){
+    if(!options.batch&&!data.cell?.pbc.some(Boolean)&&$('thermoEnabled').checked&&['optimize','ts','vibrations'].includes(data.mode)){
       if(!info.thermochemistry)throw Error('接続中のサーバーは熱化学量の計算に対応していません。');
       data.thermochemistry={temperature:numeric('thermoTemperature',1,5000),pressure:numeric('thermoPressure',.001,1e9),symmetryNumber:numeric('thermoSymmetry',1,10000,true),state:$('thermoState').value,standardState:$('thermoStandardState').value,lowFrequency:$('thermoLowFrequency').value,frequencyCutoff:numeric('thermoCutoff',1,1000)};
     }
   }
-  function settings(mode){if(mode!==lastMode&&['ts','optimize'].includes(mode))$('thermoState').value=mode==='ts'?'ts':'minimum';lastMode=mode;$('researchConstraints').hidden=!['optimize','batch','scan'].includes(mode)&&!$('internalConstraintsEnabled').checked;$('engineLUPSettings').hidden=mode!=='lup';$('engineIRCSettings').hidden=mode!=='irc';$('engineScanSettings').hidden=mode!=='scan';$('engineAdaptiveSettings').hidden=!['cineb','lup'].includes(mode);$('engineThermoSettings').hidden=!['optimize','ts','vibrations'].includes(mode);}
+  function settings(mode){const periodic=!!MV.App?.getState?.()?.metadata?.cell?.pbc.some(Boolean);$('ircGammaOptions').hidden=!periodic;$('gammaThermoSettings').hidden=!periodic||!['optimize','ts','vibrations'].includes(mode);if(mode!==lastMode&&['ts','optimize'].includes(mode))$('thermoState').value=mode==='ts'?'ts':'minimum';lastMode=mode;$('researchConstraints').hidden=!['optimize','batch','scan'].includes(mode)&&!$('internalConstraintsEnabled').checked;$('engineLUPSettings').hidden=mode!=='lup';$('engineIRCSettings').hidden=mode!=='irc';$('engineScanSettings').hidden=mode!=='scan';$('engineAdaptiveSettings').hidden=!['cineb','lup'].includes(mode);$('engineThermoSettings').hidden=periodic||!['optimize','ts','vibrations'].includes(mode);}
   function restore(data){
     $('internalConstraintsEnabled').checked=!!data.internalConstraints?.length;$('internalConstraintRows').replaceChildren();for(const c of data.internalConstraints||[])coordinateRow($('internalConstraintRows'),false,c);
     if(data.dsafir){
-      $('dsafirDelta').value=data.dsafir.delta;$('dsafirStep').value=data.dsafir.stepSize;$('dsafirThreshold').value=data.dsafir.threshold;
+      $('dsafirDelta').value=data.dsafir.delta;$('dsafirStep').value=data.dsafir.stepSize;$('dsafirThreshold').value=data.dsafir.threshold;$('dsafirImage').value=data.dsafir.endpointImage||'nearest';
     }
     if(data.lup){$('lupRedistributeEvery').value=data.lup.redistributeEvery;$('lupRedistributionTolerance').value=data.lup.redistributionTolerance;}
-    if(data.irc){$('ircDirection').value=data.irc.direction;$('ircStepSize').value=data.irc.stepSize;$('ircRelaxEndpoints').checked=data.irc.relaxEndpoints;}
+    if(data.irc){$('ircGammaThreshold').value=data.irc.imaginaryThreshold??20;$('ircDirection').value=data.irc.direction;$('ircStepSize').value=data.irc.stepSize;$('ircRelaxEndpoints').checked=data.irc.relaxEndpoints;}
     if(data.scan){$('scanCoordinateRows').replaceChildren();for(const c of data.scan.coordinates)coordinateRow($('scanCoordinateRows'),true,c);$('scanStopOnFailure').checked=data.scan.stopOnFailure;}
     $('adaptiveEnabled').checked=!!data.adaptiveNEB?.enabled;for(const [key,id] of Object.entries({maxImages:'adaptiveMaxImages',interval:'adaptiveInterval',maxSpacing:'adaptiveMaxSpacing',energyGap:'adaptiveEnergyGap'}))if(data.adaptiveNEB?.[key]!=null)$(id).value=data.adaptiveNEB[key];
     $('pathSplitEnabled').checked=!!data.pathSplit?.enabled;for(const [key,id] of Object.entries({prominence:'pathSplitProminence',minSeparation:'pathSplitSeparation',smoothingWindow:'pathSplitSmooth'}))if(data.pathSplit?.[key]!=null)$(id).value=data.pathSplit[key];
@@ -65,8 +66,13 @@
     if(r.mode==='lup'){
       const d=r.diagnostics||{},settings=r.lup||j.data.lup;out.append(el('p',{class:'mv-small'},`LUP系（CI-String） · ${bandOptimizer?'':(r.optimizer||j.data.optimizer||'lbfgs').toUpperCase()+' · '}再分布残差 ${Number.isFinite(d.redistributionResidual)?d.redistributionResidual.toPrecision(5)+' Å':'未取得'}${settings?' / 閾値 '+settings.redistributionTolerance+' Å':''}${Number.isFinite(d.redistributionMove)?' · 再分布による最大変位 '+d.redistributionMove.toPrecision(5)+' Å':''}。CIの最高点はTS候補です。TS最適化・振動解析で別途確認できます。`));
     }
-    if(r.mode==='irc'){out.append(el('h3',{},'IRCの到達状態'));const rows=Object.entries(r.branches||{}).map(([name,b])=>[name==='forward'?'正方向':'逆方向',b.steps,b.converged?'IRC収束':'IRC未収束',b.endpointConverged?'端点の力は収束':j.data.irc?.relaxEndpoints?'端点の力は未収束':'端点MIN未実施']);out.append(table(['方向','ステップ','IRC','端点'],rows));out.append(el('p',{class:'mv-small'},`経路中のTS入力: 構造${(r.tsIndex??0)+1}。端点構造を確認して反応物・生成物との接続を判断してください。`));}
+    if(r.mode==='irc'){out.append(el('h3',{},'IRCの到達状態'));const rows=Object.entries(r.branches||{}).map(([name,b])=>[name==='forward'?'正方向':'逆方向',b.steps,b.converged?'IRC収束':'IRC未収束',b.endpointVerifiedMinimum?'Γ点の極小を確認':b.endpointGammaImaginaryCM?.length?'端点に有意な虚振動あり':b.endpointConverged?'端点の力は収束':j.data.irc?.relaxEndpoints?'端点の力は未収束':'端点MIN未実施']);out.append(table(['方向','ステップ','IRC','端点'],rows));out.append(el('p',{class:'mv-small'},`経路中のTS入力: 構造${(r.tsIndex??0)+1}。端点構造を確認して反応物・生成物との接続を判断してください。`));}
     if(r.mode==='scan'&&r.scan){out.append(el('h3',{},'スキャン結果'));const rows=(r.scan.nodes||[]).map((n,i)=>[i+1,n.direction==='reverse'?'復路':'往路',JSON.stringify(n.targets),JSON.stringify(n.actual),n.converged?'収束':'未収束',n.steps,r.energies[i]]);const heads=['点','方向','指定座標','実際の座標','状態','ステップ','E (eV)'];out.append(table(heads,rows));const b=el('button',{class:'mv-btn'},'スキャン表をCSV保存');b.onclick=()=>downloadCSV('relaxed-scan.csv',[heads,...rows]);out.append(b);}
+    if(r.vibrations?.harmonicThermo){
+      const h=r.vibrations.harmonicThermo;
+      out.append(el('h3',{},'Γ点モードの調和振動寄与'),el('p',{class:'mv-small'},`${h.temperatureK} K · セルあたり · ${h.includedModes}モードを採用。虚振動${h.omittedImaginary}本と ${h.cutoffCM} cm⁻¹以下の実振動${h.omittedLowOrZero}本を除外。`),
+        table(['量','値','単位'],[['ZPE',h.zpeEV,'eV'],['Fᵥᵢᵦ',h.vibrationalHelmholtzEV,'eV'],['Sᵥᵢᵦ',h.entropyEVPerK,'eV/K']].map(([k,v,u])=>[k,v.toPrecision(8),u])));
+    }
     if(r.thermochemistry){const t=r.thermochemistry;out.append(el('h3',{},'熱化学量'));if(t.status!=='completed')out.append(el('p',{},t.error||t.note||'熱化学量は未確定です。'));else{out.append(el('p',{class:'mv-small'},`${t.temperature} K · ${t.pressure} Pa · ${t.standardState==='1M'?'1 mol/L':'理想気体'} · ${t.state==='ts'?'TS':'極小構造'}`));const rows=[['電子・溶媒補正エネルギー',t.electronicEnergyEV,'eV'],['ZPE',t.zpeEV,'eV'],['H',t.enthalpyEV,'eV'],['S',t.entropyEVPerK,'eV/K'],['G',t.gibbsEV,'eV'],['熱補正',t.thermalCorrectionEV,'eV'],['標準状態補正',t.standardStateCorrectionEV,'eV']];out.append(table(['量','値','単位'],rows.map(r=>[r[0],Number.isFinite(r[1])?r[1].toPrecision(10):'—',r[2]])));const b=el('button',{class:'mv-btn'},'熱化学量をCSV保存');b.onclick=()=>downloadCSV('thermochemistry.csv',[['量','値','単位'],...rows]);out.append(b);for(const note of t.notes||[])out.append(el('p',{class:'mv-small'},note));}}
     if(r.adaptiveStatus?.enabled){const a=r.adaptiveStatus;out.append(el('p',{class:'mv-small'},`自動ノード追加: ${r.images.length}ノード · 未解消の間隔 ${a.unresolvedIntervals??0}`+(a.nodeLimitReached?' · ノード上限に到達':'')+(a.blockedIntervals?.length?` · 追加できない区間 ${a.blockedIntervals.length}`:'')+'。力の収束と経路の分解能は別に確認してください。'));}
     if(r.pathSegments?.segments?.length){out.append(el('h3',{},'経路の分割候補'));for(const segment of r.pathSegments.segments){const row=el('div',{class:'mv-row'});row.append(el('span',{},`構造${segment.start+1}〜${segment.end+1}${segment.needsEndpointOptimization?' · 端点のMINが必要':' · 端点の物理力は閾値以下'}`));const b=el('button',{class:'mv-btn'},r.mode==='lup'?'この区間をLUP系入力へ':'この区間をCI-NEB入力へ');b.onclick=()=>{try{MV.EngineUI.prepareSegment(segment);}catch(e){$('engineMessage').textContent=e.message;}};row.append(b);out.append(row);}out.append(el('p',{class:'mv-small'},'分割で新たに端点となった谷は、経路の両端を緩和する設定か、個別のMINで最適化できます。区間ごとの経路計算は設定を確認して実行します。'));}
@@ -74,6 +80,7 @@
   function init(){
     $('internalConstraintAdd').onclick=()=>coordinateRow($('internalConstraintRows'));
     $('scanCoordinateAdd').onclick=()=>{if($('scanCoordinateRows').children.length<2)coordinateRow($('scanCoordinateRows'),true);};coordinateRow($('scanCoordinateRows'),true);
+    $('gammaThermoEnabled').addEventListener('change',()=>{if($('gammaThermoEnabled').checked)$('engineVibrationCheck').checked=true;});
     $('thermoEnabled').addEventListener('change',()=>{if($('thermoEnabled').checked)$('engineVibrationCheck').checked=true;});
     $('btnIRC').onclick=()=>MV.EngineUI.prepareSingle('irc');$('btnScan').onclick=()=>MV.EngineUI.prepareSingle('scan');
     $('engineMode').addEventListener('change',()=>{if(['ts','optimize'].includes($('engineMode').value))$('thermoState').value=$('engineMode').value==='ts'?'ts':'minimum';});

@@ -4,6 +4,8 @@
 
 ## 主な操作
 
+- 表面スラブの下層を矩形で固定し、吸着構造の最適化、DS-AFIRからCI-NEB・CI-Stringへの経路緩和、Γ点振動とIRCを実行できます。3方向周期のバルクでは材料用の応力対応ポテンシャルで格子も緩和できます。[周期構造の計算手順と対応表](./PERIODIC.md)
+
 - 「分子動力学（MD）」で現在の構造をNVE・NVT・NPTで時間発展させ、軌跡とエネルギー・温度を確認できます。3種類の熱浴を選択でき、周期系のNPTでは体積・圧力も記録します。接続中の電子状態計算・学習済みモデルと、RDKitのMMFF94・MMFF94s・UFFに対応します。[設定・入力例](./MD.md)
 
 - bridge.py **1.16.0**でCPU配分を計算内容に合わせて調整します。画面では原子・結合表の行再利用、構造比較の必要時生成、円錐角の厳密な再利用を追加しました。長い結果を受信する際の負担と、選択・回転操作中のCPU・メモリ消費を減らします。[測定条件と検証](./AFIR-VALIDATION.md)を参照してください。バックエンド側の改善にはbridge.pyの更新・再起動・再接続が必要です。
@@ -16,7 +18,7 @@
 
 - 描画エリア下の「セルを削除」で、表示中の構造の格子ベクトルと周期境界条件を削除し、非周期構造にできます。原子のCartesian座標・ID・結合・選択・カメラは保持し、Undo／Redoに対応します。構造列では現在のフレームのみが対象です。未適用の座標編集や計算実行中は削除せず、その旨を表示します。周期セル設定ダイアログの「周期セルを解除」も同じ操作です。
 
-- 「原子団の重心」で選択原子を1つ以上の原子団に登録し、重心の相対位置または絶対位置を固定して緩和できます。内部構造は自由。非周期MIN・AFIR-MIN・緩和スキャン・一括MINに対応し、原子固定・内部座標拘束を併用可能です。bridge.py 1.11.0以降が必要です。[操作と制限](RESEARCH.md#原子団の重心を固定した緩和)を参照してください。
+- 「原子団の重心」で選択原子を1つ以上の原子団に登録し、重心の相対位置または絶対位置を固定して緩和できます。内部構造は自由。非周期系と固定セルでのMIN・AFIR-MIN・緩和スキャン・一括MINに対応し、原子固定・内部座標拘束を併用可能です。周期系には `periodicGroupImages` に対応したbridge.pyが必要です。[操作と制限](RESEARCH.md#原子団の重心を固定した緩和)を参照してください。
 
 - 「AFIR / 原子団に人工力」と「全原子の座標・構造データ」は、右下を上下にドラッグして高さを調整できます。見出しの「低く」「高く」は80pxずつ調整し、「戻す」で画面サイズに応じた初期の高さへ戻します。タッチ操作・キーボードでもボタンを使えます。内容は各パネル内でスクロールし、見出しと高さの操作は上部に残ります。スクロール端からページ全体へスクロールが連鎖するのを抑えます。高さは同じページ内の表示切替では保持し、再読み込みで初期値に戻ります。座標欄自体の高さ変更と内部スクロールも引き続き使えます。
 - XYZ / 拡張XYZ / 連続XYZ / POSCAR / MOL・SDF V2000 / V3000 / プロジェクトJSONを開く、貼り付ける、ドロップする。
@@ -145,7 +147,7 @@ References for the structural readers and interpolation concept:
 
 ## Local energy engines and path relaxation
 
-See [the setup and numerical guide](local-engine/README.md). The new external-engine panel supports authenticated localhost jobs with tblite (including fixed cells) and the official `xtb --gxtb --grad` binary (nonperiodic), single-point energies/forces, single-structure optimization, strict perpendicular path relaxation, NEB and optional CI-NEB. Endpoints stay fixed. Results are reviewed before applying, preserve atom order and cell, and support Undo and JSON export. Tokens are never persisted. The helper must be started explicitly by the user; this GitHub Pages site cannot execute a native binary by pathname alone.
+See [the setup and numerical guide](local-engine/README.md). The new external-engine panel supports authenticated localhost jobs with tblite (including fixed cells) and the official `xtb --gxtb --grad` binary (nonperiodic), single-point energies/forces, single-structure optimization, strict perpendicular path relaxation, NEB and optional CI-NEB. CI-NEB and CI-String offer independent endpoint relaxation or fixed endpoints. Results are reviewed before applying, preserve atom order and cell, and support Undo and JSON export. Tokens are never persisted. The helper must be started explicitly by the user; this GitHub Pages site cannot execute a native binary by pathname alone.
 
 Tests: `python -m unittest discover -s molecule-visualizer/tests -p 'test_*.py' -v` after installing `local-engine/requirements.txt` and `tblite`. `tests/engine-browser.cjs` covers the real local-service connection, energy display, stale-result protection, fixed-cell path application, frame navigation, Undo, and the mobile local-UI fallback.
 

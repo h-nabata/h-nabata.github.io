@@ -50,6 +50,19 @@ class FakeModel:
 
 
 class Contract(unittest.TestCase):
+    def test_spin_independent_periodic_head_accepts_odd_electron_cell(self):
+        slab = {**WATER, 'symbols':['O','H'], 'images':[[[0.,0.,0.],[1.,0.,0.]]],
+                'multiplicity':1, 'cell':{'vectors':(np.eye(3)*18.).tolist(),'pbc':[True,True,False]}}
+        slab.pop('atomIds', None)
+        data = b.validate(slab, 'llmlip')
+        b.job_config(data, config())
+        with self.assertRaisesRegex(ValueError, '電子数'):
+            b.job_config(data, config({**MODEL, 'spin':True}))
+        doublet = {**data, 'multiplicity':2}
+        b.job_config(doublet, config({**MODEL, 'spin':True}))
+        with self.assertRaisesRegex(ValueError, 'スピン'):
+            b.job_config(doublet, config())
+
     def test_pressure_requires_selected_periodic_stress_model_and_head(self):
         cell = {'vectors':(12*np.eye(3)).tolist(), 'pbc':[True]*3}
         for settings in ({'ensemble':'npt'}, {'ensemble':'nvt', 'recordPressure':True}):

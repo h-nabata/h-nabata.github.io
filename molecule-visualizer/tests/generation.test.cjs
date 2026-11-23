@@ -1,5 +1,5 @@
 const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
-const ctx={window:{}};vm.createContext(ctx);for(const f of ['model','bonding','geometry','io','molfile','periodic','formats','ring-conformers','generation'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
+const ctx={window:{}};vm.createContext(ctx);for(const f of ['model','bonding','geometry','io','molfile','periodic','formats','ring-conformers','constraints','generation'])vm.runInContext(fs.readFileSync(path.join(__dirname,'..',f+'.js'),'utf8'),ctx);
 const {IO,Model:M,Periodic:P,Generation:G,Formats:F}=ctx.window.MoleculeVisualizer;
 const xyz=s=>s.atoms.map(a=>[a.x,a.y,a.z]),near=(x,y,t=1e-8)=>assert.ok(Math.abs(x-y)<t,`${x} != ${y}`);
 const cif=`data_test
@@ -65,4 +65,22 @@ test('initial path smoothing projects the entire 3N gradient and records zero ta
  near(projected.reduce((s,v,i)=>s+v*tau[i],0),0);assert.ok(Math.abs(projected.slice(0,3).reduce((s,v,i)=>s+v*tau[i],0))>.01,'projection must be in 3N space, not per atom');
  const p=IO.parseXYZToState('H 0 0 0\nH 1 0 0\nTV 8 0 0\nTV 1 8 0\nTV 0 0 8'),q=M.cloneState(p);q.atoms[1].x=2;
  const periodic=G.path(p,q,{count:5,method:'distance'}).state;assert.ok(periodic.metadata.generation.maxTangentialStep<1e-12);assert.equal(JSON.stringify(periodic.metadata.trajectory[0].metadata.cell),JSON.stringify(p.metadata.cell));
+});
+
+test('periodic interpolation uses a common rounded cell and keeps frozen substrate coordinates at every node',()=>{
+  const input='3\nLattice="10 0 0 2 8.123456789012 0 0 0 18" pbc="T T F"\nC 0 0 2\nC 1.5 0 2\nLi 9.1 1 4\n';
+  const start=IO.parseXYZToState(input);
+  const end=IO.parseXYZToState(input.replace('8.123456789012','8.1234567890').replace('9.1 1 4','.9 1 4'));
+  const locks=ctx.window.MoleculeVisualizer.Constraints;
+  locks.attach(start,[0,1]);
+  const result=G.path(start,end,{count:5,method:'distance',minimumImage:true}).state.metadata.trajectory;
+  assert.equal(result.length,5);
+  for(const frame of result){
+    assert.deepEqual(frame.metadata.cell.vectors,start.metadata.cell.vectors);
+    assert.deepEqual(xyz(frame).slice(0,2),xyz(start).slice(0,2));
+    assert.deepEqual(Array.from(locks.indices(frame)),[0,1]);
+  }
+  near(result.at(-1).atoms[2].x,10.9);
+  end.atoms[0].z+=.2;
+  assert.throws(()=>G.path(start,end,{count:5,method:'linear',minimumImage:true}),/固定原子/);
 });

@@ -6,7 +6,7 @@
   function settings(){const path=$('generationKind').value==='path';$('pathControls').hidden=!path;$('randomControls').hidden=path;$('randomRingOptions').hidden=$('randomMode').value==='orientation';$('generationCount').min=path?2:1;}
   function finish(j,status,detail='ブラウザ'){if(job!==j)return;MV.Activity?.update(j,j.label,status,detail);j.worker?.terminate();clearTimeout(j.timeout);job=null;$('generationRun').disabled=false;$('generationCancel').disabled=true;}
   function cancel(){if(!job)return;finish(job,'cancelled');message('生成を中止しました。構造は変更していません。');}
-  function current(){const s=app().freezeDisplayedStructure();return s.metadata.cell?MV.IO.stateToXYZText(s):MV.IO.stateToMolV3000Text(s);}
+  function current(){const s=app().freezeDisplayedStructure();return s.metadata.constraints?.enabled||s.atoms.some(a=>a.selective)?MV.IO.stateToProjectText(s):s.metadata.cell?MV.IO.stateToXYZText(s):MV.IO.stateToMolV3000Text(s);}
   function open(kind){app().freezeDisplayedStructure();$('generationKind').value=kind;$('generationCount').value=kind==='path'?9:5;settings();if(kind==='path'&&!$('pathStart').value.trim())$('pathStart').value=current();message('');$('generationDialog').showModal();}
   const formKey=()=>JSON.stringify(['generationKind','generationCount','generationSeed','randomMode','pathMethod','pathStart','pathEnd','randomRingAngle'].map(id=>$(id).value).concat($('pathMinimumImage').checked,$('randomRings').checked));
   function run(){
@@ -19,7 +19,7 @@
       const state=kind==='path'?MV.Formats.parse($('pathStart').value):MV.Model.createState(MV.Periodic.snapshot(app().getState())),end=kind==='path'?MV.Formats.parse($('pathEnd').value):null;
       const j={label:kind==='path'?'初期経路の生成':'配座・配向の生成',fingerprint:fingerprint(app().getState()),formKey:formKey()};job=j;MV.Activity?.update(j,j.label,'running','ブラウザ');$('generationRun').disabled=true;$('generationCancel').disabled=false;message('構造列を生成しています…');
       try{
-        j.worker=new Worker('./generation-worker.js?v=performance-41');j.timeout=setTimeout(()=>{if(job===j){finish(j,'error','時間上限');message('生成が120秒を超えました。原子数・構造数を減らしてください。');}},120000);
+        j.worker=new Worker('./generation-worker.js?v=periodic-62');j.timeout=setTimeout(()=>{if(job===j){finish(j,'error','時間上限');message('生成が120秒を超えました。原子数・構造数を減らしてください。');}},120000);
         j.worker.onmessage=e=>{
           if(job!==j)return;
           if(e.data.error){finish(j,'error');message(e.data.error);return;}

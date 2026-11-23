@@ -58,7 +58,9 @@ Gaussianの .com は別の文法として判別し、タイトルを含むCartes
 - 不明な原子名、非有限数、不足した座標、曖昧な単位などを推測して埋めません。エラーになった場合は明示的なCartesian座標を含むXYZ等へ変換してください。
 - Z-matrix入力、ghost/dummy原子、外部include、参照のみで実座標を含まない入力、任意の出力ログ、圧縮ファイル、バイナリ軌跡・チェックポイント（CHK、GBW、DCD、XTC、TRR、ASE TRAJ、HDF5等）は直接読み込みません。FCHK / XYZ / POSCAR等へ変換してください。
 - 読み込んだログの座標は計算の収束やTS検証を保証しません。GRRM・Gaussian・ORCA入力の計算方法や溶媒設定も本アプリの計算条件へ転記しません。
-- Frozen Atoms / Gaussian -1 / TURBOMOLE f は本アプリの原子固定へ変換します。Selective dynamics等の軸別フラグは構造データとして保持しますが、原子全体の固定へ勝手に置き換えません。固定原子を使える計算モードは既存の制限に従います。
+- Frozen Atoms、Gaussianの `-1`、TURBOMOLEの `f`、POSCARの `F F F`、Quantum ESPRESSOの `0 0 0` は、読み込み時に原子固定として有効になります。3D画面の「矩形で固定」を選んでドラッグすると、矩形内に投影された原子を、奥に重なった原子も含めて固定します。「原子固定」の「矩形で解除」で固定を外せます。
+- 一部の方向のみを固定する場合、POSCARのSelective dynamicsは分率座標のa・b・c成分、Quantum ESPRESSOの移動可否はCartesian座標のX・Y・Z成分に対応します。固定セルの構造最適化で使用でき、対応していない計算モードでは実行前に理由を表示します。
+- 編集中の構造をextXYZで保存すると、原子単位の固定およびCartesian方向固定はASE互換の `move_mask` 列、分率方向固定はアプリ独自の `mv_fractional_move` 列に記録します。外部ソフトへ分率方向固定を渡す場合はPOSCARを使用してください。
 
 ## 参照仕様
 
