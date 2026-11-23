@@ -130,8 +130,62 @@ def first_event(trace, kind):
     return None
 
 
+def rotation_summary(trace):
+    """Count classified steps and retain tilt amplitudes even below the 10° threshold."""
+    con_peaks = con_interiors = large_peak_turns = 0
+    max_peak_turn = max_opposite_peak = max_opposite_interior = 0.
+    for sample in trace:
+        angles = np.asarray(sample['imageAnglesDeg'])[1:-1]
+        peak = sample['peakImage'] - 2
+        # asin(sin(theta)) is the signed distance in degrees from the nearest
+        # molecular plane, while abs(theta) retains labelled rotations past 90°.
+        tilts = np.rad2deg(np.arcsin(np.clip(np.sin(np.deg2rad(angles)), -1., 1.)))
+        weak = np.where(tilts[:,0]*tilts[:,1] < 0, np.min(np.abs(tilts), axis=1), 0.)
+        turn = float(np.max(np.abs(angles[peak])))
+        max_peak_turn = max(max_peak_turn, turn)
+        max_opposite_peak = max(max_opposite_peak, float(weak[peak]))
+        max_opposite_interior = max(max_opposite_interior, float(weak.max()))
+        large_peak_turns += int(turn > 100.)
+        con_peaks += int(sample['peakClass'] == 'con')
+        con_interiors += int('con' in sample['imageClasses'][1:-1])
+    return dict(evaluatedBands=len(trace), conrotatoryPeakSteps=con_peaks,
+                anyConrotatoryInteriorSteps=con_interiors, maxOppositePeakTiltDeg=max_opposite_peak,
+                maxOppositeInteriorTiltDeg=max_opposite_interior, maxAbsPeakTurnDeg=max_peak_turn,
+                peakTurnOver100DegSteps=large_peak_turns)
+
+
+def reference_rmsd(peak, reference):
+    """Compare final geometries by proper rotation; permutations are used only after relaxation."""
+    reference = np.asarray(reference, dtype=float)
+    peak = np.asarray(peak, dtype=float)
+    if peak.shape != (10, 3) or reference.shape != (10, 3):
+        raise ValueError('The reference and measured peak must each contain the ten mapped C4H6 atoms.')
+    peak = peak - peak.mean(axis=0)
+    reference = reference - reference.mean(axis=0)
+    def rmsd(order):
+        target = reference[order]
+        left, _, right = np.linalg.svd(peak.T @ target)
+        left[:, -1] *= np.linalg.det(left @ right)
+        return float(np.sqrt(np.mean(np.sum((peak @ left @ right - target)**2, axis=1))))
+    raw = rmsd(np.arange(10))
+    best, best_order = raw, list(range(10))
+    for backbone in (np.arange(10), MIRROR):
+        for swap_left in (False, True):
+            for swap_right in (False, True):
+                order = backbone.copy()
+                if swap_left:
+                    order[[4,5]] = order[[5,4]]
+                if swap_right:
+                    order[[8,9]] = order[[9,8]]
+                distance = rmsd(order)
+                if distance < best:
+                    best, best_order = distance, order.tolist()
+    return dict(mappedRmsdA=raw, equivalentAtomRmsdA=best, matchedReferenceAtoms=[i+1 for i in best_order])
+
+
 def run(mode, case, *, engine, distortion, steps, endpoint_mode, workers=1, twist=0., source=EXAMPLE,
-        max_move=.03, climb_after=5, pre_relax=False, mirror_tolerance=None):
+        max_move=.03, climb_after=5, pre_relax=False, mirror_tolerance=None, optimizer=None,
+        redistribute_every=None):
     symbols, images = band(case, distortion, twist, source)
     job = {'symbols':symbols, 'images':images.tolist(), 'mode':mode, 'fmax':.05, 'maxMove':max_move,
            'spring':1., 'climbAfter':climb_after, 'maxSteps':steps}
@@ -141,6 +195,10 @@ def run(mode, case, *, engine, distortion, steps, endpoint_mode, workers=1, twis
             job['pathSymmetry']['maxInitialCorrection'] = mirror_tolerance
     if mode in ('cineb', 'lup'):
         job['endpointMode'] = endpoint_mode
+    if optimizer is not None:
+        job['optimizer'] = optimizer
+    if mode == 'lup' and redistribute_every is not None:
+        job['lup'] = {'redistributeEvery':redistribute_every}
     trace = []
     last_band = None
     def record(event):
@@ -149,7 +207,8 @@ def run(mode, case, *, engine, distortion, steps, endpoint_mode, workers=1, twis
         if snapshot and 'steps' in snapshot:
             last_band = snapshot
             result = geometry(np.asarray(snapshot['images']), np.asarray(snapshot['energies']))
-            trace.append({'step':event['step'], **result})
+            trace.append({'step':event['step'], 'fmaxEVPerA':snapshot['effectiveFmax'],
+                          'evaluations':snapshot['evaluations'], **result})
     def evaluate(payload, directory, progress=lambda event: None):
         data = bridge.validate(payload, engine)
         if engine == 'gxtb':
@@ -174,6 +233,9 @@ def run(mode, case, *, engine, distortion, steps, endpoint_mode, workers=1, twis
             if pre_relax:
                 seed_job = dict(job, mode='neb', maxMove=.03)
                 seed_job.pop('endpointMode', None)
+                seed_job.pop('lup', None)
+                # Keep the same ordinary NEB seed when comparing CI optimizers.
+                seed_job['optimizer'] = 'fire'
                 seed = evaluate(seed_job, directory, record)
                 pre = {k:seed[k] for k in ('reason','steps','effectiveFmax','evaluations')}
                 pre['initialMirrorCorrectionA'] = seed.get('initialSymmetryCorrection')
@@ -198,17 +260,21 @@ def run(mode, case, *, engine, distortion, steps, endpoint_mode, workers=1, twis
             failure.update(lastCompleteBandA=result['images'], lastCompleteEnergiesEV=result['energies'])
     initial = geometry(images, np.zeros(len(images)))
     return {'mode':mode, 'case':case, 'engine':engine, 'inputFile':Path(source).name, 'preRelaxation':pre,
+            'optimizer':optimizer or ('lbfgs' if mode=='lup' else 'fire'),
+            'redistributeEvery':job.get('lup', {}).get('redistributeEvery', 5) if mode=='lup' else None,
             'inputSHA256':hashlib.sha256(Path(source).read_bytes()).hexdigest(),
             'inputBandClass':initial['bandClass'], 'inputMaxMirrorErrorA':initial['maxMirrorErrorA'],
             'pathConsistencyWarning':result.get('pathConsistencyWarning'), 'failure':failure,
+            'scfStepRetries':result.get('scfStepRetries', 0),
             'mirrorToleranceA':job.get('pathSymmetry', {}).get('maxInitialCorrection', .05) if case == 'mirror' else None,
             'initialMirrorCorrectionA':pre['initialMirrorCorrectionA'] if pre else result.get('initialSymmetryCorrection'),
             'maxMoveA':max_move, 'climbAfter':climb_after, 'maxSteps':steps, 'endpointMode':job.get('endpointMode','fixed'),
             'inputBendA':0. if case=='con' else distortion, 'inputTerminalTwistDeg':0. if case=='con' else twist, 'steps':result.get('steps'),
             'evaluations':result.get('evaluations'), 'reason':result['reason'], 'fmaxEVPerA':result.get('effectiveFmax'),
+            'rawPeakFmaxEVPerA':result.get('diagnostics', {}).get('climbingPhysicalFmax'),
             **final, 'firstMirrorErrorOver0.05A':first_event(trace,'mirror'),
             'firstConrotatoryInterior':first_event(trace,'con'), 'firstConrotatoryPeak':first_event(trace,'peak'),
-            'trace':trace}
+            'rotationSummary':rotation_summary(trace), 'trace':trace}
 
 
 def main():
@@ -221,6 +287,10 @@ def main():
     parser.add_argument('--distortion', type=float, default=.015)
     parser.add_argument('--twist-deg', type=float, default=0., help='Additional mirror-breaking terminal twist (degrees)')
     parser.add_argument('--pre-relax', action='store_true', help='Converge a fixed-end ordinary NEB seed before starting the requested method')
+    parser.add_argument('--optimizer', help='Path optimizer name. Omit to use the original per-method default.')
+    parser.add_argument('--redistribute-every', type=int, help='CI-string redistribution interval in steps.')
+    parser.add_argument('--reference-con', type=Path, help='Compare final peaks with a converged same-engine conrotatory control in this benchmark JSON.')
+    parser.add_argument('--reference-mode', choices=['cineb','lup'], default='cineb', help='CI method for the reference control')
     parser.add_argument('--max-move', type=float, default=.03)
     parser.add_argument('--climb-after', type=int, default=5)
     parser.add_argument('--steps', type=int, default=200)
@@ -228,6 +298,14 @@ def main():
     parser.add_argument('--workers', type=int, default=1)
     parser.add_argument('--json', type=Path)
     args = parser.parse_args()
+    reference = None
+    if args.reference_con is not None:
+        candidates = [row for row in json.loads(args.reference_con.read_text())
+                      if row['engine']==args.engine and row['mode']==args.reference_mode and row['case']=='con'
+                      and row['reason']=='converged' and row.get('peakClass')=='con' and row.get('peakCoordinatesA')]
+        if len(candidates) != 1:
+            parser.error('The reference JSON must contain exactly one converged conrotatory control matching --engine and --reference-mode.')
+        reference = candidates[0]
     results = []
     for mode in args.mode:
         for case in args.case:
@@ -235,7 +313,12 @@ def main():
                 result = run(mode, case, engine=args.engine, distortion=args.distortion, steps=args.steps,
                              endpoint_mode=args.endpoint_mode, workers=args.workers, twist=args.twist_deg, source=args.input,
                              max_move=args.max_move, climb_after=args.climb_after, pre_relax=args.pre_relax,
-                             mirror_tolerance=args.mirror_tolerance)
+                             mirror_tolerance=args.mirror_tolerance, optimizer=args.optimizer,
+                             redistribute_every=args.redistribute_every)
+                if reference is not None and result.get('peakCoordinatesA'):
+                    result['conrotatoryReference'] = {
+                        'inputSHA256':reference['inputSHA256'], 'mode':reference['mode'], 'engine':reference['engine'],
+                        **reference_rmsd(result['peakCoordinatesA'], reference['peakCoordinatesA'])}
             except (OSError, ValueError) as exc:
                 result = {'mode':mode, 'case':case, 'engine':args.engine, 'reason':'failed',
                           'failure':{'stage':'input', 'error':str(exc)}}

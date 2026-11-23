@@ -34,8 +34,16 @@ jobs:
           test_engine.NativeGXTB test_afir_engine.NativeAFIR
           test_butadiene_path.ButadienePaths.test_gxtb_mapped_paths
           test_butadiene_path.ButadienePaths.test_gxtb_explicitly_projects_asymmetric_string
+          test_path_optimizer_controls.UnrestrictedPathControls.test_gxtb_mobile_end_ethane_torsion
       - name: Compare fresh and restarted electronic states at two nearby geometries
         run: python molecule-visualizer/scripts/probe_butadiene_gxtb.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save playwright@1.55.0
+      - run: npx playwright install --with-deps chromium
+      - name: Run unrestricted native g-xTB path optimizations through the browser
+        run: node molecule-visualizer/tests/gxtb-path-browser.cjs
   llmlip-native:
     runs-on: ubuntu-24.04
     timeout-minutes: 20

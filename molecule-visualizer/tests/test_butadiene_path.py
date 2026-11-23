@@ -71,6 +71,30 @@ class ButadienePaths(unittest.TestCase):
         self.assertEqual(result['steps'], 0)
         self.assertEqual(result['peakImage'], 5)
 
+    def test_large_labelled_turn_is_reported_separately_from_opposite_tilt(self):
+        def sample(angles):
+            classes = ['unresolved', b.branch(angles), 'dis', 'unresolved']
+            return dict(peakImage=2, imageClasses=classes, peakClass=classes[1],
+                        imageAnglesDeg=[[0.,0.], angles, [60.,60.], [90.,90.]])
+        summary = b.rotation_summary([sample([46.,134.]), sample([65.,-145.]), sample([170.,-175.])])
+        self.assertEqual(summary['conrotatoryPeakSteps'], 1)
+        self.assertEqual(summary['anyConrotatoryInteriorSteps'], 1)
+        self.assertEqual(summary['peakTurnOver100DegSteps'], 3)
+        self.assertEqual(summary['maxAbsPeakTurnDeg'], 175.)
+        self.assertAlmostEqual(summary['maxOppositePeakTiltDeg'], 35.)
+
+    def test_posthoc_comparison_allows_equivalent_hydrogens_and_proper_rotation(self):
+        reference = np.random.default_rng(74).normal(size=(10, 3))
+        order = list(range(10))
+        order[8], order[9] = order[9], order[8]
+        rotation = np.array([[0., 1., 0.], [-1., 0., 0.], [0., 0., 1.]])
+        peak = reference[order] @ rotation + [3., -2., 4.]
+        match = b.reference_rmsd(peak, reference)
+        self.assertLess(match['equivalentAtomRmsdA'], 1e-12)
+        self.assertGreater(match['mappedRmsdA'], .1)
+        self.assertEqual(match['matchedReferenceAtoms'], [i+1 for i in order])
+        self.assertGreater(b.reference_rmsd(-peak, reference)['equivalentAtomRmsdA'], .1)
+
     def check_native_path(self, engine):
         options = dict(engine=engine, distortion=.015, steps=100, endpoint_mode='fixed')
         result = b.run('neb', 'mirror', **options)
